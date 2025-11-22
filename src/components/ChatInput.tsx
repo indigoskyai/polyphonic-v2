@@ -2,9 +2,10 @@ import { useState } from "react";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
+  disabled?: boolean;
 }
 
-export const ChatInput = ({ onSend }: ChatInputProps) => {
+export const ChatInput = ({ onSend, disabled = false }: ChatInputProps) => {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
@@ -41,10 +42,14 @@ export const ChatInput = ({ onSend }: ChatInputProps) => {
         
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || disabled}
           className="w-12 h-12 bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-700 hover:text-white hover:border-gray-600 transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
-          <span className="text-xl">→</span>
+          {disabled ? (
+            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span className="text-xl">→</span>
+          )}
         </button>
       </div>
     </div>

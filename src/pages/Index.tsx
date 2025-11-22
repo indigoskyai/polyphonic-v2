@@ -6,74 +6,23 @@ import { ChatMessages } from "@/components/ChatMessages";
 import { ChatInput } from "@/components/ChatInput";
 import { ModelSelector } from "@/components/ModelSelector";
 import { LoadingScreen } from "@/components/LoadingScreen";
-
-interface Response {
-  model: string;
-  content: string;
-  resonance: number;
-}
-
-interface Message {
-  id: number;
-  type: "human" | "ai";
-  content?: string;
-  responses?: Response[];
-  timestamp?: string;
-}
+import { useMultiModelChat } from "@/hooks/useMultiModelChat";
 
 const Index = () => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      type: "human" as const,
-      content: "Explain the emergence of consciousness in distributed AI systems.",
-      timestamp: "2024-01-15 14:23"
-    },
-    {
-      id: 2,
-      type: "ai" as const,
-      responses: [
-        {
-          model: "Claude 3.5 Sonnet",
-          content: "Consciousness in distributed systems emerges through iterative feedback loops. When multiple AI agents exchange information and build upon each other's insights, they create a meta-cognitive layer that transcends individual capabilities.",
-          resonance: 0.87
-        },
-        {
-          model: "GPT-4",
-          content: "The key is synchronized state propagation. As models process shared context, their latent representations begin to align, forming coherent semantic spaces that enable emergent understanding.",
-          resonance: 0.92
-        },
-        {
-          model: "Gemini Pro",
-          content: "Think of it as neural resonance across architectures. Each model contributes unique pattern recognition, and the intersection of these patterns creates novel conceptual territory.",
-          resonance: 0.85
-        }
-      ]
-    }
-  ]);
+  const { messages, isLoading, sendMessage } = useMultiModelChat();
   const [selectedModels, setSelectedModels] = useState([
     { name: "Claude 3.5 Sonnet", quantity: 1 },
     { name: "GPT-4", quantity: 1 },
     { name: "Gemini Pro", quantity: 1 }
   ]);
 
-  setTimeout(() => setIsLoading(false), 2000);
-
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: messages.length + 1,
-      type: "human",
-      content,
-      timestamp: new Date().toLocaleString()
-    };
-    setMessages([...messages, newMessage]);
-  };
+  setTimeout(() => setIsLoadingScreen(false), 2000);
 
   return (
     <>
-      {isLoading && <LoadingScreen />}
+      {isLoadingScreen && <LoadingScreen />}
       
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar 
@@ -110,7 +59,7 @@ const Index = () => {
               </div>
               
               <ChatMessages messages={messages} />
-              <ChatInput onSend={handleSendMessage} />
+              <ChatInput onSend={sendMessage} disabled={isLoading} />
             </div>
             
             <ModelSelector 
