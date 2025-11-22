@@ -22,29 +22,43 @@ const IOSPreview = () => {
       </Link>
 
       <PhoneContainer>
-        {activeScreen === "chat" && <ChatScreen />}
-        {activeScreen === "models" && <ModelsScreen />}
-        {activeScreen === "memory" && <MemoryScreen />}
-        {activeScreen === "share" && <ShareScreen />}
+        <div className="flex-1 overflow-hidden">
+          {activeScreen === "chat" && <ChatScreen />}
+          {activeScreen === "models" && <ModelsScreen />}
+          {activeScreen === "memory" && <MemoryScreen />}
+          {activeScreen === "share" && <ShareScreen />}
+        </div>
         
-        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-gray-900 to-transparent backdrop-blur-xl border-t border-gray-700 flex justify-around items-center pb-5">
+        <div className="h-20 bg-gradient-to-t from-gray-900 via-gray-900/98 to-gray-900/95 backdrop-blur-xl border-t border-gray-700/50 flex items-center justify-around px-2 pb-5 relative">
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent" />
           {[
-            { id: "chat", icon: "⟁", label: "Chat" },
-            { id: "models", icon: "◊", label: "Models" },
-            { id: "memory", icon: "∞", label: "Memory" },
-            { id: "share", icon: "⟲", label: "Share" }
+            { id: "chat", icon: "◐", label: "Chat" },
+            { id: "models", icon: "◈", label: "Models" },
+            { id: "memory", icon: "◊", label: "Memory" },
+            { id: "share", icon: "◎", label: "Share" }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveScreen(tab.id as any)}
-              className={`flex flex-col items-center gap-1 transition-all duration-200 ${
-                activeScreen === tab.id 
-                  ? "text-white scale-105" 
-                  : "text-gray-400 hover:text-gray-200"
+              className={`relative flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-all duration-200 ${
+                activeScreen === tab.id
+                  ? "bg-gray-800/80 text-white scale-105"
+                  : "text-gray-500 hover:text-gray-300 active:scale-95"
               }`}
             >
-              <span className="text-2xl">{tab.icon}</span>
-              <span className="text-xs font-mono tracking-wider uppercase">{tab.label}</span>
+              {activeScreen === tab.id && (
+                <div className="absolute inset-0 bg-gray-800 rounded-xl opacity-0 animate-fadeIn" />
+              )}
+              <span className={`text-2xl mb-0.5 transition-transform relative z-10 ${
+                activeScreen === tab.id ? "-translate-y-0.5" : ""
+              }`}>
+                {tab.icon}
+              </span>
+              <span className={`text-[10px] font-medium uppercase tracking-wider relative z-10 transition-all ${
+                activeScreen === tab.id ? "font-semibold" : ""
+              }`}>
+                {tab.label}
+              </span>
             </button>
           ))}
         </div>
