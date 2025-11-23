@@ -15,7 +15,24 @@ interface Message {
   timestamp?: string;
 }
 
-export const useMultiModelChat = () => {
+interface ModelConfig {
+  name: string;
+  quantity: number;
+}
+
+const MODEL_NAME_TO_ID: Record<string, string> = {
+  "Claude 3.5 Sonnet": "claude",
+  "GPT-4": "gpt4",
+  "Gemini Pro": "gemini"
+};
+
+const MODEL_ID_TO_NAME: Record<string, string> = {
+  "claude": "Claude",
+  "gpt4": "GPT-4",
+  "gemini": "Gemini"
+};
+
+export const useMultiModelChat = (selectedModels: ModelConfig[] = []) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -23,6 +40,21 @@ export const useMultiModelChat = () => {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
+
+    // Get active model IDs from selected models
+    const activeModelIds = selectedModels
+      .filter(m => m.quantity > 0)
+      .map(m => MODEL_NAME_TO_ID[m.name])
+      .filter(Boolean);
+
+    if (activeModelIds.length === 0) {
+      toast({
+        title: "No Models Selected",
+        description: "Please enable at least one model to chat.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const userMessage: Message = {
       id: messageIdRef.current++,
@@ -34,13 +66,13 @@ export const useMultiModelChat = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Initialize AI response with empty content for each model
+    // Initialize AI response with empty content for selected models only
     const aiMessageId = messageIdRef.current++;
-    const initialResponses: Response[] = [
-      { model: "Claude", content: "", resonance: 0 },
-      { model: "GPT-4", content: "", resonance: 0 },
-      { model: "Gemini", content: "", resonance: 0 }
-    ];
+    const initialResponses: Response[] = activeModelIds.map(modelId => ({
+      model: MODEL_ID_TO_NAME[modelId] || modelId,
+      content: "",
+      resonance: 0
+    }));
 
     setMessages(prev => [...prev, {
       id: aiMessageId,
@@ -58,7 +90,8 @@ export const useMultiModelChat = () => {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [{ role: "user", content }]
+          messages: [{ role: "user", content }],
+          selectedModels: activeModelIds
         }),
       });
 
@@ -150,7 +183,7 @@ export const useMultiModelChat = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, toast]);
+  }, [isLoading, selectedModels, toast]);
 
   return { messages, isLoading, sendMessage };
 };

@@ -11,19 +11,24 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, selectedModels } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Define the models to query simultaneously
-    const models = [
-      { id: "claude", model: "openai/gpt-5-mini", name: "Claude" },
-      { id: "gpt4", model: "openai/gpt-5-mini", name: "GPT-4" },
-      { id: "gemini", model: "google/gemini-2.5-flash", name: "Gemini" }
+    // Define all available models with correct Lovable AI mappings
+    const allModels = [
+      { id: "claude", model: "google/gemini-2.5-pro", name: "Claude", description: "Most powerful reasoning" },
+      { id: "gpt4", model: "openai/gpt-5", name: "GPT-4", description: "Excellent accuracy & nuance" },
+      { id: "gemini", model: "google/gemini-2.5-flash", name: "Gemini", description: "Fast & balanced" }
     ];
+
+    // Filter models based on selection (default to all if not specified)
+    const models = selectedModels 
+      ? allModels.filter(m => selectedModels.includes(m.id))
+      : allModels;
 
     // Create a readable stream
     const stream = new ReadableStream({
@@ -49,7 +54,7 @@ serve(async (req) => {
                   ...messages,
                 ],
                 stream: true,
-                temperature: 0.7,
+                // Note: temperature removed as it's not supported by newer models (gpt-5, gemini-2.5-pro)
               }),
             });
 

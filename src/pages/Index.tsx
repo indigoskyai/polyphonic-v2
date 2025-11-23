@@ -11,12 +11,12 @@ import { useMultiModelChat } from "@/hooks/useMultiModelChat";
 const Index = () => {
   const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { messages, isLoading, sendMessage } = useMultiModelChat();
   const [selectedModels, setSelectedModels] = useState([
     { name: "Claude 3.5 Sonnet", quantity: 1 },
     { name: "GPT-4", quantity: 1 },
     { name: "Gemini Pro", quantity: 1 }
   ]);
+  const { messages, isLoading, sendMessage } = useMultiModelChat(selectedModels);
 
   setTimeout(() => setIsLoadingScreen(false), 2000);
 
@@ -45,7 +45,7 @@ const Index = () => {
                 <div className="flex gap-6 text-sm text-gray-400">
                   <div className="flex items-center gap-2">
                     <span>⟁</span>
-                    <span>3 Models Active</span>
+                    <span>{selectedModels.filter(m => m.quantity > 0).length} Models Active</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span>∞</span>
