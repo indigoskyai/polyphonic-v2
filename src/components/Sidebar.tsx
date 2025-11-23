@@ -1,3 +1,5 @@
+import { NavLink } from "@/components/NavLink";
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -30,33 +32,54 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               Workspace
             </div>
           )}
-          {[
-            { icon: "⟁", label: "Constellation Lab", badge: "3" },
-            { icon: "◊", label: "Autonomous Mode" },
-            { icon: "∞", label: "Memory Bank", badge: "247" },
-            { icon: "⬡", label: "Pattern Explorer" }
-          ].map((item, i) => (
-            <button
-              key={i}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                i === 0 
-                  ? "bg-gray-800 text-white" 
-                  : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-              }`}
-            >
-              <span className="text-lg">{item.icon}</span>
-              {!collapsed && (
-                <>
-                  <span className="flex-1 text-left text-sm">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-xs px-2 py-0.5 bg-gray-700 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-          ))}
+          <NavLink
+            to="/"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            activeClassName="bg-gray-800 text-white"
+          >
+            <span className="text-lg">⟁</span>
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left text-sm">Constellation Lab</span>
+                <span className="text-xs px-2 py-0.5 bg-gray-700 rounded-full">3</span>
+              </>
+            )}
+          </NavLink>
+          
+          <NavLink
+            to="/progress"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            activeClassName="bg-gray-800 text-white"
+          >
+            <span className="text-lg">◈</span>
+            {!collapsed && <span className="flex-1 text-left text-sm">Progress Tracker</span>}
+          </NavLink>
+          
+          <button
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+          >
+            <span className="text-lg">◊</span>
+            {!collapsed && <span className="flex-1 text-left text-sm">Autonomous Mode</span>}
+          </button>
+          
+          <button
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+          >
+            <span className="text-lg">∞</span>
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left text-sm">Memory Bank</span>
+                <span className="text-xs px-2 py-0.5 bg-gray-700 rounded-full">247</span>
+              </>
+            )}
+          </button>
+          
+          <button
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+          >
+            <span className="text-lg">⬡</span>
+            {!collapsed && <span className="flex-1 text-left text-sm">Pattern Explorer</span>}
+          </button>
         </div>
         
         <div className="space-y-2">
