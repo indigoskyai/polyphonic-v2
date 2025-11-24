@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { ChatMessages } from "@/components/ChatMessages";
@@ -78,16 +77,6 @@ const Index = () => {
             />
           </div>
         </main>
-
-        <div className="fixed bottom-8 right-8">
-          <Link
-            to="/ios"
-            className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-xl text-gray-100 transition-all duration-200 hover:scale-105"
-          >
-            <span>📱</span>
-            <span className="font-mono text-sm tracking-wider">iOS Preview</span>
-          </Link>
-        </div>
       </div>
     </>
   );

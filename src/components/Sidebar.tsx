@@ -65,6 +65,15 @@ export const Sidebar = ({
             {!collapsed && <span className="flex-1 text-left text-sm">Progress Tracker</span>}
           </NavLink>
           
+          <NavLink
+            to="/ios"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            activeClassName="bg-gray-800 text-white"
+          >
+            <span className="text-lg">📱</span>
+            {!collapsed && <span className="flex-1 text-left text-sm">iOS Preview</span>}
+          </NavLink>
+          
           <button
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-gray-400 hover:bg-gray-800 hover:text-gray-200"
           >
