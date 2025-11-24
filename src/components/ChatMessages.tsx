@@ -5,7 +5,7 @@ interface Response {
 }
 
 interface Message {
-  id: number;
+  id: string;
   type: "human" | "ai";
   content?: string;
   responses?: Response[];

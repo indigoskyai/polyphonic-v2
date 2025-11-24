@@ -11,12 +11,15 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, selectedModels } = await req.json();
+    const { messages, selectedModels, conversationId } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    console.log(`[Multi-Model Chat] Processing with ${messages.length} messages in context`);
+    console.log(`[Multi-Model Chat] Conversation ID: ${conversationId || 'none'}`);
 
     // Define all available models with correct Lovable AI mappings
     const allModels = [
@@ -49,7 +52,9 @@ serve(async (req) => {
                 messages: [
                   { 
                     role: "system", 
-                    content: "You are a helpful AI assistant. Provide clear, concise answers. Keep responses under 100 words." 
+                    content: messages.length > 2 
+                      ? "You are a helpful AI assistant in a multi-model conversation system. You can see the conversation history. Build upon previous responses and maintain context. If other AI models have already provided answers, you can reference or expand on their insights. Provide clear, concise answers. Keep responses under 100 words unless the question requires more detail."
+                      : "You are a helpful AI assistant. Provide clear, concise answers. Keep responses under 100 words."
                   },
                   ...messages,
                 ],
