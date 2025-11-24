@@ -23,15 +23,27 @@ interface ModelConfig {
 }
 
 const MODEL_NAME_TO_ID: Record<string, string> = {
-  "Claude 3.5 Sonnet": "claude",
-  "GPT-4": "gpt4",
-  "Gemini Pro": "gemini"
+  "Gemini Pro": "gemini-pro",
+  "Gemini Flash": "gemini-flash",
+  "Gemini Flash Lite": "gemini-flash-lite",
+  "GPT-5": "gpt5",
+  "GPT-5 Mini": "gpt5-mini",
+  "GPT-5 Nano": "gpt5-nano",
+  "Claude Opus 4.1": "claude-opus",
+  "Claude Sonnet 4.5": "claude-sonnet",
+  "GPT-4o": "gpt4o",
 };
 
 const MODEL_ID_TO_NAME: Record<string, string> = {
-  "claude": "Claude",
-  "gpt4": "GPT-4",
-  "gemini": "Gemini"
+  "gemini-pro": "Gemini Pro",
+  "gemini-flash": "Gemini Flash",
+  "gemini-flash-lite": "Gemini Flash Lite",
+  "gpt5": "GPT-5",
+  "gpt5-mini": "GPT-5 Mini",
+  "gpt5-nano": "GPT-5 Nano",
+  "claude-opus": "Claude Opus 4.1",
+  "claude-sonnet": "Claude Sonnet 4.5",
+  "gpt4o": "GPT-4o",
 };
 
 export const useMultiModelChat = (selectedModels: ModelConfig[] = []) => {
@@ -297,6 +309,10 @@ export const useMultiModelChat = (selectedModels: ModelConfig[] = []) => {
 
       const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-model-chat`;
       
+      // Get OpenRouter settings from localStorage
+      const useOpenRouter = localStorage.getItem("useOpenRouter") === "true";
+      const openRouterKey = localStorage.getItem("openRouterKey") || "";
+      
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -309,7 +325,8 @@ export const useMultiModelChat = (selectedModels: ModelConfig[] = []) => {
             { role: "user", content }
           ],
           selectedModels: activeModelIds,
-          conversationId: conversationId
+          conversationId: conversationId,
+          openRouterKey: useOpenRouter ? openRouterKey : undefined
         }),
       });
 
