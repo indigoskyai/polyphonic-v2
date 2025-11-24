@@ -11,22 +11,47 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, selectedModels, conversationId } = await req.json();
+    const { messages, selectedModels, conversationId, openRouterKey } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Determine which provider to use
+    const useOpenRouter = !!openRouterKey;
+    const apiKey = useOpenRouter ? openRouterKey : LOVABLE_API_KEY;
+    const apiUrl = useOpenRouter 
+      ? "https://openrouter.ai/api/v1/chat/completions"
+      : "https://ai.gateway.lovable.dev/v1/chat/completions";
+    
+    if (!apiKey) {
+      throw new Error(useOpenRouter ? "OpenRouter API key not provided" : "LOVABLE_API_KEY is not configured");
     }
 
+    console.log(`[Multi-Model Chat] Provider: ${useOpenRouter ? 'OpenRouter' : 'Lovable AI'}`);
     console.log(`[Multi-Model Chat] Processing with ${messages.length} messages in context`);
     console.log(`[Multi-Model Chat] Conversation ID: ${conversationId || 'none'}`);
 
-    // Define all available models with correct Lovable AI mappings
-    const allModels = [
-      { id: "claude", model: "google/gemini-2.5-pro", name: "Claude", description: "Most powerful reasoning" },
-      { id: "gpt4", model: "openai/gpt-5", name: "GPT-4", description: "Excellent accuracy & nuance" },
-      { id: "gemini", model: "google/gemini-2.5-flash", name: "Gemini", description: "Fast & balanced" }
+    // Define models based on provider
+    const lovableModels = [
+      { id: "gemini-pro", model: "google/gemini-2.5-pro", name: "Gemini Pro", description: "Top-tier reasoning & vision" },
+      { id: "gemini-flash", model: "google/gemini-2.5-flash", name: "Gemini Flash", description: "Fast & balanced" },
+      { id: "gemini-flash-lite", model: "google/gemini-2.5-flash-lite", name: "Gemini Flash Lite", description: "Fastest & cheapest" },
+      { id: "gpt5", model: "openai/gpt-5", name: "GPT-5", description: "Powerful all-rounder" },
+      { id: "gpt5-mini", model: "openai/gpt-5-mini", name: "GPT-5 Mini", description: "Strong & efficient" },
+      { id: "gpt5-nano", model: "openai/gpt-5-nano", name: "GPT-5 Nano", description: "Speed & cost optimized" },
     ];
+
+    const openRouterModels = [
+      { id: "gemini-pro", model: "google/gemini-2.5-pro", name: "Gemini Pro" },
+      { id: "gemini-flash", model: "google/gemini-2.5-flash", name: "Gemini Flash" },
+      { id: "gemini-flash-lite", model: "google/gemini-2.5-flash-lite", name: "Gemini Flash Lite" },
+      { id: "gpt5", model: "openai/gpt-5", name: "GPT-5" },
+      { id: "gpt5-mini", model: "openai/gpt-5-mini", name: "GPT-5 Mini" },
+      { id: "gpt5-nano", model: "openai/gpt-5-nano", name: "GPT-5 Nano" },
+      { id: "claude-opus", model: "anthropic/claude-opus-4.1-20250805", name: "Claude Opus 4.1" },
+      { id: "claude-sonnet", model: "anthropic/claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
+      { id: "gpt4o", model: "openai/gpt-4o", name: "GPT-4o" },
+    ];
+
+    const allModels = useOpenRouter ? openRouterModels : lovableModels;
 
     // Filter models based on selection (default to all if not specified)
     const models = selectedModels 
@@ -41,12 +66,20 @@ serve(async (req) => {
         // Start all model requests in parallel
         const modelPromises = models.map(async ({ id, model, name }) => {
           try {
-            const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            const headers: Record<string, string> = {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            };
+            
+            // OpenRouter optional headers for rankings
+            if (useOpenRouter) {
+              headers["HTTP-Referer"] = "https://polyphonic.app";
+              headers["X-Title"] = "Polyphonic";
+            }
+
+            const response = await fetch(apiUrl, {
               method: "POST",
-              headers: {
-                Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                "Content-Type": "application/json",
-              },
+              headers,
               body: JSON.stringify({
                 model,
                 messages: [

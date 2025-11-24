@@ -8,18 +8,30 @@ interface ModelSelectorProps {
   onChange: (models: Model[]) => void;
 }
 
-const availableModels = [
-  "Claude 3.5 Sonnet",
-  "Claude 3 Opus",
-  "GPT-4",
-  "GPT-3.5 Turbo",
+const lovableModels = [
   "Gemini Pro",
-  "Gemini Ultra",
-  "Llama 3 70B",
-  "Mixtral 8x7B"
+  "Gemini Flash", 
+  "Gemini Flash Lite",
+  "GPT-5",
+  "GPT-5 Mini",
+  "GPT-5 Nano",
+];
+
+const openRouterModels = [
+  "Gemini Pro",
+  "Gemini Flash",
+  "Gemini Flash Lite",
+  "GPT-5",
+  "GPT-5 Mini",
+  "GPT-5 Nano",
+  "Claude Opus 4.1",
+  "Claude Sonnet 4.5",
+  "GPT-4o",
 ];
 
 export const ModelSelector = ({ models, onChange }: ModelSelectorProps) => {
+  const useOpenRouter = localStorage.getItem("useOpenRouter") === "true";
+  const availableModels = useOpenRouter ? openRouterModels : lovableModels;
   const updateQuantity = (modelName: string, delta: number) => {
     const updated = models.map(m =>
       m.name === modelName
@@ -46,7 +58,7 @@ export const ModelSelector = ({ models, onChange }: ModelSelectorProps) => {
           Model Orchestra
         </h2>
         <p className="text-xs text-gray-400">
-          Select and configure AI models
+          {useOpenRouter ? "OpenRouter" : "Lovable AI (Free)"} • {availableModels.length} models
         </p>
       </div>
       
