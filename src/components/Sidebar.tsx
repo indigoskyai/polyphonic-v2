@@ -1,11 +1,21 @@
 import { NavLink } from "@/components/NavLink";
+import { ConversationList } from "./ConversationList";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  currentConversationId: string | null;
+  onSelectConversation: (id: string) => void;
+  onNewConversation: () => void;
 }
 
-export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
+export const Sidebar = ({ 
+  collapsed, 
+  onToggle, 
+  currentConversationId, 
+  onSelectConversation, 
+  onNewConversation 
+}: SidebarProps) => {
   return (
     <aside 
       className={`bg-gray-900 border-r border-gray-700 flex flex-col transition-all duration-300 ${
@@ -82,26 +92,18 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
           </button>
         </div>
         
-        <div className="space-y-2">
-          {!collapsed && (
+        {!collapsed && (
+          <div className="flex-1 overflow-hidden flex flex-col">
             <div className="text-xs uppercase tracking-wider text-gray-500 px-3 mb-3">
-              Recent
+              Conversations
             </div>
-          )}
-          {[
-            "Consciousness Theory",
-            "Emergence Patterns",
-            "Collective Intelligence"
-          ].map((label, i) => (
-            <button
-              key={i}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all"
-            >
-              <span className="text-lg">▣</span>
-              {!collapsed && <span className="flex-1 text-left text-sm">{label}</span>}
-            </button>
-          ))}
-        </div>
+            <ConversationList
+              currentConversationId={currentConversationId}
+              onSelectConversation={onSelectConversation}
+              onNewConversation={onNewConversation}
+            />
+          </div>
+        )}
       </nav>
       
       <div className="p-4 border-t border-gray-700">

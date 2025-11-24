@@ -16,7 +16,14 @@ const Index = () => {
     { name: "GPT-4", quantity: 1 },
     { name: "Gemini Pro", quantity: 1 }
   ]);
-  const { messages, isLoading, sendMessage } = useMultiModelChat(selectedModels);
+  const { 
+    messages, 
+    isLoading, 
+    sendMessage, 
+    startNewConversation,
+    loadConversation,
+    conversationId 
+  } = useMultiModelChat(selectedModels);
 
   setTimeout(() => setIsLoadingScreen(false), 2000);
 
@@ -28,6 +35,9 @@ const Index = () => {
         <Sidebar 
           collapsed={sidebarCollapsed} 
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          currentConversationId={conversationId}
+          onSelectConversation={loadConversation}
+          onNewConversation={startNewConversation}
         />
         
         <main className="flex-1 flex flex-col">
