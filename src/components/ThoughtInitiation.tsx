@@ -34,7 +34,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
 
   const handleDismiss = async () => {
     setDismissed(true);
-    await supabase
+    await (supabase as any)
       .from("thought_initiations")
       .update({ status: "dismissed" })
       .eq("id", initiation.id);
