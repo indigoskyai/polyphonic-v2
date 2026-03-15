@@ -35,7 +35,7 @@ export function BeliefTracker() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    (supabase as any)
       .from("beliefs")
       .select("*")
       .eq("user_id", user.id)

@@ -43,7 +43,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
   const handleEngage = () => {
     onEngage?.(initiation.message);
     setDismissed(true);
-    supabase
+    (supabase as any)
       .from("thought_initiations")
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", initiation.id);

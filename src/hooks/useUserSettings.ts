@@ -110,7 +110,7 @@ export function useUserSettings() {
 
   const updateSettings = async (updates: Partial<Omit<UserSettings, "id" | "user_id">>) => {
     if (!user || !settings) return;
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("user_settings")
       .update(updates)
       .eq("user_id", user.id)

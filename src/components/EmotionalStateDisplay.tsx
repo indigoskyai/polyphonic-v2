@@ -77,12 +77,12 @@ export function EmotionalStateExpanded() {
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      supabase
+      (supabase as any)
         .from("emotional_state")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle(),
-      supabase
+      (supabase as any)
         .from("emotional_history")
         .select("state, timestamp")
         .eq("user_id", user.id)

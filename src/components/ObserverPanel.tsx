@@ -27,7 +27,7 @@ export function ObserverPanel() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    (supabase as any)
       .from("observer_logs")
       .select("*")
       .eq("user_id", user.id)
