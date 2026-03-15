@@ -17,7 +17,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    (supabase as any)
       .from("thought_initiations")
       .select("*")
       .eq("user_id", user.id)
