@@ -74,7 +74,7 @@ export function useUserSettings() {
 
     if (!data) {
       // Create default settings
-      const { data: created } = await supabase
+      const { data: created } = await (supabase as any)
         .from("user_settings")
         .insert({ user_id: user.id })
         .select("*")
