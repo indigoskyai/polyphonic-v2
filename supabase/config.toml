@@ -1,4 +1,28 @@
 project_id = "kknchdnrujzheulqzowv"
 
-[functions.multi-model-chat]
+[functions.chat]
+verify_jwt = false
+
+[functions.memory-extract]
+verify_jwt = false
+
+[functions.memory-reflect]
+verify_jwt = false
+
+[functions.journal-write]
+verify_jwt = false
+
+[functions.journal-cron]
+verify_jwt = false
+
+[functions.import-chatgpt]
+verify_jwt = false
+
+[functions.memory-synthesize]
+verify_jwt = false
+
+[functions.clear-import]
+verify_jwt = false
+
+[functions.generate-image]
 verify_jwt = false

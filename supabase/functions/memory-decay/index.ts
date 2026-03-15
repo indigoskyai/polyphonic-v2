@@ -1,0 +1,59 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+
+serve(async (req) => {
+  const preflightResponse = handleCorsPreflightIfNeeded(req);
+  if (preflightResponse) return preflightResponse;
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data, error } = await supabase.rpc("update_memory_decay");
+
+    if (error) {
+      console.error("Decay RPC error:", error);
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    // Also reduce sharpness proportionally to decay_factor
+    // Sharpness tracks the memory's resolution: 1.0=vivid, 0.7=softened, 0.4=impression, 0.15=archived
+    const { data: decayedMemories } = await supabase
+      .from("memories")
+      .select("id, decay_factor, sharpness")
+      .eq("is_deleted", false)
+      .lt("decay_factor", 0.9);
+
+    let sharpnessUpdated = 0;
+    if (decayedMemories) {
+      for (const m of decayedMemories) {
+        const currentSharpness = m.sharpness ?? 1.0;
+        // Sharpness should roughly track decay_factor but never exceed it
+        const targetSharpness = Math.min(currentSharpness, m.decay_factor);
+        if (targetSharpness < currentSharpness - 0.01) {
+          await supabase
+            .from("memories")
+            .update({ sharpness: Math.round(targetSharpness * 1000) / 1000 })
+            .eq("id", m.id);
+          sharpnessUpdated++;
+        }
+      }
+    }
+
+    console.log(`Memory decay complete. Rows affected: ${data}, sharpness updated: ${sharpnessUpdated}`);
+    return new Response(JSON.stringify({ success: true, rows_affected: data, sharpness_updated: sharpnessUpdated }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("memory-decay error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+});

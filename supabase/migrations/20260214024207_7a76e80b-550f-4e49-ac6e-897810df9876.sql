@@ -1,0 +1,1 @@
+ALTER TABLE public.user_settings ADD COLUMN persona text NOT NULL DEFAULT 'neutral';

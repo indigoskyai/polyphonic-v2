@@ -1,125 +1,120 @@
-interface Model {
+import { useState, useRef, useEffect } from "react";
+import { ChevronDown, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { GLASS_DROPDOWN_STYLE, GLASS_HOVER, GLASS_ACTIVE, GLASS_BORDER, GLASS_MUTED, GLASS_TEXT } from "@/lib/glassmorphism";
+
+export interface ModelOption {
+  id: string;
   name: string;
-  quantity: number;
+  provider: string;
+  reasoning?: boolean;
+  featured?: boolean;
+  maxTemp?: number; // practical coherence limit (defaults to 1.5)
 }
+
+export const FRONTIER_MODELS: ModelOption[] = [
+  { id: "anthropic/claude-opus-4.6", name: "Opus 4.6", provider: "Anthropic", featured: true, maxTemp: 1.0 },
+  { id: "anthropic/claude-sonnet-4.6", name: "Sonnet 4.6", provider: "Anthropic", featured: true, maxTemp: 1.0 },
+  { id: "openai/gpt-5.2", name: "GPT-5.2", provider: "OpenAI", featured: true, maxTemp: 1.2 },
+  { id: "google/gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "Google", featured: true, maxTemp: 1.2 },
+  { id: "moonshotai/kimi-k2.5", name: "Kimi K2.5", provider: "Moonshot AI", featured: true, maxTemp: 1.5 },
+  { id: "x-ai/grok-4", name: "Grok 4", provider: "xAI", featured: true, maxTemp: 1.2 },
+];
+
+/** @deprecated Use FRONTIER_MODELS instead */
+export const AVAILABLE_MODELS = FRONTIER_MODELS;
+
+export const DEFAULT_MAX_TEMP = 1.5;
 
 interface ModelSelectorProps {
-  models: Model[];
-  onChange: (models: Model[]) => void;
+  selectedModel: string;
+  onModelChange: (modelId: string) => void;
+  frosted?: boolean;
 }
 
-const lovableModels = [
-  "Gemini Pro",
-  "Gemini Flash", 
-  "Gemini Flash Lite",
-  "GPT-5",
-  "GPT-5 Mini",
-  "GPT-5 Nano",
-];
+export function ModelSelector({ selectedModel, onModelChange, frosted }: ModelSelectorProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-const openRouterModels = [
-  "Gemini Pro",
-  "Gemini Flash",
-  "Gemini Flash Lite",
-  "GPT-5",
-  "GPT-5 Mini",
-  "GPT-5 Nano",
-  "Claude Opus 4.1",
-  "Claude Sonnet 4.5",
-  "GPT-4o",
-];
+  const current = FRONTIER_MODELS.find((m) => m.id === selectedModel) || FRONTIER_MODELS[0];
 
-export const ModelSelector = ({ models, onChange }: ModelSelectorProps) => {
-  const useOpenRouter = localStorage.getItem("useOpenRouter") === "true";
-  const availableModels = useOpenRouter ? openRouterModels : lovableModels;
-  const updateQuantity = (modelName: string, delta: number) => {
-    const updated = models.map(m =>
-      m.name === modelName
-        ? { ...m, quantity: Math.max(0, m.quantity + delta) }
-        : m
-    ).filter(m => m.quantity > 0);
-    
-    onChange(updated);
-  };
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-  const addModel = (modelName: string) => {
-    const existing = models.find(m => m.name === modelName);
-    if (existing) {
-      updateQuantity(modelName, 1);
-    } else {
-      onChange([...models, { name: modelName, quantity: 1 }]);
-    }
-  };
+  const renderModelButton = (model: ModelOption) => (
+    <button
+      key={model.id}
+      onClick={() => { onModelChange(model.id); setOpen(false); }}
+      className="w-full flex items-center justify-between px-3 py-2 transition-colors"
+      style={{
+        background: selectedModel === model.id ? (frosted ? GLASS_ACTIVE : "var(--bg-active)") : "transparent",
+        color: frosted ? GLASS_TEXT : "var(--text-primary)",
+        fontSize: "14px",
+      }}
+      onMouseEnter={(e) => { if (selectedModel !== model.id) e.currentTarget.style.background = frosted ? GLASS_HOVER : "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { if (selectedModel !== model.id) e.currentTarget.style.background = "transparent"; }}
+    >
+      <div className="flex items-center gap-2">
+        <span style={{ fontWeight: selectedModel === model.id ? 500 : 400 }}>
+          {model.name}
+        </span>
+        {model.reasoning && (
+          <span
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded-md"
+            style={{ fontSize: "10px", fontWeight: 600, background: frosted ? GLASS_BORDER : "var(--bg-elevated)", color: "var(--text-secondary)" }}
+          >
+            <Sparkles className="h-2.5 w-2.5" />
+            Reasoning
+          </span>
+        )}
+      </div>
+      {selectedModel === model.id && (
+        <div className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--text-primary)" }} />
+      )}
+    </button>
+  );
 
   return (
-    <aside className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-light tracking-wider text-white mb-1">
-          Model Orchestra
-        </h2>
-        <p className="text-xs text-gray-400">
-          {useOpenRouter ? "OpenRouter" : "Lovable AI (Free)"} • {availableModels.length} models
-        </p>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {availableModels.map((modelName) => {
-          const selected = models.find(m => m.name === modelName);
-          return (
-            <div
-              key={modelName}
-              className={`border rounded-xl p-3 transition-all ${
-                selected
-                  ? "bg-gray-800 border-gray-600"
-                  : "bg-gray-850 border-gray-700 hover:border-gray-600"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-200">{modelName}</span>
-                {selected && (
-                  <div className="flex items-center gap-1 bg-gray-750 rounded-lg border border-gray-600">
-                    <button
-                      onClick={() => updateQuantity(modelName, -1)}
-                      className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-                    >
-                      −
-                    </button>
-                    <span className="w-6 text-center text-xs font-mono text-white">
-                      {selected.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity(modelName, 1)}
-                      className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {!selected && (
-                <button
-                  onClick={() => addModel(modelName)}
-                  className="w-full py-1.5 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 rounded-lg text-gray-300 hover:text-white transition-all font-mono uppercase tracking-wider"
-                >
-                  Add to Orchestra
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      
-      <div className="p-4 border-t border-gray-700 bg-gray-850">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-400 font-mono uppercase tracking-wider">
-            {models.reduce((sum, m) => sum + m.quantity, 0)} Models Selected
-          </span>
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors"
+        style={{
+          color: "var(--text-primary)",
+          fontSize: "16px",
+          fontWeight: 600,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = frosted ? GLASS_HOVER : "var(--bg-hover)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      >
+        <span className="truncate max-w-[200px]">
+          {current.name}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} style={{ color: frosted ? GLASS_MUTED : "var(--text-muted)" }} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 w-64 rounded-xl py-2 z-50"
+          style={frosted ? {
+            ...GLASS_DROPDOWN_STYLE,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          } : {
+            background: "var(--bg-card)",
+            border: "1px solid hsl(var(--border-subtle))",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          }}
+        >
+          {FRONTIER_MODELS.map(renderModelButton)}
         </div>
-        <button className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-gray-500 rounded-xl text-white text-sm font-mono uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98]">
-          Apply Configuration
-        </button>
-      </div>
-    </aside>
+      )}
+    </div>
   );
-};
+}

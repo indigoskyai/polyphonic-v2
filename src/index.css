@@ -2,186 +2,379 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ============================================
+   DESIGN TOKENS - Polyphonic Monochromatic System
+   ============================================ */
+:root {
+  /* MONOCHROMATIC PALETTE - Depth Hierarchy */
+  --black: #1a1a1a;
+  --gray-950: #171717;
+  --gray-900: #1a1a1a;
+  --gray-850: #1e1e1e;
+  --gray-800: #222222;
+  --gray-750: #262626;
+  --gray-700: #2a2a2a;
+  --gray-650: #303030;
+  --gray-600: #3a3a3a;
+  --gray-500: #525252;
+  --gray-400: #6b6b6b;
+  --gray-300: #8a8a8a;
+  --gray-200: #ababab;
+  --gray-100: #d9d9d9;
+  --white: #f0f0f0;
 
+  /* Depth hierarchy backgrounds - ChatGPT dark mode */
+  --bg-void: #171717;
+  --bg-sidebar: #171717;
+  --bg-content: #212121;
+  --bg-panel: #171717;
+  --bg-card: #2f2f2f;
+  --bg-card-hover: #353535;
+  --bg-input: #2f2f2f;
+  --bg-elevated: #2f2f2f;
+  --bg-hover: #353535;
+  --bg-active: #3a3a3a;
+
+  /* Border hierarchy */
+  --border-subtle: 0 0% 20%;
+  --border-default: 0 0% 18%;
+  --border-hover: 0 0% 24%;
+  --border-interactive: 0 0% 22%;
+
+  /* Text hierarchy - ChatGPT standard */
+  --text-primary: #ececec;
+  --text-secondary: #9b9b9b;
+  --text-muted: #6b6b6b;
+  --text-faint: #555555;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+
+  /* Transitions */
+  --transition-fast: 0.12s ease;
+  --transition-normal: 0.2s ease;
+
+  /* Polyphonic accent */
+  --polyphonic-accent: 158 60% 85%;
+}
+
+/* ============================================
+   SHADCN DESIGN SYSTEM TOKENS
+   ============================================ */
 @layer base {
   :root {
-    /* Pure Monochrome Palette */
-    --black: 0 0% 0%;
-    --gray-950: 0 0% 1%;
-    --gray-900: 0 0% 2%;
-    --gray-850: 0 0% 4%;
-    --gray-800: 0 0% 6%;
-    --gray-750: 0 0% 8%;
-    --gray-700: 0 0% 10%;
-    --gray-650: 0 0% 12%;
-    --gray-600: 0 0% 15%;
-    --gray-550: 0 0% 16%;
-    --gray-500: 0 0% 20%;
-    --gray-450: 0 0% 25%;
-    --gray-400: 0 0% 30%;
-    --gray-350: 0 0% 35%;
-    --gray-300: 0 0% 40%;
-    --gray-250: 0 0% 45%;
-    --gray-200: 0 0% 50%;
-    --gray-150: 0 0% 60%;
-    --gray-100: 0 0% 70%;
-    --gray-50: 0 0% 80%;
-    --white: 0 0% 90%;
+    --background: 0 0% 13%;
+    --foreground: 0 0% 93%;
 
-    /* Core Design Tokens */
-    --background: var(--black);
-    --foreground: var(--gray-50);
+    --card: 0 0% 18%;
+    --card-foreground: 0 0% 93%;
 
-    --card: var(--gray-800);
-    --card-foreground: var(--gray-100);
+    --popover: 0 0% 18%;
+    --popover-foreground: 0 0% 93%;
 
-    --popover: var(--gray-900);
-    --popover-foreground: var(--white);
+    --primary: 0 0% 93%;
+    --primary-foreground: 0 0% 10%;
 
-    --primary: var(--white);
-    --primary-foreground: var(--black);
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 80%;
 
-    --secondary: var(--gray-700);
-    --secondary-foreground: var(--white);
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 42%;
 
-    --muted: var(--gray-800);
-    --muted-foreground: var(--gray-400);
+    --accent: 0 0% 22%;
+    --accent-foreground: 0 0% 93%;
 
-    --accent: var(--gray-700);
-    --accent-foreground: var(--gray-100);
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 98%;
 
-    --destructive: var(--gray-400);
-    --destructive-foreground: var(--white);
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 40%;
 
-    --border: var(--gray-700);
-    --input: var(--gray-800);
-    --ring: var(--gray-600);
+    --radius: 0.5rem;
 
-    --radius: 0.75rem;
-
-    /* Resonance System */
-    --resonance-low: var(--gray-500);
-    --resonance-med: var(--gray-300);
-    --resonance-high: var(--gray-150);
-
-    /* Sidebar */
-    --sidebar-background: var(--gray-900);
-    --sidebar-foreground: var(--gray-50);
-    --sidebar-primary: var(--white);
-    --sidebar-primary-foreground: var(--black);
-    --sidebar-accent: var(--gray-800);
-    --sidebar-accent-foreground: var(--white);
-    --sidebar-border: var(--gray-700);
-    --sidebar-ring: var(--gray-600);
-
-    /* Transitions */
-    --transition-fast: 150ms cubic-bezier(0, 0, 0.2, 1);
-    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slower: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 83%;
+    --sidebar-primary: 0 0% 93%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 0 0% 40%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-  }
-
-  /* Custom Scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--gray-900));
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--gray-600));
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--gray-500));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-@layer utilities {
-  .font-mono {
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
-  }
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
-  .animate-slide-in-right {
-    animation: slideInRight 0.3s ease-out;
-  }
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-  .animate-slide-in-up {
-    animation: slideInUp 0.3s ease-out;
-  }
+@keyframes polyphonic-spin {
+  0%, 100% { transform: rotate(0deg) scale(1); opacity: 0.9; }
+  50% { transform: rotate(180deg) scale(1.08); opacity: 1; }
+}
 
-  .animate-fade-in {
-    animation: fadeIn 0.5s ease-out;
+@keyframes polyphonic-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes polyphonic-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2.5px;
+  height: 1.15em;
+  background-color: hsl(0 0% 85%);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.8s step-end infinite;
+  border-radius: 1px;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+}
+
+.animate-fadeSlideIn {
+  animation: fadeSlideIn 0.3s ease-out forwards;
+}
+
+/* ============================================
+   GLOBAL CLICK FEEDBACK
+   ============================================ */
+button:not(:disabled):active,
+[role="button"]:not(:disabled):active {
+  transform: scale(0.97);
+  opacity: 0.85;
+  transition: transform 50ms ease-out, opacity 50ms ease-out;
+}
+
+button:not(:active),
+[role="button"]:not(:active) {
+  transition: transform 100ms ease-out, opacity 100ms ease-out;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 20%);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 30%);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(0 0% 20%) transparent;
+}
+
+textarea::placeholder {
+  color: #6b6b6b;
+  opacity: 1;
+}
+
+/* Glass-aware scrollbar when custom background is active */
+[data-custom-bg] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+[data-custom-bg] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+[data-custom-bg] * {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+/* Glass-aware placeholder text */
+[data-custom-bg] input::placeholder,
+[data-custom-bg] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Glass-aware Radix dropdown menu item hover */
+[data-custom-bg] [role="menuitem"]:focus,
+[data-custom-bg] [role="menuitem"]:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Glass-aware dialog close button */
+[data-custom-bg] [data-dialog-close]:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================
+   MIDNIGHT THEME VARIANT
+   ============================================ */
+[data-theme="midnight"] {
+  --bg-void: #0a0a0a;
+  --bg-sidebar: #0a0a0a;
+  --bg-content: #141414;
+  --bg-panel: #0a0a0a;
+  --bg-card: #1e1e1e;
+  --bg-card-hover: #252525;
+  --bg-input: #1e1e1e;
+  --bg-elevated: #1e1e1e;
+  --bg-hover: #252525;
+  --bg-active: #2a2a2a;
+
+  --gray-950: #080808;
+  --gray-900: #0a0a0a;
+  --gray-850: #0e0e0e;
+  --gray-800: #141414;
+  --gray-750: #181818;
+  --gray-700: #1e1e1e;
+  --gray-650: #222222;
+  --gray-600: #2a2a2a;
+
+  --text-faint: #444444;
+}
+
+[data-theme="midnight"] @layer base {
+}
+
+@layer base {
+  [data-theme="midnight"] :root,
+  :root[data-theme="midnight"] {
+    --background: 0 0% 6%;
+    --card: 0 0% 12%;
+    --popover: 0 0% 12%;
+    --secondary: 0 0% 12%;
+    --muted: 0 0% 12%;
+    --accent: 0 0% 15%;
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-accent: 0 0% 7%;
+    --sidebar-border: 0 0% 10%;
   }
 }
 
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
+/* ============================================
+   LIGHTS OUT THEME - True Black
+   ============================================ */
+[data-theme="lights-out"] {
+  --bg-void: #000000;
+  --bg-sidebar: #050505;
+  --bg-content: #0a0a0a;
+  --bg-panel: #050505;
+  --bg-card: #111111;
+  --bg-card-hover: #161616;
+  --bg-input: #111111;
+  --bg-elevated: #161616;
+  --bg-hover: #161616;
+  --bg-active: #1a1a1a;
+
+  --gray-950: #000000;
+  --gray-900: #050505;
+  --gray-850: #0a0a0a;
+  --gray-800: #111111;
+  --gray-750: #141414;
+  --gray-700: #161616;
+  --gray-650: #1a1a1a;
+  --gray-600: #252525;
+
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --text-muted: #787878;
+  --text-faint: #505050;
+}
+
+@layer base {
+  [data-theme="lights-out"] :root,
+  :root[data-theme="lights-out"] {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 7%;
+    --secondary-foreground: 0 0% 85%;
+    --muted: 0 0% 7%;
+    --muted-foreground: 0 0% 47%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 10%;
+    --input: 0 0% 10%;
+    --ring: 0 0% 35%;
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-accent: 0 0% 5%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 8%;
   }
 }
 
-@keyframes slideInUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+/* ============================================
+   PAGE TRANSITIONS
+   ============================================ */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes page-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
+.page-transition-enter {
+  animation: page-fade-in 300ms ease-in-out both;
 }
 
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
+.page-transition-exit {
+  animation: page-fade-out 250ms ease-in-out both;
+  pointer-events: none;
+}
+
+/* Prevent horizontal overflow */
+@media (min-width: 768px) {
+  html, body, #root {
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 }

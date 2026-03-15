@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Outer triangle -->
+  <polygon points="256,48 472,432 40,432" fill="none" stroke="#d9d9d9" stroke-width="28" stroke-linejoin="round"/>
+  <!-- Inner triangle -->
+  <polygon points="256,168 376,376 136,376" fill="none" stroke="#d9d9d9" stroke-width="22" stroke-linejoin="round"/>
+</svg>

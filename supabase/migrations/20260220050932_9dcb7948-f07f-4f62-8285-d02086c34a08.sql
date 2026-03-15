@@ -1,0 +1,1 @@
+ALTER TABLE public.user_settings ADD COLUMN journal_model text DEFAULT NULL;
