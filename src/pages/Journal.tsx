@@ -4,11 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, Info, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useUserSettings } from "@/hooks/useUserSettings";
 import { usePageNavigate } from "@/hooks/usePageNavigate";
 import PageTransition from "@/components/PageTransition";
-import { getBackgroundStyle } from "@/lib/backgrounds";
-import { GLASS_STYLE, GLASS_HOVER, GLASS_BORDER } from "@/lib/glassmorphism";
 import { preprocessAsciiArt } from "@/lib/asciiArt";
 import { CodeBlock, InlineCode } from "@/components/CodeBlock";
 
@@ -26,13 +23,9 @@ const Journal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { exiting, navigateTo } = usePageNavigate();
-  const { settings } = useUserSettings();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
-
-  const bgStyle = getBackgroundStyle(settings?.background_style);
-  const hasCustomBg = !!bgStyle;
 
   useEffect(() => {
     if (user) loadEntries();
@@ -92,19 +85,11 @@ const Journal = () => {
 
   return (
     <PageTransition exiting={exiting}>
-    <div className="flex h-screen relative" style={{ background: hasCustomBg ? "transparent" : "var(--bg-content)" }}>
-      {/* Background layer */}
-      {hasCustomBg && bgStyle && (
-        <>
-          <div className="absolute inset-0 z-0" style={bgStyle} />
-          <div className="absolute inset-0 z-[1]" style={{ background: "rgba(0, 0, 0, 0.3)" }} />
-        </>
-      )}
-
+    <div className="flex h-screen relative" style={{ background: "var(--bg-content)" }}>
       {/* Entry list sidebar */}
       <div
         className="w-72 flex flex-col h-full border-r relative z-10"
-        style={hasCustomBg ? { ...GLASS_STYLE, borderRadius: 0 } : { background: "var(--bg-sidebar)", borderColor: "hsl(var(--border-subtle))" }}
+        style={{ background: "var(--bg-sidebar)", borderColor: "hsl(var(--border-subtle))" }}
       >
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
@@ -112,7 +97,7 @@ const Journal = () => {
             onClick={() => navigateTo("/chat")}
             className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
             style={{ color: "var(--gray-400)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_BORDER : "var(--gray-800)"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -134,7 +119,7 @@ const Journal = () => {
         <div
           className="mx-3 mb-2 px-3 py-2.5 rounded-lg flex gap-2"
           style={{
-            background: hasCustomBg ? GLASS_BORDER : "var(--gray-850)",
+            background: "var(--gray-850)",
             fontSize: "12px",
             lineHeight: 1.5,
             color: "var(--gray-400)",
@@ -173,12 +158,12 @@ const Journal = () => {
                     onClick={() => setSelectedEntry(entry)}
                     className="w-full text-left px-3 py-2.5 rounded-lg transition-colors mb-0.5"
                     style={{
-                      background: selectedEntry?.id === entry.id ? (hasCustomBg ? GLASS_BORDER : "var(--gray-850)") : "transparent",
+                      background: selectedEntry?.id === entry.id ? "var(--gray-850)" : "transparent",
                       fontSize: "13px",
                       color: selectedEntry?.id === entry.id ? "var(--text-primary)" : "var(--text-secondary)",
                     }}
                     onMouseEnter={(e) => {
-                      if (selectedEntry?.id !== entry.id) e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)";
+                      if (selectedEntry?.id !== entry.id) e.currentTarget.style.background = "var(--gray-850)";
                     }}
                     onMouseLeave={(e) => {
                       if (selectedEntry?.id !== entry.id) e.currentTarget.style.background = "transparent";
@@ -193,7 +178,7 @@ const Journal = () => {
                             fontSize: "10px",
                             fontWeight: 500,
                             color: "var(--text-secondary)",
-                            background: hasCustomBg ? GLASS_BORDER : "var(--gray-800)",
+                            background: "var(--gray-800)",
                             textTransform: "capitalize",
                           }}
                         >
@@ -224,12 +209,7 @@ const Journal = () => {
           <div className="flex-1 overflow-y-auto">
             <div
               className="max-w-2xl mx-auto px-8 py-12"
-            style={hasCustomBg ? {
-                ...GLASS_STYLE,
-                borderRadius: "16px",
-                marginTop: "24px",
-                marginBottom: "24px",
-              } : undefined}
+            style={undefined}
             >
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">

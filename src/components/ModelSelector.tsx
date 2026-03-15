@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GLASS_DROPDOWN_STYLE, GLASS_HOVER, GLASS_ACTIVE, GLASS_BORDER, GLASS_MUTED, GLASS_TEXT } from "@/lib/glassmorphism";
 
 export interface ModelOption {
   id: string;
@@ -32,7 +31,7 @@ interface ModelSelectorProps {
   frosted?: boolean;
 }
 
-export function ModelSelector({ selectedModel, onModelChange, frosted }: ModelSelectorProps) {
+export function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -54,11 +53,11 @@ export function ModelSelector({ selectedModel, onModelChange, frosted }: ModelSe
       onClick={() => { onModelChange(model.id); setOpen(false); }}
       className="w-full flex items-center justify-between px-3 py-2 transition-colors"
       style={{
-        background: selectedModel === model.id ? (frosted ? GLASS_ACTIVE : "var(--bg-active)") : "transparent",
-        color: frosted ? GLASS_TEXT : "var(--text-primary)",
+        background: selectedModel === model.id ? "var(--bg-active)" : "transparent",
+        color: "var(--text-primary)",
         fontSize: "14px",
       }}
-      onMouseEnter={(e) => { if (selectedModel !== model.id) e.currentTarget.style.background = frosted ? GLASS_HOVER : "var(--bg-hover)"; }}
+      onMouseEnter={(e) => { if (selectedModel !== model.id) e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { if (selectedModel !== model.id) e.currentTarget.style.background = "transparent"; }}
     >
       <div className="flex items-center gap-2">
@@ -68,7 +67,7 @@ export function ModelSelector({ selectedModel, onModelChange, frosted }: ModelSe
         {model.reasoning && (
           <span
             className="flex items-center gap-1 px-1.5 py-0.5 rounded-md"
-            style={{ fontSize: "10px", fontWeight: 600, background: frosted ? GLASS_BORDER : "var(--bg-elevated)", color: "var(--text-secondary)" }}
+            style={{ fontSize: "10px", fontWeight: 600, background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
           >
             <Sparkles className="h-2.5 w-2.5" />
             Reasoning
@@ -91,22 +90,19 @@ export function ModelSelector({ selectedModel, onModelChange, frosted }: ModelSe
           fontSize: "16px",
           fontWeight: 600,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = frosted ? GLASS_HOVER : "var(--bg-hover)"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       >
         <span className="truncate max-w-[200px]">
           {current.name}
         </span>
-        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} style={{ color: frosted ? GLASS_MUTED : "var(--text-muted)" }} />
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} style={{ color: "var(--text-muted)" }} />
       </button>
 
       {open && (
         <div
           className="absolute top-full left-0 mt-1 w-64 rounded-xl py-2 z-50"
-          style={frosted ? {
-            ...GLASS_DROPDOWN_STYLE,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-          } : {
+          style={{
             background: "var(--bg-card)",
             border: "1px solid hsl(var(--border-subtle))",
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",

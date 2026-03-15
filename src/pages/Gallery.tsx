@@ -3,11 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Image as ImageIcon, Loader2, ExternalLink } from "lucide-react";
-import { useUserSettings } from "@/hooks/useUserSettings";
 import { usePageNavigate } from "@/hooks/usePageNavigate";
 import PageTransition from "@/components/PageTransition";
-import { getBackgroundStyle } from "@/lib/backgrounds";
-import { GLASS_STYLE, GLASS_HOVER, GLASS_BORDER, GLASS_MUTED, GLASS_ICON, GLASS_TEXT } from "@/lib/glassmorphism";
 import ImageLightbox from "@/components/ImageLightbox";
 
 interface GalleryImage {
@@ -23,13 +20,9 @@ const Gallery = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { exiting, navigateTo } = usePageNavigate();
-  const { settings } = useUserSettings();
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-
-  const bgStyle = getBackgroundStyle(settings?.background_style);
-  const hasCustomBg = !!bgStyle;
 
   useEffect(() => {
     if (user) loadImages();
@@ -131,14 +124,7 @@ const Gallery = () => {
 
   return (
     <PageTransition exiting={exiting}>
-    <div className="flex h-screen relative" style={{ background: hasCustomBg ? "transparent" : "var(--bg-content)" }}>
-      {hasCustomBg && bgStyle && (
-        <>
-          <div className="absolute inset-0 z-0" style={bgStyle} />
-          <div className="absolute inset-0 z-[1]" style={{ background: "rgba(0, 0, 0, 0.3)" }} />
-        </>
-      )}
-
+    <div className="flex h-screen relative" style={{ background: "var(--bg-content)" }}>
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
@@ -146,7 +132,7 @@ const Gallery = () => {
             onClick={() => navigateTo("/chat")}
             className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
             style={{ color: "var(--gray-400)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_BORDER : "var(--gray-800)"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -185,13 +171,8 @@ const Gallery = () => {
                     key={idx}
                     className="group relative rounded-xl overflow-hidden cursor-pointer"
                     style={{
-                      ...(hasCustomBg ? {
-                        background: "rgba(255, 255, 255, 0.06)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
-                      } : {
-                        background: "var(--bg-card)",
-                        border: "1px solid hsl(var(--border-subtle))",
-                      }),
+                      background: "var(--bg-card)",
+                      border: "1px solid hsl(var(--border-subtle))",
                     }}
                   >
                     <div

@@ -3,8 +3,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { usePageNavigate } from "@/hooks/usePageNavigate";
-import { useUserSettings } from "@/hooks/useUserSettings";
-import { getBackgroundStyle } from "@/lib/backgrounds";
 import { GLASS_STYLE, GLASS_BORDER, GLASS_MUTED, GLASS_LABEL, GLASS_ICON, GLASS_ICON_HOVER } from "@/lib/glassmorphism";
 import PageTransition from "@/components/PageTransition";
 import { EmotionalStateExpanded } from "@/components/EmotionalStateDisplay";
@@ -25,12 +23,9 @@ const InnerLife = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { exiting, navigateTo } = usePageNavigate();
-  const { settings } = useUserSettings();
   const [activeTab, setActiveTab] = useState<Tab>("emotions");
   const [dreams, setDreams] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
-
-  const bgStyle = getBackgroundStyle(settings?.background_style || undefined);
 
   useEffect(() => {
     if (!user) return;
@@ -66,7 +61,7 @@ const InnerLife = () => {
 
   return (
     <PageTransition exiting={exiting}>
-      <div className="h-screen flex flex-col" style={bgStyle || { background: "#0A0C10" }}>
+      <div className="h-screen flex flex-col" style={{ background: "#0A0C10" }}>
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${GLASS_BORDER}` }}>
           <button

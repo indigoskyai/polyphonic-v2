@@ -78,22 +78,7 @@ const Auth = () => {
   };
 
   return (
-    <div className={`relative flex min-h-screen items-center justify-center px-4 overflow-hidden ${exiting ? 'page-transition-exit' : 'page-transition-enter'}`}>
-      {/* Wallpaper background */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: "url('/images/landing-bg.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center 35%",
-          backgroundRepeat: "no-repeat",
-        }}
-      />
-      {/* Dark overlay for readability */}
-      <div
-        className="absolute inset-0 z-[1]"
-        style={{ background: "rgba(0, 0, 0, 0.35)" }}
-      />
+    <div className={`relative flex min-h-screen items-center justify-center px-4 overflow-hidden ${exiting ? 'page-transition-exit' : 'page-transition-enter'}`} style={{ background: "var(--bg-void, #0a0a0a)" }}>
 
       {/* Floating glass card */}
       <div

@@ -2,22 +2,13 @@ import { describe, it, expect } from "vitest";
 import { hasCustomBackground, GLASS_STYLE, GLASS_DROPDOWN_STYLE, GLASS_BUTTON_IMAGE_GEN, GLASS_BUTTON_WEB_SEARCH, GLASS_BUTTON_INACTIVE, GLASS_INPUT_FOCUS_BORDER, GLASS_INPUT_FOCUS_SHADOW } from "@/lib/glassmorphism";
 
 describe("glassmorphism", () => {
-  it("hasCustomBackground returns true for wallpaper styles", () => {
-    expect(hasCustomBackground("wallpaper")).toBe(true);
-    expect(hasCustomBackground("wallpaper-stargazer")).toBe(true);
-  });
-
-  it("hasCustomBackground returns true for gradient styles", () => {
-    expect(hasCustomBackground("gradient-sunset")).toBe(true);
-  });
-
-  it("hasCustomBackground returns false for 'none'", () => {
+  it("hasCustomBackground always returns false", () => {
+    expect(hasCustomBackground("wallpaper")).toBe(false);
+    expect(hasCustomBackground("wallpaper-stargazer")).toBe(false);
+    expect(hasCustomBackground("gradient-sunset")).toBe(false);
     expect(hasCustomBackground("none")).toBe(false);
-  });
-
-  it("hasCustomBackground defaults to wallpaper (true) for null/undefined", () => {
-    expect(hasCustomBackground(null)).toBe(true);
-    expect(hasCustomBackground(undefined)).toBe(true);
+    expect(hasCustomBackground(null)).toBe(false);
+    expect(hasCustomBackground(undefined)).toBe(false);
   });
 
   it("GLASS_STYLE has required properties", () => {

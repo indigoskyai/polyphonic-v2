@@ -1,7 +1,5 @@
-import { getBackgroundStyle } from "@/lib/backgrounds";
-
 export function hasCustomBackground(backgroundStyle?: string | null): boolean {
-  return !!getBackgroundStyle(backgroundStyle || undefined);
+  return false;
 }
 
 export const GLASS_STYLE: React.CSSProperties = {

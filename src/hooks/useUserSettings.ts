@@ -36,7 +36,7 @@ const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id"> = {
   theme: "dark",
   memory_enabled: true,
   chat_history_enabled: true,
-  background_style: "wallpaper",
+  background_style: "none",
   persona: "neutral",
   nickname: "",
   occupation: "",

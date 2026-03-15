@@ -12,8 +12,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { ImportBanner } from "@/components/ImportBanner";
 import { useImportStatus } from "@/hooks/useImportStatus";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getBackgroundStyle } from "@/lib/backgrounds";
-import { GLASS_STYLE, GLASS_DROPDOWN_STYLE, GLASS_HOVER, GLASS_ACTIVE, GLASS_BORDER, GLASS_ICON, GLASS_ICON_HOVER, GLASS_LABEL, GLASS_MUTED, GLASS_TEXT, GLASS_INPUT_BG, GLASS_INPUT_BORDER, GLASS_DIVIDER, GLASS_BUTTON_INACTIVE, GLASS_BUTTON_IMAGE_GEN, GLASS_BUTTON_WEB_SEARCH, GLASS_BUTTON_IMAGE_GEN_HOVER, GLASS_BUTTON_WEB_SEARCH_HOVER, GLASS_INPUT_FOCUS_BORDER, GLASS_INPUT_FOCUS_SHADOW } from "@/lib/glassmorphism";
+import { GLASS_HOVER, GLASS_ICON_HOVER, GLASS_MUTED, GLASS_BUTTON_INACTIVE, GLASS_BUTTON_IMAGE_GEN, GLASS_BUTTON_WEB_SEARCH, GLASS_BUTTON_IMAGE_GEN_HOVER, GLASS_BUTTON_WEB_SEARCH_HOVER, GLASS_INPUT_FOCUS_BORDER, GLASS_INPUT_FOCUS_SHADOW } from "@/lib/glassmorphism";
 import {
   Plus, Send, Trash2, LogOut, MessageSquare, Search, Settings, Archive,
   Paperclip, ArrowUp, User, PanelLeftOpen, X, Loader2, Square, Mic, MicOff, ImageIcon,
@@ -1352,8 +1351,7 @@ const Chat = () => {
     </div>
   );
 
-  const hasCustomBg = !!getBackgroundStyle(settings?.background_style);
-  const inputArea = renderInputArea(hasCustomBg);
+  const inputArea = renderInputArea(false);
 
   // Sidebar content (shared between mobile overlay and desktop)
   const sidebarContent = (
@@ -1361,42 +1359,205 @@ const Chat = () => {
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-2.5 pb-0.5">
         <div className="flex items-center gap-2 px-2">
-          <span style={{ fontSize: "13px", fontWeight: 600, letterSpacing: "0.08em", color: hasCustomBg ? GLASS_LABEL : "var(--text-secondary)", textTransform: "uppercase" as const }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, letterSpacing: "0.08em", color: "var(--text-secondary)", textTransform: "uppercase" as const }}>
             Polyphonic
           </span>
         </div>
         <button
           onClick={() => setSidebarCollapsed(true)}
           className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-          style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_BORDER : "var(--gray-800)"; }}
+          style={{ color: "var(--gray-400)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Nav Items */}
+      {/* Top Actions */}
       <div className="px-2 pt-3 pb-1 space-y-0">
         <button
           onClick={() => { setActiveConversationId(null); setMessages([]); if (isMobile) setSidebarCollapsed(true); }}
           className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
           style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
         >
-          <Plus className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
+          <Plus className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
           <span>New chat</span>
         </button>
         <button
           onClick={() => setSearchOpen(!searchOpen)}
           className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
           style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
         >
-          <Search className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
+          <Search className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
           <span>Search chats</span>
+        </button>
+      </div>
+
+      {/* Inline search */}
+      {searchOpen && (
+        <div className="px-2 pb-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--gray-500)" }} />
+            <input
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              className="w-full pl-9 h-8 text-[13px] rounded-lg outline-none"
+              style={{ background: "var(--bg-input)", border: "1px solid hsl(var(--border-subtle))", color: "#d4d4d4" }}
+              onBlur={(e) => { if (!e.target.value) { setSearchQuery(""); setSearchOpen(false); } }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Section Header */}
+      <div className="px-2 pt-3 pb-0.5">
+        <div className="px-3 pb-1">
+          <span style={{ fontFamily: "var(--font-sans)", fontSize: "12px", fontWeight: 500, color: "var(--gray-500)" }}>
+            Your chats
+          </span>
+        </div>
+      </div>
+
+      {/* Chat List */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-0">
+        {filteredChats.map((conv) => (
+          <div
+            key={conv.id}
+            className={cn(
+              "group w-full text-left py-1.5 px-3 rounded-lg flex items-center gap-2 transition-all duration-150 mb-0 cursor-pointer min-h-[36px]",
+            )}
+            style={{
+              background: activeConversationId === conv.id ? ("var(--gray-850)") : "transparent",
+              fontSize: "14px",
+              color: activeConversationId === conv.id ? "#ececec" : "#d4d4d4",
+            }}
+            onClick={() => {
+              if (editingConvId !== conv.id) setActiveConversationId(conv.id);
+            }}
+            onMouseEnter={(e) => {
+              if (activeConversationId !== conv.id) e.currentTarget.style.background = "var(--gray-850)";
+            }}
+            onMouseLeave={(e) => {
+              if (activeConversationId !== conv.id) e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {editingConvId === conv.id ? (
+              <input
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") renameConversation(conv.id, editingTitle);
+                  if (e.key === "Escape") setEditingConvId(null);
+                }}
+                onBlur={() => renameConversation(conv.id, editingTitle)}
+                autoFocus
+                className="flex-1 min-w-0 bg-transparent outline-none text-[14px]"
+                style={{ color: "#ececec" }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span
+                className="truncate flex-1 flex items-center gap-1.5"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingConvId(conv.id);
+                  setEditingTitle(conv.title || "");
+                }}
+              >
+                {conv.parent_conversation_id && (
+                  <GitBranch className="h-3 w-3 shrink-0" style={{ color: "var(--gray-500)" }} />
+                )}
+                <span className="truncate">{conv.title || "Untitled"}</span>
+              </span>
+            )}
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingConvId(conv.id);
+                  setEditingTitle(conv.title || "");
+                }}
+                className="p-1 rounded"
+                style={{ color: "var(--gray-500)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--gray-500)"; }}
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
+                className="p-1 rounded"
+                style={{ color: "var(--gray-500)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--gray-500)"; }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {filteredChats.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <MessageSquare className="h-5 w-5" style={{ color: "var(--gray-500)" }} />
+            <span style={{ fontSize: "13px", color: "var(--gray-500)" }}>
+              {searchQuery ? "No conversations found" : "No conversations yet"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="px-2 pt-2 pb-1 space-y-0" style={{ borderTop: "1px solid var(--gray-900)" }}>
+        <button
+          onClick={() => { navigateTo("/journal"); if (isMobile) setSidebarCollapsed(true); }}
+          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors relative min-h-[36px]"
+          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <BookOpen className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
+          <span>Journal</span>
+          {unreadJournalCount > 0 && (
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--gray-400)",
+                marginLeft: "auto",
+              }}
+            >
+              {unreadJournalCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => { navigateTo("/inner-life"); if (isMobile) setSidebarCollapsed(true); }}
+          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
+          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <Brain className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
+          <span>Inner Life</span>
+        </button>
+
+        <button
+          onClick={() => { navigateTo("/gallery"); if (isMobile) setSidebarCollapsed(true); }}
+          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
+          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <ImageIcon className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
+          <span>Gallery</span>
         </button>
 
         <Popover open={reflectionsOpen} onOpenChange={setReflectionsOpen}>
@@ -1404,17 +1565,17 @@ const Chat = () => {
             <button
               className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors relative min-h-[36px]"
               style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             >
-              <Sparkles className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
+              <Sparkles className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
               <span>Reflections</span>
               {curiosityQuestions.length > 0 && (
                 <span
                   style={{
                     fontSize: "12px",
                     fontWeight: 500,
-                    color: hasCustomBg ? GLASS_MUTED : "var(--gray-400)",
+                    color: "var(--gray-400)",
                     marginLeft: "auto",
                   }}
                 >
@@ -1427,10 +1588,7 @@ const Chat = () => {
             side="right"
             align="start"
             className="w-80 p-0"
-            style={hasCustomBg ? {
-              ...GLASS_DROPDOWN_STYLE,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            } : {
+            style={{
               background: "var(--bg-card)",
               border: "1px solid hsl(var(--border-subtle))",
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
@@ -1473,7 +1631,7 @@ const Chat = () => {
                         background: "transparent",
                         lineHeight: 1.5,
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       {q.question}
@@ -1484,188 +1642,17 @@ const Chat = () => {
             </div>
           </PopoverContent>
         </Popover>
-
-        <button
-          onClick={() => { navigateTo("/gallery"); if (isMobile) setSidebarCollapsed(true); }}
-          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
-          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        >
-          <ImageIcon className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
-          <span>Gallery</span>
-        </button>
-
-        <button
-          onClick={() => { navigateTo("/journal"); if (isMobile) setSidebarCollapsed(true); }}
-          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors relative min-h-[36px]"
-          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        >
-          <BookOpen className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
-          <span>Journal</span>
-          {unreadJournalCount > 0 && (
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 500,
-                color: hasCustomBg ? GLASS_MUTED : "var(--gray-400)",
-                marginLeft: "auto",
-              }}
-            >
-              {unreadJournalCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => { navigateTo("/guide"); if (isMobile) setSidebarCollapsed(true); }}
-          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
-          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        >
-          <HelpCircle className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
-          <span>Guide</span>
-        </button>
-
-        <button
-          onClick={() => { navigateTo("/inner-life"); if (isMobile) setSidebarCollapsed(true); }}
-          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors min-h-[36px]"
-          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        >
-          <Brain className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
-          <span>Inner Life</span>
-        </button>
-      </div>
-
-      {/* Inline search */}
-      {searchOpen && (
-        <div className="px-2 pb-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }} />
-            <input
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              autoFocus
-              className="w-full pl-9 h-8 text-[13px] rounded-lg outline-none"
-              style={{ background: hasCustomBg ? GLASS_HOVER : "var(--bg-input)", border: hasCustomBg ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid hsl(var(--border-subtle))", color: "#d4d4d4" }}
-              onBlur={(e) => { if (!e.target.value) { setSearchQuery(""); setSearchOpen(false); } }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Section Header */}
-      <div className="px-2 pt-3 pb-0.5">
-        <div className="px-3 pb-1">
-          <span style={{ fontFamily: "var(--font-sans)", fontSize: "12px", fontWeight: 500, color: hasCustomBg ? GLASS_LABEL : "var(--gray-500)" }}>
-            Your chats
-          </span>
-        </div>
-      </div>
-
-      {/* Chat List */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-0">
-        {filteredChats.map((conv) => (
-          <div
-            key={conv.id}
-            className={cn(
-              "group w-full text-left py-1.5 px-3 rounded-lg flex items-center gap-2 transition-all duration-150 mb-0 cursor-pointer min-h-[36px]",
-            )}
-            style={{
-              background: activeConversationId === conv.id ? (hasCustomBg ? "rgba(255, 255, 255, 0.1)" : "var(--gray-850)") : "transparent",
-              fontSize: "14px",
-              color: activeConversationId === conv.id ? "#ececec" : "#d4d4d4",
-            }}
-            onClick={() => {
-              if (editingConvId !== conv.id) setActiveConversationId(conv.id);
-            }}
-            onMouseEnter={(e) => {
-              if (activeConversationId !== conv.id) e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-850)";
-            }}
-            onMouseLeave={(e) => {
-              if (activeConversationId !== conv.id) e.currentTarget.style.background = "transparent";
-            }}
-          >
-            {editingConvId === conv.id ? (
-              <input
-                value={editingTitle}
-                onChange={(e) => setEditingTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") renameConversation(conv.id, editingTitle);
-                  if (e.key === "Escape") setEditingConvId(null);
-                }}
-                onBlur={() => renameConversation(conv.id, editingTitle)}
-                autoFocus
-                className="flex-1 min-w-0 bg-transparent outline-none text-[14px]"
-                style={{ color: "#ececec" }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span
-                className="truncate flex-1 flex items-center gap-1.5"
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingConvId(conv.id);
-                  setEditingTitle(conv.title || "");
-                }}
-              >
-                {conv.parent_conversation_id && (
-                  <GitBranch className="h-3 w-3 shrink-0" style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }} />
-                )}
-                <span className="truncate">{conv.title || "Untitled"}</span>
-              </span>
-            )}
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingConvId(conv.id);
-                  setEditingTitle(conv.title || "");
-                }}
-                className="p-1 rounded"
-                style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
-              >
-                <Pencil size={13} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
-                className="p-1 rounded"
-                style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
-        {filteredChats.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <MessageSquare className="h-5 w-5" style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }} />
-            <span style={{ fontSize: "13px", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}>
-              {searchQuery ? "No conversations found" : "No conversations yet"}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
-      <div className="mt-auto py-2.5 px-3 flex items-center gap-3" style={{ borderTop: hasCustomBg ? `1px solid ${GLASS_BORDER}` : "1px solid var(--gray-900)" }}>
+      <div className="py-2.5 px-3 flex items-center gap-3" style={{ borderTop: "1px solid var(--gray-900)" }}>
         {user && (
           <>
-            <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0" style={{ background: hasCustomBg ? GLASS_BORDER : "var(--gray-800)" }}>
-              <User className="h-3.5 w-3.5" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
+            <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--gray-800)" }}>
+              <User className="h-3.5 w-3.5" style={{ color: "var(--gray-400)" }} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="truncate" style={{ fontSize: "14px", fontWeight: 400, color: hasCustomBg ? GLASS_TEXT : "var(--gray-200)" }}>
+              <div className="truncate" style={{ fontSize: "14px", fontWeight: 400, color: "var(--gray-200)" }}>
                 {displayName}
               </div>
             </div>
@@ -1675,31 +1662,41 @@ const Chat = () => {
           <DropdownMenuTrigger asChild>
             <button
               className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-              style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_BORDER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--gray-200)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON : "var(--gray-400)"; }}
+              style={{ color: "var(--gray-400)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--gray-200)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-400)"; }}
             >
               <Settings className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-48 mb-2" style={hasCustomBg ? { ...GLASS_DROPDOWN_STYLE, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" } : { background: "var(--gray-900)", border: "1px solid var(--gray-800)" }}>
+          <DropdownMenuContent side="top" align="end" className="w-48 mb-2" style={{ background: "var(--gray-900)", border: "1px solid var(--gray-800)" }}>
             <DropdownMenuItem
               onClick={() => setSettingsOpen(true)}
-              className={`cursor-pointer gap-2 text-[13px]${hasCustomBg ? " focus:bg-transparent" : ""}`}
-              style={{ color: hasCustomBg ? GLASS_ICON_HOVER : "var(--gray-200)" }}
-              onMouseEnter={hasCustomBg ? (e) => { (e.currentTarget as HTMLElement).style.background = GLASS_HOVER; } : undefined}
-              onMouseLeave={hasCustomBg ? (e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; } : undefined}
+              className="cursor-pointer gap-2 text-[13px]"
+              style={{ color: "var(--gray-200)" }}
+              onMouseEnter={undefined}
+              onMouseLeave={undefined}
             >
-              <Settings className="h-4 w-4" style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }} />
+              <Settings className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator style={{ background: hasCustomBg ? GLASS_BORDER : "var(--gray-800)" }} />
+            <DropdownMenuItem
+              onClick={() => { navigateTo("/guide"); if (isMobile) setSidebarCollapsed(true); }}
+              className="cursor-pointer gap-2 text-[13px]"
+              style={{ color: "var(--gray-200)" }}
+              onMouseEnter={undefined}
+              onMouseLeave={undefined}
+            >
+              <HelpCircle className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
+              About
+            </DropdownMenuItem>
+            <DropdownMenuSeparator style={{ background: "var(--gray-800)" }} />
             <DropdownMenuItem
               onClick={signOut}
-              className={`cursor-pointer gap-2 text-[13px]${hasCustomBg ? " focus:bg-transparent" : ""}`}
+              className="cursor-pointer gap-2 text-[13px]"
               style={{ color: "hsl(0 65% 50%)" }}
-              onMouseEnter={hasCustomBg ? (e) => { (e.currentTarget as HTMLElement).style.background = GLASS_HOVER; } : undefined}
-              onMouseLeave={hasCustomBg ? (e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; } : undefined}
+              onMouseEnter={undefined}
+              onMouseLeave={undefined}
             >
               <LogOut className="h-4 w-4" />
               Sign Out
@@ -1712,18 +1709,7 @@ const Chat = () => {
 
   return (
     <PageTransition exiting={exiting}>
-    <div className="flex h-screen h-dvh relative" data-custom-bg={hasCustomBg || undefined} style={{ background: hasCustomBg ? "transparent" : "var(--bg-content)", border: "none" }}>
-      {/* Background layer - behind everything including sidebar */}
-      {hasCustomBg && (() => {
-        const bgStyle = getBackgroundStyle(settings?.background_style);
-        if (!bgStyle) return null;
-        return (
-          <>
-            <div className="absolute inset-0 z-0" style={bgStyle} />
-            <div className="absolute inset-0 z-[1]" style={{ background: "rgba(0, 0, 0, 0.3)" }} />
-          </>
-        );
-      })()}
+    <div className="flex h-screen h-dvh relative" style={{ background: "var(--bg-content)", border: "none" }}>
       {/* ============ SIDEBAR ============ */}
       {isMobile ? (
         // Mobile: fixed overlay
@@ -1735,7 +1721,7 @@ const Chat = () => {
             />
              <nav
               className="relative flex flex-col h-full w-72 max-w-[85vw] overflow-hidden"
-              style={hasCustomBg ? { ...GLASS_STYLE, borderRadius: 0, clipPath: "inset(0)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" } : { background: "var(--bg-sidebar)" }}
+              style={{ background: "var(--bg-sidebar)" }}
             >
               {sidebarContent}
             </nav>
@@ -1748,7 +1734,7 @@ const Chat = () => {
             "flex flex-col h-full min-h-0 max-h-screen overflow-hidden transition-all duration-200 relative z-10",
             sidebarCollapsed ? "w-0 overflow-hidden" : "w-60"
           )}
-          style={hasCustomBg ? { ...GLASS_STYLE, borderRadius: 0, isolation: "isolate" as const, overflow: "hidden", borderRight: "none", boxShadow: "none", clipPath: "inset(0)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" } : { background: "var(--bg-sidebar)" }}
+          style={{ background: "var(--bg-sidebar)" }}
         >
           {sidebarContent}
         </nav>
@@ -1757,19 +1743,19 @@ const Chat = () => {
       {/* ============ MAIN CHAT AREA ============ */}
       <div className="flex-1 flex flex-col min-w-0 relative z-[11]" style={{ background: "transparent", border: "none" }}>
         {/* Top bar with model selector */}
-        <div className="flex items-center h-12 px-3 shrink-0 relative z-20" style={{ borderBottom: hasCustomBg ? "none" : "1px solid hsl(var(--border-subtle) / 0.3)", borderTop: "none" }}>
+        <div className="flex items-center h-12 px-3 shrink-0 relative z-20" style={{ borderBottom: "1px solid hsl(var(--border-subtle) / 0.3)", borderTop: "none" }}>
           {(sidebarCollapsed || isMobile) && (
             <button
               onClick={() => setSidebarCollapsed(false)}
               className="h-8 w-8 flex items-center justify-center rounded-lg transition-colors mr-1"
-              style={{ color: hasCustomBg ? GLASS_ICON : "var(--gray-400)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON : "var(--gray-400)"; }}
+              style={{ color: "var(--gray-400)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-400)"; }}
             >
               {isMobile ? <Menu className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
             </button>
           )}
-          <ModelSelector selectedModel={selectedModel} onModelChange={handleModelChange} frosted={hasCustomBg} />
+          <ModelSelector selectedModel={selectedModel} onModelChange={handleModelChange} frosted={false} />
           <div className="ml-auto">
             <EmotionalStateCompact />
           </div>
@@ -1794,7 +1780,7 @@ const Chat = () => {
                   letterSpacing: "0.15em",
                   textTransform: "uppercase" as const,
                   color: "rgba(255, 255, 255, 0.95)",
-                  textShadow: hasCustomBg ? "0 2px 30px rgba(255, 255, 255, 0.15), 0 4px 40px rgba(0, 0, 0, 0.6)" : "0 2px 20px rgba(0, 0, 0, 0.5)",
+                  textShadow: "0 2px 20px rgba(0, 0, 0, 0.5)",
                 }}
               >
                 Polyphonic
@@ -1810,15 +1796,7 @@ const Chat = () => {
             <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto flex flex-col relative z-10">
               <div className="flex-1 min-h-0">
                 <div className="max-w-3xl mx-auto px-6 py-6"
-                     style={hasCustomBg ? {
-                       background: "rgba(0, 0, 0, 0.35)",
-                       backdropFilter: "blur(12px)",
-                       WebkitBackdropFilter: "blur(12px)",
-                       borderRadius: "20px",
-                       marginTop: "8px",
-                       marginBottom: "8px",
-                       padding: "24px",
-                     } : undefined}
+                     style={undefined}
                 >
                   {messages.map((msg, idx) => {
                     // Detect model switch: show divider when an assistant message uses a different model than the previous assistant message
@@ -1835,11 +1813,11 @@ const Chat = () => {
                     <div key={msg.id}>
                       {showModelSwitch && (
                         <div className="flex items-center gap-3 my-4" style={{ opacity: 0.5 }}>
-                          <div className="flex-1 h-px" style={{ background: hasCustomBg ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)" }} />
-                          <span style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.05em", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)", textTransform: "uppercase" as const, whiteSpace: "nowrap" }}>
+                          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                          <span style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.05em", color: "var(--gray-500)", textTransform: "uppercase" as const, whiteSpace: "nowrap" }}>
                             switched to {switchModelName}
                           </span>
-                          <div className="flex-1 h-px" style={{ background: hasCustomBg ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)" }} />
+                          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
                         </div>
                       )}
                     <div
@@ -1850,12 +1828,7 @@ const Chat = () => {
                         <div
                           className="rounded-2xl px-5 py-4 relative"
                           style={{
-                            background: hasCustomBg ? "rgba(255, 255, 255, 0.08)" : "var(--bg-card)",
-                            ...(hasCustomBg ? {
-                              border: "1px solid rgba(255, 255, 255, 0.1)",
-                              backdropFilter: "blur(12px)",
-                              WebkitBackdropFilter: "blur(12px)",
-                            } : {}),
+                            background: "var(--bg-card)",
                           }}
                         >
                           {/* Edit button on hover */}
@@ -1864,9 +1837,9 @@ const Chat = () => {
                               <button
                                 onClick={() => { setEditingMessageId(msg.id); setEditingMessageContent(msg.content); }}
                                 className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-                                style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                style={{ color: "var(--gray-500)" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                 title="Edit message"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
@@ -1874,10 +1847,10 @@ const Chat = () => {
                             </div>
                           )}
                           <div className="flex items-center gap-2 mb-2">
-                            <span style={{ fontSize: "14px", fontWeight: 500, color: hasCustomBg ? GLASS_TEXT : "var(--text-primary)" }}>{displayName}</span>
-                            <span style={{ fontSize: "12px", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}>{formatTime(msg.created_at)}</span>
+                            <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>{displayName}</span>
+                            <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>{formatTime(msg.created_at)}</span>
                             {msg.edited_at && (
-                              <span style={{ fontSize: "11px", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)", fontStyle: "italic" }}>(edited)</span>
+                              <span style={{ fontSize: "11px", color: "var(--gray-500)", fontStyle: "italic" }}>(edited)</span>
                             )}
                           </div>
                           {editingMessageId === msg.id ? (
@@ -1887,9 +1860,9 @@ const Chat = () => {
                                 onChange={(e) => setEditingMessageContent(e.target.value)}
                                 className="w-full rounded-lg px-3 py-2 text-[15px] outline-none resize-none"
                                 style={{
-                                  background: hasCustomBg ? "rgba(255,255,255,0.06)" : "var(--bg-input)",
-                                  border: hasCustomBg ? "1px solid rgba(255,255,255,0.12)" : "1px solid hsl(var(--border-subtle))",
-                                  color: hasCustomBg ? GLASS_TEXT : "var(--text-primary)",
+                                  background: "var(--bg-input)",
+                                  border: "1px solid hsl(var(--border-subtle))",
+                                  color: "var(--text-primary)",
                                   minHeight: "60px",
                                   lineHeight: 1.7,
                                 }}
@@ -1906,8 +1879,8 @@ const Chat = () => {
                                 <button
                                   onClick={() => { setEditingMessageId(null); setEditingMessageContent(""); }}
                                   className="px-3 py-1.5 rounded-lg text-xs transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-400)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; }}
+                                  style={{ color: "var(--gray-400)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; }}
                                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                                 >
                                   Cancel
@@ -1915,9 +1888,9 @@ const Chat = () => {
                                 <button
                                   onClick={() => handleEditMessage(msg.id, editingMessageContent)}
                                   className="px-3 py-1.5 rounded-lg text-xs transition-colors"
-                                  style={{ background: hasCustomBg ? "rgba(255,255,255,0.12)" : "var(--gray-700)", color: hasCustomBg ? GLASS_TEXT : "var(--text-primary)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? "rgba(255,255,255,0.18)" : "var(--gray-600)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = hasCustomBg ? "rgba(255,255,255,0.12)" : "var(--gray-700)"; }}
+                                  style={{ background: "var(--gray-700)", color: "var(--text-primary)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-600)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--gray-700)"; }}
                                 >
                                   Save & Submit
                                 </button>
@@ -1926,7 +1899,7 @@ const Chat = () => {
                           ) : (
                             <>
                               {msg.content && msg.content !== "(attached files)" && (
-                                <div style={{ fontSize: "15px", lineHeight: 1.7, color: hasCustomBg ? GLASS_TEXT : "var(--text-primary)", fontWeight: 400, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                <div style={{ fontSize: "15px", lineHeight: 1.7, color: "var(--text-primary)", fontWeight: 400, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                   {msg.content}
                                 </div>
                               )}
@@ -2031,23 +2004,23 @@ const Chat = () => {
                                 <button
                                   onClick={() => handleVariantNav(msg.id, 'prev')}
                                   className="h-6 w-6 flex items-center justify-center rounded-md transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                  style={{ color: "var(--gray-500)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                   title="Previous variant"
                                 >
                                   <ChevronLeft className="h-3.5 w-3.5" />
                                 </button>
-                                <span style={{ fontSize: "11px", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "11px", color: "var(--gray-500)", fontWeight: 500, whiteSpace: "nowrap" }}>
                                   {(activeVariantIndex[msg.id] || 0) + 1}/{messageVariants[msg.id].length}
                                   {msg.model && ` · ${AVAILABLE_MODELS.find((m) => m.id === msg.model)?.name || msg.model?.split("/").pop()}`}
                                 </span>
                                 <button
                                   onClick={() => handleVariantNav(msg.id, 'next')}
                                   className="h-6 w-6 flex items-center justify-center rounded-md transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                  style={{ color: "var(--gray-500)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                   title="Next variant"
                                 >
                                   <ChevronRight className="h-3.5 w-3.5" />
@@ -2056,7 +2029,7 @@ const Chat = () => {
                             )}
                             {/* Model label when no variants */}
                             {(!messageVariants[msg.id] || messageVariants[msg.id].length <= 1) && msg.model && (
-                              <span style={{ fontSize: "11px", color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)", fontWeight: 400 }}>
+                              <span style={{ fontSize: "11px", color: "var(--gray-500)", fontWeight: 400 }}>
                                 {AVAILABLE_MODELS.find((m) => m.id === msg.model)?.name || msg.model?.split("/").pop()}
                               </span>
                             )}
@@ -2065,9 +2038,9 @@ const Chat = () => {
                                 <button
                                   onClick={() => handleRegenerate(msg.id)}
                                   className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                  style={{ color: "var(--gray-500)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                   title="Regenerate"
                                 >
                                   <RefreshCw className="h-3.5 w-3.5" />
@@ -2076,9 +2049,9 @@ const Chat = () => {
                                   <DropdownMenuTrigger asChild>
                                     <button
                                       className="h-7 px-1.5 flex items-center justify-center rounded-md transition-colors gap-1"
-                                      style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)", fontSize: "11px" }}
-                                      onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                      style={{ color: "var(--gray-500)", fontSize: "11px" }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                       title="Try other models"
                                     >
                                       <ChevronDown className="h-3 w-3" />
@@ -2087,17 +2060,17 @@ const Chat = () => {
                                   <DropdownMenuContent
                                     align="start"
                                     className="w-56"
-                                    style={hasCustomBg ? { ...GLASS_DROPDOWN_STYLE, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" } : { background: "var(--bg-card)", border: "1px solid hsl(var(--border-subtle))" }}
+                                    style={{ background: "var(--bg-card)", border: "1px solid hsl(var(--border-subtle))" }}
                                   >
                                     {AVAILABLE_MODELS.filter((m) => m.featured).map((model) => (
                                       <DropdownMenuItem
                                         key={model.id}
                                         onClick={() => handleRegenerate(msg.id, model.id)}
                                         className="cursor-pointer text-[13px]"
-                                        style={{ color: hasCustomBg ? GLASS_TEXT : "var(--text-primary)" }}
+                                        style={{ color: "var(--text-primary)" }}
                                       >
                                         {model.name}
-                                        <span className="ml-auto text-[11px]" style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}>{model.provider}</span>
+                                        <span className="ml-auto text-[11px]" style={{ color: "var(--gray-500)" }}>{model.provider}</span>
                                       </DropdownMenuItem>
                                     ))}
                                   </DropdownMenuContent>
@@ -2105,9 +2078,9 @@ const Chat = () => {
                                 <button
                                   onClick={() => handleBranchConversation(msg.id)}
                                   className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                  style={{ color: "var(--gray-500)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                   title="Branch conversation"
                                 >
                                   <GitBranch className="h-3.5 w-3.5" />
@@ -2115,9 +2088,9 @@ const Chat = () => {
                                 <button
                                   onClick={() => { navigator.clipboard.writeText(msg.content); toast({ title: "Copied to clipboard" }); }}
                                   className="h-7 w-7 flex items-center justify-center rounded-md transition-colors"
-                                  style={{ color: hasCustomBg ? GLASS_MUTED : "var(--gray-500)" }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = hasCustomBg ? GLASS_HOVER : "var(--gray-800)"; e.currentTarget.style.color = hasCustomBg ? GLASS_ICON_HOVER : "var(--text-primary)"; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hasCustomBg ? GLASS_MUTED : "var(--gray-500)"; }}
+                                  style={{ color: "var(--gray-500)" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-800)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--gray-500)"; }}
                                   title="Copy message"
                                 >
                                   <Copy className="h-3.5 w-3.5" />
@@ -2146,7 +2119,7 @@ const Chat = () => {
           </>
         )}
       </div>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onImportStarted={startImportTracking} settings={settings} onUpdateSettings={updateSettings} frosted={hasCustomBg} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onImportStarted={startImportTracking} settings={settings} onUpdateSettings={updateSettings} />
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
     </PageTransition>

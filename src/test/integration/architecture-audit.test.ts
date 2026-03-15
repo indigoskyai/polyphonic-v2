@@ -94,15 +94,14 @@ describe("Frontend defaults", () => {
     expect(source).toContain('selected_model: "anthropic/claude-opus-4.6"');
   });
 
-  test("SettingsDialog shows correct role-model defaults (journal, dreamer, observer)", () => {
+  test("SettingsDialog has 3 tabs (general, appearance, account)", () => {
     const source = readSource("src/components/SettingsDialog.tsx");
-    // Journal default
-    expect(source).toContain('"anthropic/claude-opus-4.6"');
-    // Dreamer default
-    expect(source).toContain('"google/gemini-3-pro-preview"');
-    // Observer defaults
-    expect(source).toContain('"x-ai/grok-4"');
-    expect(source).toContain('"moonshotai/kimi-k2.5"');
+    expect(source).toContain('"general"');
+    expect(source).toContain('"appearance"');
+    expect(source).toContain('"account"');
+    // Role-model selectors removed from user-facing settings
+    expect(source).not.toContain('"models"');
+    expect(source).not.toContain('"usage"');
   });
 
   test("ObserverPanel defines MODEL_COLORS for grok-4, gemini-3-pro-preview, kimi-k2.5, synthesis", () => {
