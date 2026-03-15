@@ -5,12 +5,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Settings, Palette, UserCircle,
-  Save, Loader2, Check, Trash2
+  Save, Loader2, Check, Trash2, Brain, Pencil, ChevronRight, X, Search, ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChatGPTImport } from "@/components/ChatGPTImport";
+import { PersonaReview } from "@/components/PersonaReview";
+import { ConflictResolver } from "@/components/ConflictResolver";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -21,10 +24,11 @@ interface SettingsDialogProps {
   onUpdateSettings: (updates: Partial<Omit<import("@/hooks/useUserSettings").UserSettings, "id" | "user_id">>) => Promise<any>;
 }
 
-type Tab = "general" | "appearance" | "account";
+type Tab = "general" | "memory" | "appearance" | "account";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "general", label: "General", icon: Settings },
+  { id: "memory", label: "Memory", icon: Brain },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "account", label: "Account", icon: UserCircle },
 ];
@@ -47,6 +51,36 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
   const [localNickname, setLocalNickname] = useState("");
   const [localOccupation, setLocalOccupation] = useState("");
   const [localAboutMe, setLocalAboutMe] = useState("");
+
+  // Memory tab state
+  interface MemoryItem {
+    id: string;
+    content: string;
+    memory_type: string;
+    provenance: any;
+    created_at: string;
+  }
+  const [aiMemories, setAiMemories] = useState<MemoryItem[]>([]);
+  const [importedMemories, setImportedMemories] = useState<MemoryItem[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [showImported, setShowImported] = useState(false);
+  const [memoriesView, setMemoriesView] = useState(false);
+
+  // Persona & conflict state
+  const [allPersonas, setAllPersonas] = useState<any[]>([]);
+  const [personaLoading, setPersonaLoading] = useState(false);
+  const [unresolvedConflicts, setUnresolvedConflicts] = useState(0);
+
+  // Clear imported data state
+  const [importedMemoryCount, setImportedMemoryCount] = useState(0);
+  const [importedProfileCount, setImportedProfileCount] = useState(0);
+  const [clearingImport, setClearingImport] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [memorySearchQuery, setMemorySearchQuery] = useState("");
+  type MemoryFilter = "all" | "ai" | "imported";
+  const [memoryFilter, setMemoryFilter] = useState<MemoryFilter>("all");
 
   // Sync local state with loaded settings
   useEffect(() => {
@@ -77,6 +111,70 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
     if (!user) return;
     setDisplayName(user.user_metadata?.display_name || user.email?.split("@")[0] || "");
   }, [user]);
+
+  // Load memories, personas, and conflict count when memory tab is active
+  useEffect(() => {
+    if (activeTab !== "memory" || !user) return;
+    setMemoriesLoading(true);
+    setPersonaLoading(true);
+    Promise.all([
+      supabase
+        .from("memories")
+        .select("id, content, memory_type, provenance, created_at")
+        .eq("user_id", user.id)
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("companion_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("memory_conflicts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "unresolved"),
+    ]).then(([memRes, personaRes, conflictsRes]) => {
+      // Personas (all of them)
+      setAllPersonas(personaRes.data || []);
+      setImportedProfileCount((personaRes.data || []).length);
+      setPersonaLoading(false);
+
+      // Conflict count
+      setUnresolvedConflicts(conflictsRes.count ?? 0);
+
+      const all = (memRes.data || []) as MemoryItem[];
+      const imported: MemoryItem[] = [];
+      const organic: MemoryItem[] = [];
+      for (const m of all) {
+        const src = (m.provenance as any)?.source;
+        if (src === "import" || src === "chatgpt_import") {
+          imported.push(m);
+        } else {
+          organic.push(m);
+        }
+      }
+      setAiMemories(organic);
+      setImportedMemories(imported);
+      setImportedMemoryCount(imported.length);
+      setMemoriesLoading(false);
+    });
+  }, [activeTab, user]);
+
+  const handleDeleteMemory = async (id: string) => {
+    await supabase.from("memories").update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq("id", id);
+    setAiMemories((prev) => prev.filter((m) => m.id !== id));
+    setImportedMemories((prev) => prev.filter((m) => m.id !== id));
+    toast({ title: "Memory removed" });
+  };
+
+  const handleSaveMemoryEdit = async (id: string) => {
+    await supabase.from("memories").update({ content: editingContent }).eq("id", id);
+    setAiMemories((prev) => prev.map((m) => (m.id === id ? { ...m, content: editingContent } : m)));
+    setImportedMemories((prev) => prev.map((m) => (m.id === id ? { ...m, content: editingContent } : m)));
+    setEditingMemoryId(null);
+    toast({ title: "Memory updated" });
+  };
 
   const handleSave = async (updates: Record<string, unknown>) => {
     setSaving(true);
@@ -128,9 +226,9 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) setMemoriesView(false); onOpenChange(v); }}>
       <DialogContent
-        className={cn("p-0 gap-0 overflow-hidden transition-all duration-300 max-w-2xl")}
+        className={cn("p-0 gap-0 overflow-hidden transition-all duration-300", memoriesView ? "max-w-4xl" : "max-w-2xl")}
         aria-describedby={undefined}
         style={{
           background: "var(--bg-sidebar)",
@@ -141,7 +239,7 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
 
-        <div className={cn("flex overflow-hidden transition-all duration-300 h-[min(85vh,640px)]")}>
+        <div className={cn("flex overflow-hidden transition-all duration-300", memoriesView ? "h-[min(90vh,780px)]" : "h-[min(85vh,640px)]")}>
           {/* Sidebar */}
           <div className="w-48 shrink-0 py-4 px-2 flex flex-col gap-0.5 overflow-y-auto" style={{ borderRight: "1px solid rgba(255, 255, 255, 0.04)" }}>
             <div className="px-3 pb-3">
@@ -155,7 +253,7 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { setActiveTab(tab.id); setMemoriesView(false); }}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors w-full"
                   )}
@@ -177,6 +275,159 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 pb-10" style={{ maxHeight: "100%" }}>
+            {memoriesView ? (
+              /* INLINE MEMORIES MANAGEMENT VIEW */
+              (() => {
+                const allMemories = [...aiMemories, ...importedMemories].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const isImported = (m: MemoryItem) => {
+                  const src = (m.provenance as any)?.source;
+                  return src === "import" || src === "chatgpt_import";
+                };
+                let filteredMemories = allMemories;
+                if (memoryFilter === "ai") filteredMemories = filteredMemories.filter((m) => !isImported(m));
+                if (memoryFilter === "imported") filteredMemories = filteredMemories.filter((m) => isImported(m));
+                if (memorySearchQuery.trim()) {
+                  const q = memorySearchQuery.toLowerCase();
+                  filteredMemories = filteredMemories.filter((m) => m.content.toLowerCase().includes(q));
+                }
+                const importedCount = allMemories.filter(isImported).length;
+                const aiCount = allMemories.length - importedCount;
+                const filterTabs: { id: MemoryFilter; label: string; count: number }[] = [
+                  { id: "all", label: "All", count: allMemories.length },
+                  { id: "ai", label: "AI-Generated", count: aiCount },
+                  { id: "imported", label: "Imported", count: importedCount },
+                ];
+
+                return (
+                  <div className="space-y-4">
+                    {/* Header with back button */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setMemoriesView(false)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: "var(--text-secondary)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <div>
+                        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)" }}>Saved Memories</h3>
+                        <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
+                          {allMemories.length} memories · Browse, search, edit, or remove
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                      <input
+                        value={memorySearchQuery}
+                        onChange={(e) => setMemorySearchQuery(e.target.value)}
+                        placeholder="Search memories..."
+                        className="w-full rounded-lg pl-10 pr-3 py-2.5 outline-none focus:ring-1"
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex gap-2">
+                      {filterTabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setMemoryFilter(tab.id)}
+                          className="px-3 py-1.5 rounded-lg text-sm transition-colors"
+                          style={{
+                            background: memoryFilter === tab.id ? "var(--gray-800)" : "transparent",
+                            border: memoryFilter === tab.id ? "1px solid hsl(var(--border-hover))" : "1px solid transparent",
+                            color: memoryFilter === tab.id ? "var(--text-primary)" : "var(--text-secondary)",
+                            fontWeight: memoryFilter === tab.id ? 500 : 400,
+                            fontSize: "13px",
+                          }}
+                        >
+                          {tab.label} ({tab.count})
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Memory List */}
+                    <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-input)", border: "1px solid transparent", maxHeight: "calc(85vh - 280px)", overflowY: "auto" }}>
+                      {memoriesLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                          <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--text-muted)" }} />
+                        </div>
+                      ) : filteredMemories.length === 0 ? (
+                        <div className="py-16 text-center">
+                          <Brain className="h-8 w-8 mx-auto mb-3" style={{ color: "var(--text-muted)", opacity: 0.4 }} />
+                          <p style={{ fontSize: "14px", color: "var(--text-muted)" }}>
+                            {memorySearchQuery ? "No memories match your search." : "No memories yet."}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="divide-y" style={{ borderColor: "rgba(255, 255, 255, 0.04)" }}>
+                          {filteredMemories.map((m) => (
+                            <div key={m.id} className="flex items-start gap-3 px-4 py-3 group">
+                              <div className="flex-1 min-w-0">
+                                {editingMemoryId === m.id ? (
+                                  <div className="flex flex-col gap-2">
+                                    <textarea
+                                      value={editingContent}
+                                      onChange={(e) => setEditingContent(e.target.value)}
+                                      className="w-full rounded-lg px-3 py-2 outline-none text-sm resize-y"
+                                      style={{ background: "var(--gray-800)", color: "var(--text-primary)", border: "1px solid rgba(255, 255, 255, 0.08)", minHeight: "80px", maxHeight: "160px", overflowY: "auto", lineHeight: 1.6, wordBreak: "break-word" }}
+                                      autoFocus
+                                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveMemoryEdit(m.id); } if (e.key === "Escape") setEditingMemoryId(null); }}
+                                    />
+                                    <div className="flex items-center gap-2 justify-end">
+                                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Enter to save · Esc to cancel</span>
+                                      <button onClick={() => handleSaveMemoryEdit(m.id)} className="p-1 rounded hover:bg-white/10">
+                                        <Check className="h-3.5 w-3.5" style={{ color: "var(--text-primary)" }} />
+                                      </button>
+                                      <button onClick={() => setEditingMemoryId(null)} className="p-1 rounded hover:bg-white/10">
+                                        <X className="h-3.5 w-3.5" style={{ color: "var(--text-muted)" }} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5, wordBreak: "break-word" }}>{m.content}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0" style={{ background: "var(--gray-800)", color: "var(--text-muted)", border: "none" }}>
+                                        {m.memory_type}
+                                      </Badge>
+                                      {isImported(m) && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ color: "var(--text-muted)", borderColor: "var(--gray-700)" }}>
+                                          imported
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {editingMemoryId !== m.id && (
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                  <button
+                                    onClick={() => { setEditingMemoryId(m.id); setEditingContent(m.content); }}
+                                    className="p-1 rounded hover:bg-white/10"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" style={{ color: "var(--text-muted)" }} />
+                                  </button>
+                                  <button onClick={() => handleDeleteMemory(m.id)} className="p-1 rounded hover:bg-white/10">
+                                    <Trash2 className="h-3.5 w-3.5" style={{ color: "hsl(0 65% 50%)" }} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+            <>
             {/* GENERAL TAB */}
             {activeTab === "general" && (
               <div className="space-y-6">
@@ -323,18 +574,27 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* MEMORY TAB */}
+            {activeTab === "memory" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>Memory</h3>
+                  <p style={descStyle}>Control how your AI companion remembers and uses information about you.</p>
+                </div>
+
                 {/* Memory Toggle */}
-                <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)", paddingTop: "20px", marginTop: "8px" }}>
-                  <div className="flex items-center justify-between p-4 rounded-xl" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
-                    <div>
-                      <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>Memory</div>
-                      <p style={{ ...descStyle, marginTop: "2px" }}>Allow your companion to form and use memories about you across conversations.</p>
-                    </div>
-                    <Switch
-                      checked={settings?.memory_enabled ?? true}
-                      onCheckedChange={(checked) => handleSave({ memory_enabled: checked })}
-                    />
+                <div className="flex items-center justify-between p-4 rounded-xl" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>Memory</div>
+                    <p style={{ ...descStyle, marginTop: "2px" }}>Allow your companion to form and use memories about you across conversations.</p>
                   </div>
+                  <Switch
+                    checked={settings?.memory_enabled ?? true}
+                    onCheckedChange={(checked) => handleSave({ memory_enabled: checked })}
+                  />
                 </div>
 
                 {/* Chat History Toggle */}
@@ -349,9 +609,186 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
                   />
                 </div>
 
+                {/* Manage Memories Button */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>Saved Memories</label>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setMemoriesView(true);
+                      setMemorySearchQuery("");
+                      setMemoryFilter("all");
+                    }}
+                    className="w-full flex items-center gap-3 p-4 rounded-xl transition-colors"
+                    style={{ background: "var(--bg-input)", border: "1px solid transparent" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-input)"; }}
+                  >
+                    <Brain className="h-5 w-5" style={{ color: "var(--text-muted)" }} />
+                    <div className="flex-1 text-left">
+                      <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>Manage Memories</div>
+                      <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
+                        Browse, search, edit, and remove saved memories
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                  </button>
+                </div>
+
+                {/* Memory Conflicts */}
+                {unresolvedConflicts > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Memory Conflicts</label>
+                      <Badge variant="secondary" style={{ fontSize: "11px", background: "hsl(45 90% 50% / 0.15)", color: "hsl(45 90% 50%)", border: "1px solid hsl(45 90% 50% / 0.3)" }}>
+                        {unresolvedConflicts}
+                      </Badge>
+                    </div>
+                    <div className="p-4 rounded-xl" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
+                      <ConflictResolver
+                        userId={user!.id}
+                        onResolved={() => setUnresolvedConflicts(0)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Companion Personas */}
+                <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)", paddingTop: "20px", marginTop: "8px" }}>
+                  <label style={{ ...labelStyle, fontSize: "14px", fontWeight: 600, marginBottom: "12px" }}>Companion Personas</label>
+                  {personaLoading ? (
+                    <div className="flex items-center gap-2 py-4">
+                      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                      <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Loading personas...</span>
+                    </div>
+                  ) : allPersonas.length > 0 ? (
+                    <PersonaReview
+                      personas={allPersonas.map((p: any) => ({
+                        id: p.id,
+                        name: p.name,
+                        source_platform: p.source_platform || "chatgpt",
+                        linguistic_fingerprint: p.linguistic_fingerprint || {},
+                        psychological_profile: p.psychological_profile || {},
+                        companion_summary: p.companion_summary || "",
+                        system_prompt_fragment: p.system_prompt_fragment || "",
+                        behavioral_rules: p.behavioral_rules || [],
+                        conversations_analyzed: p.conversations_analyzed || 0,
+                        date_range_start: p.date_range_start || null,
+                        date_range_end: p.date_range_end || null,
+                        extraction_model: p.extraction_model || "",
+                        is_active: p.is_active,
+                        user_approved: p.user_approved,
+                      }))}
+                      mode="settings"
+                      onUpdate={() => {
+                        // Reload personas after changes
+                        if (!user) return;
+                        supabase
+                          .from("companion_profiles")
+                          .select("*")
+                          .eq("user_id", user.id)
+                          .order("created_at", { ascending: false })
+                          .then(({ data }) => setAllPersonas(data || []));
+                      }}
+                    />
+                  ) : (
+                    <div className="p-4 rounded-xl text-center" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
+                      <p style={{ fontSize: "13px", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        No companion personas. Import your ChatGPT history to generate companion personalities.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* ChatGPT Import */}
                 <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)", paddingTop: "20px", marginTop: "8px" }}>
                   <ChatGPTImport onImportStarted={onImportStarted} />
                 </div>
+
+                {/* Clear Imported Data */}
+                {(importedMemoryCount > 0 || importedProfileCount > 0) && (
+                  <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)", paddingTop: "20px", marginTop: "8px" }}>
+                    <label style={{ ...labelStyle, fontSize: "14px", fontWeight: 600, marginBottom: "12px" }}>Imported Data</label>
+                    <div className="p-4 rounded-xl space-y-3" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
+                      <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        {importedMemoryCount} imported memor{importedMemoryCount === 1 ? "y" : "ies"} and {importedProfileCount} companion profile{importedProfileCount === 1 ? "" : "s"} from ChatGPT import.
+                      </p>
+                      {showClearConfirm ? (
+                        <div className="space-y-2">
+                          <p style={{ fontSize: "12px", color: "hsl(0 65% 55%)", fontWeight: 500 }}>
+                            This will permanently delete all imported memories, companion profiles, and memory conflicts. This cannot be undone.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                if (!user) return;
+                                setClearingImport(true);
+                                try {
+                                  await supabase
+                                    .from("memories")
+                                    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+                                    .eq("user_id", user.id)
+                                    .filter("provenance->>source", "in", '("chatgpt_import","import")');
+                                  await supabase
+                                    .from("companion_profiles")
+                                    .delete()
+                                    .eq("user_id", user.id);
+                                  await supabase
+                                    .from("memory_conflicts")
+                                    .delete()
+                                    .eq("user_id", user.id);
+                                  setImportedMemoryCount(0);
+                                  setImportedProfileCount(0);
+                                  setImportedMemories([]);
+                                  setAllPersonas([]);
+                                  setUnresolvedConflicts(0);
+                                  setShowClearConfirm(false);
+                                  toast({ title: "Imported data cleared" });
+                                } catch (e: any) {
+                                  toast({ title: "Failed to clear data", description: e.message, variant: "destructive" });
+                                } finally {
+                                  setClearingImport(false);
+                                }
+                              }}
+                              disabled={clearingImport}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs"
+                              style={{
+                                background: "hsl(0 65% 50%)",
+                                color: "white",
+                                fontWeight: 500,
+                                opacity: clearingImport ? 0.7 : 1,
+                              }}
+                            >
+                              {clearingImport ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              Confirm Delete
+                            </button>
+                            <button
+                              onClick={() => setShowClearConfirm(false)}
+                              className="px-3 py-1.5 rounded-lg transition-colors text-xs"
+                              style={{ color: "var(--text-muted)", background: "transparent" }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowClearConfirm(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs"
+                          style={{
+                            background: "transparent",
+                            border: "1px solid hsl(0 65% 50% / 0.3)",
+                            color: "hsl(0 65% 55%)",
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Clear All Imported Data
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -563,6 +1000,8 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
                   </button>
                 </div>
               </div>
+            )}
+            </>
             )}
           </div>
         </div>
