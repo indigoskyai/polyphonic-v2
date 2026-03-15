@@ -62,7 +62,7 @@ serve(async (req) => {
     // Fetch all active memories
     const { data: memories, error: memError } = await supabase
       .from("memories")
-      .select("id, content, memory_type, confidence, confidence_source, relevance_score, created_at, access_count, tags, emotional_valence, emotional_intensity, decay_factor, is_watchlist")
+      .select("id, content, memory_type, confidence, confidence_source, relevance_score, created_at, access_count, tags, emotional_valence, emotional_intensity, decay_factor, is_watchlist, sharpness")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
