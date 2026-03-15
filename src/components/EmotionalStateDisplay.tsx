@@ -30,7 +30,7 @@ export function EmotionalStateCompact() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    (supabase as any)
       .from("emotional_state")
       .select("*")
       .eq("user_id", user.id)
