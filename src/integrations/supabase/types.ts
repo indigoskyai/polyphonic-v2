@@ -38,6 +38,24 @@ export type Database = {
         }
         Relationships: []
       }
+      app_config: {
+        Row: {
+          created_at: string
+          key: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
       beliefs: {
         Row: {
           active: boolean | null
@@ -1195,6 +1213,7 @@ export type Database = {
     Functions: {
       decrypt_user_api_key: { Args: { p_user_id: string }; Returns: string }
       delete_user_api_key: { Args: never; Returns: undefined }
+      get_app_config: { Args: { config_key: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
