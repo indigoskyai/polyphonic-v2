@@ -412,6 +412,123 @@ function formatMemoriesForPrompt(
   }
 }
 
+// ─── Tool Calling ───
+
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Search the web for current information, news, or answers to questions.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_url",
+      description: "Read and extract content from a web page URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "The URL to read" },
+          focus: { type: "string", description: "Optional focus area to extract specific content" },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_image",
+      description: "Generate an image based on a text description.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Detailed description of the image to generate" },
+        },
+        required: ["prompt"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "queue_task",
+      description: "Queue a task for autonomous processing later (e.g. research, reminders, follow-ups).",
+      parameters: {
+        type: "object",
+        properties: {
+          description: { type: "string", description: "Description of the task to queue" },
+          priority: { type: "number", description: "Priority from 0.0 (low) to 1.0 (high). Defaults to 0.5." },
+        },
+        required: ["description"],
+      },
+    },
+  },
+];
+
+const TOOL_CAPABLE_MODELS = new Set([
+  "anthropic/claude-opus-4.6",
+  "anthropic/claude-sonnet-4.6",
+  "openai/gpt-5.2",
+  "openai/gpt-4o",
+  "openai/gpt-4.1",
+  "openai/gpt-4.1-mini",
+  "openai/gpt-4.1-nano",
+  "openai/gpt-4o-mini",
+  "google/gemini-3-pro-preview",
+]);
+
+async function executeTool(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  userId: string,
+  supabase: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+): Promise<Record<string, unknown>> {
+  const headers = { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" };
+  const body = JSON.stringify({ ...toolInput, user_id: userId });
+
+  try {
+    switch (toolName) {
+      case "web_search": {
+        const res = await fetch(`${supabaseUrl}/functions/v1/anima-web-search`, { method: "POST", headers, body });
+        return await res.json();
+      }
+      case "read_url": {
+        const res = await fetch(`${supabaseUrl}/functions/v1/anima-web-read`, { method: "POST", headers, body });
+        return await res.json();
+      }
+      case "generate_image": {
+        const res = await fetch(`${supabaseUrl}/functions/v1/anima-image-create`, { method: "POST", headers, body });
+        return await res.json();
+      }
+      case "queue_task": {
+        await supabase.from("entity_task_queue").insert({
+          user_id: userId,
+          task_description: (toolInput as any).description || "",
+          priority: (toolInput as any).priority || 0.5,
+        });
+        return { status: "queued", message: "Task queued for autonomous processing" };
+      }
+      default:
+        return { error: `Unknown tool: ${toolName}` };
+    }
+  } catch (err) {
+    console.error(`Tool execution error (${toolName}):`, err);
+    return { error: `Tool ${toolName} failed: ${String(err)}` };
+  }
+}
+
 // ─── Main Handler ───
 
 serve(async (req) => {
@@ -819,25 +936,107 @@ FOUR PRINCIPLES (never reference these explicitly):
       totalChars -= typeof removed.content === "string" ? removed.content.length : JSON.stringify(removed.content).length;
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://polyphonic.chat",
-        "X-Title": "Polyphonic",
-      },
-      body: JSON.stringify({
+    const activeTemp = (req as any)._experimentalTemperature ?? validTemp;
+    const openRouterHeaders = {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://polyphonic.chat",
+      "X-Title": "Polyphonic",
+    };
+    const supportsTools = TOOL_CAPABLE_MODELS.has(chatModel);
+
+    let toolCallMetadata: Array<{ tool: string; input: Record<string, unknown>; output: Record<string, unknown> }> = [];
+    let finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
+    let toolStatusEvent: string | null = null;
+
+    // ─── Phase 1: Non-streaming tool-use check (only for tool-capable models) ───
+    if (supportsTools) {
+      const initialBody: Record<string, unknown> = {
         model: chatModel,
         messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
-        stream: true,
-        temperature: (req as any)._experimentalTemperature ?? validTemp,
+        temperature: activeTemp,
         max_tokens: validMaxTokens,
-      }),
+        tools: TOOLS,
+      };
+
+      const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: openRouterHeaders,
+        body: JSON.stringify(initialBody),
+      });
+
+      if (!initialResponse.ok) {
+        const errStatus = initialResponse.status;
+        if (errStatus === 429) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+            { status: 429, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
+          );
+        }
+        if (errStatus === 402) {
+          return new Response(
+            JSON.stringify({ error: "Insufficient credits on OpenRouter." }),
+            { status: 402, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
+          );
+        }
+        const errText = await initialResponse.text();
+        console.error("OpenRouter initial error:", errStatus, errText);
+        return new Response(JSON.stringify({ error: "AI provider error" }), {
+          status: 502,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      const initialData = await initialResponse.json();
+      const choice = initialData.choices?.[0];
+
+      if (choice?.message?.tool_calls?.length > 0) {
+        // Model wants to use tools — execute them
+        toolStatusEvent = `data: ${JSON.stringify({
+          tool_status: "executing",
+          tools: choice.message.tool_calls.map((tc: any) => tc.function.name),
+        })}\n\n`;
+
+        const toolResults: Array<{ role: string; tool_call_id: string; content: string }> = [];
+        for (const tc of choice.message.tool_calls) {
+          const toolInput = JSON.parse(tc.function.arguments);
+          const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
+          toolResults.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+          toolCallMetadata.push({ tool: tc.function.name, input: toolInput, output: result });
+        }
+
+        // Rebuild messages with tool call + results for the final streaming call
+        finalMessages = [
+          { role: "system", content: systemPrompt },
+          ...truncatedMessages,
+          choice.message, // assistant's tool_call message
+          ...toolResults,
+        ];
+      } else if (choice?.message?.content) {
+        // Model responded with text directly (no tool calls) — we still need to stream it
+        // We'll just proceed to the streaming call with the original messages
+        // (The non-streaming response is discarded; streaming provides the consistent SSE format)
+      }
+    }
+
+    // ─── Phase 2: Final streaming call (with or without tool results) ───
+    const streamBody: Record<string, unknown> = {
+      model: chatModel,
+      messages: finalMessages,
+      stream: true,
+      temperature: activeTemp,
+      max_tokens: validMaxTokens,
+      // No tools in the final call — we want text output only
+    };
+
+    const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: openRouterHeaders,
+      body: JSON.stringify(streamBody),
     });
 
-    if (!response.ok) {
-      const status = response.status;
+    if (!streamResponse.ok) {
+      const status = streamResponse.status;
       if (status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
@@ -856,15 +1055,75 @@ FOUR PRINCIPLES (never reference these explicitly):
           }
         );
       }
-      const text = await response.text();
-      console.error("OpenRouter error:", status, text);
+      const text = await streamResponse.text();
+      console.error("OpenRouter stream error:", status, text);
       return new Response(JSON.stringify({ error: "AI provider error" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    return new Response(response.body, {
+    // If tools were executed, prepend the tool status event to the stream
+    if (toolStatusEvent && streamResponse.body) {
+      const encoder = new TextEncoder();
+      const toolStatusChunk = encoder.encode(toolStatusEvent);
+      const upstreamReader = streamResponse.body.getReader();
+
+      const mergedStream = new ReadableStream({
+        async start(controller) {
+          // Send tool status event first
+          controller.enqueue(toolStatusChunk);
+          // Then pipe the rest of the upstream SSE stream
+          try {
+            while (true) {
+              const { done, value } = await upstreamReader.read();
+              if (done) break;
+              controller.enqueue(value);
+            }
+          } catch (err) {
+            console.error("Stream pipe error:", err);
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      // Append tool_calls metadata as a final SSE event after stream ends
+      // (Client can use this to display tool usage in the UI)
+      if (toolCallMetadata.length > 0) {
+        const metadataReader = mergedStream.getReader();
+        const finalStream = new ReadableStream({
+          async start(controller) {
+            try {
+              while (true) {
+                const { done, value } = await metadataReader.read();
+                if (done) break;
+                controller.enqueue(value);
+              }
+              // After stream completes, send tool metadata
+              const metaEvent = encoder.encode(
+                `data: ${JSON.stringify({ tool_calls: toolCallMetadata })}\n\n`
+              );
+              controller.enqueue(metaEvent);
+            } catch (err) {
+              console.error("Final stream error:", err);
+            } finally {
+              controller.close();
+            }
+          },
+        });
+
+        return new Response(finalStream, {
+          headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
+        });
+      }
+
+      return new Response(mergedStream, {
+        headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
+      });
+    }
+
+    return new Response(streamResponse.body, {
       headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
     });
   } catch (e) {

@@ -62,3 +62,12 @@ verify_jwt = false
 
 [functions.anima-believe]
 verify_jwt = false
+
+[functions.anima-web-search]
+verify_jwt = false
+
+[functions.anima-web-read]
+verify_jwt = false
+
+[functions.anima-image-create]
+verify_jwt = false

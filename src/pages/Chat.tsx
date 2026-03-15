@@ -57,6 +57,11 @@ interface Message {
   attachments?: Attachment[] | null;
   model?: string | null;
   edited_at?: string | null;
+  tool_calls?: Array<{
+    tool: string;
+    input: Record<string, any>;
+    output: Record<string, any>;
+  }> | null;
 }
 
 interface Variant {
@@ -64,6 +69,166 @@ interface Variant {
   content: string;
   model: string | null;
   created_at: string;
+}
+
+const TOOL_STATUS_LABELS: Record<string, string> = {
+  web_search: "Searching the web...",
+  read_url: "Reading page...",
+  generate_image: "Generating image...",
+  queue_task: "Queuing task...",
+};
+
+function ToolCallCard({ tool, input, output }: { tool: string; input: Record<string, any>; output: Record<string, any> }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const labels: Record<string, string> = {
+    web_search: "SEARCH",
+    read_url: "READ",
+    generate_image: "IMAGE",
+    queue_task: "TASK QUEUED",
+  };
+
+  const icons: Record<string, string> = {
+    web_search: "\u{1F50D}",
+    read_url: "\u{1F4C4}",
+    generate_image: "\u{1F3A8}",
+    queue_task: "\u{1F4CB}",
+  };
+
+  return (
+    <div
+      style={{
+        background: "var(--surface-1, #0a0a0a)",
+        border: "1px solid rgba(255, 255, 255, 0.06)",
+        borderRadius: "8px",
+        padding: "12px 14px",
+        marginBottom: "10px",
+        fontSize: "13px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: expanded ? "10px" : "0",
+          cursor: "pointer",
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ fontSize: "14px" }}>{icons[tool] || "\u26A1"}</span>
+        <span style={{
+          fontFamily: "var(--font-mono, monospace)",
+          fontSize: "10px",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase" as const,
+          color: "var(--gray-500, #525252)",
+        }}>
+          {labels[tool] || tool}
+        </span>
+        {tool === "web_search" && input.query && (
+          <span style={{ color: "var(--gray-300, #8a8a8a)", fontSize: "13px" }}>
+            {input.query}
+          </span>
+        )}
+        {tool === "read_url" && (
+          <span style={{ color: "var(--gray-300, #8a8a8a)", fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+            {output?.title || input.url}
+          </span>
+        )}
+        {tool === "queue_task" && (
+          <span style={{ color: "var(--gray-300, #8a8a8a)", fontSize: "13px" }}>
+            {input.description}
+          </span>
+        )}
+        <span style={{ marginLeft: "auto", color: "var(--gray-600, #3a3a3a)", fontSize: "11px" }}>
+          {expanded ? "\u25BE" : "\u25B8"}
+        </span>
+      </div>
+
+      {expanded && (
+        <div style={{ paddingTop: "8px", borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
+          {/* Web search results */}
+          {tool === "web_search" && output?.results && (
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: "8px" }}>
+              {output.answer && (
+                <p style={{ color: "var(--gray-200, #ababab)", fontSize: "13px", lineHeight: "1.6", marginBottom: "4px" }}>
+                  {output.answer}
+                </p>
+              )}
+              {(output.results as any[]).map((r: any, i: number) => (
+                <a
+                  key={i}
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "block",
+                    padding: "8px 10px",
+                    background: "rgba(255, 255, 255, 0.02)",
+                    borderRadius: "6px",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--gray-100, #d4d4d4)", marginBottom: "2px" }}>
+                    {r.title}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--gray-400, #6b6b6b)", lineHeight: "1.5" }}>
+                    {(r.snippet || "").slice(0, 150)}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* URL read content */}
+          {tool === "read_url" && (
+            <div>
+              {output?.summary && (
+                <p style={{ color: "var(--gray-200, #ababab)", fontSize: "13px", lineHeight: "1.6" }}>
+                  {output.summary}
+                </p>
+              )}
+              {!output?.summary && output?.content && (
+                <p style={{ color: "var(--gray-300, #8a8a8a)", fontSize: "12px", lineHeight: "1.5", maxHeight: "200px", overflow: "auto" }}>
+                  {(output.content as string).slice(0, 500)}...
+                </p>
+              )}
+              {input.url && (
+                <a href={input.url as string} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: "11px", color: "var(--gray-500, #525252)", textDecoration: "underline", textUnderlineOffset: "3px", marginTop: "6px", display: "inline-block" }}>
+                  {input.url}
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Generated image */}
+          {tool === "generate_image" && output?.image_url && (
+            <div>
+              <img
+                src={output.image_url as string}
+                alt={input.prompt as string}
+                style={{ maxWidth: "100%", borderRadius: "6px", marginTop: "4px", maxHeight: "300px", objectFit: "contain" as const }}
+              />
+              <p style={{ fontSize: "11px", color: "var(--gray-500, #525252)", marginTop: "6px", fontStyle: "italic" }}>
+                {input.prompt}
+              </p>
+            </div>
+          )}
+
+          {/* Queued task */}
+          {tool === "queue_task" && (
+            <div style={{ color: "var(--gray-300, #8a8a8a)", fontSize: "13px" }}>
+              <span style={{ color: "hsl(142 71% 45%)", fontSize: "12px" }}>{"\u2713"} Queued</span>
+              <span style={{ marginLeft: "8px" }}>{output?.message || "Task will be processed autonomously"}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const Chat = () => {
@@ -97,6 +262,7 @@ const Chat = () => {
   const [imageGenMode, setImageGenMode] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageContent, setEditingMessageContent] = useState("");
   const [messageVariants, setMessageVariants] = useState<Record<string, Variant[]>>({});
@@ -296,7 +462,7 @@ const Chat = () => {
   const loadMessages = async (conversationId: string) => {
     const { data } = await supabase
       .from("messages")
-      .select("id, role, content, created_at, attachments, model, edited_at")
+      .select("id, role, content, created_at, attachments, model, edited_at, tool_calls")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
     if (data) {
@@ -546,8 +712,24 @@ const Chat = () => {
           if (jsonStr === "[DONE]") break;
           try {
             const parsed = JSON.parse(jsonStr);
+            if (parsed.tool_status) {
+              const toolName = parsed.tool || "";
+              if (parsed.tool_status === "executing") {
+                setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else {
+                setToolStatus(null);
+              }
+              continue;
+            }
+            if (parsed.tool_calls) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantTempId ? { ...m, tool_calls: parsed.tool_calls } : m))
+              );
+              continue;
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
+              setToolStatus(null);
               assistantContent += delta;
               if (!rafPending) {
                 rafPending = true;
@@ -598,6 +780,7 @@ const Chat = () => {
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+      setToolStatus(null);
     }
   };
 
@@ -702,8 +885,24 @@ const Chat = () => {
           if (jsonStr === "[DONE]") break;
           try {
             const parsed = JSON.parse(jsonStr);
+            if (parsed.tool_status) {
+              const toolName = parsed.tool || "";
+              if (parsed.tool_status === "executing") {
+                setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else {
+                setToolStatus(null);
+              }
+              continue;
+            }
+            if (parsed.tool_calls) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === messageId ? { ...m, tool_calls: parsed.tool_calls } : m))
+              );
+              continue;
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
+              setToolStatus(null);
               assistantContent += delta;
               if (!rafPending) {
                 rafPending = true;
@@ -778,6 +977,7 @@ const Chat = () => {
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+      setToolStatus(null);
     }
   };
 
@@ -1053,8 +1253,26 @@ const Chat = () => {
           if (jsonStr === "[DONE]") break;
           try {
             const parsed = JSON.parse(jsonStr);
+            // Handle tool_status events
+            if (parsed.tool_status) {
+              const toolName = parsed.tool || "";
+              if (parsed.tool_status === "executing") {
+                setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else {
+                setToolStatus(null);
+              }
+              continue;
+            }
+            // Handle tool_calls metadata event
+            if (parsed.tool_calls) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantTempId ? { ...m, tool_calls: parsed.tool_calls } : m))
+              );
+              continue;
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
+              setToolStatus(null);
               assistantContent += delta;
               if (!rafPending) {
                 rafPending = true;
@@ -1085,27 +1303,44 @@ const Chat = () => {
       setMessages((prev) => prev.map((m) => (m.id === assistantTempId ? { ...m, content: assistantContent } : m)));
 
       if (assistantContent) {
+        // Grab tool_calls from the temp message before replacing
+        let streamedToolCalls: Message["tool_calls"] = null;
+        setMessages((prev) => {
+          const tempMsg = prev.find((m) => m.id === assistantTempId);
+          if (tempMsg?.tool_calls) streamedToolCalls = tempMsg.tool_calls;
+          return prev;
+        });
+        const insertData: any = { conversation_id: convId, user_id: user.id, role: "assistant", content: assistantContent, model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || selectedModel) };
+        if (streamedToolCalls) insertData.tool_calls = streamedToolCalls;
         const { data: savedMsg } = await supabase
           .from("messages")
-          .insert({ conversation_id: convId, user_id: user.id, role: "assistant", content: assistantContent, model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || selectedModel) })
-          .select("id, role, content, created_at, model")
+          .insert(insertData)
+          .select("id, role, content, created_at, model, tool_calls")
           .single();
 
         if (savedMsg) {
-          setMessages((prev) => prev.map((m) => (m.id === assistantTempId ? savedMsg : m)));
+          setMessages((prev) => prev.map((m) => (m.id === assistantTempId ? (savedMsg as unknown as Message) : m)));
         }
       }
     } catch (e: any) {
       if (e.name === "AbortError") {
         // Save partial content on abort
         if (assistantContent && convId) {
+          let abortToolCalls: Message["tool_calls"] = null;
+          setMessages((prev) => {
+            const tempMsg = prev.find((m) => m.id === assistantTempId);
+            if (tempMsg?.tool_calls) abortToolCalls = tempMsg.tool_calls;
+            return prev;
+          });
+          const abortInsert: any = { conversation_id: convId, user_id: user.id, role: "assistant", content: assistantContent, model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || selectedModel) };
+          if (abortToolCalls) abortInsert.tool_calls = abortToolCalls;
           const { data: savedMsg } = await supabase
           .from("messages")
-          .insert({ conversation_id: convId, user_id: user.id, role: "assistant", content: assistantContent, model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || selectedModel) })
-          .select("id, role, content, created_at, model")
+          .insert(abortInsert)
+          .select("id, role, content, created_at, model, tool_calls")
             .single();
           if (savedMsg) {
-            setMessages((prev) => prev.map((m) => (m.id === assistantTempId ? savedMsg : m)));
+            setMessages((prev) => prev.map((m) => (m.id === assistantTempId ? (savedMsg as unknown as Message) : m)));
           }
         } else {
           setMessages((prev) => prev.filter((m) => m.id !== assistantTempId));
@@ -1118,6 +1353,7 @@ const Chat = () => {
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+      setToolStatus(null);
     }
   };
 
@@ -1937,6 +2173,25 @@ const Chat = () => {
                         </div>
                       ) : (
                         <div>
+                          {msg.tool_calls?.map((tc, i) => (
+                            <ToolCallCard key={i} tool={tc.tool} input={tc.input} output={tc.output} />
+                          ))}
+                          {isStreaming && idx === messages.length - 1 && msg.role === "assistant" && toolStatus && !msg.content && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "8px 0",
+                                fontSize: "13px",
+                                color: "var(--gray-400, #6b6b6b)",
+                                fontFamily: "var(--font-mono, monospace)",
+                              }}
+                            >
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "var(--gray-500)" }} />
+                              <span>{toolStatus}</span>
+                            </div>
+                          )}
                           <div
                             className="chat-prose"
                             style={{
