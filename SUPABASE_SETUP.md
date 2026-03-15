@@ -86,14 +86,18 @@ The following are auto-provided by Supabase (no action needed):
 
 ## 5. Database Configuration for Inner Life
 
-The resonance cascade trigger needs to know the Supabase URL and service role key. Run this SQL:
+The resonance cascade triggers need the Supabase URL and service role key. Since `ALTER DATABASE SET` is blocked in Lovable Cloud, we use an `app_config` table instead (created by migration `20260315060000_config_table_workaround.sql`).
+
+**Insert the config values** (run in SQL Editor):
 
 ```sql
-ALTER DATABASE postgres SET app.supabase_url = 'https://kknchdnrujzheulqzowv.supabase.co';
-ALTER DATABASE postgres SET app.service_role_key = '<your service role key from Supabase dashboard>';
+INSERT INTO app_config (key, value) VALUES
+  ('supabase_url', 'https://kknchdnrujzheulqzowv.supabase.co'),
+  ('service_role_key', '<your service role key from Supabase dashboard>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 ```
 
-Without this, the `trigger_resonance()` function (which chains cognitive processes when high-salience thoughts are created) will silently fail.
+Without these values, the `trigger_resonance()` and `trigger_emotional_resonance()` functions (which chain cognitive processes when high-salience thoughts are created or emotional shifts occur) will silently skip.
 
 ## 6. Storage
 
