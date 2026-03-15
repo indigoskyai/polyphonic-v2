@@ -48,11 +48,11 @@ const InnerLife = () => {
 
     // Fetch stats
     Promise.all([
-      supabase.from("beliefs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("active", true),
-      supabase.from("beliefs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("stagnant", true),
-      supabase.from("memories").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_deleted", false),
-      supabase.from("observer_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-      supabase.from("thought_initiations").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "pending"),
+      (supabase as any).from("beliefs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("active", true),
+      (supabase as any).from("beliefs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("stagnant", true),
+      (supabase as any).from("memories").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_deleted", false),
+      (supabase as any).from("observer_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      (supabase as any).from("thought_initiations").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "pending"),
     ]).then(([beliefs, stagnant, memories, observations, pending]) => {
       setStats({
         beliefs: beliefs.count || 0,

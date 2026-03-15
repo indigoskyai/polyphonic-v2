@@ -43,6 +43,12 @@ const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id"> = {
   about_me: "",
   memory_tier: "standard",
   journal_model: null,
+  voice_model: null,
+  dreamer_model: null,
+  observer_models: null,
+  synthesis_model: null,
+  belief_model: null,
+  memory_model: null,
 };
 
 export function useUserSettings() {
@@ -54,7 +60,7 @@ export function useUserSettings() {
     if (!user) return;
     setLoading(true);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("user_settings")
       .select("*")
       .eq("user_id", user.id)
@@ -68,7 +74,7 @@ export function useUserSettings() {
 
     if (!data) {
       // Create default settings
-      const { data: created } = await supabase
+      const { data: created } = await (supabase as any)
         .from("user_settings")
         .insert({ user_id: user.id })
         .select("*")
@@ -104,7 +110,7 @@ export function useUserSettings() {
 
   const updateSettings = async (updates: Partial<Omit<UserSettings, "id" | "user_id">>) => {
     if (!user || !settings) return;
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("user_settings")
       .update(updates)
       .eq("user_id", user.id)

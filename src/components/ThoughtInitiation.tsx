@@ -17,7 +17,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    (supabase as any)
       .from("thought_initiations")
       .select("*")
       .eq("user_id", user.id)
@@ -34,7 +34,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
 
   const handleDismiss = async () => {
     setDismissed(true);
-    await supabase
+    await (supabase as any)
       .from("thought_initiations")
       .update({ status: "dismissed" })
       .eq("id", initiation.id);
@@ -43,7 +43,7 @@ export function ThoughtInitiation({ onEngage }: { onEngage?: (message: string) =
   const handleEngage = () => {
     onEngage?.(initiation.message);
     setDismissed(true);
-    supabase
+    (supabase as any)
       .from("thought_initiations")
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", initiation.id);

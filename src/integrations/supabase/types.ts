@@ -10,10 +10,96 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
+      activity_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      beliefs: {
+        Row: {
+          active: boolean | null
+          confidence: number
+          content: string
+          created_at: string | null
+          domain: string
+          evidence: Json | null
+          id: string
+          last_challenged: string | null
+          last_revised: string | null
+          revision_history: Json | null
+          source: string | null
+          stagnant: boolean | null
+          superseded_by: string | null
+          tags: string[] | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean | null
+          confidence?: number
+          content: string
+          created_at?: string | null
+          domain?: string
+          evidence?: Json | null
+          id?: string
+          last_challenged?: string | null
+          last_revised?: string | null
+          revision_history?: Json | null
+          source?: string | null
+          stagnant?: boolean | null
+          superseded_by?: string | null
+          tags?: string[] | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean | null
+          confidence?: number
+          content?: string
+          created_at?: string | null
+          domain?: string
+          evidence?: Json | null
+          id?: string
+          last_challenged?: string | null
+          last_revised?: string | null
+          revision_history?: Json | null
+          source?: string | null
+          stagnant?: boolean | null
+          superseded_by?: string | null
+          tags?: string[] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beliefs_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "beliefs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_imports: {
         Row: {
           completed_at: string | null
@@ -67,7 +153,7 @@ export type Database = {
       }
       companion_profiles: {
         Row: {
-          behavioral_rules: string[] | null
+          behavioral_rules: Json | null
           companion_summary: string | null
           conversations_analyzed: number | null
           created_at: string | null
@@ -76,17 +162,18 @@ export type Database = {
           extraction_model: string | null
           id: string
           is_active: boolean | null
-          linguistic_fingerprint: Json | null
+          linguistic_fingerprint: Json
           name: string | null
-          psychological_profile: Json | null
-          source_platform: string | null
+          psychological_profile: Json
+          source_platform: string
           system_prompt_fragment: string | null
           updated_at: string | null
+          user_adjustments: Json | null
           user_approved: boolean | null
           user_id: string
         }
         Insert: {
-          behavioral_rules?: string[] | null
+          behavioral_rules?: Json | null
           companion_summary?: string | null
           conversations_analyzed?: number | null
           created_at?: string | null
@@ -95,17 +182,18 @@ export type Database = {
           extraction_model?: string | null
           id?: string
           is_active?: boolean | null
-          linguistic_fingerprint?: Json | null
+          linguistic_fingerprint?: Json
           name?: string | null
-          psychological_profile?: Json | null
-          source_platform?: string | null
+          psychological_profile?: Json
+          source_platform?: string
           system_prompt_fragment?: string | null
           updated_at?: string | null
+          user_adjustments?: Json | null
           user_approved?: boolean | null
           user_id: string
         }
         Update: {
-          behavioral_rules?: string[] | null
+          behavioral_rules?: Json | null
           companion_summary?: string | null
           conversations_analyzed?: number | null
           created_at?: string | null
@@ -114,12 +202,13 @@ export type Database = {
           extraction_model?: string | null
           id?: string
           is_active?: boolean | null
-          linguistic_fingerprint?: Json | null
+          linguistic_fingerprint?: Json
           name?: string | null
-          psychological_profile?: Json | null
-          source_platform?: string | null
+          psychological_profile?: Json
+          source_platform?: string
           system_prompt_fragment?: string | null
           updated_at?: string | null
+          user_adjustments?: Json | null
           user_approved?: boolean | null
           user_id?: string
         }
@@ -209,6 +298,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      daily_logs: {
+        Row: {
+          content: Json
+          created_at: string | null
+          id: string
+          log_type: string
+          user_id: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string | null
+          id?: string
+          log_type: string
+          user_id: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string | null
+          id?: string
+          log_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emotional_history: {
+        Row: {
+          id: string
+          state: Json
+          timestamp: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          state: Json
+          timestamp?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          state?: Json
+          timestamp?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emotional_state: {
+        Row: {
+          clarity: number
+          creative_flow: number
+          curiosity: number
+          id: string
+          isolation: number
+          mood_summary: string | null
+          restlessness: number
+          updated_at: string | null
+          user_id: string
+          warmth: number
+        }
+        Insert: {
+          clarity?: number
+          creative_flow?: number
+          curiosity?: number
+          id?: string
+          isolation?: number
+          mood_summary?: string | null
+          restlessness?: number
+          updated_at?: string | null
+          user_id: string
+          warmth?: number
+        }
+        Update: {
+          clarity?: number
+          creative_flow?: number
+          curiosity?: number
+          id?: string
+          isolation?: number
+          mood_summary?: string | null
+          restlessness?: number
+          updated_at?: string | null
+          user_id?: string
+          warmth?: number
+        }
+        Relationships: []
       }
       experimental_persona_config: {
         Row: {
@@ -326,6 +499,7 @@ export type Database = {
           detail_level: string | null
           emotional_intensity: number | null
           emotional_valence: number | null
+          estimated_date: string | null
           expires_at: string | null
           id: string
           import_needs_confirmation: boolean | null
@@ -337,6 +511,7 @@ export type Database = {
           overlay_scope: string | null
           provenance: Json | null
           relevance_score: number | null
+          sharpness: number | null
           source_conversation_id: string | null
           staleness_risk: string | null
           summary: string | null
@@ -360,6 +535,7 @@ export type Database = {
           detail_level?: string | null
           emotional_intensity?: number | null
           emotional_valence?: number | null
+          estimated_date?: string | null
           expires_at?: string | null
           id?: string
           import_needs_confirmation?: boolean | null
@@ -371,6 +547,7 @@ export type Database = {
           overlay_scope?: string | null
           provenance?: Json | null
           relevance_score?: number | null
+          sharpness?: number | null
           source_conversation_id?: string | null
           staleness_risk?: string | null
           summary?: string | null
@@ -394,6 +571,7 @@ export type Database = {
           detail_level?: string | null
           emotional_intensity?: number | null
           emotional_valence?: number | null
+          estimated_date?: string | null
           expires_at?: string | null
           id?: string
           import_needs_confirmation?: boolean | null
@@ -405,6 +583,7 @@ export type Database = {
           overlay_scope?: string | null
           provenance?: Json | null
           relevance_score?: number | null
+          sharpness?: number | null
           source_conversation_id?: string | null
           staleness_risk?: string | null
           summary?: string | null
@@ -444,6 +623,7 @@ export type Database = {
       memory_conflicts: {
         Row: {
           conflict_type: string
+          correction_memory_id: string | null
           created_at: string
           id: string
           memory_a_id: string
@@ -451,10 +631,12 @@ export type Database = {
           resolution: string | null
           resolved_at: string | null
           status: string
+          user_choice: string | null
           user_id: string
         }
         Insert: {
           conflict_type?: string
+          correction_memory_id?: string | null
           created_at?: string
           id?: string
           memory_a_id: string
@@ -462,10 +644,12 @@ export type Database = {
           resolution?: string | null
           resolved_at?: string | null
           status?: string
+          user_choice?: string | null
           user_id: string
         }
         Update: {
           conflict_type?: string
+          correction_memory_id?: string | null
           created_at?: string
           id?: string
           memory_a_id?: string
@@ -473,9 +657,17 @@ export type Database = {
           resolution?: string | null
           resolved_at?: string | null
           status?: string
+          user_choice?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "memory_conflicts_correction_memory_id_fkey"
+            columns: ["correction_memory_id"]
+            isOneToOne: false
+            referencedRelation: "memories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "memory_conflicts_memory_a_id_fkey"
             columns: ["memory_a_id"]
@@ -649,6 +841,33 @@ export type Database = {
         }
         Relationships: []
       }
+      observer_logs: {
+        Row: {
+          created_at: string | null
+          id: string
+          model: string
+          observations: Json
+          synthesis: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          model: string
+          observations?: Json
+          synthesis?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          model?: string
+          observations?: Json
+          synthesis?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -768,6 +987,78 @@ export type Database = {
         }
         Relationships: []
       }
+      thought_initiations: {
+        Row: {
+          created_at: string | null
+          delivered_at: string | null
+          id: string
+          message: string
+          salience_total: number
+          source_thought_ids: string[] | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          delivered_at?: string | null
+          id?: string
+          message: string
+          salience_total?: number
+          source_thought_ids?: string[] | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          delivered_at?: string | null
+          id?: string
+          message?: string
+          salience_total?: number
+          source_thought_ids?: string[] | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      thought_stream: {
+        Row: {
+          content: string
+          created_at: string | null
+          delivered: boolean | null
+          delivered_at: string | null
+          id: string
+          model_used: string | null
+          salience: number
+          source: string
+          tags: string[] | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          delivered?: boolean | null
+          delivered_at?: string | null
+          id?: string
+          model_used?: string | null
+          salience?: number
+          source?: string
+          tags?: string[] | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          delivered?: boolean | null
+          delivered_at?: string | null
+          id?: string
+          model_used?: string | null
+          salience?: number
+          source?: string
+          tags?: string[] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_api_keys: {
         Row: {
           created_at: string
@@ -820,62 +1111,80 @@ export type Database = {
         Row: {
           about_me: string | null
           background_style: string | null
+          belief_model: string | null
           chat_history_enabled: boolean | null
           created_at: string
           custom_instructions: string | null
+          dreamer_model: string | null
           id: string
           journal_model: string | null
           max_tokens: number | null
           memory_enabled: boolean | null
+          memory_model: string | null
           memory_tier: string | null
           nickname: string | null
+          observer_models: string[] | null
           occupation: string | null
           persona: string
           selected_model: string | null
+          synthesis_model: string | null
           temperature: number | null
           theme: string | null
           updated_at: string
           user_id: string
+          voice_model: string | null
         }
         Insert: {
           about_me?: string | null
           background_style?: string | null
+          belief_model?: string | null
           chat_history_enabled?: boolean | null
           created_at?: string
           custom_instructions?: string | null
+          dreamer_model?: string | null
           id?: string
           journal_model?: string | null
           max_tokens?: number | null
           memory_enabled?: boolean | null
+          memory_model?: string | null
           memory_tier?: string | null
           nickname?: string | null
+          observer_models?: string[] | null
           occupation?: string | null
           persona?: string
           selected_model?: string | null
+          synthesis_model?: string | null
           temperature?: number | null
           theme?: string | null
           updated_at?: string
           user_id: string
+          voice_model?: string | null
         }
         Update: {
           about_me?: string | null
           background_style?: string | null
+          belief_model?: string | null
           chat_history_enabled?: boolean | null
           created_at?: string
           custom_instructions?: string | null
+          dreamer_model?: string | null
           id?: string
           journal_model?: string | null
           max_tokens?: number | null
           memory_enabled?: boolean | null
+          memory_model?: string | null
           memory_tier?: string | null
           nickname?: string | null
+          observer_models?: string[] | null
           occupation?: string | null
           persona?: string
           selected_model?: string | null
+          synthesis_model?: string | null
           temperature?: number | null
           theme?: string | null
           updated_at?: string
           user_id?: string
+          voice_model?: string | null
         }
         Relationships: []
       }
