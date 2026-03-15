@@ -9,6 +9,12 @@ verify_jwt = false
 [functions.memory-reflect]
 verify_jwt = false
 
+[functions.memory-synthesize]
+verify_jwt = false
+
+[functions.memory-decay]
+verify_jwt = false
+
 [functions.journal-write]
 verify_jwt = false
 
@@ -18,11 +24,41 @@ verify_jwt = false
 [functions.import-chatgpt]
 verify_jwt = false
 
-[functions.memory-synthesize]
-verify_jwt = false
-
 [functions.clear-import]
 verify_jwt = false
 
 [functions.generate-image]
+verify_jwt = false
+
+[functions.extract-persona]
+verify_jwt = false
+
+[functions.anima-think]
+verify_jwt = false
+
+[functions.anima-initiate]
+verify_jwt = false
+
+[functions.anima-dream]
+verify_jwt = false
+
+[functions.anima-question]
+verify_jwt = false
+
+[functions.anima-reflect]
+verify_jwt = false
+
+[functions.anima-observe]
+verify_jwt = false
+
+[functions.anima-consolidate]
+verify_jwt = false
+
+[functions.anima-connect]
+verify_jwt = false
+
+[functions.anima-emotional-state]
+verify_jwt = false
+
+[functions.anima-believe]
 verify_jwt = false

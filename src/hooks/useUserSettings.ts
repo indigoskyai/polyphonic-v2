@@ -43,6 +43,12 @@ const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id"> = {
   about_me: "",
   memory_tier: "standard",
   journal_model: null,
+  voice_model: null,
+  dreamer_model: null,
+  observer_models: null,
+  synthesis_model: null,
+  belief_model: null,
+  memory_model: null,
 };
 
 export function useUserSettings() {
