@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { evaluate, logProcessRan } from "../_shared/activity-gate.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 
@@ -25,7 +25,10 @@ interface UserAction {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const preflightResponse = handleCorsPreflightIfNeeded(req);
+  if (preflightResponse) return preflightResponse;
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -166,12 +169,11 @@ async function processUser(
 
     actions.push({ userId, action: "web_search_curiosity", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "question_researched",
+    await logActivity(supabase, userId, {
+      type: "question_researched",
+      title: "Heartbeat: Question Researched",
       summary: `Researched curiosity question: ${highCuriosityQ.question.slice(0, 100)}`,
-      metadata: { question_id: highCuriosityQ.id, function: "anima-web-search" },
+      content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
     });
 
     // Mark question as being worked on
@@ -192,12 +194,11 @@ async function processUser(
 
     actions.push({ userId, action: "reflect_on_thought", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "thought_deepened",
+    await logActivity(supabase, userId, {
+      type: "thought_deepened",
+      title: "Heartbeat: Thought Deepened",
       summary: `Deepened reflection on: ${highSalienceThought.content.slice(0, 100)}`,
-      metadata: { thought_id: highSalienceThought.id, function: "anima-reflect" },
+      content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
     });
   }
 
@@ -213,12 +214,11 @@ async function processUser(
 
     actions.push({ userId, action: "challenge_belief", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "belief_challenged",
+    await logActivity(supabase, userId, {
+      type: "belief_challenged",
+      title: "Heartbeat: Belief Challenged",
       summary: `Challenged stagnant belief: ${stagnantBelief.content.slice(0, 100)}`,
-      metadata: { belief_id: stagnantBelief.id, function: "anima-believe" },
+      content: { belief_id: stagnantBelief.id, function: "anima-believe" },
     });
   }
 
@@ -244,12 +244,11 @@ async function processUser(
 
       actions.push({ userId, action: "curiosity_exploration", result });
 
-      await logActivity(supabase, {
-        user_id: userId,
-        process_type: "heartbeat",
-        action_type: "curiosity_explored",
+      await logActivity(supabase, userId, {
+        type: "curiosity_explored",
+        title: "Heartbeat: Curiosity Explored",
         summary: `Explored topic from high curiosity state: ${topic.slice(0, 80)}`,
-        metadata: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
+        content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
       });
     }
   }
@@ -258,10 +257,9 @@ async function processUser(
   if (actions.length === 0) {
     actions.push({ userId, action: "quiet_cycle", result: "No actionable signals" });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "quiet_cycle",
+    await logActivity(supabase, userId, {
+      type: "quiet_cycle",
+      title: "Heartbeat: Quiet Cycle",
       summary: "Heartbeat ran but found no actionable signals",
     });
   }
@@ -343,12 +341,11 @@ async function processTaskQueue(
         result: { task_id: task.id, function: functionName },
       });
 
-      await logActivity(supabase, {
-        user_id: task.user_id,
-        process_type: "heartbeat",
-        action_type: "task_completed",
+      await logActivity(supabase, task.user_id, {
+        type: "task_completed",
+        title: "Heartbeat: Task Completed",
         summary: `Completed queued task: ${task.description.slice(0, 100)}`,
-        metadata: { task_id: task.id, function: functionName },
+        content: { task_id: task.id, function: functionName },
       });
     } catch (taskErr) {
       const errMsg = taskErr instanceof Error ? taskErr.message : "Unknown error";
@@ -369,12 +366,11 @@ async function processTaskQueue(
         error: errMsg,
       });
 
-      await logActivity(supabase, {
-        user_id: task.user_id,
-        process_type: "heartbeat",
-        action_type: "task_failed",
+      await logActivity(supabase, task.user_id, {
+        type: "task_failed",
+        title: "Heartbeat: Task Failed",
         summary: `Task failed: ${task.description.slice(0, 100)}`,
-        metadata: { task_id: task.id, error: errMsg },
+        content: { task_id: task.id, error: errMsg },
       });
     }
   }

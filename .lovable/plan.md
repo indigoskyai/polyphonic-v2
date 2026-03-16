@@ -1,29 +1,43 @@
 
 
-## Plan: Fix Build Errors & Deploy New Edge Functions
+# Add User-Selectable Journal Model
 
-### Errors to Fix
+## Current Behavior
+The `journal-write` edge function defaults to `anthropic/claude-sonnet-4` for generating journal entries. The only override is an admin-only `model_configs` table entry (currently empty for the "journal" feature key). Users have no way to choose which model writes their journal.
 
-**4 files need changes:**
+## Changes
 
-#### 1. `supabase/functions/anima-heartbeat/index.ts`
-- **Import fix**: Change `corsHeaders` import to `getCorsHeaders` (the shared cors module exports a function, not a constant)
-- **Update all CORS usages**: Replace `corsHeaders` with `getCorsHeaders(req)` throughout
-- **Fix `logActivity` calls (7 occurrences)**: The shared `logActivity` signature is `(supabase, userId, entry)` but heartbeat calls it as `(supabase, { user_id, ... })`. Extract `user_id` as the second arg and pass the rest as the entry object, mapping `process_type`/`action_type`/`summary`/`metadata` to the `ActivityEntry` interface fields (`type`, `title`, `summary`, `content`)
+### 1. Add `journal_model` column to `user_settings` table
+- New nullable text column with default `NULL` (meaning "use system default")
+- No migration conflicts since the column doesn't exist yet
 
-#### 2. `supabase/functions/chat/index.ts` (line 829)
-- Add type annotation: `(word: string)` to fix implicit `any` error
+### 2. Update `journal-write` edge function to respect user preference
+- After fetching the admin model config, also fetch the user's `journal_model` from `user_settings`
+- Priority: user preference > admin config > hardcoded default (`anthropic/claude-sonnet-4`)
 
-#### 3. `src/pages/Reflections.tsx` (lines 73, 166)
-- Replace `.catch()` chains with try/catch or `.then()` error handling since the Supabase query builder returns `PromiseLike` which doesn't have `.catch()`
-- Line 73: Remove `.catch(...)`, handle error from `.then()` result
-- Line 166: Remove `.catch(() => {})`, wrap in try/catch or just use `.then()`
+### 3. Add Journal Model selector to Settings Dialog
+- Add a new section in the "Models & API" tab of SettingsDialog
+- Label: "Journal Model" with description "Choose which AI model writes your journal entries"
+- Dropdown with the same model list used elsewhere (from `AVAILABLE_MODELS`)
+- Include a "System Default" option that sets the value to null/empty
 
-#### 4. `supabase/functions/anima-social-moltbook/index.ts` and `supabase/functions/anima-social-x/index.ts`
-- These use inline `corsHeaders` constant (not the shared module) — no changes needed, they'll deploy as-is
+## Technical Details
 
-### Deploy Steps
-After fixing build errors:
-1. Deploy new: `anima-heartbeat`, `anima-social-moltbook`, `anima-social-x`
-2. Redeploy: `chat`
+**Database migration:**
+```sql
+ALTER TABLE public.user_settings
+ADD COLUMN journal_model text DEFAULT NULL;
+```
+
+**Edge function change (`supabase/functions/journal-write/index.ts`):**
+- Fetch `user_settings.journal_model` for the user
+- Use it if set, otherwise fall back to admin config, then to `anthropic/claude-sonnet-4`
+
+**Settings UI (`src/components/SettingsDialog.tsx`):**
+- Add a "Journal Model" select dropdown in the Models tab
+- Uses the existing `AVAILABLE_MODELS` list
+- Saves to `user_settings.journal_model` via the existing `updateSettings` flow
+
+**Hook update (`src/hooks/useUserSettings.ts`):**
+- Add `journal_model` to the `UserSettings` interface and defaults
 
