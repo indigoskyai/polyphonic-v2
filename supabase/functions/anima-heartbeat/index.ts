@@ -244,12 +244,11 @@ async function processUser(
 
       actions.push({ userId, action: "curiosity_exploration", result });
 
-      await logActivity(supabase, {
-        user_id: userId,
-        process_type: "heartbeat",
-        action_type: "curiosity_explored",
+      await logActivity(supabase, userId, {
+        type: "curiosity_explored",
+        title: "Heartbeat: Curiosity Explored",
         summary: `Explored topic from high curiosity state: ${topic.slice(0, 80)}`,
-        metadata: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
+        content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
       });
     }
   }
