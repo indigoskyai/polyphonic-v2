@@ -169,12 +169,11 @@ async function processUser(
 
     actions.push({ userId, action: "web_search_curiosity", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "question_researched",
+    await logActivity(supabase, userId, {
+      type: "question_researched",
+      title: "Heartbeat: Question Researched",
       summary: `Researched curiosity question: ${highCuriosityQ.question.slice(0, 100)}`,
-      metadata: { question_id: highCuriosityQ.id, function: "anima-web-search" },
+      content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
     });
 
     // Mark question as being worked on
