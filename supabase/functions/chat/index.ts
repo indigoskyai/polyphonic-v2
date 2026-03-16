@@ -979,11 +979,15 @@ Use these tools when they would genuinely help. You are not limited to your trai
 
           if (supportsTools) {
             // ── Phase 1: Non-streaming call with tools ──
+            // Use a fast model for tool-planning (just decides WHICH tools to call).
+            // The final streaming call uses the user's selected model for the actual response.
+            const planningModel = "anthropic/claude-sonnet-4.6";
+            const planningPrompt = `You are a helpful AI assistant with access to tools. Decide if the user's message requires using any tools. If so, call the appropriate tool(s). If not, respond directly.\n\n${validCustomInstructions ? `User instructions: ${validCustomInstructions}\n` : ""}`;
             const initialBody: Record<string, unknown> = {
-              model: chatModel,
-              messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
-              temperature: activeTemp,
-              max_tokens: validMaxTokens,
+              model: planningModel,
+              messages: [{ role: "system", content: planningPrompt }, ...truncatedMessages],
+              temperature: 0.3,
+              max_tokens: 1024,
               tools: TOOLS,
             };
 
@@ -1069,15 +1073,24 @@ Use these tools when they would genuinely help. You are not limited to your trai
                 return;
               }
 
-              // Forward streaming chunks
-              const reader = streamResponse.body!.getReader();
+              // Forward streaming chunks, filtering out OpenRouter's [DONE]
+              // (we send our own [DONE] after tool_calls metadata)
+              const streamReader = streamResponse.body!.getReader();
+              const streamDecoder = new TextDecoder();
               while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                controller.enqueue(value);
+                const { done: streamDone, value: streamValue } = await streamReader.read();
+                if (streamDone) break;
+                const chunk = streamDecoder.decode(streamValue, { stream: true });
+                // Strip OpenRouter's [DONE] so client doesn't stop reading early
+                const filtered = chunk.split("\n")
+                  .filter(line => line.trim() !== "data: [DONE]")
+                  .join("\n");
+                if (filtered.trim()) {
+                  controller.enqueue(encoder.encode(filtered + "\n"));
+                }
               }
 
-              // Send tool_calls metadata
+              // Send tool_calls metadata BEFORE [DONE] so client receives it
               if (toolCallMetadata.length > 0) {
                 sendEvent(controller, { tool_calls: toolCallMetadata });
               }
