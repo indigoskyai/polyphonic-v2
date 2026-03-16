@@ -194,12 +194,11 @@ async function processUser(
 
     actions.push({ userId, action: "reflect_on_thought", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "thought_deepened",
+    await logActivity(supabase, userId, {
+      type: "thought_deepened",
+      title: "Heartbeat: Thought Deepened",
       summary: `Deepened reflection on: ${highSalienceThought.content.slice(0, 100)}`,
-      metadata: { thought_id: highSalienceThought.id, function: "anima-reflect" },
+      content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
     });
   }
 
