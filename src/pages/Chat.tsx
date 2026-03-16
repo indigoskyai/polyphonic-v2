@@ -673,7 +673,7 @@ const Chat = () => {
         },
         body: JSON.stringify({
           messages: allMessages,
-          model: webSearchEnabled ? "perplexity/sonar" : settings?.selected_model,
+          model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || "anthropic/claude-opus-4.6"),
           temperature: settings?.temperature,
           max_tokens: settings?.max_tokens,
           custom_instructions: settings?.custom_instructions,
@@ -1191,7 +1191,7 @@ const Chat = () => {
         },
         body: JSON.stringify({
           messages: allMessages,
-          model: webSearchEnabled ? "perplexity/sonar" : settings?.selected_model,
+          model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || "anthropic/claude-opus-4.6"),
           temperature: settings?.temperature,
           max_tokens: settings?.max_tokens,
           custom_instructions: settings?.custom_instructions,

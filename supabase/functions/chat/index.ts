@@ -475,17 +475,12 @@ const TOOLS = [
   },
 ];
 
-const TOOL_CAPABLE_MODELS = new Set([
-  "anthropic/claude-opus-4.6",
-  "anthropic/claude-sonnet-4.6",
-  "openai/gpt-5.2",
-  "openai/gpt-4o",
-  "openai/gpt-4.1",
-  "openai/gpt-4.1-mini",
-  "openai/gpt-4.1-nano",
-  "openai/gpt-4o-mini",
-  "google/gemini-3-pro-preview",
-]);
+// Models that support tool/function calling via OpenRouter
+const TOOL_CAPABLE_PREFIXES = ["anthropic/claude", "openai/gpt", "google/gemini"];
+
+function modelSupportsTools(modelId: string): boolean {
+  return TOOL_CAPABLE_PREFIXES.some(prefix => modelId.startsWith(prefix));
+}
 
 async function executeTool(
   toolName: string,
@@ -738,7 +733,10 @@ FOUR PRINCIPLES (never reference these explicitly):
       systemPrompt += `\n\nUser's custom instructions:\n${validCustomInstructions}`;
     }
 
-    const chatModel = model || modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    // User's selected model takes priority. modelConfig is admin-level override only used when no model is specified.
+    const chatModel = (typeof model === "string" && model.trim().length > 0)
+      ? model.trim()
+      : (modelConfig?.model_id || "anthropic/claude-opus-4.6");
 
     // ─── Tiered Memory Retrieval ───
     if (user_id && memory_enabled !== false) {
@@ -943,7 +941,18 @@ FOUR PRINCIPLES (never reference these explicitly):
       "HTTP-Referer": "https://polyphonic.chat",
       "X-Title": "Polyphonic",
     };
-    const supportsTools = TOOL_CAPABLE_MODELS.has(chatModel);
+    const supportsTools = modelSupportsTools(chatModel);
+
+    // Add tool awareness to system prompt when tools are available
+    if (supportsTools) {
+      systemPrompt += `\n\n=== Available Capabilities ===
+You have access to tools that let you take real actions:
+- web_search: Search the internet for current information
+- read_url: Read and extract content from any web page
+- generate_image: Create images from text descriptions
+- queue_task: Save a task to work on autonomously later
+Use these tools when they would genuinely help. You are not limited to your training data — you can look things up, read articles, and create visual content.`;
+    }
 
     let toolCallMetadata: Array<{ tool: string; input: Record<string, unknown>; output: Record<string, unknown> }> = [];
     let finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
