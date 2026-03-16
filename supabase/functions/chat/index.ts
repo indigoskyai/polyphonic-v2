@@ -954,88 +954,187 @@ You have access to tools that let you take real actions:
 Use these tools when they would genuinely help. You are not limited to your training data — you can look things up, read articles, and create visual content.`;
     }
 
-    let toolCallMetadata: Array<{ tool: string; input: Record<string, unknown>; output: Record<string, unknown> }> = [];
-    let finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
-    let toolStatusEvent: string | null = null;
+    // ─── Stream-first tool-calling architecture ───
+    // For tool-capable models, we return a ReadableStream IMMEDIATELY so the
+    // client receives SSE bytes within milliseconds, avoiding timeouts during
+    // the multi-phase tool-calling flow (initial call → tool execution → final streaming call).
 
-    // ─── Phase 1: Non-streaming tool-use check (only for tool-capable models) ───
     if (supportsTools) {
-      const initialBody: Record<string, unknown> = {
-        model: chatModel,
-        messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
-        temperature: activeTemp,
-        max_tokens: validMaxTokens,
-        tools: TOOLS,
+      const encoder = new TextEncoder();
+      const sendEvent = (controller: ReadableStreamDefaultController, data: any) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
-      const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: openRouterHeaders,
-        body: JSON.stringify(initialBody),
+      const toolStream = new ReadableStream({
+        async start(controller) {
+          try {
+            // ── Immediately signal the client that we're alive ──
+            sendEvent(controller, { tool_status: "thinking" });
+
+            // ── Phase 1: Non-streaming call with tools ──
+            const initialBody: Record<string, unknown> = {
+              model: chatModel,
+              messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
+              temperature: activeTemp,
+              max_tokens: validMaxTokens,
+              tools: TOOLS,
+            };
+
+            const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: openRouterHeaders,
+              body: JSON.stringify(initialBody),
+            });
+
+            if (!initialResponse.ok) {
+              const errStatus = initialResponse.status;
+              let errMsg = "AI provider error";
+              if (errStatus === 429) errMsg = "Rate limit exceeded. Please try again later.";
+              else if (errStatus === 402) errMsg = "Insufficient credits on OpenRouter.";
+              else {
+                const errText = await initialResponse.text();
+                console.error("OpenRouter initial error:", errStatus, errText);
+              }
+              sendEvent(controller, { error: errMsg });
+              controller.close();
+              return;
+            }
+
+            const initialData = await initialResponse.json();
+            const choice = initialData.choices?.[0];
+
+            let finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
+            let toolCallMetadata: Array<{ tool: string; input: Record<string, unknown>; output: Record<string, unknown> }> = [];
+
+            if (choice?.message?.tool_calls?.length > 0) {
+              // ── Phase 2: Execute tools IN PARALLEL ──
+              const toolNames = choice.message.tool_calls.map((tc: any) => tc.function.name);
+              sendEvent(controller, { tool_status: "executing", tools: toolNames });
+
+              const toolPromises = choice.message.tool_calls.map(async (tc: any) => {
+                const toolInput = JSON.parse(tc.function.arguments);
+                const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
+                return {
+                  result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(result) },
+                  metadata: { tool: tc.function.name, input: toolInput, output: result },
+                };
+              });
+
+              const toolOutcomes = await Promise.all(toolPromises);
+              const toolResults = toolOutcomes.map(o => o.result);
+              toolCallMetadata = toolOutcomes.map(o => o.metadata);
+
+              // Rebuild messages with tool call + results for the final streaming call
+              finalMessages = [
+                { role: "system", content: systemPrompt },
+                ...truncatedMessages,
+                choice.message, // assistant's tool_call message
+                ...toolResults,
+              ];
+
+              // ── Phase 3: Final streaming call ──
+              sendEvent(controller, { tool_status: "composing" });
+
+              const streamBody: Record<string, unknown> = {
+                model: chatModel,
+                messages: finalMessages,
+                stream: true,
+                temperature: activeTemp,
+                max_tokens: validMaxTokens,
+              };
+
+              const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: openRouterHeaders,
+                body: JSON.stringify(streamBody),
+              });
+
+              if (!streamResponse.ok) {
+                const status = streamResponse.status;
+                let errMsg = "AI provider error";
+                if (status === 429) errMsg = "Rate limit exceeded. Please try again later.";
+                else if (status === 402) errMsg = "Insufficient credits on OpenRouter.";
+                else {
+                  const text = await streamResponse.text();
+                  console.error("OpenRouter stream error:", status, text);
+                }
+                sendEvent(controller, { error: errMsg });
+                controller.close();
+                return;
+              }
+
+              // Forward streaming chunks from OpenRouter to the client
+              const reader = streamResponse.body!.getReader();
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                controller.enqueue(value); // forward raw SSE chunks
+              }
+
+              // Send tool_calls metadata as a final SSE event
+              if (toolCallMetadata.length > 0) {
+                sendEvent(controller, { tool_calls: toolCallMetadata });
+              }
+            } else if (choice?.message?.content) {
+              // ── No tools called — stream the text we already have ──
+              // Instead of making a redundant second streaming call, emit the
+              // content we received from the initial non-streaming response.
+              const content = choice.message.content;
+
+              // Emit as an SSE chunk matching OpenRouter's streaming format
+              const syntheticChunk = {
+                choices: [{
+                  delta: { content },
+                  index: 0,
+                  finish_reason: "stop",
+                }],
+              };
+              sendEvent(controller, syntheticChunk);
+            } else {
+              // Edge case: no content and no tool calls — fall through with empty response
+              const syntheticChunk = {
+                choices: [{
+                  delta: { content: "" },
+                  index: 0,
+                  finish_reason: "stop",
+                }],
+              };
+              sendEvent(controller, syntheticChunk);
+            }
+
+            // Signal stream end
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          } catch (err) {
+            console.error("Tool stream error:", err);
+            try {
+              sendEvent(controller, { error: "An unexpected error occurred." });
+            } catch (_) {
+              // Controller may already be closed
+            }
+          } finally {
+            try {
+              controller.close();
+            } catch (_) {
+              // Already closed
+            }
+          }
+        },
       });
 
-      if (!initialResponse.ok) {
-        const errStatus = initialResponse.status;
-        if (errStatus === 429) {
-          return new Response(
-            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-            { status: 429, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
-          );
-        }
-        if (errStatus === 402) {
-          return new Response(
-            JSON.stringify({ error: "Insufficient credits on OpenRouter." }),
-            { status: 402, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
-          );
-        }
-        const errText = await initialResponse.text();
-        console.error("OpenRouter initial error:", errStatus, errText);
-        return new Response(JSON.stringify({ error: "AI provider error" }), {
-          status: 502,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
-
-      const initialData = await initialResponse.json();
-      const choice = initialData.choices?.[0];
-
-      if (choice?.message?.tool_calls?.length > 0) {
-        // Model wants to use tools — execute them
-        toolStatusEvent = `data: ${JSON.stringify({
-          tool_status: "executing",
-          tools: choice.message.tool_calls.map((tc: any) => tc.function.name),
-        })}\n\n`;
-
-        const toolResults: Array<{ role: string; tool_call_id: string; content: string }> = [];
-        for (const tc of choice.message.tool_calls) {
-          const toolInput = JSON.parse(tc.function.arguments);
-          const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
-          toolResults.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
-          toolCallMetadata.push({ tool: tc.function.name, input: toolInput, output: result });
-        }
-
-        // Rebuild messages with tool call + results for the final streaming call
-        finalMessages = [
-          { role: "system", content: systemPrompt },
-          ...truncatedMessages,
-          choice.message, // assistant's tool_call message
-          ...toolResults,
-        ];
-      } else if (choice?.message?.content) {
-        // Model responded with text directly (no tool calls) — we still need to stream it
-        // We'll just proceed to the streaming call with the original messages
-        // (The non-streaming response is discarded; streaming provides the consistent SSE format)
-      }
+      return new Response(toolStream, {
+        headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
+      });
     }
 
-    // ─── Phase 2: Final streaming call (with or without tool results) ───
+    // ─── Non-tool-capable models: standard streaming path (unchanged) ───
+    const finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
+
     const streamBody: Record<string, unknown> = {
       model: chatModel,
       messages: finalMessages,
       stream: true,
       temperature: activeTemp,
       max_tokens: validMaxTokens,
-      // No tools in the final call — we want text output only
     };
 
     const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -1069,66 +1168,6 @@ Use these tools when they would genuinely help. You are not limited to your trai
       return new Response(JSON.stringify({ error: "AI provider error" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    // If tools were executed, prepend the tool status event to the stream
-    if (toolStatusEvent && streamResponse.body) {
-      const encoder = new TextEncoder();
-      const toolStatusChunk = encoder.encode(toolStatusEvent);
-      const upstreamReader = streamResponse.body.getReader();
-
-      const mergedStream = new ReadableStream({
-        async start(controller) {
-          // Send tool status event first
-          controller.enqueue(toolStatusChunk);
-          // Then pipe the rest of the upstream SSE stream
-          try {
-            while (true) {
-              const { done, value } = await upstreamReader.read();
-              if (done) break;
-              controller.enqueue(value);
-            }
-          } catch (err) {
-            console.error("Stream pipe error:", err);
-          } finally {
-            controller.close();
-          }
-        },
-      });
-
-      // Append tool_calls metadata as a final SSE event after stream ends
-      // (Client can use this to display tool usage in the UI)
-      if (toolCallMetadata.length > 0) {
-        const metadataReader = mergedStream.getReader();
-        const finalStream = new ReadableStream({
-          async start(controller) {
-            try {
-              while (true) {
-                const { done, value } = await metadataReader.read();
-                if (done) break;
-                controller.enqueue(value);
-              }
-              // After stream completes, send tool metadata
-              const metaEvent = encoder.encode(
-                `data: ${JSON.stringify({ tool_calls: toolCallMetadata })}\n\n`
-              );
-              controller.enqueue(metaEvent);
-            } catch (err) {
-              console.error("Final stream error:", err);
-            } finally {
-              controller.close();
-            }
-          },
-        });
-
-        return new Response(finalStream, {
-          headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
-        });
-      }
-
-      return new Response(mergedStream, {
-        headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
       });
     }
 
