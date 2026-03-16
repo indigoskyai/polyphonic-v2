@@ -366,12 +366,11 @@ async function processTaskQueue(
         error: errMsg,
       });
 
-      await logActivity(supabase, {
-        user_id: task.user_id,
-        process_type: "heartbeat",
-        action_type: "task_failed",
+      await logActivity(supabase, task.user_id, {
+        type: "task_failed",
+        title: "Heartbeat: Task Failed",
         summary: `Task failed: ${task.description.slice(0, 100)}`,
-        metadata: { task_id: task.id, error: errMsg },
+        content: { task_id: task.id, error: errMsg },
       });
     }
   }

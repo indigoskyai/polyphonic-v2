@@ -826,7 +826,7 @@ FOUR PRINCIPLES (never reference these explicitly):
 
               const relevantSkills = enabledSkills.filter(skill => {
                 const nameWords = skill.skill_name.toLowerCase().split(/\s+/);
-                return nameWords.some(word => word.length > 3 && recentText.includes(word));
+                return nameWords.some((word: string) => word.length > 3 && recentText.includes(word));
               }).slice(0, 2); // Max 2 skills to manage context size
 
               if (relevantSkills.length > 0) {

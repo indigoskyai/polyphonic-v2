@@ -161,8 +161,7 @@ const Reflections = () => {
           .from("thought_stream")
           .update({ delivered: true })
           .eq("id", item.id)
-          .then(() => {})
-          .catch(() => {});
+          .then(() => {}, () => {});
       }
 
       navigate(`/chat?conversation=${convData.id}`);
