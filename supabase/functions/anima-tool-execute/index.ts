@@ -258,12 +258,12 @@ serve(async (req) => {
             input: args,
             output: data,
           };
-        } catch (err) {
+        } catch (err: unknown) {
           clearTimeout(timeout);
           const errMsg =
-            err.name === "AbortError"
+            err instanceof Error && err.name === "AbortError"
               ? "Tool execution timed out"
-              : `Tool execution failed: ${err.message}`;
+              : `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`;
           console.error(`Tool ${fnName} error:`, errMsg);
           return {
             tool_call_id: tc.id,
