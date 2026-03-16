@@ -257,10 +257,9 @@ async function processUser(
   if (actions.length === 0) {
     actions.push({ userId, action: "quiet_cycle", result: "No actionable signals" });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "quiet_cycle",
+    await logActivity(supabase, userId, {
+      type: "quiet_cycle",
+      title: "Heartbeat: Quiet Cycle",
       summary: "Heartbeat ran but found no actionable signals",
     });
   }
