@@ -49,8 +49,9 @@ serve(async (req) => {
       });
     }
 
-    const tavilyApiKey = Deno.env.get("TAVILY_API_KEY");
-    if (!tavilyApiKey) {
+    // Use Perplexity Sonar via OpenRouter — no additional API key needed
+    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "Web search not configured" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -59,21 +60,30 @@ serve(async (req) => {
 
     console.log("Web search query:", query.slice(0, 100));
 
-    const searchResponse = await fetch("https://api.tavily.com/search", {
+    const searchResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${openrouterKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://polyphonic.chat",
+        "X-Title": "Polyphonic",
+      },
       body: JSON.stringify({
-        api_key: tavilyApiKey,
-        query,
-        search_depth: "basic",
-        max_results: 6,
-        include_answer: true,
+        model: "perplexity/sonar",
+        messages: [
+          {
+            role: "system",
+            content: "You are a web search assistant. Search for the query and provide a concise answer followed by the key sources. Format your response as JSON with this structure: { \"answer\": \"your synthesized answer\", \"results\": [{ \"title\": \"page title\", \"url\": \"source url\", \"snippet\": \"relevant excerpt\" }] }. Include 4-6 results. Return ONLY valid JSON, no markdown fences.",
+          },
+          { role: "user", content: query },
+        ],
+        temperature: 0.1,
       }),
     });
 
     if (!searchResponse.ok) {
       const text = await searchResponse.text();
-      console.error("Tavily search error:", searchResponse.status, text);
+      console.error("Sonar search error:", searchResponse.status, text);
       return new Response(JSON.stringify({ error: "Web search failed" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -81,15 +91,29 @@ serve(async (req) => {
     }
 
     const searchData = await searchResponse.json();
+    const rawContent = searchData.choices?.[0]?.message?.content || "";
 
-    const answer = searchData.answer || "";
-    const results = (searchData.results || []).map(
-      (r: { title?: string; url?: string; content?: string }) => ({
+    // Parse the JSON response from Sonar
+    let answer = "";
+    let results: Array<{ title: string; url: string; snippet: string }> = [];
+    try {
+      const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      answer = parsed.answer || rawContent;
+      results = (parsed.results || []).map((r: any) => ({
         title: r.title || "",
         url: r.url || "",
-        snippet: r.content || "",
-      })
-    );
+        snippet: r.snippet || r.content || "",
+      }));
+    } catch {
+      // If JSON parsing fails, use the raw response as the answer
+      answer = rawContent;
+      // Try to extract citations from Sonar's response if available
+      const citations = searchData.choices?.[0]?.message?.citations;
+      if (Array.isArray(citations)) {
+        results = citations.map((url: string) => ({ title: "", url, snippet: "" }));
+      }
+    }
 
     // Log activity
     const supabase = createClient(supabaseUrl, serviceRoleKey);
