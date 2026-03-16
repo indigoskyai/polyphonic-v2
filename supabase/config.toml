@@ -74,3 +74,12 @@ verify_jwt = false
 
 [functions.anima-tool-execute]
 verify_jwt = false
+
+[functions.anima-heartbeat]
+verify_jwt = false
+
+[functions.anima-social-moltbook]
+verify_jwt = false
+
+[functions.anima-social-x]
+verify_jwt = false

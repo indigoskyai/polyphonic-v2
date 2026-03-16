@@ -24,7 +24,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ReactMarkdown from "react-markdown";
 import { CodeBlock, InlineCode } from "@/components/CodeBlock";
 import { preprocessAsciiArt } from "@/lib/asciiArt";
@@ -260,7 +259,7 @@ const Chat = () => {
   const [isListening, setIsListening] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [reflectionsOpen, setReflectionsOpen] = useState(false);
+  // reflectionsOpen state removed — now a nav link to /reflections
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
@@ -594,8 +593,6 @@ const Chat = () => {
 
   const handleReflectionClick = async (question: { id: string; question: string }) => {
     if (!user) return;
-    setReflectionsOpen(false);
-
     const title = question.question.slice(0, 60);
     const { data: convData, error: convError } = await supabase
       .from("conversations")
@@ -1865,88 +1862,28 @@ const Chat = () => {
           <span>Gallery</span>
         </button>
 
-        <Popover open={reflectionsOpen} onOpenChange={setReflectionsOpen}>
-          <PopoverTrigger asChild>
-            <button
-              className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors relative min-h-[36px]"
-              style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        <button
+          onClick={() => { navigateTo("/reflections"); if (isMobile) setSidebarCollapsed(true); }}
+          className="w-full flex items-center gap-3 px-3 py-[6px] rounded-lg transition-colors relative min-h-[36px]"
+          style={{ fontSize: "14px", fontWeight: 400, color: "#d4d4d4" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <Sparkles className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
+          <span>Reflections</span>
+          {curiosityQuestions.length > 0 && (
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--gray-400)",
+                marginLeft: "auto",
+              }}
             >
-              <Sparkles className="h-4 w-4" style={{ color: "var(--gray-400)" }} />
-              <span>Reflections</span>
-              {curiosityQuestions.length > 0 && (
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: "var(--gray-400)",
-                    marginLeft: "auto",
-                  }}
-                >
-                  {curiosityQuestions.length}
-                </span>
-              )}
-            </button>
-          </PopoverTrigger>
-           <PopoverContent
-            side="right"
-            align="start"
-            className="w-80 p-0"
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid hsl(var(--border-subtle))",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--gray-400)" }} />
-                  <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)" }}>
-                    Thoughts while you were away
-                  </span>
-                </div>
-                {curiosityQuestions.length > 0 && (
-                  <button
-                    onClick={() => dismissCuriosity()}
-                    className="text-xs px-2 py-0.5 rounded transition-colors"
-                    style={{ color: "var(--gray-500)", fontSize: "11px" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--gray-500)"; }}
-                  >
-                    Dismiss all
-                  </button>
-                )}
-              </div>
-              {curiosityQuestions.length === 0 ? (
-                <p style={{ fontSize: "13px", color: "var(--gray-500)", padding: "8px 0" }}>
-                  No new reflections right now.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {curiosityQuestions.map((q) => (
-                    <button
-                      key={q.id}
-                      onClick={() => handleReflectionClick(q)}
-                      className="w-full text-left px-3 py-2 rounded-lg transition-colors min-h-[44px]"
-                      style={{
-                        fontSize: "13px",
-                        color: "var(--text-primary)",
-                        background: "transparent",
-                        lineHeight: 1.5,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gray-850)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      {q.question}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+              {curiosityQuestions.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Footer */}

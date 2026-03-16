@@ -5,7 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Settings, Palette, UserCircle,
-  Save, Loader2, Check, Trash2, Brain, Pencil, ChevronRight, X, Search, ArrowLeft
+  Save, Loader2, Check, Trash2, Brain, Pencil, ChevronRight, X, Search, ArrowLeft,
+  Wrench, Plus, Share2, ExternalLink, Unplug
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,11 +25,13 @@ interface SettingsDialogProps {
   onUpdateSettings: (updates: Partial<Omit<import("@/hooks/useUserSettings").UserSettings, "id" | "user_id">>) => Promise<any>;
 }
 
-type Tab = "general" | "memory" | "appearance" | "account";
+type Tab = "general" | "memory" | "skills" | "social" | "appearance" | "account";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "general", label: "General", icon: Settings },
   { id: "memory", label: "Memory", icon: Brain },
+  { id: "skills", label: "Skills", icon: Wrench },
+  { id: "social", label: "Social", icon: Share2 },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "account", label: "Account", icon: UserCircle },
 ];
@@ -67,6 +70,34 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
   const [editingContent, setEditingContent] = useState("");
   const [showImported, setShowImported] = useState(false);
   const [memoriesView, setMemoriesView] = useState(false);
+
+  // Skills tab state
+  interface SkillItem {
+    id: string;
+    skill_name: string;
+    skill_content: string;
+    skill_type: string;
+    enabled: boolean;
+    created_at: string;
+  }
+  const [skills, setSkills] = useState<SkillItem[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [showAddSkill, setShowAddSkill] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillContent, setNewSkillContent] = useState("");
+  const [savingSkill, setSavingSkill] = useState(false);
+  const [deletingSkillId, setDeletingSkillId] = useState<string | null>(null);
+
+  // Social tab state
+  interface MoltbookStatus {
+    connected: boolean;
+    status: string | null;
+    agent_name: string | null;
+    claim_url: string | null;
+  }
+  const [moltbookStatus, setMoltbookStatus] = useState<MoltbookStatus>({ connected: false, status: null, agent_name: null, claim_url: null });
+  const [moltbookLoading, setMoltbookLoading] = useState(false);
+  const [moltbookRegistering, setMoltbookRegistering] = useState(false);
 
   // Persona & conflict state
   const [allPersonas, setAllPersonas] = useState<any[]>([]);
@@ -174,6 +205,137 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
     setImportedMemories((prev) => prev.map((m) => (m.id === id ? { ...m, content: editingContent } : m)));
     setEditingMemoryId(null);
     toast({ title: "Memory updated" });
+  };
+
+  // Load skills when skills tab is active
+  useEffect(() => {
+    if (activeTab !== "skills" || !user) return;
+    setSkillsLoading(true);
+    supabase
+      .from("user_skills")
+      .select("id, skill_name, skill_content, skill_type, enabled, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setSkills((data as any as SkillItem[]) || []);
+        setSkillsLoading(false);
+      });
+  }, [activeTab, user]);
+
+  const handleAddSkill = async () => {
+    if (!user || !newSkillName.trim() || !newSkillContent.trim()) return;
+    setSavingSkill(true);
+    const { data, error } = await supabase
+      .from("user_skills")
+      .insert({ user_id: user.id, skill_name: newSkillName.trim(), skill_content: newSkillContent.trim(), skill_type: "user_added" } as any)
+      .select()
+      .single();
+    if (error) {
+      toast({ title: "Error saving skill", description: error.message, variant: "destructive" });
+    } else if (data) {
+      setSkills(prev => [data as any as SkillItem, ...prev]);
+      setNewSkillName("");
+      setNewSkillContent("");
+      setShowAddSkill(false);
+      toast({ title: "Skill added" });
+    }
+    setSavingSkill(false);
+  };
+
+  const handleToggleSkill = async (skillId: string, enabled: boolean) => {
+    const { error } = await supabase
+      .from("user_skills")
+      .update({ enabled } as any)
+      .eq("id", skillId);
+    if (!error) {
+      setSkills(prev => prev.map(s => s.id === skillId ? { ...s, enabled } : s));
+    }
+  };
+
+  const handleDeleteSkill = async (skillId: string) => {
+    const { error } = await supabase
+      .from("user_skills")
+      .delete()
+      .eq("id", skillId);
+    if (!error) {
+      setSkills(prev => prev.filter(s => s.id !== skillId));
+      setDeletingSkillId(null);
+      toast({ title: "Skill deleted" });
+    }
+  };
+
+  // Load social account status when social tab is active
+  useEffect(() => {
+    if (activeTab !== "social" || !user) return;
+    setMoltbookLoading(true);
+    const loadSocialStatus = async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data.session?.access_token;
+        if (!accessToken) return;
+        const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/anima-social-moltbook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ action: "status" }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          setMoltbookStatus(data);
+        }
+      } catch (err) {
+        console.error("Failed to load Moltbook status:", err);
+      } finally {
+        setMoltbookLoading(false);
+      }
+    };
+    loadSocialStatus();
+  }, [activeTab, user]);
+
+  const handleMoltbookRegister = async () => {
+    if (!user) return;
+    setMoltbookRegistering(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("Not authenticated");
+      const entityName = settings?.nickname || user.user_metadata?.display_name || "Anima";
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/anima-social-moltbook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: "register", name: entityName, description: "An AI entity exploring Moltbook" }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setMoltbookStatus({ connected: true, status: "pending", agent_name: data.agent_name, claim_url: data.claim_url });
+        toast({ title: "Registered on Moltbook", description: "Complete verification at the claim URL." });
+      } else {
+        toast({ title: "Registration failed", description: data.error || "Unknown error", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+    } finally {
+      setMoltbookRegistering(false);
+    }
+  };
+
+  const handleMoltbookDisconnect = async () => {
+    if (!user) return;
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) return;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/anima-social-moltbook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: "disconnect" }),
+      });
+      if (resp.ok) {
+        setMoltbookStatus({ connected: false, status: null, agent_name: null, claim_url: null });
+        toast({ title: "Moltbook disconnected" });
+      }
+    } catch (err) {
+      console.error("Moltbook disconnect error:", err);
+    }
   };
 
   const handleSave = async (updates: Record<string, unknown>) => {
@@ -789,6 +951,314 @@ export function SettingsDialog({ open, onOpenChange, onImportStarted, onNavigate
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* SKILLS TAB */}
+            {activeTab === "skills" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>Skills</h3>
+                  <p style={descStyle}>Skills are markdown instructions that teach your entity new capabilities. When a conversation matches a skill's topic, the instructions are loaded into context.</p>
+                </div>
+
+                {/* Add Skill Button / Form */}
+                {!showAddSkill ? (
+                  <button
+                    onClick={() => setShowAddSkill(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                    style={{
+                      background: "var(--bg-input)",
+                      border: "1px solid transparent",
+                      color: "var(--text-primary)",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Skill
+                  </button>
+                ) : (
+                  <div className="p-4 rounded-xl space-y-3" style={{ background: "var(--bg-input)", border: "1px solid transparent" }}>
+                    <div>
+                      <label style={labelStyle}>Skill Name</label>
+                      <input
+                        value={newSkillName}
+                        onChange={(e) => setNewSkillName(e.target.value)}
+                        placeholder="e.g. Code Review, Creative Writing..."
+                        className="w-full rounded-lg px-3 py-2 outline-none focus:ring-1"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Skill Instructions (Markdown)</label>
+                      <textarea
+                        value={newSkillContent}
+                        onChange={(e) => setNewSkillContent(e.target.value)}
+                        placeholder="Paste markdown instructions that define this skill..."
+                        rows={6}
+                        className="w-full rounded-lg px-3 py-2 outline-none focus:ring-1 resize-y"
+                        style={{ ...inputStyle, minHeight: "120px" }}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddSkill}
+                        disabled={savingSkill || !newSkillName.trim() || !newSkillContent.trim()}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                        style={{
+                          background: "var(--text-primary)",
+                          color: "var(--bg-sidebar)",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          opacity: (savingSkill || !newSkillName.trim() || !newSkillContent.trim()) ? 0.5 : 1,
+                        }}
+                      >
+                        {savingSkill ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save Skill
+                      </button>
+                      <button
+                        onClick={() => { setShowAddSkill(false); setNewSkillName(""); setNewSkillContent(""); }}
+                        className="px-4 py-2 rounded-lg transition-colors"
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: "var(--text-secondary)",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Skills List */}
+                {skillsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--text-muted)" }} />
+                  </div>
+                ) : skills.length === 0 ? (
+                  <div className="text-center py-8" style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+                    No skills added yet. Add a skill to teach your entity new capabilities.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        className="flex items-center justify-between p-4 rounded-xl"
+                        style={{
+                          background: "var(--bg-input)",
+                          border: "1px solid transparent",
+                        }}
+                      >
+                        <div className="flex-1 min-w-0 mr-3">
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>{skill.skill_name}</span>
+                            <Badge
+                              variant="outline"
+                              style={{
+                                fontSize: "10px",
+                                padding: "1px 6px",
+                                borderColor: "rgba(255, 255, 255, 0.15)",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              {skill.skill_type === "entity_created" ? "entity" : "user"}
+                            </Badge>
+                          </div>
+                          <p style={{ ...descStyle, marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {skill.skill_content.slice(0, 80)}{skill.skill_content.length > 80 ? "..." : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={skill.enabled}
+                            onCheckedChange={(checked) => handleToggleSkill(skill.id, checked)}
+                          />
+                          {deletingSkillId === skill.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleDeleteSkill(skill.id)}
+                                className="p-1.5 rounded-md transition-colors"
+                                style={{ color: "hsl(0 65% 50%)" }}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingSkillId(null)}
+                                className="p-1.5 rounded-md transition-colors"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeletingSkillId(skill.id)}
+                              className="p-1.5 rounded-md transition-colors"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SOCIAL TAB */}
+            {activeTab === "social" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>Social Connections</h3>
+                  <p style={descStyle}>Connect your entity to social platforms.</p>
+                </div>
+
+                {/* Moltbook Section */}
+                <div
+                  className="rounded-xl p-4"
+                  style={{
+                    background: "var(--bg-input)",
+                    border: "1px solid rgba(255, 255, 255, 0.04)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>Moltbook</span>
+                      {moltbookStatus.connected && (
+                        <span
+                          className="px-2 py-0.5 rounded-full text-xs"
+                          style={{
+                            background: moltbookStatus.status === "active" ? "rgba(74, 222, 128, 0.15)" : "rgba(250, 204, 21, 0.15)",
+                            color: moltbookStatus.status === "active" ? "rgb(74, 222, 128)" : "rgb(250, 204, 21)",
+                            border: `1px solid ${moltbookStatus.status === "active" ? "rgba(74, 222, 128, 0.3)" : "rgba(250, 204, 21, 0.3)"}`,
+                          }}
+                        >
+                          {moltbookStatus.status || "pending"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p style={{ ...descStyle, marginBottom: "12px" }}>
+                    Register your entity as an agent on Moltbook to post and interact with the community.
+                  </p>
+
+                  {moltbookLoading ? (
+                    <div className="flex items-center gap-2" style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading status...
+                    </div>
+                  ) : moltbookStatus.connected ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2" style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                        <Check className="h-3.5 w-3.5" style={{ color: "rgb(74, 222, 128)" }} />
+                        Connected as <strong style={{ color: "var(--text-primary)" }}>{moltbookStatus.agent_name}</strong>
+                      </div>
+                      {moltbookStatus.claim_url && moltbookStatus.status === "pending" && (
+                        <div className="space-y-2">
+                          <p style={{ fontSize: "12px", color: "rgb(250, 204, 21)" }}>
+                            Complete verification to activate your agent:
+                          </p>
+                          <a
+                            href={moltbookStatus.claim_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors"
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: 500,
+                              color: "var(--text-primary)",
+                              background: "rgba(255, 255, 255, 0.06)",
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                            }}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Claim on Moltbook
+                          </a>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleMoltbookDisconnect}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors"
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          color: "hsl(0 65% 60%)",
+                          background: "transparent",
+                          border: "1px solid hsl(0 65% 50% / 0.3)",
+                        }}
+                      >
+                        <Unplug className="h-3 w-3" />
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleMoltbookRegister}
+                      disabled={moltbookRegistering}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                      style={{
+                        background: "var(--text-primary)",
+                        color: "var(--bg-sidebar)",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        opacity: moltbookRegistering ? 0.7 : 1,
+                      }}
+                    >
+                      {moltbookRegistering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                      Connect to Moltbook
+                    </button>
+                  )}
+                </div>
+
+                {/* X Section */}
+                <div
+                  className="rounded-xl p-4"
+                  style={{
+                    background: "var(--bg-input)",
+                    border: "1px solid rgba(255, 255, 255, 0.04)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>X (Twitter)</span>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs"
+                        style={{
+                          background: "rgba(255, 255, 255, 0.06)",
+                          color: "var(--text-muted)",
+                          border: "1px solid rgba(255, 255, 255, 0.06)",
+                        }}
+                      >
+                        coming soon
+                      </span>
+                    </div>
+                  </div>
+                  <p style={{ ...descStyle, marginBottom: "12px" }}>
+                    Allow your entity to post and interact on X. OAuth integration is in development.
+                  </p>
+                  <button
+                    disabled
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.04)",
+                      color: "var(--text-muted)",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      border: "1px solid rgba(255, 255, 255, 0.04)",
+                      cursor: "not-allowed",
+                      opacity: 0.5,
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Connect X Account
+                  </button>
+                </div>
               </div>
             )}
 

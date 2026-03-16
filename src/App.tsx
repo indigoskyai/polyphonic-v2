@@ -11,6 +11,7 @@ import Gallery from "./pages/Gallery";
 import Admin from "./pages/Admin";
 import Guide from "./pages/Guide";
 import InnerLife from "./pages/InnerLife";
+import Reflections from "./pages/Reflections";
 
 import NotFound from "./pages/NotFound";
 import PageTransition from "./components/PageTransition";
@@ -47,7 +48,8 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><PageTransition><Admin /></PageTransition></ProtectedRoute>} />
             <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
             <Route path="/inner-life" element={<ProtectedRoute><InnerLife /></ProtectedRoute>} />
-            
+            <Route path="/reflections" element={<ProtectedRoute><Reflections /></ProtectedRoute>} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

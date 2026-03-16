@@ -150,3 +150,18 @@ Additional anima cron jobs (can be added later):
 - `anima-think` — every 2 hours
 - `anima-observe` — every 6 hours
 - `anima-dream` — daily
+- `anima-heartbeat` — every 15 minutes (lightweight liveness check, triggers activity-gated processes)
+
+### Heartbeat Cron
+
+The heartbeat function is a lightweight ping that checks for active users and triggers background cognitive processes only when there's recent activity. Schedule it at a high frequency since it short-circuits quickly when idle:
+
+```sql
+-- Heartbeat (every 15 minutes)
+SELECT cron.schedule('anima-heartbeat', '*/15 * * * *',
+  $$SELECT net.http_post('https://kknchdnrujzheulqzowv.supabase.co/functions/v1/anima-heartbeat',
+    '{}', 'application/json',
+    ARRAY[http_header('Authorization', 'Bearer ' || current_setting('app.service_role_key'))]
+  )$$
+);
+```

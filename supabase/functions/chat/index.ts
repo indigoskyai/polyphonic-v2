@@ -807,6 +807,39 @@ FOUR PRINCIPLES (never reference these explicitly):
             console.error("Inner life context error (non-blocking):", innerLifeErr);
           }
 
+          // ─── Skill Loading ───
+          try {
+            const { data: enabledSkills } = await supabase
+              .from("user_skills")
+              .select("skill_name, skill_content")
+              .eq("user_id", user_id)
+              .eq("enabled", true)
+              .limit(5);
+
+            if (enabledSkills && enabledSkills.length > 0) {
+              // Simple keyword matching: check if any recent user message mentions skill-related terms
+              const recentText = (messages || [])
+                .filter((m: any) => m.role === "user")
+                .slice(-3)
+                .map((m: any) => typeof m.content === "string" ? m.content.toLowerCase() : "")
+                .join(" ");
+
+              const relevantSkills = enabledSkills.filter(skill => {
+                const nameWords = skill.skill_name.toLowerCase().split(/\s+/);
+                return nameWords.some(word => word.length > 3 && recentText.includes(word));
+              }).slice(0, 2); // Max 2 skills to manage context size
+
+              if (relevantSkills.length > 0) {
+                systemPrompt += "\n\n=== Active Skills ===\n";
+                for (const skill of relevantSkills) {
+                  systemPrompt += `\n--- Skill: ${skill.skill_name} ---\n${skill.skill_content.slice(0, 2000)}\n`;
+                }
+              }
+            }
+          } catch (skillErr) {
+            console.error("Skill loading error (non-blocking):", skillErr);
+          }
+
           // ─── Model Identity Preamble ───
           const MODEL_IDENTITY_MAP: Record<string, { name: string; provider: string }> = {
             "openai/gpt-4o": { name: "GPT-4o", provider: "OpenAI" },
