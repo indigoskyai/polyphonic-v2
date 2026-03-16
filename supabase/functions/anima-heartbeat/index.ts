@@ -341,12 +341,11 @@ async function processTaskQueue(
         result: { task_id: task.id, function: functionName },
       });
 
-      await logActivity(supabase, {
-        user_id: task.user_id,
-        process_type: "heartbeat",
-        action_type: "task_completed",
+      await logActivity(supabase, task.user_id, {
+        type: "task_completed",
+        title: "Heartbeat: Task Completed",
         summary: `Completed queued task: ${task.description.slice(0, 100)}`,
-        metadata: { task_id: task.id, function: functionName },
+        content: { task_id: task.id, function: functionName },
       });
     } catch (taskErr) {
       const errMsg = taskErr instanceof Error ? taskErr.message : "Unknown error";
