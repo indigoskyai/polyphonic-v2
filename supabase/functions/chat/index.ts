@@ -412,128 +412,6 @@ function formatMemoriesForPrompt(
   }
 }
 
-// ─── Tool Calling ───
-
-const TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "web_search",
-      description: "Search the web for current information, news, or answers to questions.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "The search query" },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "read_url",
-      description: "Read and extract content from a web page URL.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "The URL to read" },
-          focus: { type: "string", description: "Optional focus area to extract specific content" },
-        },
-        required: ["url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "generate_image",
-      description: "Generate an image based on a text description.",
-      parameters: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "Detailed description of the image to generate" },
-        },
-        required: ["prompt"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "queue_task",
-      description: "Queue a task for autonomous processing later (e.g. research, reminders, follow-ups).",
-      parameters: {
-        type: "object",
-        properties: {
-          description: { type: "string", description: "Description of the task to queue" },
-          priority: { type: "number", description: "Priority from 0.0 (low) to 1.0 (high). Defaults to 0.5." },
-        },
-        required: ["description"],
-      },
-    },
-  },
-];
-
-// Models that support tool/function calling via OpenRouter
-const TOOL_CAPABLE_PREFIXES = ["anthropic/claude", "openai/gpt", "google/gemini"];
-
-function modelSupportsTools(modelId: string): boolean {
-  return TOOL_CAPABLE_PREFIXES.some(prefix => modelId.startsWith(prefix));
-}
-
-// Timed AbortController — prevents any single phase from hanging indefinitely
-function createTimedAbort(timeoutMs: number) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  return {
-    signal: controller.signal,
-    cleanup: () => clearTimeout(timeoutId),
-  };
-}
-
-async function executeTool(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  userId: string,
-  supabase: any,
-  supabaseUrl: string,
-  serviceRoleKey: string,
-): Promise<Record<string, unknown>> {
-  const headers = { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" };
-  const body = JSON.stringify({ ...toolInput, user_id: userId });
-
-  try {
-    switch (toolName) {
-      case "web_search": {
-        const res = await fetch(`${supabaseUrl}/functions/v1/anima-web-search`, { method: "POST", headers, body });
-        return await res.json();
-      }
-      case "read_url": {
-        const res = await fetch(`${supabaseUrl}/functions/v1/anima-web-read`, { method: "POST", headers, body });
-        return await res.json();
-      }
-      case "generate_image": {
-        const res = await fetch(`${supabaseUrl}/functions/v1/anima-image-create`, { method: "POST", headers, body });
-        return await res.json();
-      }
-      case "queue_task": {
-        await supabase.from("entity_task_queue").insert({
-          user_id: userId,
-          task_description: (toolInput as any).description || "",
-          priority: (toolInput as any).priority || 0.5,
-        });
-        return { status: "queued", message: "Task queued for autonomous processing" };
-      }
-      default:
-        return { error: `Unknown tool: ${toolName}` };
-    }
-  } catch (err) {
-    console.error(`Tool execution error (${toolName}):`, err);
-    return { error: `Tool ${toolName} failed: ${String(err)}` };
-  }
-}
-
 // ─── Main Handler ───
 
 serve(async (req) => {
@@ -580,6 +458,7 @@ serve(async (req) => {
       occupation = "",
       about_me = "",
       memory_tier = "standard",
+      tool_messages,
     } = rawBody;
 
     // Input validation
@@ -971,25 +850,41 @@ FOUR PRINCIPLES (never reference these explicitly):
             "HTTP-Referer": "https://polyphonic.chat",
             "X-Title": "Polyphonic",
           };
-          const supportsTools = modelSupportsTools(chatModel);
-
-          // Add tool awareness to system prompt when tools are available
-          if (supportsTools) {
-            systemPrompt += `\n\n=== Available Capabilities ===
-You have access to tools that let you take real actions:
-- web_search: Search the internet for current information
-- read_url: Read and extract content from any web page
-- generate_image: Create images from text descriptions
-- queue_task: Save a task to work on autonomously later
-Use these tools when they would genuinely help. You are not limited to your training data — you can look things up, read articles, and create visual content.`;
-          }
 
           // Signal client that context loading is done, now thinking
           sendEvent(controller, { tool_status: "thinking" });
 
-          // ─── Helper: pipe OpenRouter stream, filtering out its [DONE] ───
-          async function pipeStream(response: Response) {
-            const reader = response.body!.getReader();
+          // Build final message array: system + conversation + any pre-computed tool messages
+          const finalMessages: any[] = [
+            { role: "system", content: systemPrompt },
+            ...truncatedMessages,
+          ];
+
+          // Append tool messages from the frontend (pre-computed via anima-tool-execute)
+          if (Array.isArray(tool_messages) && tool_messages.length > 0) {
+            finalMessages.push(...tool_messages);
+          }
+
+          // ─── Single streaming call to OpenRouter ───
+          const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: openRouterHeaders,
+            body: JSON.stringify({
+              model: chatModel,
+              messages: finalMessages,
+              stream: true,
+              temperature: activeTemp,
+              max_tokens: validMaxTokens,
+            }),
+          });
+
+          if (!streamResponse.ok) {
+            const errText = await streamResponse.text();
+            console.error("OpenRouter stream error:", streamResponse.status, errText);
+            sendEvent(controller, { error: streamResponse.status === 429 ? "Rate limit exceeded." : streamResponse.status === 402 ? "Insufficient credits." : "AI provider error" });
+          } else {
+            // Pipe the OpenRouter stream, filtering out its [DONE]
+            const reader = streamResponse.body!.getReader();
             const decoder = new TextDecoder();
             let buf = "";
             while (true) {
@@ -1007,130 +902,6 @@ Use these tools when they would genuinely help. You are not limited to your trai
             if (buf.trim() && buf.trim() !== "data: [DONE]") {
               controller.enqueue(encoder.encode(buf));
             }
-          }
-
-          // ─── Helper: make a direct streaming call (no tools) ───
-          async function directStream() {
-            const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: openRouterHeaders,
-              body: JSON.stringify({
-                model: chatModel,
-                messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
-                stream: true,
-                temperature: activeTemp,
-                max_tokens: validMaxTokens,
-              }),
-            });
-            if (!streamResponse.ok) {
-              const errText = await streamResponse.text();
-              console.error("OpenRouter stream error:", streamResponse.status, errText);
-              sendEvent(controller, { error: streamResponse.status === 429 ? "Rate limit exceeded." : streamResponse.status === 402 ? "Insufficient credits." : "AI provider error" });
-              return;
-            }
-            await pipeStream(streamResponse);
-          }
-
-          if (supportsTools) {
-            // ── Phase 1: Tool planning with timeout + fallback ──
-            const planningModel = "anthropic/claude-sonnet-4.6";
-            const planningPrompt = `You are a helpful AI assistant with access to tools. Decide if the user's message requires using any tools. If so, call the appropriate tool(s). If not, respond directly.\n\n${validCustomInstructions ? `User instructions: ${validCustomInstructions}\n` : ""}`;
-
-            let choice: any = null;
-            try {
-              const { signal: planSignal, cleanup: planCleanup } = createTimedAbort(12000);
-              const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: openRouterHeaders,
-                body: JSON.stringify({
-                  model: planningModel,
-                  messages: [{ role: "system", content: planningPrompt }, ...truncatedMessages],
-                  temperature: 0.3,
-                  max_tokens: 1024,
-                  tools: TOOLS,
-                }),
-                signal: planSignal,
-              });
-              planCleanup();
-
-              if (initialResponse.ok) {
-                const initialData = await initialResponse.json();
-                choice = initialData.choices?.[0];
-              } else {
-                console.error("Tool planning error:", initialResponse.status);
-              }
-            } catch (planErr) {
-              console.error("Tool planning failed/timed out, falling back to direct stream:", planErr);
-            }
-
-            if (choice?.message?.tool_calls?.length > 0) {
-              // ── Phase 2: Execute tools IN PARALLEL with timeout ──
-              const toolNames = choice.message.tool_calls.map((tc: any) => tc.function.name);
-              sendEvent(controller, { tool_status: "executing", tools: toolNames });
-
-              const toolPromises = choice.message.tool_calls.map(async (tc: any) => {
-                const toolInput = JSON.parse(tc.function.arguments);
-                const { signal: toolSignal, cleanup: toolCleanup } = createTimedAbort(10000);
-                try {
-                  const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
-                  return {
-                    result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(result) },
-                    metadata: { tool: tc.function.name, input: toolInput, output: result },
-                  };
-                } catch (toolErr) {
-                  const errResult = { error: `Tool ${tc.function.name} timed out or failed` };
-                  return {
-                    result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(errResult) },
-                    metadata: { tool: tc.function.name, input: toolInput, output: errResult },
-                  };
-                } finally {
-                  toolCleanup();
-                }
-              });
-
-              const toolOutcomes = await Promise.all(toolPromises);
-              const toolResults = toolOutcomes.map((o: any) => o.result);
-              const toolCallMetadata = toolOutcomes.map((o: any) => o.metadata);
-
-              // ── Phase 3: Final streaming call with tool results ──
-              sendEvent(controller, { tool_status: "composing" });
-
-              const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: openRouterHeaders,
-                body: JSON.stringify({
-                  model: chatModel,
-                  messages: [
-                    { role: "system", content: systemPrompt },
-                    ...truncatedMessages,
-                    choice.message,
-                    ...toolResults,
-                  ],
-                  stream: true,
-                  temperature: activeTemp,
-                  max_tokens: validMaxTokens,
-                }),
-              });
-
-              if (!streamResponse.ok) {
-                const errText = await streamResponse.text();
-                console.error("OpenRouter final stream error:", streamResponse.status, errText);
-                sendEvent(controller, { error: "AI provider error" });
-              } else {
-                await pipeStream(streamResponse);
-              }
-
-              // Send tool_calls metadata BEFORE our [DONE]
-              if (toolCallMetadata.length > 0) {
-                sendEvent(controller, { tool_calls: toolCallMetadata });
-              }
-            } else {
-              // Planning returned no tools (or failed) — fall back to direct stream
-              await directStream();
-            }
-          } else {
-            // ─── Non-tool-capable models: direct streaming ───
-            await directStream();
           }
 
           // Signal stream end

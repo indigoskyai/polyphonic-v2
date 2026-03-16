@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.anima-image-create]
 verify_jwt = false
+
+[functions.anima-tool-execute]
+verify_jwt = false

@@ -1193,6 +1193,52 @@ const Chat = () => {
         return { role: m.role as "user" | "assistant", content: m.content };
       });
 
+      // ─── Tool execution (pre-chat) ───
+      const chatModelId = webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || "anthropic/claude-opus-4.6");
+      const TOOL_CAPABLE_PREFIXES = ["anthropic/claude", "openai/gpt", "google/gemini"];
+      const modelSupportTools = TOOL_CAPABLE_PREFIXES.some(p => chatModelId.startsWith(p));
+
+      let toolMessages: any[] = [];
+      let toolCallMeta: any[] = [];
+
+      if (modelSupportTools) {
+        setToolStatus("Planning...");
+        try {
+          const toolResp = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/anima-tool-execute`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+              },
+              body: JSON.stringify({
+                messages: allMessages,
+                custom_instructions: settings?.custom_instructions,
+              }),
+            }
+          );
+          const toolData = await toolResp.json();
+
+          if (toolData.used_tools && toolData.tool_messages) {
+            toolMessages = toolData.tool_messages;
+            toolCallMeta = toolData.tool_calls || [];
+            // Update the temp assistant message with tool_calls for rendering ToolCallCards
+            if (toolCallMeta.length > 0) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantTempId ? { ...m, tool_calls: toolCallMeta } : m))
+              );
+            }
+            setToolStatus("Composing response...");
+          } else {
+            setToolStatus(null);
+          }
+        } catch (toolErr) {
+          console.error("Tool execution failed, continuing without tools:", toolErr);
+          setToolStatus(null);
+        }
+      }
+
       const sessionData = await sessionPromise;
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: "POST",
@@ -1202,7 +1248,7 @@ const Chat = () => {
         },
         body: JSON.stringify({
           messages: allMessages,
-          model: webSearchEnabled ? "perplexity/sonar" : (settings?.selected_model || "anthropic/claude-opus-4.6"),
+          model: chatModelId,
           temperature: settings?.temperature,
           max_tokens: settings?.max_tokens,
           custom_instructions: settings?.custom_instructions,
@@ -1212,6 +1258,7 @@ const Chat = () => {
           nickname: settings?.nickname || "",
           occupation: settings?.occupation || "",
           about_me: settings?.about_me || "",
+          tool_messages: toolMessages.length > 0 ? toolMessages : undefined,
         }),
         signal: controller.signal,
       });
@@ -1360,8 +1407,17 @@ const Chat = () => {
         }
       } else {
         console.error(e);
-        toast({ title: "Error", description: "Failed to get AI response", variant: "destructive" });
-        setMessages((prev) => prev.filter((m) => m.id !== assistantTempId));
+        if (assistantContent) {
+          // Keep partial response
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantTempId ? { ...m, content: assistantContent } : m))
+          );
+          toast({ title: "Response may be incomplete", variant: "destructive" });
+        } else {
+          // No content at all — remove the empty message
+          setMessages((prev) => prev.filter((m) => m.id !== assistantTempId));
+          toast({ title: "Failed to get response", variant: "destructive" });
+        }
       }
     } finally {
       abortRef.current = null;
