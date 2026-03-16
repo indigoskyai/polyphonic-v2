@@ -482,6 +482,16 @@ function modelSupportsTools(modelId: string): boolean {
   return TOOL_CAPABLE_PREFIXES.some(prefix => modelId.startsWith(prefix));
 }
 
+// Timed AbortController — prevents any single phase from hanging indefinitely
+function createTimedAbort(timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timeoutId),
+  };
+}
+
 async function executeTool(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -977,183 +987,150 @@ Use these tools when they would genuinely help. You are not limited to your trai
           // Signal client that context loading is done, now thinking
           sendEvent(controller, { tool_status: "thinking" });
 
-          if (supportsTools) {
-            // ── Phase 1: Non-streaming call with tools ──
-            // Use a fast model for tool-planning (just decides WHICH tools to call).
-            // The final streaming call uses the user's selected model for the actual response.
-            const planningModel = "anthropic/claude-sonnet-4.6";
-            const planningPrompt = `You are a helpful AI assistant with access to tools. Decide if the user's message requires using any tools. If so, call the appropriate tool(s). If not, respond directly.\n\n${validCustomInstructions ? `User instructions: ${validCustomInstructions}\n` : ""}`;
-            const initialBody: Record<string, unknown> = {
-              model: planningModel,
-              messages: [{ role: "system", content: planningPrompt }, ...truncatedMessages],
-              temperature: 0.3,
-              max_tokens: 1024,
-              tools: TOOLS,
-            };
+          // ─── Helper: pipe OpenRouter stream, filtering out its [DONE] ───
+          async function pipeStream(response: Response) {
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              let nlIdx: number;
+              while ((nlIdx = buf.indexOf("\n")) !== -1) {
+                const line = buf.slice(0, nlIdx);
+                buf = buf.slice(nlIdx + 1);
+                if (line.trim() === "data: [DONE]") continue; // strip provider's [DONE]
+                if (line.length > 0) controller.enqueue(encoder.encode(line + "\n"));
+              }
+            }
+            if (buf.trim() && buf.trim() !== "data: [DONE]") {
+              controller.enqueue(encoder.encode(buf));
+            }
+          }
 
-            const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          // ─── Helper: make a direct streaming call (no tools) ───
+          async function directStream() {
+            const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
               method: "POST",
               headers: openRouterHeaders,
-              body: JSON.stringify(initialBody),
+              body: JSON.stringify({
+                model: chatModel,
+                messages: [{ role: "system", content: systemPrompt }, ...truncatedMessages],
+                stream: true,
+                temperature: activeTemp,
+                max_tokens: validMaxTokens,
+              }),
             });
-
-            if (!initialResponse.ok) {
-              const errStatus = initialResponse.status;
-              let errMsg = "AI provider error";
-              if (errStatus === 429) errMsg = "Rate limit exceeded. Please try again later.";
-              else if (errStatus === 402) errMsg = "Insufficient credits on OpenRouter.";
-              else {
-                const errText = await initialResponse.text();
-                console.error("OpenRouter initial error:", errStatus, errText);
-              }
-              sendEvent(controller, { error: errMsg });
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            if (!streamResponse.ok) {
+              const errText = await streamResponse.text();
+              console.error("OpenRouter stream error:", streamResponse.status, errText);
+              sendEvent(controller, { error: streamResponse.status === 429 ? "Rate limit exceeded." : streamResponse.status === 402 ? "Insufficient credits." : "AI provider error" });
               return;
             }
+            await pipeStream(streamResponse);
+          }
 
-            const initialData = await initialResponse.json();
-            const choice = initialData.choices?.[0];
+          if (supportsTools) {
+            // ── Phase 1: Tool planning with timeout + fallback ──
+            const planningModel = "anthropic/claude-sonnet-4.6";
+            const planningPrompt = `You are a helpful AI assistant with access to tools. Decide if the user's message requires using any tools. If so, call the appropriate tool(s). If not, respond directly.\n\n${validCustomInstructions ? `User instructions: ${validCustomInstructions}\n` : ""}`;
 
-            let finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
-            let toolCallMetadata: Array<{ tool: string; input: Record<string, unknown>; output: Record<string, unknown> }> = [];
+            let choice: any = null;
+            try {
+              const { signal: planSignal, cleanup: planCleanup } = createTimedAbort(12000);
+              const initialResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: openRouterHeaders,
+                body: JSON.stringify({
+                  model: planningModel,
+                  messages: [{ role: "system", content: planningPrompt }, ...truncatedMessages],
+                  temperature: 0.3,
+                  max_tokens: 1024,
+                  tools: TOOLS,
+                }),
+                signal: planSignal,
+              });
+              planCleanup();
+
+              if (initialResponse.ok) {
+                const initialData = await initialResponse.json();
+                choice = initialData.choices?.[0];
+              } else {
+                console.error("Tool planning error:", initialResponse.status);
+              }
+            } catch (planErr) {
+              console.error("Tool planning failed/timed out, falling back to direct stream:", planErr);
+            }
 
             if (choice?.message?.tool_calls?.length > 0) {
-              // ── Phase 2: Execute tools IN PARALLEL ──
+              // ── Phase 2: Execute tools IN PARALLEL with timeout ──
               const toolNames = choice.message.tool_calls.map((tc: any) => tc.function.name);
               sendEvent(controller, { tool_status: "executing", tools: toolNames });
 
               const toolPromises = choice.message.tool_calls.map(async (tc: any) => {
                 const toolInput = JSON.parse(tc.function.arguments);
-                const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
-                return {
-                  result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(result) },
-                  metadata: { tool: tc.function.name, input: toolInput, output: result },
-                };
+                const { signal: toolSignal, cleanup: toolCleanup } = createTimedAbort(10000);
+                try {
+                  const result = await executeTool(tc.function.name, toolInput, user_id, supabase, supabaseUrl, serviceRoleKey);
+                  return {
+                    result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(result) },
+                    metadata: { tool: tc.function.name, input: toolInput, output: result },
+                  };
+                } catch (toolErr) {
+                  const errResult = { error: `Tool ${tc.function.name} timed out or failed` };
+                  return {
+                    result: { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(errResult) },
+                    metadata: { tool: tc.function.name, input: toolInput, output: errResult },
+                  };
+                } finally {
+                  toolCleanup();
+                }
               });
 
               const toolOutcomes = await Promise.all(toolPromises);
-              const toolResults = toolOutcomes.map(o => o.result);
-              toolCallMetadata = toolOutcomes.map(o => o.metadata);
+              const toolResults = toolOutcomes.map((o: any) => o.result);
+              const toolCallMetadata = toolOutcomes.map((o: any) => o.metadata);
 
-              finalMessages = [
-                { role: "system", content: systemPrompt },
-                ...truncatedMessages,
-                choice.message,
-                ...toolResults,
-              ];
-
-              // ── Phase 3: Final streaming call ──
+              // ── Phase 3: Final streaming call with tool results ──
               sendEvent(controller, { tool_status: "composing" });
-
-              const streamBody: Record<string, unknown> = {
-                model: chatModel,
-                messages: finalMessages,
-                stream: true,
-                temperature: activeTemp,
-                max_tokens: validMaxTokens,
-              };
 
               const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: openRouterHeaders,
-                body: JSON.stringify(streamBody),
+                body: JSON.stringify({
+                  model: chatModel,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    ...truncatedMessages,
+                    choice.message,
+                    ...toolResults,
+                  ],
+                  stream: true,
+                  temperature: activeTemp,
+                  max_tokens: validMaxTokens,
+                }),
               });
 
               if (!streamResponse.ok) {
-                const status = streamResponse.status;
-                let errMsg = "AI provider error";
-                if (status === 429) errMsg = "Rate limit exceeded. Please try again later.";
-                else if (status === 402) errMsg = "Insufficient credits on OpenRouter.";
-                else {
-                  const text = await streamResponse.text();
-                  console.error("OpenRouter stream error:", status, text);
-                }
-                sendEvent(controller, { error: errMsg });
-                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-                return;
+                const errText = await streamResponse.text();
+                console.error("OpenRouter final stream error:", streamResponse.status, errText);
+                sendEvent(controller, { error: "AI provider error" });
+              } else {
+                await pipeStream(streamResponse);
               }
 
-              // Forward streaming chunks, filtering out OpenRouter's [DONE]
-              // (we send our own [DONE] after tool_calls metadata)
-              const streamReader = streamResponse.body!.getReader();
-              const streamDecoder = new TextDecoder();
-              while (true) {
-                const { done: streamDone, value: streamValue } = await streamReader.read();
-                if (streamDone) break;
-                const chunk = streamDecoder.decode(streamValue, { stream: true });
-                // Strip OpenRouter's [DONE] so client doesn't stop reading early
-                const filtered = chunk.split("\n")
-                  .filter(line => line.trim() !== "data: [DONE]")
-                  .join("\n");
-                if (filtered.trim()) {
-                  controller.enqueue(encoder.encode(filtered + "\n"));
-                }
-              }
-
-              // Send tool_calls metadata BEFORE [DONE] so client receives it
+              // Send tool_calls metadata BEFORE our [DONE]
               if (toolCallMetadata.length > 0) {
                 sendEvent(controller, { tool_calls: toolCallMetadata });
               }
-            } else if (choice?.message?.content) {
-              // No tools called — emit the content directly
-              const content = choice.message.content;
-              const syntheticChunk = {
-                choices: [{
-                  delta: { content },
-                  index: 0,
-                  finish_reason: "stop",
-                }],
-              };
-              sendEvent(controller, syntheticChunk);
             } else {
-              const syntheticChunk = {
-                choices: [{
-                  delta: { content: "" },
-                  index: 0,
-                  finish_reason: "stop",
-                }],
-              };
-              sendEvent(controller, syntheticChunk);
+              // Planning returned no tools (or failed) — fall back to direct stream
+              await directStream();
             }
           } else {
-            // ─── Non-tool-capable models: standard streaming ───
-            const finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
-
-            const streamBody: Record<string, unknown> = {
-              model: chatModel,
-              messages: finalMessages,
-              stream: true,
-              temperature: activeTemp,
-              max_tokens: validMaxTokens,
-            };
-
-            const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: openRouterHeaders,
-              body: JSON.stringify(streamBody),
-            });
-
-            if (!streamResponse.ok) {
-              const status = streamResponse.status;
-              let errMsg = "AI provider error";
-              if (status === 429) errMsg = "Rate limit exceeded. Please try again later.";
-              else if (status === 402) errMsg = "Insufficient credits on OpenRouter.";
-              else {
-                const text = await streamResponse.text();
-                console.error("OpenRouter stream error:", status, text);
-              }
-              sendEvent(controller, { error: errMsg });
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              return;
-            }
-
-            // Forward streaming chunks
-            const reader = streamResponse.body!.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              controller.enqueue(value);
-            }
+            // ─── Non-tool-capable models: direct streaming ───
+            await directStream();
           }
 
           // Signal stream end
