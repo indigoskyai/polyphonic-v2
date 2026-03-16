@@ -78,6 +78,13 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   queue_task: "Queuing task...",
 };
 
+const PHASE_STATUS_LABELS: Record<string, string> = {
+  loading: "Loading context...",
+  thinking: "Thinking...",
+  executing: "Working...",
+  composing: "Composing response...",
+};
+
 function ToolCallCard({ tool, input, output }: { tool: string; input: Record<string, any>; output: Record<string, any> }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -713,9 +720,11 @@ const Chat = () => {
           try {
             const parsed = JSON.parse(jsonStr);
             if (parsed.tool_status) {
-              const toolName = parsed.tool || "";
-              if (parsed.tool_status === "executing") {
+              if (parsed.tool_status === "executing" && parsed.tools?.length) {
+                const toolName = parsed.tools[0];
                 setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else if (PHASE_STATUS_LABELS[parsed.tool_status]) {
+                setToolStatus(PHASE_STATUS_LABELS[parsed.tool_status]);
               } else {
                 setToolStatus(null);
               }
@@ -886,9 +895,11 @@ const Chat = () => {
           try {
             const parsed = JSON.parse(jsonStr);
             if (parsed.tool_status) {
-              const toolName = parsed.tool || "";
-              if (parsed.tool_status === "executing") {
+              if (parsed.tool_status === "executing" && parsed.tools?.length) {
+                const toolName = parsed.tools[0];
                 setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else if (PHASE_STATUS_LABELS[parsed.tool_status]) {
+                setToolStatus(PHASE_STATUS_LABELS[parsed.tool_status]);
               } else {
                 setToolStatus(null);
               }
@@ -1255,9 +1266,11 @@ const Chat = () => {
             const parsed = JSON.parse(jsonStr);
             // Handle tool_status events
             if (parsed.tool_status) {
-              const toolName = parsed.tool || "";
-              if (parsed.tool_status === "executing") {
+              if (parsed.tool_status === "executing" && parsed.tools?.length) {
+                const toolName = parsed.tools[0];
                 setToolStatus(TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`);
+              } else if (PHASE_STATUS_LABELS[parsed.tool_status]) {
+                setToolStatus(PHASE_STATUS_LABELS[parsed.tool_status]);
               } else {
                 setToolStatus(null);
               }
@@ -2176,7 +2189,7 @@ const Chat = () => {
                           {msg.tool_calls?.map((tc, i) => (
                             <ToolCallCard key={i} tool={tc.tool} input={tc.input} output={tc.output} />
                           ))}
-                          {isStreaming && idx === messages.length - 1 && msg.role === "assistant" && toolStatus && !msg.content && (
+                          {isStreaming && idx === messages.length - 1 && msg.role === "assistant" && toolStatus && (
                             <div
                               style={{
                                 display: "flex",
