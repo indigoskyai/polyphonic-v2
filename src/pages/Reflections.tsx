@@ -69,8 +69,7 @@ const Reflections = () => {
         .in("source", ["reflection", "consolidation", "question"])
         .order("created_at", { ascending: false })
         .range(fromOffset, fromOffset + PAGE_SIZE - 1)
-        .then((res) => res)
-        .catch(() => ({ data: null, error: { message: "table not found" } })),
+        .then((res) => res, () => ({ data: null, error: { message: "table not found" } })),
 
       supabase
         .from("curiosity_questions")
