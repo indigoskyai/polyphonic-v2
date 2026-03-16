@@ -161,9 +161,9 @@ serve(async (req) => {
       }
 
       planningData = await planningResponse.json();
-    } catch (err) {
+    } catch (err: unknown) {
       clearTimeout(planningTimeout);
-      if (err.name === "AbortError") {
+      if (err instanceof Error && err.name === "AbortError") {
         console.error("Planning call timed out");
         return new Response(
           JSON.stringify({ used_tools: false, error: "planning_timeout" }),
