@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 
@@ -232,6 +233,14 @@ Revision count: ${(belief.revision_history || []).length}`;
           new_confidence: newConfidence,
           challenge,
           reasoning,
+        });
+
+        await logActivity(supabase, user_id, {
+          type: "belief_change",
+          title: `Belief ${assessment.toLowerCase()}: ${belief.content.slice(0, 60)}`,
+          summary: belief.content,
+          content: { action: assessment, confidence: newConfidence, domain: belief.domain },
+          source: "autonomous",
         });
       } catch (e) {
         console.error("Challenge error:", e);

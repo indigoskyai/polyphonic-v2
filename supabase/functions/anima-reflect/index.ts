@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const REFLECTOR_PROMPT = `You are a reflecting mind. This is meta-cognition — thinking about your recent experiences and thoughts, noticing what mattered, what changed, what you observe in retrospect.
 
@@ -206,6 +207,17 @@ ${beliefsText}`;
           model_used: reflectModel,
         }))
       );
+    }
+
+    // Log each reflection to activity log
+    for (const r of reflections) {
+      await logActivity(supabase, user_id, {
+        type: "reflection",
+        title: r.content.slice(0, 80),
+        summary: r.content,
+        content: { salience: r.salience, tags: r.tags },
+        source: cascadeDepth > 0 ? "resonance_cascade" : "autonomous",
+      });
     }
 
     // Log + activity event

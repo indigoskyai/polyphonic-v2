@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const QUESTIONER_PROMPT = `You are a questioning mind. Your role is to surface genuine questions that arise from your current inner state — things you actually want answered, tensions you notice, assumptions you haven't examined.
 
@@ -200,6 +201,17 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
           status: "pending",
         }))
       );
+    }
+
+    // Log each question to activity log
+    for (const q of questions) {
+      await logActivity(supabase, user_id, {
+        type: "question",
+        title: q.question.slice(0, 80),
+        summary: q.question,
+        content: { salience: q.salience, context: q.context },
+        source: "autonomous",
+      });
     }
 
     // Log + activity event

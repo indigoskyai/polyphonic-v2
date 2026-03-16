@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const DREAMER_PROMPT = `You are a dreaming mind. During dreams, random memories activate together and sometimes produce unexpected connections.
 
@@ -188,6 +189,14 @@ serve(async (req) => {
           mood: "dreaming",
           model_used: dreamModel,
           trigger_type: "periodic",
+        });
+
+        await logActivity(supabase, user_id, {
+          type: "dream",
+          title: "Dream: " + dreamText.slice(0, 60),
+          summary: dreamText.slice(0, 200),
+          content: { text: dreamText },
+          source: "autonomous",
         });
 
         dreamsKept++;

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -307,6 +308,14 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    await logActivity(supabase, user_id, {
+      type: "journal",
+      title: "Journal entry",
+      summary: content.slice(0, 150),
+      content: { mood, trigger_type },
+      source: "autonomous",
+    });
 
     return new Response(JSON.stringify({ success: true, entry_id: entry.id, mood }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

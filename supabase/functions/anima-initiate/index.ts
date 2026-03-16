@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 // Threshold for accumulated salience before the entity reaches out
 const INITIATION_THRESHOLD = 2.5;
@@ -226,6 +227,14 @@ Write ONLY the message. Nothing else.`;
       })
       .select("id")
       .single();
+
+    await logActivity(supabase, user_id, {
+      type: "initiation",
+      title: "Reached out to you",
+      summary: message.slice(0, 150),
+      content: { salience_total: Math.round(salienceTotal * 100) / 100 },
+      source: "autonomous",
+    });
 
     return new Response(JSON.stringify({
       should_initiate: true,

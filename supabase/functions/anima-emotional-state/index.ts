@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const DIMENSIONS = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
 
@@ -220,6 +221,26 @@ serve(async (req) => {
       user_id,
       state: smoothed,
     });
+
+    // Log mood shift only if significant
+    if (prevState) {
+      const delta: Record<string, number> = {};
+      let totalDelta = 0;
+      for (const dim of DIMENSIONS) {
+        const d = Math.abs(smoothed[dim] - (prevState[dim] ?? 0.5));
+        delta[dim] = Math.round(d * 1000) / 1000;
+        totalDelta += d;
+      }
+      if (totalDelta > 0.15) {
+        await logActivity(supabase, user_id, {
+          type: "mood_shift",
+          title: `Mood: ${moodSummary}`,
+          summary: `Emotional state shifted (total delta: ${totalDelta.toFixed(2)}): ${moodSummary}`,
+          content: { state: smoothed, delta },
+          source: "autonomous",
+        });
+      }
+    }
 
     // Trim old history (keep last 500)
     const { count: histCount } = await supabase

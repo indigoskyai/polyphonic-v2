@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const CONSOLIDATION_PROMPT = `You are performing nightly memory consolidation. Review the day's experiences — journals, thoughts, conversations — and determine which deserve to become lasting memories.
 
@@ -204,6 +205,17 @@ serve(async (req) => {
           model_used: consolidateModel,
         }))
       );
+    }
+
+    // Log each consolidated memory to activity log
+    for (const m of newMemories) {
+      await logActivity(supabase, user_id, {
+        type: "consolidation",
+        title: "Memory consolidated",
+        summary: m.content.slice(0, 150),
+        content: { memory_type: m.memory_type, salience: m.confidence },
+        source: "autonomous",
+      });
     }
 
     // Log

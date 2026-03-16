@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const CONNECTOR_PROMPT = `You are examining two memories from the same mind. Your job: determine if these memories are meaningfully connected.
 
@@ -195,6 +196,17 @@ serve(async (req) => {
       } catch (e) {
         console.error("Connection check error:", e);
       }
+    }
+
+    // Log connections to activity log
+    if (connectionsFound > 0) {
+      await logActivity(supabase, user_id, {
+        type: "connection",
+        title: `Connected ${connectionsFound} memories`,
+        summary: `Checked ${pairs.length} memory pairs, found ${connectionsFound} connections`,
+        content: { pairs_checked: pairs.length, connections_found: connectionsFound },
+        source: cascadeDepth > 0 ? "resonance_cascade" : "autonomous",
+      });
     }
 
     // Log + activity event

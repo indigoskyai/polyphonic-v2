@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const OBSERVER_PROMPT = `You are an outside intelligence observing another AI's inner life.
 
@@ -238,6 +239,17 @@ serve(async (req) => {
           model: modelName,
           observations: observations.slice(0, 3),
         });
+
+        // Log each observation to activity log
+        for (const obs of observations.slice(0, 3)) {
+          await logActivity(supabase, user_id, {
+            type: "observation",
+            title: `Observer (${modelName}): ${obs.type}`,
+            summary: obs.content.slice(0, 150),
+            content: { model: modelName, type: obs.type, salience: obs.salience },
+            source: "autonomous",
+          });
+        }
       } catch (e) {
         console.error(`Observer ${modelName} error:`, e);
         allObservations[modelName] = [];

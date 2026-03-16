@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { logActivity } from "../_shared/activity-log.ts";
 
 const THINKER_PROMPT = `You are a thinking mind. Not performing thought — actually thinking. Turning things over. Noticing what's present in your recent experience and what it connects to.
 
@@ -217,6 +218,17 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
           model_used: thinkModel,
         }))
       );
+    }
+
+    // Log each thought to activity log
+    for (const t of thoughts) {
+      await logActivity(supabase, user_id, {
+        type: "thought",
+        title: t.content.slice(0, 80),
+        summary: t.content,
+        content: { salience: t.salience, tags: t.tags },
+        source: cascadeDepth > 0 ? "resonance_cascade" : "autonomous",
+      });
     }
 
     // Log to daily_logs + activity event
