@@ -214,12 +214,11 @@ async function processUser(
 
     actions.push({ userId, action: "challenge_belief", result });
 
-    await logActivity(supabase, {
-      user_id: userId,
-      process_type: "heartbeat",
-      action_type: "belief_challenged",
+    await logActivity(supabase, userId, {
+      type: "belief_challenged",
+      title: "Heartbeat: Belief Challenged",
       summary: `Challenged stagnant belief: ${stagnantBelief.content.slice(0, 100)}`,
-      metadata: { belief_id: stagnantBelief.id, function: "anima-believe" },
+      content: { belief_id: stagnantBelief.id, function: "anima-believe" },
     });
   }
 
