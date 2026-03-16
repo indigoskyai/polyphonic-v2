@@ -401,6 +401,114 @@ export type Database = {
         }
         Relationships: []
       }
+      entity_activity_log: {
+        Row: {
+          activity_type: string
+          content: Json | null
+          created_at: string
+          emotional_context: Json | null
+          id: string
+          source: string | null
+          summary: string | null
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          content?: Json | null
+          created_at?: string
+          emotional_context?: Json | null
+          id?: string
+          source?: string | null
+          summary?: string | null
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          content?: Json | null
+          created_at?: string
+          emotional_context?: Json | null
+          id?: string
+          source?: string | null
+          summary?: string | null
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      entity_social_accounts: {
+        Row: {
+          account_name: string | null
+          agent_id: string | null
+          config: Json | null
+          created_at: string
+          encrypted_credentials: string | null
+          id: string
+          platform: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          account_name?: string | null
+          agent_id?: string | null
+          config?: Json | null
+          created_at?: string
+          encrypted_credentials?: string | null
+          id?: string
+          platform: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          account_name?: string | null
+          agent_id?: string | null
+          config?: Json | null
+          created_at?: string
+          encrypted_credentials?: string | null
+          id?: string
+          platform?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      entity_task_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          priority: number | null
+          result: Json | null
+          started_at: string | null
+          status: string | null
+          task_description: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          priority?: number | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string | null
+          task_description: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          priority?: number | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string | null
+          task_description?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       experimental_persona_config: {
         Row: {
           id: string
@@ -792,6 +900,7 @@ export type Database = {
           id: string
           model: string | null
           role: string
+          tool_calls: Json | null
           user_id: string
         }
         Insert: {
@@ -803,6 +912,7 @@ export type Database = {
           id?: string
           model?: string | null
           role: string
+          tool_calls?: Json | null
           user_id: string
         }
         Update: {
@@ -814,6 +924,7 @@ export type Database = {
           id?: string
           model?: string | null
           role?: string
+          tool_calls?: Json | null
           user_id?: string
         }
         Relationships: [
@@ -1203,6 +1314,39 @@ export type Database = {
           updated_at?: string
           user_id?: string
           voice_model?: string | null
+        }
+        Relationships: []
+      }
+      user_skills: {
+        Row: {
+          created_at: string
+          enabled: boolean | null
+          id: string
+          mcp_config: Json | null
+          skill_content: string
+          skill_name: string
+          skill_type: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean | null
+          id?: string
+          mcp_config?: Json | null
+          skill_content: string
+          skill_name: string
+          skill_type?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean | null
+          id?: string
+          mcp_config?: Json | null
+          skill_content?: string
+          skill_name?: string
+          skill_type?: string | null
+          user_id?: string
         }
         Relationships: []
       }
