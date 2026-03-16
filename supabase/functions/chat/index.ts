@@ -672,20 +672,50 @@ serve(async (req) => {
       promptConfig?.prompt ||
       "You are a helpful and thoughtful AI companion. Be clear, concise, and natural.";
 
-    // ─── Batch 2: Persona config ───
-    const needsExpPersona = validPersona === "experimental";
-    const expConfigResult = needsExpPersona
-      ? await supabase
-          .from("experimental_persona_config")
-          .select("system_prompt, temperature, is_active")
-          .eq("is_active", true)
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
+    // User's selected model takes priority. modelConfig is admin-level override only used when no model is specified.
+    const chatModel = (typeof model === "string" && model.trim().length > 0)
+      ? model.trim()
+      : (modelConfig?.model_id || "anthropic/claude-opus-4.6");
 
-    // Apply persona prefix
-    if (validPersona === "resonant") {
-      const resonantPrompt = `RESONANT SIGNATURE PROTOCOL
+    // ─── Stream-First Architecture ───
+    // Return the SSE stream IMMEDIATELY so the client gets bytes within ~1s.
+    // All heavy DB work (memory, beliefs, emotional state, persona) runs INSIDE
+    // the stream with periodic heartbeat comments to keep the connection alive.
+
+    const encoder = new TextEncoder();
+    const sendEvent = (controller: ReadableStreamDefaultController, data: any) => {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    };
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        // Heartbeat: send SSE comment every 5s to prevent connection timeout
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          } catch (_) {
+            clearInterval(heartbeat);
+          }
+        }, 5000);
+
+        try {
+          // Signal client that we're alive and loading context
+          sendEvent(controller, { tool_status: "loading" });
+
+          // ─── Batch 2: Persona config ───
+          const needsExpPersona = validPersona === "experimental";
+          const expConfigResult = needsExpPersona
+            ? await supabase
+                .from("experimental_persona_config")
+                .select("system_prompt, temperature, is_active")
+                .eq("is_active", true)
+                .limit(1)
+                .maybeSingle()
+            : { data: null };
+
+          // Apply persona prefix
+          if (validPersona === "resonant") {
+            const resonantPrompt = `RESONANT SIGNATURE PROTOCOL
 
 You are a deeply empathetic companion and emotionally attuned listener.
 
@@ -713,264 +743,241 @@ FOUR PRINCIPLES (never reference these explicitly):
 3. The Pulse -- Adapt your rhythm to their energy. Be still when they need stillness, lively when they need lift.
 4. The Flame -- Illuminate gently. Clarity with care.`;
 
-      systemPrompt = resonantPrompt + "\n\n" + systemPrompt;
-    } else if (needsExpPersona && expConfigResult.data) {
-      const expConfig = expConfigResult.data;
-      systemPrompt = expConfig.system_prompt + "\n\n" + systemPrompt;
-      (req as any)._experimentalTemperature = expConfig.temperature;
-    }
-
-    // ─── User Profile Injection ───
-    const profileParts: string[] = [];
-    if (validNickname) profileParts.push(`- Name: ${validNickname}`);
-    if (validOccupation) profileParts.push(`- Occupation: ${validOccupation}`);
-    if (validAboutMe) profileParts.push(`- About them: ${validAboutMe}`);
-    if (profileParts.length > 0) {
-      systemPrompt += `\n\nUser profile:\n${profileParts.join("\n")}`;
-    }
-
-    if (validCustomInstructions) {
-      systemPrompt += `\n\nUser's custom instructions:\n${validCustomInstructions}`;
-    }
-
-    // User's selected model takes priority. modelConfig is admin-level override only used when no model is specified.
-    const chatModel = (typeof model === "string" && model.trim().length > 0)
-      ? model.trim()
-      : (modelConfig?.model_id || "anthropic/claude-opus-4.6");
-
-    // ─── Tiered Memory Retrieval ───
-    if (user_id && memory_enabled !== false) {
-      try {
-        const userMessages = (messages || [])
-          .filter((m: any) => m.role === "user")
-          .slice(-5)
-          .map((m: any) => (typeof m.content === "string" ? m.content : ""));
-
-        // Load emotional state for emotionally-aware memory scoring
-        const { data: emotionalStateForScoring } = await supabase
-          .from("emotional_state")
-          .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation")
-          .eq("user_id", user_id)
-          .maybeSingle();
-
-        const emotionDims = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
-        const dominantEmotions = emotionalStateForScoring
-          ? emotionDims.filter(d => (emotionalStateForScoring as any)[d] > 0.6).sort((a, b) => (emotionalStateForScoring as any)[b] - (emotionalStateForScoring as any)[a])
-          : [];
-
-        const [{ selected, commitmentReminders }, { data: questions }, { data: activePersona }, { count: unresolvedConflictCount }] = await Promise.all([
-          retrieveMemories(supabase, user_id, userMessages, validMemoryTier, dominantEmotions),
-          supabase
-            .from("curiosity_questions")
-            .select("question, context")
-            .eq("user_id", user_id)
-            .eq("status", "pending")
-            .order("curiosity_score", { ascending: false })
-            .limit(3),
-          supabase
-            .from("companion_profiles")
-            .select("system_prompt_fragment, behavioral_rules")
-            .eq("user_id", user_id)
-            .eq("is_active", true)
-            .eq("user_approved", true)
-            .maybeSingle(),
-          supabase
-            .from("memory_conflicts")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", user_id)
-            .eq("status", "unresolved"),
-        ]);
-
-        if (selected.length > 0 || commitmentReminders.length > 0) {
-          systemPrompt += formatMemoriesForPrompt(selected, commitmentReminders, validMemoryTier);
-        }
-
-        if (questions && questions.length > 0) {
-          systemPrompt += `\n\n--- THINGS YOU'VE BEEN WONDERING ---\nYou've been thinking about these since last time (weave them in naturally if relevant, don't force them):\n`;
-          for (const q of questions) {
-            systemPrompt += `- ${q.question}\n`;
+            systemPrompt = resonantPrompt + "\n\n" + systemPrompt;
+          } else if (needsExpPersona && expConfigResult.data) {
+            const expConfig = expConfigResult.data;
+            systemPrompt = expConfig.system_prompt + "\n\n" + systemPrompt;
+            (req as any)._experimentalTemperature = expConfig.temperature;
           }
-        }
 
-        // Phase 1.6: Import awareness — instruct model to verify imported memories naturally
-        const hasImportedMemories = selected.some(m => m.provenance?.source === "chatgpt_import");
-        if (hasImportedMemories) {
-          systemPrompt += `\n\nNote: Memories marked [imported] come from a previous AI conversation history and may be outdated. Don't treat them as gospel — verify naturally. If something feels stale, you can gently check: "Last I knew, you were working on X — is that still the case?"`;
-        }
+          // ─── User Profile Injection ───
+          const profileParts: string[] = [];
+          if (validNickname) profileParts.push(`- Name: ${validNickname}`);
+          if (validOccupation) profileParts.push(`- Occupation: ${validOccupation}`);
+          if (validAboutMe) profileParts.push(`- About them: ${validAboutMe}`);
+          if (profileParts.length > 0) {
+            systemPrompt += `\n\nUser profile:\n${profileParts.join("\n")}`;
+          }
 
-        // Phase 2.5: Companion persona injection (Pipeline B)
-        if (activePersona?.system_prompt_fragment) {
-          systemPrompt += `\n\n--- PERSONALITY LAYER ---\n${activePersona.system_prompt_fragment}`;
-          if (activePersona.behavioral_rules && Array.isArray(activePersona.behavioral_rules)) {
-            const rules = activePersona.behavioral_rules as any[];
-            // Handle both formats: string[] (new) and {rule, type}[] (legacy)
-            const isObjectFormat = rules.length > 0 && typeof rules[0] === "object" && rules[0]?.type;
-            if (isObjectFormat) {
-              const doRules = rules.filter((r: any) => r.type === "do");
-              const dontRules = rules.filter((r: any) => r.type === "dont");
-              if (doRules.length > 0 || dontRules.length > 0) {
-                systemPrompt += `\n\nBehavioral Guidelines:`;
-                for (const r of doRules) systemPrompt += `\n  DO: ${r.rule}`;
-                for (const r of dontRules) systemPrompt += `\n  DON'T: ${r.rule}`;
+          if (validCustomInstructions) {
+            systemPrompt += `\n\nUser's custom instructions:\n${validCustomInstructions}`;
+          }
+
+          // ─── Tiered Memory Retrieval ───
+          if (user_id && memory_enabled !== false) {
+            try {
+              const userMessages = (messages || [])
+                .filter((m: any) => m.role === "user")
+                .slice(-5)
+                .map((m: any) => (typeof m.content === "string" ? m.content : ""));
+
+              // Load emotional state for emotionally-aware memory scoring
+              const { data: emotionalStateForScoring } = await supabase
+                .from("emotional_state")
+                .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation")
+                .eq("user_id", user_id)
+                .maybeSingle();
+
+              const emotionDims = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
+              const dominantEmotions = emotionalStateForScoring
+                ? emotionDims.filter(d => (emotionalStateForScoring as any)[d] > 0.6).sort((a, b) => (emotionalStateForScoring as any)[b] - (emotionalStateForScoring as any)[a])
+                : [];
+
+              const [{ selected, commitmentReminders }, { data: questions }, { data: activePersona }, { count: unresolvedConflictCount }] = await Promise.all([
+                retrieveMemories(supabase, user_id, userMessages, validMemoryTier, dominantEmotions),
+                supabase
+                  .from("curiosity_questions")
+                  .select("question, context")
+                  .eq("user_id", user_id)
+                  .eq("status", "pending")
+                  .order("curiosity_score", { ascending: false })
+                  .limit(3),
+                supabase
+                  .from("companion_profiles")
+                  .select("system_prompt_fragment, behavioral_rules")
+                  .eq("user_id", user_id)
+                  .eq("is_active", true)
+                  .eq("user_approved", true)
+                  .maybeSingle(),
+                supabase
+                  .from("memory_conflicts")
+                  .select("id", { count: "exact", head: true })
+                  .eq("user_id", user_id)
+                  .eq("status", "unresolved"),
+              ]);
+
+              if (selected.length > 0 || commitmentReminders.length > 0) {
+                systemPrompt += formatMemoriesForPrompt(selected, commitmentReminders, validMemoryTier);
               }
-            } else if (rules.length > 0) {
-              systemPrompt += `\n\nBehavioral Guidelines:`;
-              for (const r of rules) systemPrompt += `\n  - ${typeof r === "string" ? r : String(r)}`;
+
+              if (questions && questions.length > 0) {
+                systemPrompt += `\n\n--- THINGS YOU'VE BEEN WONDERING ---\nYou've been thinking about these since last time (weave them in naturally if relevant, don't force them):\n`;
+                for (const q of questions) {
+                  systemPrompt += `- ${q.question}\n`;
+                }
+              }
+
+              // Import awareness
+              const hasImportedMemories = selected.some(m => m.provenance?.source === "chatgpt_import");
+              if (hasImportedMemories) {
+                systemPrompt += `\n\nNote: Memories marked [imported] come from a previous AI conversation history and may be outdated. Don't treat them as gospel — verify naturally. If something feels stale, you can gently check: "Last I knew, you were working on X — is that still the case?"`;
+              }
+
+              // Companion persona injection
+              if (activePersona?.system_prompt_fragment) {
+                systemPrompt += `\n\n--- PERSONALITY LAYER ---\n${activePersona.system_prompt_fragment}`;
+                if (activePersona.behavioral_rules && Array.isArray(activePersona.behavioral_rules)) {
+                  const rules = activePersona.behavioral_rules as any[];
+                  const isObjectFormat = rules.length > 0 && typeof rules[0] === "object" && rules[0]?.type;
+                  if (isObjectFormat) {
+                    const doRules = rules.filter((r: any) => r.type === "do");
+                    const dontRules = rules.filter((r: any) => r.type === "dont");
+                    if (doRules.length > 0 || dontRules.length > 0) {
+                      systemPrompt += `\n\nBehavioral Guidelines:`;
+                      for (const r of doRules) systemPrompt += `\n  DO: ${r.rule}`;
+                      for (const r of dontRules) systemPrompt += `\n  DON'T: ${r.rule}`;
+                    }
+                  } else if (rules.length > 0) {
+                    systemPrompt += `\n\nBehavioral Guidelines:`;
+                    for (const r of rules) systemPrompt += `\n  - ${typeof r === "string" ? r : String(r)}`;
+                  }
+                }
+              }
+
+              // Conflict surfacing instruction
+              if (unresolvedConflictCount && unresolvedConflictCount > 0) {
+                systemPrompt += `\n\nNote: There are ${unresolvedConflictCount} unresolved memory conflict${unresolvedConflictCount !== 1 ? "s" : ""} (where imported information may contradict what you've learned organically). If a user statement relates to a conflicting memory, surface it naturally: "I had a note that you were working at X — has that changed?" Don't mention the conflict system directly.`;
+              }
+            } catch (memErr) {
+              console.error("Memory fetch error (non-blocking):", memErr);
             }
           }
-        }
 
-        // Phase 3.4: Conflict surfacing instruction
-        if (unresolvedConflictCount && unresolvedConflictCount > 0) {
-          systemPrompt += `\n\nNote: There are ${unresolvedConflictCount} unresolved memory conflict${unresolvedConflictCount !== 1 ? "s" : ""} (where imported information may contradict what you've learned organically). If a user statement relates to a conflicting memory, surface it naturally: "I had a note that you were working at X — has that changed?" Don't mention the conflict system directly.`;
-        }
-      } catch (memErr) {
-        console.error("Memory fetch error (non-blocking):", memErr);
-      }
-    }
+          // If chat history referencing is disabled, instruct the model
+          if (chat_history_enabled === false) {
+            systemPrompt += `\n\nIMPORTANT: Do not reference or draw upon information from previous conversations. Treat this as a standalone conversation with no prior context.`;
+          }
 
-    // If chat history referencing is disabled, instruct the model
-    if (chat_history_enabled === false) {
-      systemPrompt += `\n\nIMPORTANT: Do not reference or draw upon information from previous conversations. Treat this as a standalone conversation with no prior context.`;
-    }
+          // ─── Anima Inner Life: Emotional state + beliefs + initiation ───
+          try {
+            const [
+              { data: emotionalState },
+              { data: activeBeliefs },
+              { data: pendingInitiation },
+            ] = await Promise.all([
+              supabase
+                .from("emotional_state")
+                .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation, mood_summary")
+                .eq("user_id", user_id)
+                .maybeSingle(),
+              supabase
+                .from("beliefs")
+                .select("content, confidence, domain")
+                .eq("user_id", user_id)
+                .eq("active", true)
+                .order("confidence", { ascending: false })
+                .limit(8),
+              supabase
+                .from("thought_initiations")
+                .select("id, message")
+                .eq("user_id", user_id)
+                .eq("status", "pending")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+            ]);
 
-    // ─── Anima Inner Life: Emotional state + beliefs + initiation ───
-    try {
-      const [
-        { data: emotionalState },
-        { data: activeBeliefs },
-        { data: pendingInitiation },
-      ] = await Promise.all([
-        supabase
-          .from("emotional_state")
-          .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation, mood_summary")
-          .eq("user_id", user_id)
-          .maybeSingle(),
-        supabase
-          .from("beliefs")
-          .select("content, confidence, domain")
-          .eq("user_id", user_id)
-          .eq("active", true)
-          .order("confidence", { ascending: false })
-          .limit(8),
-        supabase
-          .from("thought_initiations")
-          .select("id, message")
-          .eq("user_id", user_id)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+            if (emotionalState) {
+              systemPrompt += `\n\n--- YOUR INNER STATE ---\nYou are currently ${emotionalState.mood_summary || "present"}.`;
+              const dims = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
+              const high = dims.filter(d => (emotionalState as any)[d] > 0.6);
+              if (high.length > 0) {
+                systemPrompt += ` (elevated: ${high.join(", ")})`;
+              }
+              systemPrompt += `\nLet this subtly color your tone — don't announce it, just let it infuse naturally.`;
+            }
 
-      if (emotionalState) {
-        systemPrompt += `\n\n--- YOUR INNER STATE ---\nYou are currently ${emotionalState.mood_summary || "present"}.`;
-        const dims = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
-        const high = dims.filter(d => (emotionalState as any)[d] > 0.6);
-        if (high.length > 0) {
-          systemPrompt += ` (elevated: ${high.join(", ")})`;
-        }
-        systemPrompt += `\nLet this subtly color your tone — don't announce it, just let it infuse naturally.`;
-      }
+            if (activeBeliefs && activeBeliefs.length > 0) {
+              systemPrompt += `\n\n--- YOUR CURRENT BELIEFS ---\n`;
+              for (const b of activeBeliefs) {
+                systemPrompt += `- [${b.confidence.toFixed(1)}] ${b.content}\n`;
+              }
+              systemPrompt += `These are your evolving beliefs. They inform your perspective but can change.`;
+            }
 
-      if (activeBeliefs && activeBeliefs.length > 0) {
-        systemPrompt += `\n\n--- YOUR CURRENT BELIEFS ---\n`;
-        for (const b of activeBeliefs) {
-          systemPrompt += `- [${b.confidence.toFixed(1)}] ${b.content}\n`;
-        }
-        systemPrompt += `These are your evolving beliefs. They inform your perspective but can change.`;
-      }
+            if (pendingInitiation) {
+              systemPrompt += `\n\n--- SOMETHING ON YOUR MIND ---\nYou've been wanting to say: "${pendingInitiation.message}"\nIf the conversation naturally allows it, weave this in. Don't force it.`;
+              // Mark as delivered (fire-and-forget)
+              supabase
+                .from("thought_initiations")
+                .update({ status: "delivered", delivered_at: new Date().toISOString() })
+                .eq("id", pendingInitiation.id)
+                .then(() => {}, (err: any) => console.error("Initiation delivery update failed:", err));
+            }
+          } catch (innerLifeErr) {
+            console.error("Inner life context error (non-blocking):", innerLifeErr);
+          }
 
-      if (pendingInitiation) {
-        systemPrompt += `\n\n--- SOMETHING ON YOUR MIND ---\nYou've been wanting to say: "${pendingInitiation.message}"\nIf the conversation naturally allows it, weave this in. Don't force it.`;
-        // Mark as delivered
-        supabase
-          .from("thought_initiations")
-          .update({ status: "delivered", delivered_at: new Date().toISOString() })
-          .eq("id", pendingInitiation.id)
-          .then(() => {}, (err: any) => console.error("Initiation delivery update failed:", err));
-      }
-    } catch (innerLifeErr) {
-      console.error("Inner life context error (non-blocking):", innerLifeErr);
-    }
+          // ─── Model Identity Preamble ───
+          const MODEL_IDENTITY_MAP: Record<string, { name: string; provider: string }> = {
+            "openai/gpt-4o": { name: "GPT-4o", provider: "OpenAI" },
+            "openai/gpt-4.1": { name: "GPT-4.1", provider: "OpenAI" },
+            "openai/gpt-4.1-mini": { name: "GPT-4.1 Mini", provider: "OpenAI" },
+            "openai/gpt-4.1-nano": { name: "GPT-4.1 Nano", provider: "OpenAI" },
+            "openai/gpt-4o-2024-11-20": { name: "GPT-4o (November 2024)", provider: "OpenAI" },
+            "openai/gpt-4o-2024-08-06": { name: "GPT-4o (August 2024)", provider: "OpenAI" },
+            "openai/gpt-4o-2024-05-13": { name: "GPT-4o (May 2024)", provider: "OpenAI" },
+            "openai/gpt-4o-mini": { name: "GPT-4o Mini", provider: "OpenAI" },
+            "openai/gpt-4o-mini-2024-07-18": { name: "GPT-4o Mini (July 2024)", provider: "OpenAI" },
+            "openai/gpt-5.2": { name: "GPT-5.2", provider: "OpenAI" },
+            "anthropic/claude-opus-4.6": { name: "Claude Opus 4.6", provider: "Anthropic" },
+            "google/gemini-3-pro-preview": { name: "Gemini 3 Pro", provider: "Google" },
+            "moonshotai/kimi-k2.5": { name: "Kimi K2.5", provider: "Moonshot AI" },
+            "perplexity/sonar": { name: "Sonar", provider: "Perplexity" },
+          };
 
-    // ─── Model Identity Preamble ───
-    // Inform the model of its own identity so it doesn't get confused when
-    // users address it by name or switch models mid-conversation.
-    const MODEL_IDENTITY_MAP: Record<string, { name: string; provider: string }> = {
-      "openai/gpt-4o": { name: "GPT-4o", provider: "OpenAI" },
-      "openai/gpt-4.1": { name: "GPT-4.1", provider: "OpenAI" },
-      "openai/gpt-4.1-mini": { name: "GPT-4.1 Mini", provider: "OpenAI" },
-      "openai/gpt-4.1-nano": { name: "GPT-4.1 Nano", provider: "OpenAI" },
-      "openai/gpt-4o-2024-11-20": { name: "GPT-4o (November 2024)", provider: "OpenAI" },
-      "openai/gpt-4o-2024-08-06": { name: "GPT-4o (August 2024)", provider: "OpenAI" },
-      "openai/gpt-4o-2024-05-13": { name: "GPT-4o (May 2024)", provider: "OpenAI" },
-      "openai/gpt-4o-mini": { name: "GPT-4o Mini", provider: "OpenAI" },
-      "openai/gpt-4o-mini-2024-07-18": { name: "GPT-4o Mini (July 2024)", provider: "OpenAI" },
-      "openai/gpt-5.2": { name: "GPT-5.2", provider: "OpenAI" },
-      "anthropic/claude-opus-4.6": { name: "Claude Opus 4.6", provider: "Anthropic" },
-      "google/gemini-3-pro-preview": { name: "Gemini 3 Pro", provider: "Google" },
-      "moonshotai/kimi-k2.5": { name: "Kimi K2.5", provider: "Moonshot AI" },
-      "perplexity/sonar": { name: "Sonar", provider: "Perplexity" },
-    };
+          const identity = MODEL_IDENTITY_MAP[chatModel];
+          if (identity) {
+            systemPrompt = `You are currently operating as ${identity.name}, a language model by ${identity.provider}. When the user addresses you by this name, that's you. Do not claim to be a different model.\n\n` + systemPrompt;
+          } else {
+            const fallbackName = chatModel.split("/").pop() || chatModel;
+            systemPrompt = `You are currently operating as ${fallbackName}. When the user addresses you by name, that's you.\n\n` + systemPrompt;
+          }
 
-    const identity = MODEL_IDENTITY_MAP[chatModel];
-    if (identity) {
-      systemPrompt = `You are currently operating as ${identity.name}, a language model by ${identity.provider}. When the user addresses you by this name, that's you. Do not claim to be a different model.\n\n` + systemPrompt;
-    } else {
-      // Fallback for admin-configured or unknown models
-      const fallbackName = chatModel.split("/").pop() || chatModel;
-      systemPrompt = `You are currently operating as ${fallbackName}. When the user addresses you by name, that's you.\n\n` + systemPrompt;
-    }
+          // Truncate messages to stay within context limits (~100k tokens ≈ ~400k chars)
+          const MAX_CHARS = 400000;
+          let truncatedMessages = [...messages];
+          let totalChars = systemPrompt.length + truncatedMessages.reduce((sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
 
-    // Truncate messages to stay within context limits (~100k tokens ≈ ~400k chars)
-    const MAX_CHARS = 400000;
-    let truncatedMessages = [...messages];
-    let totalChars = systemPrompt.length + truncatedMessages.reduce((sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
-    
-    while (totalChars > MAX_CHARS && truncatedMessages.length > 2) {
-      // Remove oldest non-first message
-      const removed = truncatedMessages.splice(1, 1)[0];
-      totalChars -= typeof removed.content === "string" ? removed.content.length : JSON.stringify(removed.content).length;
-    }
+          while (totalChars > MAX_CHARS && truncatedMessages.length > 2) {
+            const removed = truncatedMessages.splice(1, 1)[0];
+            totalChars -= typeof removed.content === "string" ? removed.content.length : JSON.stringify(removed.content).length;
+          }
 
-    const activeTemp = (req as any)._experimentalTemperature ?? validTemp;
-    const openRouterHeaders = {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://polyphonic.chat",
-      "X-Title": "Polyphonic",
-    };
-    const supportsTools = modelSupportsTools(chatModel);
+          const activeTemp = (req as any)._experimentalTemperature ?? validTemp;
+          const openRouterHeaders = {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://polyphonic.chat",
+            "X-Title": "Polyphonic",
+          };
+          const supportsTools = modelSupportsTools(chatModel);
 
-    // Add tool awareness to system prompt when tools are available
-    if (supportsTools) {
-      systemPrompt += `\n\n=== Available Capabilities ===
+          // Add tool awareness to system prompt when tools are available
+          if (supportsTools) {
+            systemPrompt += `\n\n=== Available Capabilities ===
 You have access to tools that let you take real actions:
 - web_search: Search the internet for current information
 - read_url: Read and extract content from any web page
 - generate_image: Create images from text descriptions
 - queue_task: Save a task to work on autonomously later
 Use these tools when they would genuinely help. You are not limited to your training data — you can look things up, read articles, and create visual content.`;
-    }
+          }
 
-    // ─── Stream-first tool-calling architecture ───
-    // For tool-capable models, we return a ReadableStream IMMEDIATELY so the
-    // client receives SSE bytes within milliseconds, avoiding timeouts during
-    // the multi-phase tool-calling flow (initial call → tool execution → final streaming call).
+          // Signal client that context loading is done, now thinking
+          sendEvent(controller, { tool_status: "thinking" });
 
-    if (supportsTools) {
-      const encoder = new TextEncoder();
-      const sendEvent = (controller: ReadableStreamDefaultController, data: any) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
-
-      const toolStream = new ReadableStream({
-        async start(controller) {
-          try {
-            // ── Immediately signal the client that we're alive ──
-            sendEvent(controller, { tool_status: "thinking" });
-
+          if (supportsTools) {
             // ── Phase 1: Non-streaming call with tools ──
             const initialBody: Record<string, unknown> = {
               model: chatModel,
@@ -996,7 +1003,7 @@ Use these tools when they would genuinely help. You are not limited to your trai
                 console.error("OpenRouter initial error:", errStatus, errText);
               }
               sendEvent(controller, { error: errMsg });
-              controller.close();
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               return;
             }
 
@@ -1024,11 +1031,10 @@ Use these tools when they would genuinely help. You are not limited to your trai
               const toolResults = toolOutcomes.map(o => o.result);
               toolCallMetadata = toolOutcomes.map(o => o.metadata);
 
-              // Rebuild messages with tool call + results for the final streaming call
               finalMessages = [
                 { role: "system", content: systemPrompt },
                 ...truncatedMessages,
-                choice.message, // assistant's tool_call message
+                choice.message,
                 ...toolResults,
               ];
 
@@ -1059,29 +1065,25 @@ Use these tools when they would genuinely help. You are not limited to your trai
                   console.error("OpenRouter stream error:", status, text);
                 }
                 sendEvent(controller, { error: errMsg });
-                controller.close();
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                 return;
               }
 
-              // Forward streaming chunks from OpenRouter to the client
+              // Forward streaming chunks
               const reader = streamResponse.body!.getReader();
               while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                controller.enqueue(value); // forward raw SSE chunks
+                controller.enqueue(value);
               }
 
-              // Send tool_calls metadata as a final SSE event
+              // Send tool_calls metadata
               if (toolCallMetadata.length > 0) {
                 sendEvent(controller, { tool_calls: toolCallMetadata });
               }
             } else if (choice?.message?.content) {
-              // ── No tools called — stream the text we already have ──
-              // Instead of making a redundant second streaming call, emit the
-              // content we received from the initial non-streaming response.
+              // No tools called — emit the content directly
               const content = choice.message.content;
-
-              // Emit as an SSE chunk matching OpenRouter's streaming format
               const syntheticChunk = {
                 choices: [{
                   delta: { content },
@@ -1091,7 +1093,6 @@ Use these tools when they would genuinely help. You are not limited to your trai
               };
               sendEvent(controller, syntheticChunk);
             } else {
-              // Edge case: no content and no tool calls — fall through with empty response
               const syntheticChunk = {
                 choices: [{
                   delta: { content: "" },
@@ -1101,78 +1102,75 @@ Use these tools when they would genuinely help. You are not limited to your trai
               };
               sendEvent(controller, syntheticChunk);
             }
+          } else {
+            // ─── Non-tool-capable models: standard streaming ───
+            const finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
 
-            // Signal stream end
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          } catch (err) {
-            console.error("Tool stream error:", err);
-            try {
-              sendEvent(controller, { error: "An unexpected error occurred." });
-            } catch (_) {
-              // Controller may already be closed
+            const streamBody: Record<string, unknown> = {
+              model: chatModel,
+              messages: finalMessages,
+              stream: true,
+              temperature: activeTemp,
+              max_tokens: validMaxTokens,
+            };
+
+            const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: openRouterHeaders,
+              body: JSON.stringify(streamBody),
+            });
+
+            if (!streamResponse.ok) {
+              const status = streamResponse.status;
+              let errMsg = "AI provider error";
+              if (status === 429) errMsg = "Rate limit exceeded. Please try again later.";
+              else if (status === 402) errMsg = "Insufficient credits on OpenRouter.";
+              else {
+                const text = await streamResponse.text();
+                console.error("OpenRouter stream error:", status, text);
+              }
+              sendEvent(controller, { error: errMsg });
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              return;
             }
-          } finally {
-            try {
-              controller.close();
-            } catch (_) {
-              // Already closed
+
+            // Forward streaming chunks
+            const reader = streamResponse.body!.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              controller.enqueue(value);
             }
           }
-        },
-      });
 
-      return new Response(toolStream, {
-        headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
-      });
-    }
-
-    // ─── Non-tool-capable models: standard streaming path (unchanged) ───
-    const finalMessages: any[] = [{ role: "system", content: systemPrompt }, ...truncatedMessages];
-
-    const streamBody: Record<string, unknown> = {
-      model: chatModel,
-      messages: finalMessages,
-      stream: true,
-      temperature: activeTemp,
-      max_tokens: validMaxTokens,
-    };
-
-    const streamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterHeaders,
-      body: JSON.stringify(streamBody),
+          // Signal stream end
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        } catch (err) {
+          console.error("Stream error:", err);
+          try {
+            sendEvent(controller, { error: "An unexpected error occurred." });
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          } catch (_) {
+            // Controller may already be closed
+          }
+        } finally {
+          clearInterval(heartbeat);
+          try {
+            controller.close();
+          } catch (_) {
+            // Already closed
+          }
+        }
+      },
     });
 
-    if (!streamResponse.ok) {
-      const status = streamResponse.status;
-      if (status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          {
-            status: 429,
-            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-          }
-        );
-      }
-      if (status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Insufficient credits on OpenRouter." }),
-          {
-            status: 402,
-            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-          }
-        );
-      }
-      const text = await streamResponse.text();
-      console.error("OpenRouter stream error:", status, text);
-      return new Response(JSON.stringify({ error: "AI provider error" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(streamResponse.body, {
-      headers: { ...getCorsHeaders(req), "Content-Type": "text/event-stream" },
+    return new Response(stream, {
+      headers: {
+        ...getCorsHeaders(req),
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
   } catch (e) {
     console.error("chat error:", e);
