@@ -1,35 +1,61 @@
+import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import Auth from "./pages/Auth";
-import Chat from "./pages/Chat";
-import Journal from "./pages/Journal";
-import Gallery from "./pages/Gallery";
-import Admin from "./pages/Admin";
-import Guide from "./pages/Guide";
-import InnerLife from "./pages/InnerLife";
-import Reflections from "./pages/Reflections";
-
-import NotFound from "./pages/NotFound";
-import PageTransition from "./components/PageTransition";
-
+import { useAuthStore } from "@/stores/authStore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import ChatView from "./pages/ChatView";
+import DashboardView from "./pages/DashboardView";
+import SettingsView from "./pages/SettingsView";
+import Rail from "./components/Rail";
+import Clockbar from "./components/Clockbar";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">Loading...</div>;
-  if (!user) return <Navigate to="/auth" replace />;
+function AuthInit({ children }: { children: React.ReactNode }) {
+  const initialize = useAuthStore((s) => s.initialize);
+  useEffect(() => {
+    const unsub = initialize();
+    return unsub;
+  }, [initialize]);
   return <>{children}</>;
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuthStore();
+  if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
+  if (!user) return <Navigate to="/auth/login" replace />;
+  return <>{children}</>;
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
+
+  useEffect(() => {
+    if (user) loadSettings(user.id);
+  }, [user]);
+
+  return (
+    <div className="flex h-screen" style={{ background: 'var(--bg-primary)' }}>
+      <Rail />
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+        {children}
+        {clockbarVisible && <Clockbar />}
+      </div>
+    </div>
+  );
+}
+
 function RootRedirect() {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">Loading...</div>;
-  return <Navigate to={user ? "/chat" : "/auth"} replace />;
+  const { user, loading } = useAuthStore();
+  if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
+  return <Navigate to={user ? "/chat" : "/auth/login"} replace />;
 }
 
 const App = () => (
@@ -38,21 +64,18 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider>
+        <AuthInit>
           <Routes>
             <Route path="/" element={<RootRedirect />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/journal" element={<ProtectedRoute><Journal /></ProtectedRoute>} />
-            <Route path="/gallery" element={<ProtectedRoute><Gallery /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><PageTransition><Admin /></PageTransition></ProtectedRoute>} />
-            <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
-            <Route path="/inner-life" element={<ProtectedRoute><InnerLife /></ProtectedRoute>} />
-            <Route path="/reflections" element={<ProtectedRoute><Reflections /></ProtectedRoute>} />
-
-            <Route path="*" element={<NotFound />} />
+            <Route path="/auth/login" element={<LoginPage />} />
+            <Route path="/auth/signup" element={<SignupPage />} />
+            <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+            <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><AppShell><DashboardView /></AppShell></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><AppShell><SettingsView /></AppShell></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </AuthProvider>
+        </AuthInit>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
