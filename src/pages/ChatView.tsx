@@ -292,7 +292,7 @@ export default function ChatView() {
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
-  const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string }>>([]);
+  const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string; thinking?: string | null }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -388,7 +388,7 @@ export default function ChatView() {
       const decoder = new TextDecoder();
       let fullContent = '';
       let fullThinking = '';
-      const collectedVariants: Array<{ model: string; content: string }> = [];
+      const collectedVariants: Array<{ model: string; content: string; thinking?: string | null }> = [];
 
       if (reader) {
         while (true) {
