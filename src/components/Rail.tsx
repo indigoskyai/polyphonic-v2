@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThreadStore, Thread } from '@/stores/threadStore';
+import { useSettingsModalStore } from '@/stores/settingsModalStore';
 
 export default function Rail() {
   const [expanded, setExpanded] = useState(false);
@@ -11,9 +12,11 @@ export default function Rail() {
 
   useEffect(() => { loadThreads(); }, []);
 
+  const openSettings = useSettingsModalStore((s) => s.openSettings);
+  const settingsOpen = useSettingsModalStore((s) => s.open);
+
   const activeView = location.pathname.startsWith('/chat') ? 'chat'
-    : location.pathname.startsWith('/dashboard') ? 'dashboard'
-    : location.pathname.startsWith('/settings') ? 'settings' : 'chat';
+    : location.pathname.startsWith('/dashboard') ? 'dashboard' : 'chat';
 
   const handleNewThread = async () => {
     const { useAuthStore } = await import('@/stores/authStore');
@@ -97,7 +100,7 @@ export default function Rail() {
           {/* Nav icons */}
           <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
           <NavIcon icon="dashboard" active={activeView === 'dashboard'} onClick={() => navigate('/dashboard')} />
-          <NavIcon icon="settings" active={activeView === 'settings'} onClick={() => navigate('/settings')} />
+          <NavIcon icon="settings" active={settingsOpen} onClick={openSettings} />
 
           {/* New thread */}
           <div
@@ -179,7 +182,7 @@ export default function Rail() {
           <div className="flex flex-col gap-0.5" style={{ padding: 8, borderTop: '1px solid var(--border-subtle)' }}>
             <SidebarAction label="New thread" icon="+" onClick={handleNewThread} />
             <SidebarAction label="Dashboard" icon="◎" onClick={() => { navigate('/dashboard'); setExpanded(false); }} />
-            <SidebarAction label="Settings" icon="⚙" onClick={() => { navigate('/settings'); setExpanded(false); }} />
+            <SidebarAction label="Settings" icon="⚙" onClick={() => { openSettings(); setExpanded(false); }} />
           </div>
         </div>
       </div>
