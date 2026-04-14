@@ -16,6 +16,7 @@ interface Settings {
   multi_model_enabled: boolean;
   ensemble_models: string[];
   synthesis_model: string;
+  reasoning_effort: 'low' | 'medium' | 'high';
 }
 
 interface SettingsState extends Settings {
@@ -39,10 +40,11 @@ const defaults: Settings = {
   multi_model_enabled: true,
   ensemble_models: [
     'anthropic/claude-sonnet-4-20250514',
-    'openai/gpt-4o',
-    'google/gemini-2.5-pro-preview-03-25',
+    'openai/gpt-5.4',
+    'google/gemini-3.1-pro-preview',
   ],
   synthesis_model: 'anthropic/claude-sonnet-4-20250514',
+  reasoning_effort: 'medium',
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

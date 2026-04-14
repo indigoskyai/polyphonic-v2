@@ -323,16 +323,22 @@ function ModelsTab() {
 }
 
 function EnsembleSettings() {
-  const { multi_model_enabled, ensemble_models, synthesis_model, updateSetting } = useSettingsStore();
+  const { multi_model_enabled, ensemble_models, synthesis_model, reasoning_effort, updateSetting } = useSettingsStore();
 
   const AVAILABLE_MODELS = [
-    { id: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+    // Reasoning models (frontier)
+    { id: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (reasoning)' },
+    { id: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4 (reasoning)' },
+    { id: 'openai/gpt-5.4', label: 'GPT-5.4 (reasoning)' },
+    { id: 'openai/gpt-5.4-mini', label: 'GPT-5.4 Mini (reasoning)' },
+    { id: 'openai/gpt-5.2', label: 'GPT-5.2 (reasoning)' },
+    { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (reasoning)' },
+    { id: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro (reasoning)' },
+    { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (reasoning)' },
+    // Non-reasoning models
     { id: 'anthropic/claude-haiku-3.5-20241022', label: 'Claude Haiku 3.5' },
-    { id: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4' },
     { id: 'openai/gpt-4o', label: 'GPT-4o' },
-    { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
     { id: 'google/gemini-2.5-pro-preview-03-25', label: 'Gemini 2.5 Pro' },
-    { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
     { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
   ];
 
@@ -396,6 +402,34 @@ function EnsembleSettings() {
             </select>
             <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 6, lineHeight: 1.4 }}>
               The model that synthesizes the final response from all ensemble outputs.
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>
+              Default Thinking Effort
+            </div>
+            <div className="flex items-center gap-2">
+              {(['low', 'medium', 'high'] as const).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => updateSetting('reasoning_effort', level)}
+                  style={{
+                    height: 32, padding: '0 14px', fontSize: 12,
+                    background: reasoning_effort === level ? 'var(--bg-surface)' : 'transparent',
+                    border: `1px solid ${reasoning_effort === level ? 'var(--border)' : 'var(--border-subtle)'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    color: reasoning_effort === level ? 'var(--text-primary)' : 'var(--text-ghost)',
+                    cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                    transition: 'all 150ms ease',
+                  }}
+                >
+                  {level === 'low' ? 'Light' : level === 'medium' ? 'Medium' : 'Deep'}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 6, lineHeight: 1.4 }}>
+              Controls how deeply reasoning models think before responding. Can be overridden per-message in the chat input.
             </div>
           </div>
         </>

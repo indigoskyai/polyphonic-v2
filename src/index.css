@@ -365,6 +365,45 @@
   word-break: break-word;
 }
 
+/* ── Thinking Effort Control ── */
+.thinking-effort-control {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.effort-bar {
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(220, 219, 216, 0.08);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background 150ms ease, height 150ms ease;
+}
+.effort-bar:nth-child(1) { height: 8px; }
+.effort-bar:nth-child(2) { height: 12px; }
+.effort-bar:nth-child(3) { height: 16px; }
+
+.effort-bar.active {
+  background: rgba(220, 219, 216, 0.35);
+}
+
+.effort-bar:hover {
+  background: rgba(220, 219, 216, 0.5);
+}
+
+.effort-label {
+  font-size: 9px;
+  font-weight: 420;
+  letter-spacing: 0.04em;
+  color: var(--text-whisper);
+  margin-left: 4px;
+  user-select: none;
+}
+
 @keyframes g-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 
 @keyframes dash-breathe { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }

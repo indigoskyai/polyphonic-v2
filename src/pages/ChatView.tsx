@@ -202,7 +202,7 @@ function parseMultiModelVariants(thinkingContent: string): Array<{ model: string
 }
 
 /* ─── Model Variants Panel (expandable per-message) ─── */
-function VariantsPanel({ variants }: { variants: Array<{ model: string; content: string }> }) {
+function VariantsPanel({ variants }: { variants: Array<{ model: string; content: string; thinking?: string | null }> }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!variants || variants.length === 0) return null;
@@ -249,6 +249,9 @@ function VariantsPanel({ variants }: { variants: Array<{ model: string; content:
                 }}>
                   {v.model}
                 </div>
+                {v.thinking && (
+                  <ThinkingBlock content={v.thinking} state="complete" />
+                )}
                 <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-tertiary)' }}>
                   <ReactMarkdown
                     components={{
@@ -283,10 +286,12 @@ export default function ChatView() {
   } = useThreadStore();
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
+  const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
 
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
+  const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
   const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -364,7 +369,7 @@ export default function ChatView() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ thread_id: tid, message: messageText }),
+        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort }),
         signal: controller.signal,
       });
 
@@ -672,6 +677,21 @@ export default function ChatView() {
                 onClick={() => setAlcoveOpen(!alcoveOpen)}
               >guardian</button>
             </div>
+
+            {/* Thinking effort control */}
+            <div className="thinking-effort-control" title={`Thinking effort: ${thinkingEffort}`}>
+              {(['low', 'medium', 'high'] as const).map((level) => (
+                <button
+                  key={level}
+                  className={`effort-bar${thinkingEffort === level || (['medium', 'high'].includes(thinkingEffort) && level === 'low') || (thinkingEffort === 'high' && level === 'medium') ? ' active' : ''}`}
+                  onClick={() => setThinkingEffort(level)}
+                  title={level}
+                  aria-label={`Set thinking effort to ${level}`}
+                />
+              ))}
+              <span className="effort-label">{thinkingEffort === 'low' ? 'light' : thinkingEffort === 'high' ? 'deep' : 'think'}</span>
+            </div>
+
             <button
               className={`send-btn${isStreaming ? ' streaming' : ''}`}
               onClick={isStreaming ? stopStreaming : sendMessage}
