@@ -843,8 +843,8 @@ export default function ChatView() {
             </select>
 
             <button
-              className={`send-btn${isStreaming ? ' streaming' : ''}`}
-              onClick={isStreaming ? stopStreaming : sendMessage}
+              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}`}
+              onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : sendMessage)}
             >
               <span className="send-icon">
                 <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4" /></svg>
