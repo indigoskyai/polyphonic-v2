@@ -477,12 +477,3 @@
   vertical-align: text-bottom;
   animation: cursor-blink 1s ease-in-out infinite;
 }
-  content: '';
-  display: inline-block;
-  width: 2px;
-  height: 16px;
-  background: var(--text-tertiary);
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  animation: cursor-blink 1s ease-in-out infinite;
-}
