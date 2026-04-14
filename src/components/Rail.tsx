@@ -12,9 +12,11 @@ export default function Rail() {
 
   useEffect(() => { loadThreads(); }, []);
 
+  const openSettings = useSettingsModalStore((s) => s.openSettings);
+  const settingsOpen = useSettingsModalStore((s) => s.open);
+
   const activeView = location.pathname.startsWith('/chat') ? 'chat'
-    : location.pathname.startsWith('/dashboard') ? 'dashboard'
-    : location.pathname.startsWith('/settings') ? 'settings' : 'chat';
+    : location.pathname.startsWith('/dashboard') ? 'dashboard' : 'chat';
 
   const handleNewThread = async () => {
     const { useAuthStore } = await import('@/stores/authStore');
