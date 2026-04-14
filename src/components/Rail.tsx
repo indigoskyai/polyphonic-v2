@@ -96,6 +96,7 @@ export default function Rail() {
 
           {/* Nav icons */}
           <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
+          <NavIcon icon="dashboard" active={activeView === 'dashboard'} onClick={() => navigate('/dashboard')} />
           <NavIcon icon="settings" active={activeView === 'settings'} onClick={() => navigate('/settings')} />
 
           {/* New thread */}
