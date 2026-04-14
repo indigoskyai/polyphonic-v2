@@ -22,7 +22,7 @@ serve(async (req) => {
       const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
       if (userKeyData) apiKey = userKeyData;
     }
-    if (!apiKey) apiKey = Deno.env.get("OPENROUTER_API_KEY") || null;
+    // No platform fallback — user must have their own key
 
     if (userId) {
       const engine = new MnemosEngine(supabase, userId);

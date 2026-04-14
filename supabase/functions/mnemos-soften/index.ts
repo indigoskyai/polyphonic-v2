@@ -22,10 +22,10 @@ serve(async (req) => {
       const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
       if (userKeyData) apiKey = userKeyData;
     }
-    if (!apiKey) apiKey = Deno.env.get("OPENROUTER_API_KEY") || null;
+    // No platform fallback — user must have their own key
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key available for softening LLM calls" }), {
+      return new Response(JSON.stringify({ error: "No API key configured. User must add their OpenRouter key in Settings." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

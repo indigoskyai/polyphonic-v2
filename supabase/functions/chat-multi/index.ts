@@ -95,14 +95,12 @@ serve(async (req) => {
     const ensembleModels: string[] = settings?.ensemble_models || DEFAULT_ENSEMBLE;
     const synthesisModel = settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL;
 
-    // Get OpenRouter API key
-    let apiKey: string | null = null;
+    // Get user's OpenRouter API key (required — no platform fallback)
     const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    if (userKeyData) apiKey = userKeyData;
-    if (!apiKey) apiKey = Deno.env.get("OPENROUTER_API_KEY") || null;
+    const apiKey: string | null = userKeyData || null;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings." }), {
+      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
