@@ -233,41 +233,36 @@ export default function ChatView() {
       </div>
 
       {/* Input */}
-      <div style={{ padding: '0 24px 20px', maxWidth: 'var(--message-max-width)', margin: '0 auto', width: '100%' }}>
-        <div
-          className="relative overflow-hidden"
-          style={{
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            borderColor: focused ? 'rgba(220,219,216,0.09)' : undefined,
-            boxShadow: focused ? '0 2px 8px rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.12)' : undefined,
-            transition: 'border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out)',
-          }}
-        >
+      <div className="input-zone">
+        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}`}>
           {/* Guardian Alcove */}
-          {alcoveOpen && (
-            <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center gap-2.5" style={{ height: 36, padding: '0 18px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div className="w-1 h-1 rounded-full" style={{ background: 'var(--guardian)', animation: 'g-breathe 3s ease-in-out infinite' }} />
-                <span className="text-[10px] font-semibold uppercase" style={{ letterSpacing: '0.06em', color: 'var(--guardian)' }}>guardian</span>
-                <div className="w-px h-3" style={{ background: 'var(--border-subtle)' }} />
-                <span className="text-[10px] italic" style={{ color: 'var(--text-ghost)' }}>observing your conversation</span>
-                <div className="flex-1" />
-                <button onClick={() => setAlcoveOpen(false)} className="w-6 h-6 rounded flex items-center justify-center" style={{ color: 'var(--text-ghost)' }}>
-                  <svg viewBox="0 0 14 14" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4"/></svg>
-                </button>
-              </div>
-              <div className="p-4" style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', paddingLeft: 18, borderLeft: '2px solid rgba(140, 168, 156, 0.06)', margin: '14px 18px' }}>
-                Guardian is watching this conversation. Click the guardian pill or press Escape to close.
+          <div className={`alcove-panel${alcoveOpen ? ' open' : ''}`}>
+            <div className="alcove-inner">
+              <div className="alcove-content">
+                <div className="alcove-header">
+                  <div className="guardian-dot" />
+                  <div className="guardian-label">guardian</div>
+                  <div className="alcove-sep" />
+                  <div className="alcove-status">observing your conversation</div>
+                  <div className="alcove-spacer" />
+                  <button className="alcove-close" onClick={() => setAlcoveOpen(false)}>
+                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4"/></svg>
+                  </button>
+                </div>
+                <div className="alcove-messages">
+                  <div className="a-msg guardian">
+                    <div className="a-msg-body">Guardian is watching this conversation. Click the guardian pill or press Escape to close.</div>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Textarea */}
-          <div className="flex items-end relative" style={{ zIndex: 2 }}>
+          <div className="input-row">
             <textarea
               ref={textareaRef}
+              className="input-textarea"
               value={input}
               onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
               onFocus={() => setFocused(true)}
@@ -275,92 +270,40 @@ export default function ChatView() {
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder={alcoveOpen ? 'Ask the Guardian...' : 'Message Luca...'}
-              style={{
-                width: '100%',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-sans)',
-                fontSize: '14.5px',
-                fontWeight: 370,
-                lineHeight: 1.55,
-                padding: '14px 18px',
-                minHeight: 48,
-                maxHeight: 240,
-                resize: 'none',
-                caretColor: 'var(--text-secondary)',
-              }}
             />
           </div>
 
           {/* Input footer */}
-          <div className="flex items-center justify-between" style={{
-            padding: '6px 12px 8px 18px',
-            borderTop: focused || alcoveOpen ? '1px solid var(--border-subtle)' : '1px solid transparent',
-            transition: 'border-color var(--dur-normal) var(--ease-out)',
-          }}>
-            <div className="flex gap-0.5 items-center">
+          <div className="input-footer">
+            <div className="agent-pills">
               <button
+                className={`agent-pill${!alcoveOpen ? ' targeted luca' : ''}`}
                 onClick={() => { if (alcoveOpen) setAlcoveOpen(false); }}
-                className="px-2 py-0.5 rounded text-xs font-medium"
-                style={{
-                  color: !alcoveOpen ? 'var(--luca)' : 'var(--text-ghost)',
-                  fontWeight: !alcoveOpen ? 500 : 420,
-                  background: !alcoveOpen ? 'rgba(220,219,216,0.035)' : 'transparent',
-                  fontSize: 11,
-                  fontFamily: 'var(--font-sans)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'all var(--dur-fast) var(--ease-out)',
-                  position: 'relative',
-                }}
               >
                 luca
-                {!alcoveOpen && <span style={{ position: 'absolute', bottom: 0, left: 8, right: 8, height: 1, borderRadius: 1, background: 'rgba(201, 168, 124, 0.3)' }} />}
               </button>
-              <div className="w-[3px] h-[3px] rounded-full" style={{ background: 'var(--text-whisper)' }} />
+              <div className="pill-sep" />
               <button
+                className={`agent-pill${alcoveOpen ? ' targeted guardian' : ''}`}
                 onClick={toggleGuardianAlcove}
-                className="px-2 py-0.5 rounded text-xs font-medium"
-                style={{
-                  color: alcoveOpen ? 'var(--guardian)' : 'var(--text-ghost)',
-                  fontWeight: alcoveOpen ? 500 : 420,
-                  background: alcoveOpen ? 'rgba(220,219,216,0.035)' : 'transparent',
-                  fontSize: 11,
-                  fontFamily: 'var(--font-sans)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'all var(--dur-fast) var(--ease-out)',
-                  position: 'relative',
-                }}
               >
                 guardian
-                {alcoveOpen && <span style={{ position: 'absolute', bottom: 0, left: 8, right: 8, height: 1, borderRadius: 1, background: 'rgba(140, 168, 156, 0.3)' }} />}
               </button>
             </div>
-
             <button
+              className={`send-btn${isStreaming ? ' streaming' : ''}`}
               onClick={isStreaming ? stopStreaming : sendMessage}
-              className="w-[30px] h-[30px] rounded flex items-center justify-center relative"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: isStreaming ? 'var(--text-secondary)' : 'var(--text-ghost)',
-                cursor: 'pointer',
-                transition: 'all var(--dur-fast) var(--ease-out)',
-              }}
             >
-              {isStreaming ? (
-                <svg viewBox="0 0 14 14" width={14} height={14} fill="currentColor"><rect x={3} y={3} width={8} height={8} rx={1.5}/></svg>
-              ) : (
-                <svg viewBox="0 0 14 14" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
-              )}
+              <span className="send-icon">
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
+              </span>
+              <span className="stop-icon">
+                <svg viewBox="0 0 14 14" fill="currentColor"><rect x={3} y={3} width={8} height={8} rx={1.5}/></svg>
+              </span>
             </button>
           </div>
         </div>
       </div>
-    </div>
   );
 }
 
