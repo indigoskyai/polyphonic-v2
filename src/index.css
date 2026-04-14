@@ -499,3 +499,26 @@
   vertical-align: text-bottom;
   animation: cursor-blink 1s ease-in-out infinite;
 }
+
+/* Inline streaming cursor (inside text flow) */
+.streaming-cursor-inline {
+  display: inline-block;
+  width: 1.5px;
+  height: 14px;
+  background: rgba(220, 219, 216, 0.4);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 1s ease-in-out infinite;
+}
+
+/* Chat scroll area — ultra-smooth scrolling */
+.chat-scroll-area {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Chat message hover subtle highlight */
+.chat-message {
+  padding: 4px 0;
+  transition: opacity 0.2s var(--ease-out);
+}
