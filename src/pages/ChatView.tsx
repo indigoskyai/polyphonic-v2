@@ -304,6 +304,7 @@ export default function ChatView() {
           </div>
         </div>
       </div>
+    </div>
   );
 }
 
