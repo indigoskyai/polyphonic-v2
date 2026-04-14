@@ -104,7 +104,12 @@ serve(async (req) => {
     // If focus provided, summarize via OpenRouter
     let summary: string | undefined;
     if (focus && typeof focus === "string" && focus.trim().length > 0) {
-      const apiKey = userApiKey;
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      let apiKey = "";
+      if (user_id !== "system") {
+        const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
+        apiKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
+      }
       if (apiKey) {
         try {
           const summaryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {

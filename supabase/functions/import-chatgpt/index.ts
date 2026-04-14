@@ -229,7 +229,9 @@ serve(async (req) => {
       });
     }
 
-    const openrouterKey = userApiKey!;
+    // Get user's API key
+    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
+    const openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
     if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "No API key. User must add their OpenRouter key in Settings." }), {
         status: 500,
