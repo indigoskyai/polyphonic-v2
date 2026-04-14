@@ -74,14 +74,6 @@ export default function Rail() {
             L
           </div>
 
-          {/* Stream icon */}
-          <div
-            className={`w-8 h-8 rounded flex items-center justify-center cursor-pointer mt-2 ${activeView === 'dashboard' ? 'active' : ''}`}
-            style={{ color: activeView === 'dashboard' ? 'var(--text-primary)' : 'var(--text-tertiary)', background: activeView === 'dashboard' ? 'var(--bg-surface)' : undefined, transition: 'all var(--dur-fast) var(--ease-out)' }}
-            onClick={() => navigate('/dashboard')}
-          >
-            <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={5}/><path d="M7 4v3l2 1"/></svg>
-          </div>
 
           {/* Thread dots */}
           <div className="flex flex-col items-center gap-0.5 flex-1 w-full px-2 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
