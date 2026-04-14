@@ -41,14 +41,39 @@ interface MemoryEvent {
   created_at: string;
 }
 
+interface MemoryStats {
+  total_engrams: number;
+  active: number;
+  dormant: number;
+  archived: number;
+  connections: number;
+  beliefs_count: number;
+}
+
+interface MindEngram {
+  id: string;
+  content: string;
+  engram_type: string;
+  strength: number;
+  tags: string[];
+  source_context: Record<string, unknown>;
+  created_at: string;
+}
+
 interface CognitiveState {
   modulators: Modulators;
   emotions: Emotions;
   beliefs: Belief[];
   thoughts: Thought[];
   recentEvents: MemoryEvent[];
+  dreams: MindEngram[];
+  insights: MindEngram[];
+  reflections: MindEngram[];
+  wanderings: Thought[];
+  memoryStats: MemoryStats;
   loaded: boolean;
   load: (userId: string) => Promise<void>;
+  loadMindData: (userId: string) => Promise<void>;
   subscribe: (userId: string) => () => void;
 }
 
@@ -75,6 +100,11 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   beliefs: [],
   thoughts: [],
   recentEvents: [],
+  dreams: [],
+  insights: [],
+  reflections: [],
+  wanderings: [],
+  memoryStats: { total_engrams: 0, active: 0, dormant: 0, archived: 0, connections: 0, beliefs_count: 0 },
   loaded: false,
 
   load: async (userId: string) => {
@@ -96,6 +126,73 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       thoughts: (thoughtsRes.data ?? []) as Thought[],
       recentEvents: (eventsRes.data ?? []) as MemoryEvent[],
       loaded: true,
+    });
+  },
+
+  loadMindData: async (userId: string) => {
+    // Load dreams (engrams with dream tags or source_context type)
+    const dreamsPromise = supabase
+      .from('engrams')
+      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .eq('user_id', userId)
+      .or('tags.cs.{dream},tags.cs.{consolidation}')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Load insights
+    const insightsPromise = supabase
+      .from('engrams')
+      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .eq('user_id', userId)
+      .contains('tags', ['insight'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Load reflections
+    const reflectionsPromise = supabase
+      .from('engrams')
+      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .eq('user_id', userId)
+      .contains('tags', ['reflection'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Load wanderings (thoughts with type 'wandering' or 'musing')
+    const wanderingsPromise = supabase
+      .from('thought_stream')
+      .select('*')
+      .eq('user_id', userId)
+      .in('type', ['wandering', 'musing', 'observation'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Memory stats
+    const statsPromises = [
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('state', 'active'),
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('state', 'dormant'),
+      supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    ];
+
+    const [dreamsRes, insightsRes, reflectionsRes, wanderingsRes, ...statsRes] = await Promise.all([
+      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, ...statsPromises,
+    ]);
+
+    set({
+      dreams: (dreamsRes.data ?? []) as MindEngram[],
+      insights: (insightsRes.data ?? []) as MindEngram[],
+      reflections: (reflectionsRes.data ?? []) as MindEngram[],
+      wanderings: (wanderingsRes.data ?? []) as Thought[],
+      memoryStats: {
+        total_engrams: statsRes[0].count ?? 0,
+        active: statsRes[1].count ?? 0,
+        dormant: statsRes[2].count ?? 0,
+        archived: statsRes[3].count ?? 0,
+        connections: statsRes[4].count ?? 0,
+        beliefs_count: statsRes[5].count ?? 0,
+      },
     });
   },
 

@@ -12,6 +12,10 @@ interface Settings {
   show_timestamps: boolean;
   show_agent_colors: boolean;
   clockbar_visible: boolean;
+  // Multi-model ensemble settings
+  multi_model_enabled: boolean;
+  ensemble_models: string[];
+  synthesis_model: string;
 }
 
 interface SettingsState extends Settings {
@@ -31,6 +35,14 @@ const defaults: Settings = {
   show_timestamps: true,
   show_agent_colors: true,
   clockbar_visible: true,
+  // Multi-model defaults
+  multi_model_enabled: true,
+  ensemble_models: [
+    'anthropic/claude-sonnet-4-20250514',
+    'openai/gpt-4o',
+    'google/gemini-2.5-pro-preview-03-25',
+  ],
+  synthesis_model: 'anthropic/claude-sonnet-4-20250514',
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

@@ -315,8 +315,92 @@ function ModelsTab() {
           </button>
         </div>
       )}
-      <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.4 }}>Your OpenRouter API key. Encrypted and stored securely.</div>
+      <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.4, marginBottom: 32 }}>Your OpenRouter API key. Encrypted and stored securely.</div>
+
+      <EnsembleSettings />
     </div>
+  );
+}
+
+function EnsembleSettings() {
+  const { multi_model_enabled, ensemble_models, synthesis_model, updateSetting } = useSettingsStore();
+
+  const AVAILABLE_MODELS = [
+    { id: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+    { id: 'anthropic/claude-haiku-3.5-20241022', label: 'Claude Haiku 3.5' },
+    { id: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4' },
+    { id: 'openai/gpt-4o', label: 'GPT-4o' },
+    { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
+    { id: 'google/gemini-2.5-pro-preview-03-25', label: 'Gemini 2.5 Pro' },
+    { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+    { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+  ];
+
+  const updateEnsembleModel = (index: number, modelId: string) => {
+    const updated = [...ensemble_models];
+    updated[index] = modelId;
+    updateSetting('ensemble_models', updated);
+  };
+
+  return (
+    <>
+      <SectionTitle>Multi-Model Synthesis</SectionTitle>
+      <SettingRow label="Enabled" description="Send messages to multiple models and synthesize a response">
+        <Toggle on={multi_model_enabled} onChange={() => updateSetting('multi_model_enabled', !multi_model_enabled)} />
+      </SettingRow>
+
+      {multi_model_enabled && (
+        <>
+          <div style={{ marginBottom: 16, marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>
+              Ensemble Models
+            </div>
+            <div className="flex flex-col gap-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span style={{ fontSize: 11, color: 'var(--text-ghost)', width: 16, textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{i + 1}</span>
+                  <select
+                    value={ensemble_models[i] || ''}
+                    onChange={(e) => updateEnsembleModel(i, e.target.value)}
+                    style={{
+                      flex: 1, height: 36, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)', padding: '0 12px', fontSize: 12, color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-sans)', outline: 'none', appearance: 'none',
+                    }}
+                  >
+                    {AVAILABLE_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10 }}>
+              Synthesis Model
+            </div>
+            <select
+              value={synthesis_model}
+              onChange={(e) => updateSetting('synthesis_model', e.target.value)}
+              style={{
+                width: '100%', maxWidth: 320, height: 36, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', padding: '0 12px', fontSize: 12, color: 'var(--text-primary)',
+                fontFamily: 'var(--font-sans)', outline: 'none', appearance: 'none',
+              }}
+            >
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 6, lineHeight: 1.4 }}>
+              The model that synthesizes the final response from all ensemble outputs.
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

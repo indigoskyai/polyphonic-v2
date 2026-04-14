@@ -218,6 +218,94 @@ function ThinkingBlock({ content, state }: { content: string; state: 'streaming'
   );
 }
 
+/* ─── Multi-model helpers ─── */
+function isMultiModelThinking(thinkingContent: string): boolean {
+  try {
+    const parsed = JSON.parse(thinkingContent);
+    return parsed?.type === 'multi_model' && Array.isArray(parsed?.variants);
+  } catch { return false; }
+}
+
+function parseMultiModelVariants(thinkingContent: string): Array<{ model: string; content: string }> {
+  try {
+    const parsed = JSON.parse(thinkingContent);
+    if (parsed?.type === 'multi_model' && Array.isArray(parsed?.variants)) {
+      return parsed.variants;
+    }
+  } catch {}
+  return [];
+}
+
+/* ─── Model Variants Panel (expandable per-message) ─── */
+function VariantsPanel({ variants }: { variants: Array<{ model: string; content: string }> }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!variants || variants.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-[10px]"
+        style={{
+          color: 'var(--text-ghost)',
+          letterSpacing: '0.04em',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '4px 0',
+        }}
+      >
+        <span style={{
+          transform: expanded ? 'rotate(90deg)' : 'none',
+          transition: 'transform var(--dur-normal) var(--ease-premium)',
+          display: 'inline-block',
+        }}>›</span>
+        {variants.length} model responses
+      </button>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: expanded ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.4s var(--ease-premium)',
+      }}>
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8 }}>
+            {variants.map((v, i) => (
+              <div key={i} style={{
+                background: 'var(--bg-deep)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 14px',
+              }}>
+                <div className="text-[10px] font-medium uppercase mb-1.5" style={{
+                  color: 'var(--text-ghost)',
+                  letterSpacing: '0.06em',
+                }}>
+                  {v.model}
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-tertiary)' }}>
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }) => <p style={{ marginBottom: 8 }}>{children}</p>,
+                      code: ({ children, className: cn }) => {
+                        if (cn) return <pre style={{ background: 'var(--bg-void)', padding: '8px 12px', borderRadius: 4, fontSize: 12, overflow: 'auto', margin: '8px 0' }}><code>{children}</code></pre>;
+                        return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--bg-surface)', padding: '1px 4px', borderRadius: 3 }}>{children}</code>;
+                      },
+                    }}
+                  >
+                    {v.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main ChatView ─── */
 export default function ChatView() {
   const { threadId } = useParams();
@@ -234,6 +322,8 @@ export default function ChatView() {
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
+  const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string }>>([]);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -294,6 +384,8 @@ export default function ChatView() {
     setStreaming(true);
     setStreamingContent('');
     setStreamingThinking('');
+    setStreamingVariants([]);
+    setIsSynthesizing(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -301,7 +393,7 @@ export default function ChatView() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
-      const resp = await fetch(`${supabaseUrl}/functions/v1/chat`, {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/chat-multi`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -326,6 +418,7 @@ export default function ChatView() {
       const decoder = new TextDecoder();
       let fullContent = '';
       let fullThinking = '';
+      const collectedVariants: Array<{ model: string; content: string }> = [];
 
       if (reader) {
         while (true) {
@@ -336,7 +429,12 @@ export default function ChatView() {
             if (!line.startsWith('data: ')) continue;
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.type === 'content') {
+              if (data.type === 'variant') {
+                collectedVariants.push({ model: data.model, content: data.text });
+                setStreamingVariants([...collectedVariants]);
+              } else if (data.type === 'synthesizing') {
+                setIsSynthesizing(true);
+              } else if (data.type === 'content') {
                 fullContent += data.text;
                 setStreamingContent(fullContent);
               } else if (data.type === 'thinking') {
@@ -346,8 +444,17 @@ export default function ChatView() {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: 'luca',
-                  thinking_content: fullThinking || null, tokens_used: data.tokens_used || null,
+                  thinking_content: collectedVariants.length > 0
+                    ? JSON.stringify({ type: 'multi_model', variants: collectedVariants })
+                    : (fullThinking || null),
+                  tokens_used: data.tokens_used || null,
                   bookmarked: false,
+                });
+              } else if (data.type === 'error') {
+                addMessage({
+                  thread_id: tid!, user_id: user.id, role: 'assistant',
+                  content: data.text || 'Something went wrong.',
+                  model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
                 });
               }
             } catch {}
@@ -366,6 +473,8 @@ export default function ChatView() {
       setStreaming(false);
       setStreamingContent('');
       setStreamingThinking('');
+      setStreamingVariants([]);
+      setIsSynthesizing(false);
       abortRef.current = null;
       loadThreads();
     }
@@ -447,13 +556,18 @@ export default function ChatView() {
                 {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Guardian' : 'Luca'}
               </div>
 
-              {/* Thinking block */}
-              {msg.thinking_content && showThinking && (
+              {/* Thinking block (only for non-multi-model thinking) */}
+              {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
                 <ThinkingBlock content={msg.thinking_content} state="complete" />
               )}
 
               {/* Message content */}
               <MessageContent content={msg.content} />
+
+              {/* Model variants (expandable) */}
+              {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
+                <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
+              )}
 
               {/* Timestamp */}
               {showTimestamps && (
@@ -479,13 +593,50 @@ export default function ChatView() {
                 <ThinkingBlock content={streamingThinking} state="streaming" />
               )}
 
+              {/* Model variant collection indicator */}
+              {streamingVariants.length > 0 && !streamingContent && !isSynthesizing && (
+                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 8 }}>
+                  <span className="text-[11px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
+                    {streamingVariants.length}/3 models responded
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: 5, height: 5, borderRadius: '50%',
+                        background: i < streamingVariants.length ? 'var(--accent-luca)' : 'rgba(220,219,216,0.08)',
+                        transition: 'background 0.3s var(--ease-out)',
+                      }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Synthesizing indicator */}
+              {isSynthesizing && !streamingContent && (
+                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 8 }}>
+                  <div className="flex items-center gap-1.5">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: 4, height: 4, borderRadius: '50%',
+                        background: 'var(--accent-luca)',
+                        opacity: 0.6,
+                        animation: `breathe-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
+                      }} />
+                    ))}
+                  </div>
+                  <span className="text-[11px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
+                    synthesizing
+                  </span>
+                </div>
+              )}
+
               {/* Streaming content with typewriter */}
               {streamingContent ? (
                 <StreamingText
                   content={streamingContent}
                   style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}
                 />
-              ) : !streamingThinking ? (
+              ) : !streamingThinking && streamingVariants.length === 0 && !isSynthesizing ? (
                 /* Waiting indicator */
                 <div className="flex items-center gap-1.5" style={{ padding: '4px 0' }}>
                   {[0, 1, 2].map(i => (

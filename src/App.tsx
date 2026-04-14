@@ -11,9 +11,12 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ChatView from "./pages/ChatView";
 import DashboardView from "./pages/DashboardView";
+import MemoryView from "./pages/MemoryView";
+import MindView from "./pages/MindView";
 import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Clockbar from "./components/Clockbar";
+import CommandPalette from "./components/CommandPalette";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +54,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         {clockbarVisible && <Clockbar />}
       </div>
       <SettingsModal open={settingsOpen} onClose={closeSettings} />
+      <CommandPalette />
     </div>
   );
 }
@@ -74,7 +78,9 @@ const App = () => (
             <Route path="/auth/signup" element={<SignupPage />} />
             <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
             <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><AppShell><DashboardView /></AppShell></ProtectedRoute>} />
+            <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
+            <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
+            <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthInit>
