@@ -556,18 +556,30 @@ export default function ChatView() {
                 Luca
               </div>
 
-              {/* Streaming thinking — 4-state lifecycle */}
-              {streamingThinking && showThinking && (
+              {/* Thinking block — always visible during streaming, 4-state lifecycle */}
+              {showThinking && !streamingContent && (
                 <ThinkingBlock
-                  content={streamingThinking}
-                  state={streamingContent ? 'settling' : 'streaming'}
+                  content={streamingThinking || ''}
+                  state={
+                    streamingThinking ? 'streaming'
+                    : isSynthesizing ? 'waiting'
+                    : 'waiting'
+                  }
                 />
               )}
 
-              {/* Model variant collection indicator */}
+              {/* Thinking block settling — visible when content starts but thinking existed */}
+              {showThinking && streamingContent && streamingThinking && (
+                <ThinkingBlock
+                  content={streamingThinking}
+                  state="settling"
+                />
+              )}
+
+              {/* Model variant collection indicator (below thinking block) */}
               {streamingVariants.length > 0 && !streamingContent && !isSynthesizing && (
-                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 8 }}>
-                  <span className="text-[11px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
+                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
+                  <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
                     {streamingVariants.length}/3 models responded
                   </span>
                   <div className="flex items-center gap-1">
@@ -584,41 +596,20 @@ export default function ChatView() {
 
               {/* Synthesizing indicator */}
               {isSynthesizing && !streamingContent && (
-                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 8 }}>
-                  <div className="flex items-center gap-1.5">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} style={{
-                        width: 4, height: 4, borderRadius: '50%',
-                        background: 'var(--accent-luca)',
-                        opacity: 0.6,
-                        animation: `breathe-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                      }} />
-                    ))}
-                  </div>
-                  <span className="text-[11px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
+                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
+                  <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
                     synthesizing
                   </span>
                 </div>
               )}
 
               {/* Streaming content with typewriter */}
-              {streamingContent ? (
+              {streamingContent && (
                 <StreamingText
                   content={streamingContent}
                   style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}
                 />
-              ) : !streamingThinking && streamingVariants.length === 0 && !isSynthesizing ? (
-                /* Waiting indicator */
-                <div className="flex items-center gap-1.5" style={{ padding: '4px 0' }}>
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{
-                      width: 4, height: 4, borderRadius: '50%',
-                      background: 'rgba(220,219,216,0.15)',
-                      animation: `breathe-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                    }} />
-                  ))}
-                </div>
-              ) : null}
+              )}
             </div>
           )}
         </div>
