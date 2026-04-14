@@ -187,6 +187,18 @@
 
 @keyframes dash-breathe { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
 
+@keyframes breathe-dot { 0%, 100% { opacity: 0.5; } 50% { opacity: 1.0; } }
+
+@keyframes stream-breathe {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes notif-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 @keyframes viewFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
