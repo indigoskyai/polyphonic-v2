@@ -49,8 +49,13 @@ serve(async (req) => {
       });
     }
 
-    // Use Perplexity Sonar via OpenRouter — no additional API key needed
-    const openrouterKey = userApiKey;
+    // Get user's API key
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    let openrouterKey = "";
+    if (user_id !== "system") {
+      const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
+      openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
+    }
     if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "Web search not configured" }), {
         status: 500,

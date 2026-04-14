@@ -68,6 +68,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
     // Accept service_role key for internal calls
+    let userId: string | null = null;
     if (token !== serviceRoleKey) {
       const supabaseAuth = createClient(
         supabaseUrl,
@@ -83,6 +84,7 @@ serve(async (req) => {
           headers: jsonHeaders,
         });
       }
+      userId = claimsData.claims.sub as string;
     }
 
     const { messages, custom_instructions } = await req.json();
@@ -94,7 +96,13 @@ serve(async (req) => {
       );
     }
 
-    const openrouterKey = userApiKey;
+    // Get user's API key
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    let openrouterKey = "";
+    if (userId) {
+      const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
+      openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
+    }
     if (!openrouterKey) {
       return new Response(
         JSON.stringify({ used_tools: false, error: "planning_failed" }),

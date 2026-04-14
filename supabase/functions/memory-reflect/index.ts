@@ -8,7 +8,7 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const openrouterKey = userApiKey!;
+  let openrouterKey: string | null = null;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
@@ -50,6 +50,10 @@ serve(async (req) => {
       }
       user_id = claimsData.claims.sub as string;
     }
+
+    // Get user's API key
+    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
+    openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : null;
 
     // Create reflection job
     const { data: job } = await supabase

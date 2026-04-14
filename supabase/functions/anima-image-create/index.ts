@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     if (!apiKey) {
-      apiKey = userApiKey;
+      // No fallback — user must have their own key
     }
 
     if (!apiKey) {
