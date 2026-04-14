@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.anima-social-x]
 verify_jwt = false
+
+[functions.chat-guardian]
+verify_jwt = false
