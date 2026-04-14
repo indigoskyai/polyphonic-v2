@@ -82,6 +82,17 @@ export default function ChatView() {
         signal: controller.signal,
       });
 
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('Chat function error:', resp.status, errText);
+        addMessage({
+          thread_id: tid!, user_id: user.id, role: 'assistant',
+          content: `Error: ${resp.status === 401 ? 'Session expired. Please refresh.' : 'Something went wrong. Please try again.'}`,
+          model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+        });
+        return;
+      }
+
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
