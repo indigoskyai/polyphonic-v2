@@ -269,6 +269,7 @@ serve(async (req) => {
 
           const decoder = new TextDecoder();
           let synthesizedContent = "";
+          let synthesisThinking = "";
           let buffer = "";
           let tokensUsed: number | null = null;
 
@@ -290,6 +291,13 @@ serve(async (req) => {
                 const delta = chunk.choices?.[0]?.delta;
                 if (!delta) continue;
 
+                // Handle thinking/reasoning from synthesis model
+                if (delta.reasoning || delta.reasoning_content) {
+                  const thinkText = delta.reasoning || delta.reasoning_content || "";
+                  synthesisThinking += thinkText;
+                  send({ type: "thinking", text: thinkText });
+                }
+
                 if (delta.content) {
                   synthesizedContent += delta.content;
                   send({ type: "content", text: delta.content });
@@ -302,8 +310,8 @@ serve(async (req) => {
             }
           }
 
-          // Save the synthesized message
-          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants);
+          // Save the synthesized message (thinking separate from variants)
+          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null);
 
           // Update thread timestamp
           await supabase
@@ -424,6 +432,7 @@ async function saveAssistantMessage(
   content: string,
   model: string,
   variants: Array<{ model: string; content: string }>,
+  thinkingContent: string | null = null,
 ) {
   await supabase.from("messages").insert({
     thread_id: threadId,
@@ -432,12 +441,36 @@ async function saveAssistantMessage(
     content,
     model,
     agent: "luca",
-    thinking_content: JSON.stringify({
-      type: "multi_model",
-      variants: variants.map((v) => ({ model: v.model, content: v.content })),
-    }),
+    // Store raw thinking text (for ThinkingBlock display)
+    thinking_content: thinkingContent || null,
+    // Store variant metadata separately (for VariantsPanel)
+    // Using bookmarked field's JSON capability or a source_context pattern
     tokens_used: null,
   });
+
+  // Store variant data as a separate metadata record if variants exist
+  if (variants.length > 0) {
+    // Get the message ID we just inserted
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("thread_id", threadId)
+      .eq("user_id", userId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (msg) {
+      // Store variants in memory_events as a lightweight sidecar
+      await supabase.from("memory_events").insert({
+        user_id: userId,
+        type: "multi_model_variants",
+        content: JSON.stringify(variants.map((v) => ({ model: v.model, content: v.content }))),
+        salience: 0,
+      });
+    }
+  }
 }
 
 /** Encode a conversation exchange into Mnemos. */

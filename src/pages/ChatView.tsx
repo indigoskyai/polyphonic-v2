@@ -104,113 +104,78 @@ function MessageContent({ content }: { content: string }) {
   );
 }
 
-/* ─── Thinking Block ─── */
-function ThinkingBlock({ content, state }: { content: string; state: 'streaming' | 'complete' }) {
+/* ─── Thinking Block (4-state: waiting → streaming → settling → complete) ─── */
+type ThinkingState = 'waiting' | 'streaming' | 'settling' | 'complete';
+
+function peekContent(text: string): string {
+  const lines = text.split('\n').filter(Boolean);
+  return lines.slice(-2).join('\n');
+}
+
+function thinkingLabel(state: ThinkingState): string {
+  switch (state) {
+    case 'waiting': return 'thinking\u2026';
+    case 'streaming': return 'reasoning\u2026';
+    case 'settling': return 'settling\u2026';
+    case 'complete': return 'thought';
+  }
+}
+
+function ThinkingBlock({ content, state, duration }: { content: string; state: ThinkingState; duration?: number }) {
   const [expanded, setExpanded] = useState(false);
-  const isActive = state === 'streaming';
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const isActive = state === 'waiting' || state === 'streaming' || state === 'settling';
 
-  // Auto-expand during streaming
-  useEffect(() => {
-    if (isActive) setExpanded(true);
-  }, [isActive]);
+  const peek = useMemo(() => peekContent(content), [content]);
 
-  // Auto-scroll thinking content during streaming
-  useEffect(() => {
-    if (isActive && bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
-  }, [content, isActive]);
+  if (!content && state === 'complete') return null;
+
+  const dataState = state;
 
   return (
-    <div
-      style={{
-        borderRadius: 'var(--radius-md)',
-        background: 'linear-gradient(135deg, rgba(220, 219, 216, 0.02) 0%, rgba(220, 219, 216, 0.005) 100%)',
-        border: `1px solid ${isActive ? 'rgba(220, 219, 216, 0.08)' : 'var(--border-subtle)'}`,
-        overflow: 'hidden',
-        marginBottom: 12,
-        transition: 'border-color 0.6s var(--ease-out)',
-      }}
-    >
+    <div className={`thinking-block${expanded ? ' expanded' : ''}`} data-state={dataState}>
       {/* Header */}
       <div
-        className="flex items-center gap-2.5 cursor-pointer select-none"
-        style={{ padding: '10px 14px', transition: 'background 0.2s var(--ease-out)' }}
+        className="thinking-header"
         onClick={() => setExpanded(!expanded)}
-        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(220, 219, 216, 0.02)'}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
       >
-        {/* Murmur dots */}
-        <div className="grid shrink-0" style={{ gridTemplateColumns: 'repeat(3, 3px)', gridTemplateRows: 'repeat(3, 3px)', gap: 2 }}>
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="rounded-full" style={{
-              width: 3, height: 3,
-              background: isActive ? undefined : 'rgba(220, 219, 216, 0.08)',
-              animation: isActive ? `murmur-slow ${3.5 + i * 0.3}s ease-in-out infinite, murmur-fast ${1.1 + i * 0.2}s ease-in-out infinite` : 'none',
-              animationDelay: isActive ? `${i * 0.15}s` : undefined,
-            }} />
-          ))}
+        {/* 3x3 Murmur Dot Grid — prime-derived timing per dot */}
+        <div className="thinking-dots" aria-hidden="true">
+          {Array.from({ length: 9 }).map((_, i) => <span key={i} className="td" />)}
         </div>
 
-        <span className="text-xs" style={{
-          fontWeight: 420,
-          letterSpacing: '0.03em',
-          color: 'var(--text-ghost)',
-          ...(isActive ? {
-            background: 'linear-gradient(90deg, rgba(220,219,216,0.20) 0%, rgba(220,219,216,0.20) 35%, rgba(220,219,216,0.55) 50%, rgba(220,219,216,0.20) 65%, rgba(220,219,216,0.20) 100%)',
-            backgroundSize: '200% 100%',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            animation: 'shimmer 2.4s ease-in-out infinite',
-          } : {}),
-        }}>
-          {isActive ? 'reasoning' : 'reasoning'}
-        </span>
+        {/* Shimmer label */}
+        <span className="thinking-label">{thinkingLabel(state)}</span>
 
-        {!isActive && (
-          <span className="text-[10px]" style={{ color: 'var(--text-whisper)' }}>
-            {Math.ceil(content.length / 4)} tokens
-          </span>
+        {/* Duration timer */}
+        {duration != null && duration > 0 && (
+          <span className="thinking-timer">{Math.round(duration)}s</span>
         )}
 
-        <span className="ml-auto text-[10px]" style={{
-          color: 'var(--text-whisper)',
-          transform: expanded ? 'rotate(90deg)' : 'none',
-          transition: 'transform var(--dur-normal) var(--ease-premium)',
-        }}>
-          ›
-        </span>
+        {/* Token estimate (complete only) */}
+        {state === 'complete' && content && (
+          <span className="thinking-timer">{Math.ceil(content.length / 4)} tokens</span>
+        )}
+
+        {/* Chevron */}
+        <span className="thinking-chevron" aria-hidden="true">›</span>
       </div>
 
-      {/* Expandable body with smooth height animation */}
-      <div style={{
-        display: 'grid',
-        gridTemplateRows: expanded ? '1fr' : '0fr',
-        transition: 'grid-template-rows 0.4s var(--ease-premium)',
-      }}>
-        <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div
-            ref={bodyRef}
-            style={{
-              borderTop: '1px solid var(--border-subtle)',
-              maxHeight: 'min(50vh, 360px)',
-              overflowY: 'auto',
-              padding: '12px 14px 14px',
-            }}
-          >
-            <pre style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11.5px',
-              lineHeight: 1.55,
-              color: isActive ? 'var(--text-soft)' : 'var(--text-tertiary)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              transition: 'color 0.3s var(--ease-out)',
-            }}>
-              {content}
-              {isActive && <span className="streaming-cursor-inline" />}
-            </pre>
+      {/* Peek window — visible during streaming/settling, hidden when expanded */}
+      {content && (
+        <div className="thinking-peek">
+          <div className="thinking-peek-inner">{peek}</div>
+        </div>
+      )}
+
+      {/* Full body — revealed when expanded */}
+      <div className="thinking-body">
+        <div className="thinking-body-content">
+          <div className="thinking-body-text">
+            {content}
+            {isActive && <span className="streaming-cursor-inline" />}
           </div>
         </div>
       </div>
@@ -444,12 +409,12 @@ export default function ChatView() {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: 'luca',
-                  thinking_content: collectedVariants.length > 0
-                    ? JSON.stringify({ type: 'multi_model', variants: collectedVariants })
-                    : (fullThinking || null),
+                  thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
-                });
+                  // Store variants as extra metadata on the message object
+                  ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
+                } as any);
               } else if (data.type === 'error') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
@@ -556,7 +521,7 @@ export default function ChatView() {
                 {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Guardian' : 'Luca'}
               </div>
 
-              {/* Thinking block (only for non-multi-model thinking) */}
+              {/* Thinking block — always show if thinking_content is a real string */}
               {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
                 <ThinkingBlock content={msg.thinking_content} state="complete" />
               )}
@@ -564,7 +529,10 @@ export default function ChatView() {
               {/* Message content */}
               <MessageContent content={msg.content} />
 
-              {/* Model variants (expandable) */}
+              {/* Model variants (expandable) — from variants field or legacy JSON thinking_content */}
+              {(msg as any).variants && (
+                <VariantsPanel variants={(msg as any).variants} />
+              )}
               {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
                 <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
               )}
@@ -588,9 +556,12 @@ export default function ChatView() {
                 Luca
               </div>
 
-              {/* Streaming thinking */}
+              {/* Streaming thinking — 4-state lifecycle */}
               {streamingThinking && showThinking && (
-                <ThinkingBlock content={streamingThinking} state="streaming" />
+                <ThinkingBlock
+                  content={streamingThinking}
+                  state={streamingContent ? 'settling' : 'streaming'}
+                />
               )}
 
               {/* Model variant collection indicator */}

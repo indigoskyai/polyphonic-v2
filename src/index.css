@@ -183,6 +183,188 @@
   50% { opacity: 1; transform: scale(1.1); }
 }
 
+/* ══════════════════════════════════════════════════════════
+   Thinking Block — murmur dots, shimmer text, peek window
+   ══════════════════════════════════════════════════════════ */
+
+.thinking-block {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(220, 219, 216, 0.015) 0%, rgba(220, 219, 216, 0.005) 100%);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition: border-color var(--dur-micro) ease;
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.thinking-block[data-state="streaming"],
+.thinking-block[data-state="settling"] {
+  border-color: rgba(220, 219, 216, 0.06);
+}
+
+.thinking-block[data-state="settling"] {
+  transition: border-color 600ms ease-out;
+}
+
+/* ── Header ── */
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dur-micro) ease;
+}
+.thinking-header:hover { background: rgba(220, 219, 216, 0.015); }
+
+/* ── Murmur Dot Grid (3×3) ── */
+.thinking-dots {
+  display: grid;
+  grid-template-columns: repeat(3, 3.5px);
+  grid-template-rows: repeat(3, 3.5px);
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.thinking-dots .td {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: rgba(220, 219, 216, 0.08);
+  transition: background 0.3s ease;
+}
+
+/* Prime-derived timing per dot — grid never visibly loops */
+.thinking-block[data-state="waiting"] .td,
+.thinking-block[data-state="streaming"] .td,
+.thinking-block[data-state="settling"] .td {
+  animation: murmur-slow 1s ease-in-out infinite, murmur-fast 1s ease-in-out infinite;
+}
+
+.thinking-dots .td:nth-child(1) { animation-duration: 4.7s, 1.3s; animation-delay: 0.0s, 0.2s; }
+.thinking-dots .td:nth-child(2) { animation-duration: 3.9s, 1.7s; animation-delay: 0.6s, 0.8s; }
+.thinking-dots .td:nth-child(3) { animation-duration: 5.1s, 1.1s; animation-delay: 1.2s, 0.1s; }
+.thinking-dots .td:nth-child(4) { animation-duration: 4.3s, 1.9s; animation-delay: 0.3s, 0.5s; }
+.thinking-dots .td:nth-child(5) { animation-duration: 3.7s, 1.5s; animation-delay: 0.9s, 0.3s; }
+.thinking-dots .td:nth-child(6) { animation-duration: 5.3s, 1.3s; animation-delay: 1.5s, 0.9s; }
+.thinking-dots .td:nth-child(7) { animation-duration: 4.1s, 1.7s; animation-delay: 0.7s, 0.6s; }
+.thinking-dots .td:nth-child(8) { animation-duration: 3.5s, 1.1s; animation-delay: 1.8s, 0.4s; }
+.thinking-dots .td:nth-child(9) { animation-duration: 4.9s, 1.9s; animation-delay: 0.4s, 1.0s; }
+
+.thinking-block[data-state="complete"] .td {
+  animation: none;
+  background: rgba(220, 219, 216, 0.06);
+}
+
+/* ── Shimmer Label ── */
+.thinking-label {
+  font-size: 12px;
+  font-weight: 420;
+  letter-spacing: 0.02em;
+  color: var(--text-ghost);
+  transition: all var(--dur-micro) ease;
+}
+
+.thinking-block[data-state="waiting"] .thinking-label,
+.thinking-block[data-state="streaming"] .thinking-label,
+.thinking-block[data-state="settling"] .thinking-label {
+  background: linear-gradient(90deg, rgba(220,219,216,0.20) 0%, rgba(220,219,216,0.20) 35%, rgba(220,219,216,0.55) 50%, rgba(220,219,216,0.20) 65%, rgba(220,219,216,0.20) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2.4s ease-in-out infinite;
+}
+
+.thinking-block[data-state="complete"] .thinking-label {
+  color: var(--text-ghost);
+  -webkit-text-fill-color: unset;
+  background: none;
+  animation: none;
+}
+
+/* ── Timer / Token Count ── */
+.thinking-timer {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-whisper);
+  margin-left: auto;
+}
+
+/* ── Chevron ── */
+.thinking-chevron {
+  font-size: 10px;
+  color: var(--text-whisper);
+  transition: transform var(--dur-normal) var(--ease-premium), color var(--dur-micro) ease;
+  margin-left: 4px;
+}
+.thinking-block.expanded .thinking-chevron {
+  transform: rotate(90deg);
+  color: var(--text-tertiary);
+}
+
+/* ── Peek Window (streaming/settling only, hidden when expanded) ── */
+.thinking-peek {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: height 220ms var(--ease-premium), opacity var(--dur-micro) ease;
+}
+
+.thinking-block[data-state="streaming"] .thinking-peek,
+.thinking-block[data-state="settling"] .thinking-peek {
+  height: 52px;
+  opacity: 1;
+}
+
+.thinking-peek-inner {
+  padding: 0 14px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-ghost);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,1) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,1) 100%);
+  overflow: hidden;
+  max-height: 42px;
+}
+
+.thinking-block.expanded .thinking-peek {
+  height: 0 !important;
+  opacity: 0 !important;
+}
+
+/* ── Body (full expanded content) ── */
+.thinking-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-settle) var(--ease-premium), border-color var(--dur-micro) ease;
+  border-top: 1px solid transparent;
+}
+
+.thinking-block.expanded .thinking-body {
+  grid-template-rows: 1fr;
+  border-top-color: var(--border-subtle);
+}
+
+.thinking-body-content { overflow: hidden; }
+
+.thinking-block.expanded .thinking-body-content {
+  overflow-y: auto;
+  max-height: min(55vh, 400px);
+  padding: 12px 14px 14px;
+}
+
+.thinking-body-text {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @keyframes g-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 
 @keyframes dash-breathe { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
