@@ -83,17 +83,17 @@ serve(async (req) => {
       .from("user_settings")
       .select("synthesis_model")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     const model = settings?.synthesis_model || "anthropic/claude-sonnet-4-20250514";
 
-    // Load Guardian's custom system prompt if configured
+    // Load Guardian's custom system prompt if configured (maybeSingle to avoid error when no row exists)
     const { data: agentConfig } = await supabase
       .from("agent_config")
       .select("system_prompt")
       .eq("user_id", userId)
       .eq("agent_name", "guardian")
-      .single();
+      .maybeSingle();
 
     const systemPrompt = agentConfig?.system_prompt || GUARDIAN_PROMPT;
 

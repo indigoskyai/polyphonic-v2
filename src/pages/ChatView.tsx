@@ -417,7 +417,9 @@ export default function ChatView() {
       });
 
       if (!resp.ok) {
-        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Guardian could not respond. Please try again.' }]);
+        const errText = await resp.text().catch(() => '');
+        console.error('Guardian error:', resp.status, errText);
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: `Guardian could not respond (${resp.status}). Check that your API key is configured in Settings.` }]);
         return;
       }
 
@@ -432,19 +434,35 @@ export default function ChatView() {
           const chunk = decoder.decode(value, { stream: true });
           for (const line of chunk.split('\n')) {
             if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6).trim();
+            if (!payload || payload.startsWith(':')) continue;
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(payload);
               if (data.type === 'content') {
                 fullContent += data.text;
                 setGuardianStreamingContent(fullContent);
+              } else if (data.type === 'error') {
+                console.error('Guardian stream error:', data.text);
+                setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Guardian encountered an error.' }]);
+                fullContent = ''; // Don't add empty message on done
               } else if (data.type === 'done') {
-                setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+                if (fullContent) {
+                  setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+                }
               }
-            } catch {}
+            } catch (e) {
+              // Skip non-JSON lines (heartbeats, etc)
+            }
           }
         }
       }
-    } catch {
+
+      // If stream ended without a done event but we have content
+      if (fullContent && !guardianMessages.some(m => m.content === fullContent)) {
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+      }
+    } catch (e) {
+      console.error('Guardian connection error:', e);
       setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
     } finally {
       setGuardianStreaming(false);
