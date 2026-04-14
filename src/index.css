@@ -608,7 +608,14 @@
 .a-msg { display: flex; flex-direction: column; gap: 3px; }
 .a-msg-role { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-ghost); }
 .a-msg-body { font-size: 13px; line-height: 1.6; color: var(--text-secondary); font-weight: 400; }
-.a-msg.guardian .a-msg-body { padding-left: 12px; border-left: 2px solid rgba(140, 168, 156, 0.06); }
+.a-msg.guardian .a-msg-body { padding-left: 12px; border-left: 2px solid rgba(140, 168, 156, 0.12); }
+.a-msg.user .a-msg-body {
+  color: var(--text-secondary);
+  font-weight: 420;
+  padding-left: 0;
+  border-left: none;
+  opacity: 0.7;
+}
 .a-msg.user .a-msg-body { color: var(--text-body); }
 
 /* Textarea */

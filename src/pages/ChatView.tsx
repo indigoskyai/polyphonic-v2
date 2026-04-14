@@ -292,6 +292,11 @@ export default function ChatView() {
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
+  // Guardian state
+  const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
+  const [guardianStreaming, setGuardianStreaming] = useState(false);
+  const [guardianStreamingContent, setGuardianStreamingContent] = useState('');
+  const guardianScrollRef = useRef<HTMLDivElement>(null);
   const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string; thinking?: string | null }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -311,6 +316,55 @@ export default function ChatView() {
     }
   }, [messages, streamingContent, streamingThinking]);
 
+  // Load guardian messages when alcove opens or thread changes
+  useEffect(() => {
+    if (alcoveOpen && currentThreadId) {
+      (async () => {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data } = await supabase
+          .from('messages')
+          .select('role, content, agent, created_at')
+          .eq('thread_id', currentThreadId)
+          .eq('agent', 'guardian')
+          .order('created_at', { ascending: true });
+        if (data) {
+          // Also include user messages that were sent to guardian (messages right before guardian responses)
+          const { data: allMsgs } = await supabase
+            .from('messages')
+            .select('role, content, agent, created_at')
+            .eq('thread_id', currentThreadId)
+            .or('agent.eq.guardian,agent.is.null')
+            .order('created_at', { ascending: true });
+          // Filter to only guardian conversation: user messages followed by guardian responses
+          const guardianConvo: Array<{ role: string; content: string; created_at?: string }> = [];
+          let inGuardianExchange = false;
+          for (const msg of (allMsgs || [])) {
+            if (msg.agent === 'guardian') {
+              inGuardianExchange = false;
+              guardianConvo.push(msg);
+            } else if (msg.role === 'user' && !msg.agent) {
+              // Check if next message is guardian
+              const idx = (allMsgs || []).indexOf(msg);
+              const next = (allMsgs || [])[idx + 1];
+              if (next?.agent === 'guardian') {
+                guardianConvo.push(msg);
+                inGuardianExchange = true;
+              }
+            }
+          }
+          setGuardianMessages(guardianConvo);
+        }
+      })();
+    }
+  }, [alcoveOpen, currentThreadId]);
+
+  // Auto-scroll guardian messages
+  useEffect(() => {
+    if (guardianScrollRef.current) {
+      guardianScrollRef.current.scrollTop = guardianScrollRef.current.scrollHeight;
+    }
+  }, [guardianMessages, guardianStreamingContent]);
+
   useEffect(() => {
     if (threadId) {
       setCurrentThread(threadId);
@@ -325,6 +379,79 @@ export default function ChatView() {
       ta.style.height = Math.min(ta.scrollHeight, 240) + 'px';
     }
   };
+
+  const sendGuardianMessage = useCallback(async () => {
+    if (!input.trim() || !user || guardianStreaming) return;
+
+    const messageText = input.trim();
+    let tid = currentThreadId;
+    if (!tid) {
+      tid = await createThread(user.id);
+      navigate(`/chat/${tid}`, { replace: true });
+    }
+
+    // Add user message to guardian conversation
+    setGuardianMessages((prev) => [...prev, { role: 'user', content: messageText }]);
+
+    // Save user message to DB
+    const { supabase } = await import('@/integrations/supabase/client');
+    await supabase.from('messages').insert({ thread_id: tid, user_id: user.id, role: 'user', content: messageText });
+
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+    // Stream Guardian response
+    setGuardianStreaming(true);
+    setGuardianStreamingContent('');
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = (await supabase.auth.getSession()).data.session;
+      const resp = await fetch(`${supabaseUrl}/functions/v1/chat-guardian`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ thread_id: tid, message: messageText }),
+      });
+
+      if (!resp.ok) {
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Guardian could not respond. Please try again.' }]);
+        return;
+      }
+
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'content') {
+                fullContent += data.text;
+                setGuardianStreamingContent(fullContent);
+              } else if (data.type === 'done') {
+                setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch {
+      setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
+    } finally {
+      setGuardianStreaming(false);
+      setGuardianStreamingContent('');
+      loadThreads();
+    }
+  }, [input, user, currentThreadId, guardianStreaming]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || !user || isStreaming) return;
@@ -455,7 +582,7 @@ export default function ChatView() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (alcoveOpen) setAlcoveOpen(false);
+      if (alcoveOpen) sendGuardianMessage();
       else sendMessage();
     }
     if (e.key === 'Escape' && alcoveOpen) setAlcoveOpen(false);
@@ -640,10 +767,36 @@ export default function ChatView() {
                     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4" /></svg>
                   </button>
                 </div>
-                <div className="alcove-messages">
-                  <div className="a-msg guardian">
-                    <div className="a-msg-body">Guardian is watching this conversation. Click the guardian pill or press Escape to close.</div>
-                  </div>
+                <div className="alcove-messages" ref={guardianScrollRef}>
+                  {guardianMessages.length === 0 && !guardianStreaming && (
+                    <div className="a-msg guardian">
+                      <div className="a-msg-body">observing your conversation. ask me anything about what you and Luca have been discussing.</div>
+                    </div>
+                  )}
+                  {guardianMessages.map((msg, i) => (
+                    <div key={i} className={`a-msg ${msg.role === 'user' ? 'user' : 'guardian'}`}>
+                      <div className="a-msg-body">{msg.content}</div>
+                    </div>
+                  ))}
+                  {guardianStreaming && guardianStreamingContent && (
+                    <div className="a-msg guardian">
+                      <div className="a-msg-body">{guardianStreamingContent}<span className="streaming-cursor-inline" /></div>
+                    </div>
+                  )}
+                  {guardianStreaming && !guardianStreamingContent && (
+                    <div className="a-msg guardian">
+                      <div className="a-msg-body" style={{ display: 'flex', gap: 4, padding: '4px 0' }}>
+                        {[0, 1, 2].map(i => (
+                          <div key={i} style={{
+                            width: 4, height: 4, borderRadius: '50%',
+                            background: 'var(--guardian)',
+                            opacity: 0.4,
+                            animation: `breathe-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
+                          }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
