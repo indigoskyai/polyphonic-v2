@@ -195,6 +195,7 @@ function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onC
       onClick={onClick}
     >
       {icon === 'chat' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 3h10v7H5L2 12V3z"/></svg>}
+      {icon === 'dashboard' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={5}/><path d="M7 4v3l2 1"/></svg>}
       {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={2}/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8l-1.4 1.4M4.2 9.8l-1.4 1.4"/></svg>}
     </div>
   );
