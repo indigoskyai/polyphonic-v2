@@ -56,6 +56,7 @@ serve(async (req) => {
       const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
       openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
     }
+    if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "Web search not configured" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

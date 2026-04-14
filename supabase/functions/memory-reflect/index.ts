@@ -51,6 +51,10 @@ serve(async (req) => {
       user_id = claimsData.claims.sub as string;
     }
 
+    // Get user's API key
+    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
+    openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : null;
+
     // Create reflection job
     const { data: job } = await supabase
       .from("reflection_jobs")
