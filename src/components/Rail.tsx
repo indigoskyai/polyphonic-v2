@@ -74,14 +74,6 @@ export default function Rail() {
             L
           </div>
 
-          {/* Stream icon */}
-          <div
-            className={`w-8 h-8 rounded flex items-center justify-center cursor-pointer mt-2 ${activeView === 'dashboard' ? 'active' : ''}`}
-            style={{ color: activeView === 'dashboard' ? 'var(--text-primary)' : 'var(--text-tertiary)', background: activeView === 'dashboard' ? 'var(--bg-surface)' : undefined, transition: 'all var(--dur-fast) var(--ease-out)' }}
-            onClick={() => navigate('/dashboard')}
-          >
-            <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={5}/><path d="M7 4v3l2 1"/></svg>
-          </div>
 
           {/* Thread dots */}
           <div className="flex flex-col items-center gap-0.5 flex-1 w-full px-2 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
@@ -104,6 +96,7 @@ export default function Rail() {
 
           {/* Nav icons */}
           <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
+          <NavIcon icon="dashboard" active={activeView === 'dashboard'} onClick={() => navigate('/dashboard')} />
           <NavIcon icon="settings" active={activeView === 'settings'} onClick={() => navigate('/settings')} />
 
           {/* New thread */}
@@ -202,6 +195,7 @@ function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onC
       onClick={onClick}
     >
       {icon === 'chat' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 3h10v7H5L2 12V3z"/></svg>}
+      {icon === 'dashboard' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={5}/><path d="M7 4v3l2 1"/></svg>}
       {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={2}/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8l-1.4 1.4M4.2 9.8l-1.4 1.4"/></svg>}
     </div>
   );
