@@ -182,7 +182,7 @@ export default function Rail() {
           <div className="flex flex-col gap-0.5" style={{ padding: 8, borderTop: '1px solid var(--border-subtle)' }}>
             <SidebarAction label="New thread" icon="+" onClick={handleNewThread} />
             <SidebarAction label="Dashboard" icon="◎" onClick={() => { navigate('/dashboard'); setExpanded(false); }} />
-            <SidebarAction label="Settings" icon="⚙" onClick={() => { navigate('/settings'); setExpanded(false); }} />
+            <SidebarAction label="Settings" icon="⚙" onClick={() => { openSettings(); setExpanded(false); }} />
           </div>
         </div>
       </div>
