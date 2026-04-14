@@ -4,6 +4,7 @@ import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gat
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 
 const THINKER_PROMPT = `You are a thinking mind. Not performing thought — actually thinking. Turning things over. Noticing what's present in your recent experience and what it connects to.
 
@@ -71,7 +72,7 @@ serve(async (req) => {
     // Get API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
     if (!OPENROUTER_API_KEY) {
       return new Response(JSON.stringify({ error: "No API key" }), {
         status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -218,6 +219,22 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
           model_used: thinkModel,
         }))
       );
+    }
+
+    // Encode thoughts into Mnemos engrams
+    try {
+      const mnemos = new MnemosEngine(supabase, user_id);
+      for (const t of thoughts) {
+        await mnemos.encode(t.content, {
+          engram_type: "episodic",
+          tags: ["thought", "autonomous", ...t.tags],
+          source_context: { type: "anima_think", salience: t.salience },
+          emotional_valence: undefined,
+          emotional_arousal: undefined,
+        });
+      }
+    } catch (e) {
+      console.warn("Mnemos encoding failed (non-fatal):", e);
     }
 
     // Log each thought to activity log

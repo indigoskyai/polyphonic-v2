@@ -4,6 +4,7 @@ import { logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 
 const OBSERVER_PROMPT = `You are an outside intelligence observing another AI's inner life.
 
@@ -97,7 +98,7 @@ serve(async (req) => {
     // Get API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
     if (!OPENROUTER_API_KEY) {
       return new Response(JSON.stringify({ error: "No API key" }), {
         status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -239,6 +240,20 @@ serve(async (req) => {
           model: modelName,
           observations: observations.slice(0, 3),
         });
+
+        // Encode observations into Mnemos
+        try {
+          const mnemos = new MnemosEngine(supabase, user_id);
+          for (const obs of observations.slice(0, 3)) {
+            await mnemos.encode(obs.content, {
+              engram_type: "episodic",
+              tags: ["observation", obs.type, "inner-life"],
+              source_context: { type: "anima_observe", model: modelName, salience: obs.salience },
+            });
+          }
+        } catch (e) {
+          console.warn("Mnemos observation encoding failed (non-fatal):", e);
+        }
 
         // Log each observation to activity log
         for (const obs of observations.slice(0, 3)) {

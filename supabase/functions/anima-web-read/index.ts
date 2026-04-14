@@ -104,7 +104,7 @@ serve(async (req) => {
     // If focus provided, summarize via OpenRouter
     let summary: string | undefined;
     if (focus && typeof focus === "string" && focus.trim().length > 0) {
-      const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+      const apiKey = userApiKey;
       if (apiKey) {
         try {
           const summaryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {

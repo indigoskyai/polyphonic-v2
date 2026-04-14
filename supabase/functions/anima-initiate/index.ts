@@ -177,7 +177,7 @@ serve(async (req) => {
     // Compose initiation message using LLM
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
 
     let message = "I've been thinking about some things and wanted to share...";
 

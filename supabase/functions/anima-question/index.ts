@@ -63,7 +63,7 @@ serve(async (req) => {
     // Get API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
     if (!OPENROUTER_API_KEY) {
       return new Response(JSON.stringify({ error: "No API key" }), {
         status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

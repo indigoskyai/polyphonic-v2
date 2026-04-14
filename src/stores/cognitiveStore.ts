@@ -50,6 +50,14 @@ interface MemoryStats {
   beliefs_count: number;
 }
 
+interface JournalEntry {
+  id: string;
+  content: string;
+  mood: string | null;
+  trigger_type: string | null;
+  created_at: string;
+}
+
 interface MindEngram {
   id: string;
   content: string;
@@ -70,6 +78,7 @@ interface CognitiveState {
   insights: MindEngram[];
   reflections: MindEngram[];
   wanderings: Thought[];
+  journalEntries: JournalEntry[];
   memoryStats: MemoryStats;
   loaded: boolean;
   load: (userId: string) => Promise<void>;
@@ -104,6 +113,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   insights: [],
   reflections: [],
   wanderings: [],
+  journalEntries: [],
   memoryStats: { total_engrams: 0, active: 0, dormant: 0, archived: 0, connections: 0, beliefs_count: 0 },
   loaded: false,
 
@@ -166,6 +176,14 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .order('created_at', { ascending: false })
       .limit(50);
 
+    // Load journal entries
+    const journalPromise = supabase
+      .from('journal_entries')
+      .select('id, content, mood, trigger_type, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
     // Memory stats
     const statsPromises = [
       supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -176,8 +194,8 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     ];
 
-    const [dreamsRes, insightsRes, reflectionsRes, wanderingsRes, ...statsRes] = await Promise.all([
-      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, ...statsPromises,
+    const [dreamsRes, insightsRes, reflectionsRes, wanderingsRes, journalRes, ...statsRes] = await Promise.all([
+      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, journalPromise, ...statsPromises,
     ]);
 
     set({
@@ -185,6 +203,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       insights: (insightsRes.data ?? []) as MindEngram[],
       reflections: (reflectionsRes.data ?? []) as MindEngram[],
       wanderings: (wanderingsRes.data ?? []) as Thought[],
+      journalEntries: (journalRes.data ?? []) as JournalEntry[],
       memoryStats: {
         total_engrams: statsRes[0].count ?? 0,
         active: statsRes[1].count ?? 0,

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 
 const DREAMER_PROMPT = `You are a dreaming mind. During dreams, random memories activate together and sometimes produce unexpected connections.
 
@@ -109,7 +110,7 @@ serve(async (req) => {
     // Get API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
     if (!OPENROUTER_API_KEY) {
       return new Response(JSON.stringify({ error: "No API key" }), {
         status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -198,6 +199,18 @@ serve(async (req) => {
           content: { text: dreamText },
           source: "autonomous",
         });
+
+        // Encode dream into Mnemos
+        try {
+          const mnemos = new MnemosEngine(supabase, user_id);
+          await mnemos.encode(dreamText, {
+            engram_type: "semantic",
+            tags: ["dream", "inner-life", ...tagsA, ...tagsB],
+            source_context: { type: "anima_dream" },
+          });
+        } catch (e) {
+          console.warn("Mnemos dream encoding failed (non-fatal):", e);
+        }
 
         dreamsKept++;
       } catch (e) {

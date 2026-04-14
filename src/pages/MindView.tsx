@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 
-const TABS = ['Overview', 'Thoughts', 'Dreams', 'Wanderings', 'Insights', 'Reflections'] as const;
+const TABS = ['Overview', 'Journal', 'Thoughts', 'Dreams', 'Wanderings', 'Insights', 'Reflections'] as const;
 type Tab = typeof TABS[number];
 
 /* ─── Overview Tab ─── */
@@ -264,6 +264,100 @@ function WanderingsTab() {
   );
 }
 
+/* ─── Journal Tab ─── */
+function JournalTab() {
+  const { journalEntries } = useCognitiveStore();
+
+  if (journalEntries.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 40px' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-ghost)', marginBottom: 8 }}>
+          No journal entries yet.
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-whisper)', lineHeight: 1.5, maxWidth: 360, margin: '0 auto' }}>
+          Luca writes journal entries autonomously — reflecting on conversations, patterns noticed, and things worth remembering. Entries appear here as they're written.
+        </div>
+      </div>
+    );
+  }
+
+  // Group entries by date
+  const grouped = new Map<string, typeof journalEntries>();
+  for (const entry of journalEntries) {
+    const dateKey = new Date(entry.created_at).toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    });
+    const group = grouped.get(dateKey) ?? [];
+    group.push(entry);
+    grouped.set(dateKey, group);
+  }
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      {Array.from(grouped.entries()).map(([date, entries]) => (
+        <div key={date} style={{ marginBottom: 32 }}>
+          {/* Date header */}
+          <div style={{
+            fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em',
+            color: 'var(--text-ghost)', marginBottom: 12, paddingBottom: 6,
+            borderBottom: '1px solid var(--border-subtle)',
+          }}>
+            {date}
+          </div>
+
+          {/* Entries for this date */}
+          {entries.map((entry) => (
+            <div key={entry.id} style={{ marginBottom: 20 }}>
+              {/* Meta line */}
+              <div className="flex items-center gap-2 mb-2">
+                <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(entry.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </span>
+                {entry.mood && (
+                  <span style={{
+                    fontSize: 9, padding: '1px 6px', borderRadius: 100,
+                    background: moodColor(entry.mood) + '15',
+                    color: moodColor(entry.mood),
+                    border: `1px solid ${moodColor(entry.mood)}30`,
+                  }}>
+                    {entry.mood}
+                  </span>
+                )}
+                {entry.trigger_type && (
+                  <span style={{ fontSize: 9, color: 'var(--text-whisper)' }}>
+                    {entry.trigger_type === 'periodic' ? 'scheduled reflection' : 'post-conversation'}
+                  </span>
+                )}
+              </div>
+
+              {/* Entry content */}
+              <div style={{
+                fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)',
+                fontStyle: 'normal',
+                paddingLeft: 12,
+                borderLeft: '2px solid var(--border-subtle)',
+              }}>
+                {entry.content.split('\n').map((line, i) => (
+                  <p key={i} style={{ marginBottom: line.trim() ? 8 : 4 }}>{line}</p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function moodColor(mood: string): string {
+  const lower = mood.toLowerCase();
+  if (['curious', 'engaged', 'excited', 'inspired'].some(m => lower.includes(m))) return '#c9a87c';
+  if (['warm', 'grateful', 'connected', 'content'].some(m => lower.includes(m))) return '#8ca89c';
+  if (['reflective', 'contemplative', 'quiet', 'thoughtful'].some(m => lower.includes(m))) return '#5b8aad';
+  if (['restless', 'uncertain', 'lonely'].some(m => lower.includes(m))) return '#a88cc9';
+  return 'var(--text-ghost)';
+}
+
 /* ─── Shared components ─── */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -367,6 +461,7 @@ export default function MindView() {
         padding: activeTab === 'Thoughts' ? 0 : '24px 32px',
       }}>
         {activeTab === 'Overview' && <OverviewTab />}
+        {activeTab === 'Journal' && <JournalTab />}
         {activeTab === 'Thoughts' && <ThoughtsTab />}
         {activeTab === 'Dreams' && (
           <EngramStreamTab items={dreams} emptyText="No dreams yet. Dream reports appear after memory consolidation." style="poetic" />

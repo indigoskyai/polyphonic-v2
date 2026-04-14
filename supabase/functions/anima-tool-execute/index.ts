@@ -94,7 +94,7 @@ serve(async (req) => {
       );
     }
 
-    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
+    const openrouterKey = userApiKey;
     if (!openrouterKey) {
       return new Response(
         JSON.stringify({ used_tools: false, error: "planning_failed" }),

@@ -51,7 +51,7 @@ serve(async (req) => {
     const usingOwnKey = !!userApiKey;
 
     // Use user's OpenRouter key if available, fall back to system key
-    const apiKey = usingOwnKey ? userApiKey : Deno.env.get("OPENROUTER_API_KEY");
+    const apiKey = usingOwnKey ? userApiKey : userApiKey;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "Image generation not configured" }), {
         status: 500,

@@ -131,7 +131,7 @@ serve(async (req) => {
     // Use user's own API key if available
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const openrouterKey = userApiKey || Deno.env.get("OPENROUTER_API_KEY")!;
+    const openrouterKey = userApiKey!;
 
     // Update import stage
     if (import_id) {

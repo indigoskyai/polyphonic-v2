@@ -318,7 +318,7 @@ serve(async (req) => {
     // Decrypt user's API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const openrouterKey = userApiKey || Deno.env.get("OPENROUTER_API_KEY")!;
+    const openrouterKey = userApiKey!;
 
     const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

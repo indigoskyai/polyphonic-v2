@@ -229,9 +229,9 @@ serve(async (req) => {
       });
     }
 
-    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
+    const openrouterKey = userApiKey!;
     if (!openrouterKey) {
-      return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured" }), {
+      return new Response(JSON.stringify({ error: "No API key. User must add their OpenRouter key in Settings." }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });

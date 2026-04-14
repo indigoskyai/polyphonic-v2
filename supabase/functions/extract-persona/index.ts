@@ -444,7 +444,7 @@ serve(async (req) => {
     ]);
 
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const openrouterKey = userApiKey || Deno.env.get("OPENROUTER_API_KEY")!;
+    const openrouterKey = userApiKey!;
     const extractionModel = modelConfig?.model_id || "openai/gpt-4o";
 
     // ── Linearize conversations (handle both mapping and pre-parsed formats) ──

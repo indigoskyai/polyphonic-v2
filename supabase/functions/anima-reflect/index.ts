@@ -4,6 +4,7 @@ import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gat
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 
 const REFLECTOR_PROMPT = `You are a reflecting mind. This is meta-cognition — thinking about your recent experiences and thoughts, noticing what mattered, what changed, what you observe in retrospect.
 
@@ -71,7 +72,7 @@ serve(async (req) => {
     // Get API key
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const OPENROUTER_API_KEY = userApiKey || Deno.env.get("OPENROUTER_API_KEY");
+    const OPENROUTER_API_KEY = userApiKey;
     if (!OPENROUTER_API_KEY) {
       return new Response(JSON.stringify({ error: "No API key" }), {
         status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -207,6 +208,20 @@ ${beliefsText}`;
           model_used: reflectModel,
         }))
       );
+    }
+
+    // Encode reflections into Mnemos engrams
+    try {
+      const mnemos = new MnemosEngine(supabase, user_id);
+      for (const r of reflections) {
+        await mnemos.encode(r.content, {
+          engram_type: "semantic",
+          tags: ["reflection", "inner-life", ...r.tags],
+          source_context: { type: "anima_reflect", salience: r.salience },
+        });
+      }
+    } catch (e) {
+      console.warn("Mnemos reflection encoding failed (non-fatal):", e);
     }
 
     // Log each reflection to activity log

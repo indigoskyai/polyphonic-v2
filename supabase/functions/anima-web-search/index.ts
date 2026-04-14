@@ -50,7 +50,7 @@ serve(async (req) => {
     }
 
     // Use Perplexity Sonar via OpenRouter — no additional API key needed
-    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
+    const openrouterKey = userApiKey;
     if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "Web search not configured" }), {
         status: 500,

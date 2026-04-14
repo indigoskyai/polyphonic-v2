@@ -8,7 +8,7 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const openrouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
+  const openrouterKey = userApiKey!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {

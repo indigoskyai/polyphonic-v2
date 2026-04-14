@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     if (!apiKey) {
-      apiKey = Deno.env.get("OPENROUTER_API_KEY");
+      apiKey = userApiKey;
     }
 
     if (!apiKey) {
