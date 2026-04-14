@@ -94,7 +94,10 @@ serve(async (req) => {
       );
     }
 
-    const openrouterKey = userApiKey;
+    // Get user's API key
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: token === serviceRoleKey ? "system" : (await createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader! } } }).auth.getClaims(token)).data?.claims?.sub });
+    const openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
     if (!openrouterKey) {
       return new Response(
         JSON.stringify({ used_tools: false, error: "planning_failed" }),
