@@ -400,7 +400,7 @@ export default function ChatView() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.type === 'variant') {
-                collectedVariants.push({ model: data.model, content: data.text });
+                collectedVariants.push({ model: data.model, content: data.text, thinking: data.thinking || null });
                 setStreamingVariants([...collectedVariants]);
               } else if (data.type === 'synthesizing') {
                 setIsSynthesizing(true);
@@ -678,19 +678,16 @@ export default function ChatView() {
               >guardian</button>
             </div>
 
-            {/* Thinking effort control */}
-            <div className="thinking-effort-control" title={`Thinking effort: ${thinkingEffort}`}>
-              {(['low', 'medium', 'high'] as const).map((level) => (
-                <button
-                  key={level}
-                  className={`effort-bar${thinkingEffort === level || (['medium', 'high'].includes(thinkingEffort) && level === 'low') || (thinkingEffort === 'high' && level === 'medium') ? ' active' : ''}`}
-                  onClick={() => setThinkingEffort(level)}
-                  title={level}
-                  aria-label={`Set thinking effort to ${level}`}
-                />
-              ))}
-              <span className="effort-label">{thinkingEffort === 'low' ? 'light' : thinkingEffort === 'high' ? 'deep' : 'think'}</span>
-            </div>
+            {/* Thinking effort selector */}
+            <select
+              value={thinkingEffort}
+              onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+              className="effort-select"
+            >
+              <option value="low">Light</option>
+              <option value="medium">Medium</option>
+              <option value="high">Deep</option>
+            </select>
 
             <button
               className={`send-btn${isStreaming ? ' streaming' : ''}`}

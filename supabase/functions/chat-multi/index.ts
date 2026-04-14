@@ -249,14 +249,46 @@ serve(async (req) => {
               messages: synthesisMessages,
               stream: true,
               max_tokens: 4096,
-              ...buildReasoningParams(synthesisModel, reasoningEffort),
+              // No reasoning params for synthesis — it's merging outputs, not reasoning from scratch
             }),
           });
 
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
             console.error("Synthesis error:", orResponse.status, errBody);
-            // Fall back to best variant
+
+            // Retry synthesis without any special params (plain request)
+            const retryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`,
+                "HTTP-Referer": "https://polyphonic.chat",
+                "X-Title": "Polyphonic",
+              },
+              body: JSON.stringify({
+                model: synthesisModel,
+                messages: synthesisMessages,
+                stream: false,
+                max_tokens: 4096,
+              }),
+            });
+
+            if (retryResponse.ok) {
+              // deno-lint-ignore no-explicit-any
+              const retryData: any = await retryResponse.json();
+              const retryContent = retryData?.choices?.[0]?.message?.content || "";
+              if (retryContent) {
+                send({ type: "content", text: retryContent });
+                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null);
+                send({ type: "done", model: "synthesis", tokens_used: null });
+                controller.close();
+                clearInterval(heartbeat);
+                return;
+              }
+            }
+
+            // Final fallback: use first variant but notify the user
             const best = variants[0];
             send({ type: "content", text: best.content });
             await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants);
