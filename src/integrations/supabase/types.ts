@@ -567,6 +567,7 @@ export type Database = {
           id: string
           interface_density: string
           multi_model_enabled: boolean | null
+          reasoning_effort: string | null
           show_agent_colors: boolean
           show_thinking: boolean
           show_timestamps: boolean
@@ -586,6 +587,7 @@ export type Database = {
           id?: string
           interface_density?: string
           multi_model_enabled?: boolean | null
+          reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
           show_timestamps?: boolean
@@ -605,6 +607,7 @@ export type Database = {
           id?: string
           interface_density?: string
           multi_model_enabled?: boolean | null
+          reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
           show_timestamps?: boolean
