@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,11 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useSettingsModalStore } from "@/stores/settingsModalStore";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ChatView from "./pages/ChatView";
 import DashboardView from "./pages/DashboardView";
-import SettingsView from "./pages/SettingsView";
+import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Clockbar from "./components/Clockbar";
 
@@ -36,6 +37,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
+  const { open: settingsOpen, closeSettings } = useSettingsModalStore();
 
   useEffect(() => {
     if (user) loadSettings(user.id);
@@ -48,6 +50,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         {children}
         {clockbarVisible && <Clockbar />}
       </div>
+      <SettingsModal open={settingsOpen} onClose={closeSettings} />
     </div>
   );
 }
@@ -72,7 +75,6 @@ const App = () => (
             <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
             <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><AppShell><DashboardView /></AppShell></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><AppShell><SettingsView /></AppShell></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthInit>

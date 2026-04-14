@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThreadStore, Thread } from '@/stores/threadStore';
+import { useSettingsModalStore } from '@/stores/settingsModalStore';
 
 export default function Rail() {
   const [expanded, setExpanded] = useState(false);
