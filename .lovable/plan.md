@@ -1,121 +1,91 @@
 
 
-# Luca Cloud — Full Rebuild Plan
+# Plan: Implement Missing Dashboard & Settings Sections from PRD
 
-## Summary
+## Gap Analysis
 
-Replace the entire frontend and database with the Luca spec: a dark-mode-only multi-model AI chat app with two agents (Luca + Guardian), persistent Rail sidebar, Clockbar, Chat/Dashboard/Settings views, and OpenRouter integration. Clean slate database migration. The HTML reference file is the visual source of truth.
+After comparing the PRD/build spec against the current implementation, here is everything missing:
 
-## Scope Adjustments from PRD
+### Dashboard View — Missing Elements
 
-The PRD describes 4 agents (Luca, Vektor, Anima, Jerry). Per your direction:
-- **Only Luca** (warm gold `#c9a87c`) as the primary chat agent
-- **Guardian** (sage green `#8ca89c`, from the HTML reference) as an observer/meta-agent
-- Remove Vektor, Anima, Jerry entirely from agent config, pills, model defaults, and DB schema
-- Guardian is not a chat target pill — it observes. Luca is the default and only chat agent
-- Input footer follows the HTML reference exactly (no multi-agent pill selector needed)
+1. **Stream Tabs** — The PRD specifies two tabs ("Dashboard" and "Thoughts") with a tab bar below the header. Currently there are no tabs at all — just the dashboard content.
 
-## What We Keep
+2. **Cognitive Modulators labels** — Should be: arousal, resolution, openness, surprise threshold, social drive (per PRD). Currently shows: curiosity, focus, confidence, empathy, creativity.
 
-- Supabase auth system (profiles, user_roles, has_role function, auto_assign_first_admin)
-- user_api_keys table + encrypt/decrypt functions (for OpenRouter key storage)
-- app_config table
-- OPENROUTER_API_KEY secret (already configured)
-- Storage buckets
+3. **Emotional State dimensions** — Should have 6 dimensions: valence, arousal, dominance, certainty, novelty, social. Currently has only 4: coherence, clarity, excitement, social drive.
 
-## Database: Clean Slate Migration
+4. **Recent Events section** — Entirely missing. Should show rows with event type (mono), salience dot, and time, separated by subtle borders.
 
-**Drop all old tables** (except profiles, user_roles, user_api_keys, app_config):
-- activity_events, beliefs, chat_imports, companion_profiles, conversations, curiosity_questions, daily_logs, emotional_history, emotional_state, entity_activity_log, entity_social_accounts, entity_task_queue, experimental_persona_config, extraction_rejections, journal_entries, memories, memory_conflicts, memory_connections, message_variants, messages, model_configs, observer_logs, reflection_jobs, system_prompts, thought_initiations, thought_stream, user_settings, user_skills
+5. **Thoughts Tab** — Entirely missing. Should include:
+   - Sticky filter bar with pill buttons (All, Dreams, Reflections, Observations, Decisions)
+   - Stream entries with meta row (source, salience dot, timestamp), body text, and trigger line
+   - Stream loader (3 breathing dots)
+   - Realtime subscription to `thought_stream` table
 
-**Create new tables** (all with RLS `auth.uid() = user_id`):
+6. **Beliefs card detail** — The Beliefs memory card should show mini-bars with belief text and percentages when data exists.
 
-1. **threads** — id, user_id, title, created_at, updated_at, pinned (bool default false), heat (text default 'warm')
-2. **messages** — id, thread_id (fk threads), user_id, role (text), content (text), model (text), agent (text nullable — 'luca' or 'guardian'), thinking_content (text nullable), tokens_used (int), created_at, bookmarked (bool default false)
-3. **agent_config** — id, user_id, agent_name (text default 'luca'), voice (text), system_prompt (text), default_model (text default 'anthropic/claude-sonnet-4'), personality (jsonb), created_at, updated_at
-4. **cognitive_state** — id, user_id, modulators (jsonb), emotions (jsonb), beliefs (jsonb), updated_at. Realtime enabled.
-5. **thought_stream** — id, user_id, type (text), content (text), trigger (text), salience (float), source (text), created_at. Realtime enabled.
-6. **memory_events** — id, user_id, type (text), content (text), salience (float), created_at
-7. **user_settings** — id, user_id, default_model (text), synthesis_style (text default 'conversational'), stream_responses (bool default true), show_thinking (bool default true), auto_title (bool default true), interface_density (text default 'default'), font_size (int default 14), show_timestamps (bool default true), show_agent_colors (bool default true), clockbar_visible (bool default true), created_at, updated_at
+### Settings View — Missing Elements
 
-Enable realtime on cognitive_state, thought_stream, messages.
+1. **General Tab** — Missing: Default Model select dropdown, Synthesis Style radio group (Conversational/Technical/Creative/Minimal). Currently only has toggles.
 
-Trigger: auto-create user_settings on new user signup.
+2. **Models Tab** — Missing: Model cards with name, description, enable toggle, and badges ("fast"/"deep"). Missing: API Key section with password input and show/hide eye toggle. Currently only has a bare select dropdown.
 
-## Frontend: Complete Replacement
+3. **Personality Tab** — Entirely a placeholder. Should have: Agent Name text input, Voice textarea (4 rows), System Prompt textarea (8 rows), Inner Life toggle (Enable Emotional State), Thought Verbosity slider (Quiet/Normal/Verbose).
 
-**Delete all existing pages and components** (except ui/ primitives). Build from scratch:
+4. **Memory Tab** — Entirely a placeholder. Should have: Enable mnemos Memory toggle, Memory Decay Rate slider (Slow/Fast), Dream Frequency select (Every hour/6 hours/Daily/Weekly), Enable Consolidation toggle, Clear All Memory danger button with confirmation dialog.
 
-### Global CSS (`index.css`)
-- Complete design token system from the PRD (all CSS custom properties)
-- 8 `@property` declarations for breathing border
-- All keyframe animations (breathe, ring states, clockbeat, murmur dots, shimmer)
-- Font imports (Inter, JetBrains Mono)
-- Dark mode only, antialiased
+5. **Appearance Tab** — Missing: Interface Density radio group (Compact/Default/Comfortable). Has font size slider, toggles.
 
-### Application Shell (`App.tsx`)
-- Flex row layout: Rail (left) + Main Content (flex: 1) + Clockbar (bottom)
-- Routes: `/` -> `/chat`, `/chat`, `/chat/:threadId`, `/dashboard`, `/settings`, `/auth/login`, `/auth/signup`
-- Auth protection wrapper
+6. **Account Tab** — Missing: Plan badge ("pro"), Delete Account danger button with confirmation dialog.
 
-### Components to Build
+7. **Nav items** — Missing SVG icons next to tab labels per the PRD spec.
 
-**Shell:**
-- `Rail.tsx` — Collapsed (48px) / expanded (260px) with crossfade. Logo with ring states, thread dots, nav icons, search, thread list, new thread button, expand toggle
-- `Clockbar.tsx` — Live clock with beating colon, day timeline, session bar
+8. **Form controls** — Toggle dimensions should be 36x18px (currently 40x22px). Missing: proper radio button component, danger button component, confirmation dialog component.
 
-**Chat View:**
-- `ChatView.tsx` — Header + messages container + input area
-- `MessageList.tsx` — Scrollable message list with fadeIn, auto-scroll
-- `Message.tsx` — Role label (with Luca gold color), markdown body, streaming cursor, action bar
-- `ThinkingBlock.tsx` — 4-state expandable block with murmur dots, shimmer label, peek window
-- `ChatInput.tsx` — Textarea with breathing border, auto-grow, input footer (matching HTML exactly), send/stop button crossfade
+### CSS — Missing
 
-**Dashboard View:**
-- `DashboardView.tsx` — Two tabs: Dashboard + Thoughts
-- `CognitiveModulators.tsx` — 5 horizontal bar meters
-- `MemoryCards.tsx` — 3-column grid cards
-- `EmotionalState.tsx` — 6-dimension display
-- `ThoughtStream.tsx` — Filterable thought feed with realtime
+1. **`stream-breathe` keyframes** — for the thoughts tab loader dots.
+2. **`breathe-dot` keyframes** — for the dashboard header status dot.
+3. **`notif-slide-in` keyframes** — for toast notifications.
 
-**Settings View:**
-- `SettingsView.tsx` — 200px left nav + scrollable content
-- 6 tabs: General, Models, Personality, Memory, Appearance, Account
-- Form controls matching PRD specs
+### Realtime Subscriptions — Missing
 
-**Auth:**
-- `LoginPage.tsx` — Email/password login at `/auth/login`
-- `SignupPage.tsx` — Email/password signup at `/auth/signup`
+The dashboard should subscribe to `cognitive_state` and `thought_stream` tables for live updates. Currently the dashboard shows only hardcoded static values.
 
-### State Management
-- Zustand stores: `useThreadStore`, `useCognitiveStore`, `useSettingsStore`, `useAuthStore`
-- Realtime subscriptions for cognitive_state and thought_stream
+## Implementation Plan
 
-### Edge Function: `chat` (rewrite)
-- Simplified for single-agent (Luca) + OpenRouter
-- Accepts thread_id, message content, model override
-- Streams response via SSE
-- Saves user + assistant messages to new messages table
-- Uses user's OpenRouter API key (from user_api_keys) or fallback to server OPENROUTER_API_KEY secret
+### 1. Add missing CSS keyframes to `index.css`
+- `stream-breathe`, `breathe-dot`, `notif-slide-in`
 
-## Build Order (within a single full build)
+### 2. Rewrite `DashboardView.tsx`
+- Add tab bar with "Dashboard" and "Thoughts" tabs
+- Fix modulator labels to match PRD (arousal, resolution, openness, surprise threshold, social drive)
+- Expand emotional state to 6 dimensions (valence, arousal, dominance, certainty, novelty, social)
+- Add Recent Events section
+- Build Thoughts tab with filter bar, stream entries, and loader
+- Add Zustand cognitive store with realtime subscriptions to `cognitive_state` and `thought_stream`
 
-1. Design tokens + global CSS + font imports
-2. Database migration (drop old, create new)
-3. Auth pages (login/signup)
-4. App shell (Rail + Clockbar + routing)
-5. Chat view (messages + input + thinking blocks)
-6. Chat edge function (OpenRouter streaming)
-7. Dashboard view (cognitive state + thoughts)
-8. Settings view (all 6 tabs)
+### 3. Rewrite `SettingsView.tsx`
+- **General**: Add Default Model select, Synthesis Style radio group, keep existing toggles
+- **Models**: Build model cards grid with name/description/toggle/badges, add API Key section with password input and eye toggle (wired to `save_user_api_key` / `delete_user_api_key` DB functions)
+- **Personality**: Agent Name input, Voice textarea, System Prompt textarea, Inner Life toggle, Thought Verbosity slider
+- **Memory**: Enable mnemos toggle, Decay Rate slider, Dream Frequency select, Consolidation toggle, Clear All danger button with confirmation dialog
+- **Appearance**: Add Interface Density radio group, keep existing controls
+- **Account**: Add Plan badge, Delete Account danger button with confirmation
+- Add SVG icons to nav items
+- Fix toggle dimensions to 36x18px per PRD
 
-## Technical Details
+### 4. Create `src/stores/cognitiveStore.ts`
+- Zustand store for cognitive_state and thought_stream
+- Realtime subscriptions
+- Load/refresh methods
 
-- React 18 + TypeScript strict
-- Zustand for client state (replaces React Context pattern)
-- Tailwind CSS utilities + CSS custom properties (no raw values in components)
-- All icons are inline SVGs per the PRD specs
-- No emojis anywhere
-- shadcn/ui base components where applicable
-- React Router for routing
+### 5. Update `settingsStore.ts`
+- Add `synthesis_style` to the update flow (already in DB schema)
+
+### Technical Notes
+- All form controls will use design tokens exclusively (no raw values)
+- Danger buttons use `var(--red-accent)` with confirmation dialogs using `var(--bg-elevated)` backgrounds
+- Radio buttons: 16px circles with `var(--border-dim)` border, selected state with inner 6px dot
+- The API Key section uses the existing `save_user_api_key` and `delete_user_api_key` Postgres functions
 
