@@ -255,8 +255,9 @@ serve(async (req) => {
   }
 });
 
+// deno-lint-ignore no-explicit-any
 async function autoTitleThread(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   threadId: string,
   userMessage: string,
   assistantMessage: string,
