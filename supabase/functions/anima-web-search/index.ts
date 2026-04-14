@@ -122,7 +122,7 @@ serve(async (req) => {
 
     // Log activity
     const supabaseLog = createClient(supabaseUrl, serviceRoleKey);
-    await logActivity(supabase, user_id, {
+    await logActivity(supabaseLog, user_id, {
       type: "browse",
       title: `Web search: ${query}`,
       summary: answer,
