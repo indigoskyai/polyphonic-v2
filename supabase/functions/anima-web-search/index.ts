@@ -121,8 +121,8 @@ serve(async (req) => {
     }
 
     // Log activity
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    await logActivity(supabase, user_id, {
+    const supabaseLog = createClient(supabaseUrl, serviceRoleKey);
+    await logActivity(supabaseLog, user_id, {
       type: "browse",
       title: `Web search: ${query}`,
       summary: answer,
