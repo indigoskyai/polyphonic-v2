@@ -68,6 +68,72 @@ export type Database = {
         }
         Relationships: []
       }
+      beliefs: {
+        Row: {
+          active: boolean | null
+          confidence: number
+          confidence_tier: string | null
+          content: string
+          contradicting_engram_ids: string[] | null
+          created_at: string | null
+          domain: string | null
+          evidence: Json | null
+          id: string
+          last_challenged: string | null
+          last_revised: string | null
+          revision_history: Json | null
+          source: string | null
+          stagnant: boolean | null
+          superseded_by: string | null
+          supporting_engram_ids: string[] | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean | null
+          confidence?: number
+          confidence_tier?: string | null
+          content: string
+          contradicting_engram_ids?: string[] | null
+          created_at?: string | null
+          domain?: string | null
+          evidence?: Json | null
+          id?: string
+          last_challenged?: string | null
+          last_revised?: string | null
+          revision_history?: Json | null
+          source?: string | null
+          stagnant?: boolean | null
+          superseded_by?: string | null
+          supporting_engram_ids?: string[] | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean | null
+          confidence?: number
+          confidence_tier?: string | null
+          content?: string
+          contradicting_engram_ids?: string[] | null
+          created_at?: string | null
+          domain?: string | null
+          evidence?: Json | null
+          id?: string
+          last_challenged?: string | null
+          last_revised?: string | null
+          revision_history?: Json | null
+          source?: string | null
+          stagnant?: boolean | null
+          superseded_by?: string | null
+          supporting_engram_ids?: string[] | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       cognitive_state: {
         Row: {
           beliefs: Json
@@ -91,6 +157,150 @@ export type Database = {
           id?: string
           modulators?: Json
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      connections: {
+        Row: {
+          connection_type: string
+          created_at: string | null
+          id: string
+          source_id: string
+          target_id: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          connection_type: string
+          created_at?: string | null
+          id?: string
+          source_id: string
+          target_id: string
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          connection_type?: string
+          created_at?: string | null
+          id?: string
+          source_id?: string
+          target_id?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connections_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connections_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engram_archive: {
+        Row: {
+          archived_at: string | null
+          content: string
+          engram_type: string
+          id: string
+          original_created_at: string | null
+          original_stability: number | null
+          original_strength: number | null
+          source_context: Json | null
+          tags: string[] | null
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          content: string
+          engram_type: string
+          id: string
+          original_created_at?: string | null
+          original_stability?: number | null
+          original_strength?: number | null
+          source_context?: Json | null
+          tags?: string[] | null
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          content?: string
+          engram_type?: string
+          id?: string
+          original_created_at?: string | null
+          original_stability?: number | null
+          original_strength?: number | null
+          source_context?: Json | null
+          tags?: string[] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      engrams: {
+        Row: {
+          access_count: number | null
+          accessibility: number
+          content: string
+          created_at: string | null
+          emotional_arousal: number | null
+          emotional_valence: number | null
+          engram_type: string
+          id: string
+          last_accessed_at: string | null
+          source_context: Json | null
+          stability: number
+          state: string
+          strength: number
+          surprise_score: number | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_count?: number | null
+          accessibility?: number
+          content: string
+          created_at?: string | null
+          emotional_arousal?: number | null
+          emotional_valence?: number | null
+          engram_type: string
+          id?: string
+          last_accessed_at?: string | null
+          source_context?: Json | null
+          stability?: number
+          state?: string
+          strength?: number
+          surprise_score?: number | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_count?: number | null
+          accessibility?: number
+          content?: string
+          created_at?: string | null
+          emotional_arousal?: number | null
+          emotional_valence?: number | null
+          engram_type?: string
+          id?: string
+          last_accessed_at?: string | null
+          source_context?: Json | null
+          stability?: number
+          state?: string
+          strength?: number
+          surprise_score?: number | null
+          tags?: string[] | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -171,6 +381,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mnemos_emotional_state: {
+        Row: {
+          arousal: number | null
+          certainty: number | null
+          dominance: number | null
+          id: string
+          recorded_at: string | null
+          social: number | null
+          temporal: number | null
+          user_id: string
+          valence: number | null
+        }
+        Insert: {
+          arousal?: number | null
+          certainty?: number | null
+          dominance?: number | null
+          id?: string
+          recorded_at?: string | null
+          social?: number | null
+          temporal?: number | null
+          user_id: string
+          valence?: number | null
+        }
+        Update: {
+          arousal?: number | null
+          certainty?: number | null
+          dominance?: number | null
+          id?: string
+          recorded_at?: string | null
+          social?: number | null
+          temporal?: number | null
+          user_id?: string
+          valence?: number | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -316,13 +562,16 @@ export type Database = {
           clockbar_visible: boolean
           created_at: string
           default_model: string
+          ensemble_models: Json | null
           font_size: number
           id: string
           interface_density: string
+          multi_model_enabled: boolean | null
           show_agent_colors: boolean
           show_thinking: boolean
           show_timestamps: boolean
           stream_responses: boolean
+          synthesis_model: string | null
           synthesis_style: string
           updated_at: string
           user_id: string
@@ -332,13 +581,16 @@ export type Database = {
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          ensemble_models?: Json | null
           font_size?: number
           id?: string
           interface_density?: string
+          multi_model_enabled?: boolean | null
           show_agent_colors?: boolean
           show_thinking?: boolean
           show_timestamps?: boolean
           stream_responses?: boolean
+          synthesis_model?: string | null
           synthesis_style?: string
           updated_at?: string
           user_id: string
@@ -348,13 +600,16 @@ export type Database = {
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          ensemble_models?: Json | null
           font_size?: number
           id?: string
           interface_density?: string
+          multi_model_enabled?: boolean | null
           show_agent_colors?: boolean
           show_thinking?: boolean
           show_timestamps?: boolean
           stream_responses?: boolean
+          synthesis_model?: string | null
           synthesis_style?: string
           updated_at?: string
           user_id?: string
@@ -376,7 +631,32 @@ export type Database = {
         }
         Returns: boolean
       }
+      match_engrams: {
+        Args: { match_count?: number; p_user_id?: string; query_text: string }
+        Returns: {
+          access_count: number
+          accessibility: number
+          content: string
+          created_at: string
+          emotional_arousal: number
+          emotional_valence: number
+          engram_type: string
+          id: string
+          last_accessed_at: string
+          similarity: number
+          source_context: Json
+          stability: number
+          state: string
+          strength: number
+          surprise_score: number
+          tags: string[]
+          updated_at: string
+          user_id: string
+        }[]
+      }
       save_user_api_key: { Args: { p_key: string }; Returns: undefined }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
