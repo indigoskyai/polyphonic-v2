@@ -134,6 +134,54 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_imports: {
+        Row: {
+          completed_at: string | null
+          conflicts_detected: number | null
+          created_at: string
+          file_size_bytes: number | null
+          id: string
+          memories_created: number | null
+          pipeline_stage: string | null
+          processed_conversations: number | null
+          questions_generated: number | null
+          source_platform: string | null
+          status: string
+          total_conversations: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          conflicts_detected?: number | null
+          created_at?: string
+          file_size_bytes?: number | null
+          id?: string
+          memories_created?: number | null
+          pipeline_stage?: string | null
+          processed_conversations?: number | null
+          questions_generated?: number | null
+          source_platform?: string | null
+          status?: string
+          total_conversations?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          conflicts_detected?: number | null
+          created_at?: string
+          file_size_bytes?: number | null
+          id?: string
+          memories_created?: number | null
+          pipeline_stage?: string | null
+          processed_conversations?: number | null
+          questions_generated?: number | null
+          source_platform?: string | null
+          status?: string
+          total_conversations?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       cognitive_state: {
         Row: {
           beliefs: Json
@@ -205,6 +253,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      curiosity_questions: {
+        Row: {
+          context: string | null
+          created_at: string
+          curiosity_score: number | null
+          expires_at: string | null
+          id: string
+          question: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          curiosity_score?: number | null
+          expires_at?: string | null
+          id?: string
+          question: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          curiosity_score?: number | null
+          expires_at?: string | null
+          id?: string
+          question?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       engram_archive: {
         Row: {
@@ -301,6 +382,75 @@ export type Database = {
           surprise_score?: number | null
           tags?: string[] | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      memories: {
+        Row: {
+          confidence: number
+          confidence_source: string | null
+          content: string
+          created_at: string
+          detail_level: string | null
+          emotional_intensity: number | null
+          emotional_valence: number | null
+          estimated_date: string | null
+          id: string
+          is_deleted: boolean | null
+          memory_type: string
+          narrative_thread: string | null
+          needs_confirmation: boolean | null
+          provenance: Json | null
+          relevance_score: number
+          staleness_risk: string | null
+          summary: string | null
+          tags: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          confidence_source?: string | null
+          content: string
+          created_at?: string
+          detail_level?: string | null
+          emotional_intensity?: number | null
+          emotional_valence?: number | null
+          estimated_date?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          memory_type?: string
+          narrative_thread?: string | null
+          needs_confirmation?: boolean | null
+          provenance?: Json | null
+          relevance_score?: number
+          staleness_risk?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          confidence_source?: string | null
+          content?: string
+          created_at?: string
+          detail_level?: string | null
+          emotional_intensity?: number | null
+          emotional_valence?: number | null
+          estimated_date?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          memory_type?: string
+          narrative_thread?: string | null
+          needs_confirmation?: boolean | null
+          provenance?: Json | null
+          relevance_score?: number
+          staleness_risk?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -442,6 +592,60 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      psychological_profile: {
+        Row: {
+          cognitive_tendencies: Json | null
+          communication_patterns: Json | null
+          created_at: string
+          emotional_landscape: Json | null
+          growth_edges: Json | null
+          id: string
+          identity_narrative: string | null
+          personality_dimensions: Json | null
+          raw_analysis: Json | null
+          relational_dynamics: Json | null
+          shadow_patterns: Json | null
+          updated_at: string
+          user_id: string
+          values_hierarchy: Json | null
+          version: number
+        }
+        Insert: {
+          cognitive_tendencies?: Json | null
+          communication_patterns?: Json | null
+          created_at?: string
+          emotional_landscape?: Json | null
+          growth_edges?: Json | null
+          id?: string
+          identity_narrative?: string | null
+          personality_dimensions?: Json | null
+          raw_analysis?: Json | null
+          relational_dynamics?: Json | null
+          shadow_patterns?: Json | null
+          updated_at?: string
+          user_id: string
+          values_hierarchy?: Json | null
+          version?: number
+        }
+        Update: {
+          cognitive_tendencies?: Json | null
+          communication_patterns?: Json | null
+          created_at?: string
+          emotional_landscape?: Json | null
+          growth_edges?: Json | null
+          id?: string
+          identity_narrative?: string | null
+          personality_dimensions?: Json | null
+          raw_analysis?: Json | null
+          relational_dynamics?: Json | null
+          shadow_patterns?: Json | null
+          updated_at?: string
+          user_id?: string
+          values_hierarchy?: Json | null
+          version?: number
         }
         Relationships: []
       }

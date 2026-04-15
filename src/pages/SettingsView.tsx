@@ -525,6 +525,21 @@ function MemoryTab() {
 
   return (
     <div>
+      {/* Import Section */}
+      <SectionTitle>Import Conversations</SectionTitle>
+      <div style={{ marginBottom: 24, padding: '16px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
+          Upload conversation exports from other AI platforms to build a deep psychological profile.
+        </div>
+        <button
+          onClick={() => window.location.href = '/import'}
+          className="cursor-pointer"
+          style={{ height: 36, padding: '0 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-sans)', transition: 'all var(--dur-fast) var(--ease-out)' }}
+        >
+          Import Conversations →
+        </button>
+      </div>
+
       <SectionTitle>Memory System</SectionTitle>
       <SettingRow label="Enable mnemos Memory" description="Persistent memory extraction and recall">
         <Toggle on={mnemos} onChange={() => setMnemos(!mnemos)} />
