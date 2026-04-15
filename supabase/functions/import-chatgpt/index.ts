@@ -262,8 +262,8 @@ serve(async (req) => {
     }
 
     // Build conversation text, truncating long conversations
-    const MAX_CHARS_PER_CONV = 30000;
-    const MAX_BATCH_CHARS = 600000; // ~150K tokens, safe for 1M context with prompt overhead
+    const MAX_CHARS_PER_CONV = 20000;
+    const MAX_BATCH_CHARS = 300000; // ~75K tokens, keeps CPU time under limit
     const convTexts: string[] = [];
     let batchCharCount = 0;
     for (const conv of linearized) {

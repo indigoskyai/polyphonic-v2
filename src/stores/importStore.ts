@@ -279,7 +279,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
               import_id: importId,
               chunk_index: i,
               total_chunks: totalChunks,
-              accumulated_memories: accumulatedMemories,
+              accumulated_memories: accumulatedMemories.slice(-100),
             }),
           });
 
