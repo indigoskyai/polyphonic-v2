@@ -696,7 +696,111 @@ export default function ChatView() {
     return useThreadStore.getState().threads.find(t => t.id === currentThreadId)?.title;
   }, [currentThreadId, messages]);
 
-  return (
+  const isEmpty = messages.length === 0 && !isStreaming;
+
+  return isEmpty ? (
+      /* ═══ LANDING STATE — centered, minimal, alive ═══ */
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
+        <div className="flex-1 flex flex-col items-center justify-center" style={{ padding: '0 32px' }}>
+          {/* Title + breathing dot */}
+          <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: '50%',
+              border: '1px solid rgba(220,219,216,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 24px',
+              animation: 'breathe 4s ease-in-out infinite',
+            }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(220,219,216,0.12)' }} />
+            </div>
+            <h1 style={{
+              fontSize: 28,
+              fontWeight: 300,
+              letterSpacing: '0.12em',
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-sans)',
+              textTransform: 'lowercase',
+              margin: 0,
+            }}>
+              polyphonic
+            </h1>
+            {welcomeBack && (
+              <div
+                style={{
+                  maxWidth: 400,
+                  margin: '20px auto 0',
+                  animation: 'viewFadeIn 0.8s var(--ease-out) 0.4s both',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  if (welcomeBack.type === 'initiation') setInput(welcomeBack.content);
+                  setWelcomeBack(null);
+                }}
+              >
+                <span style={{
+                  fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'var(--text-whisper)', display: 'block', marginBottom: 8,
+                }}>
+                  {welcomeBack.type === 'initiation' ? 'i\u2019ve been thinking about something...'
+                    : welcomeBack.type === 'journal' ? 'while you were away...'
+                    : 'a thought surfaced...'}
+                </span>
+                <span style={{
+                  fontSize: 13, lineHeight: 1.6, color: 'var(--text-ghost)',
+                  fontStyle: 'italic', display: 'block',
+                }}>
+                  {welcomeBack.content}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Centered input */}
+          <div style={{ width: '100%', maxWidth: 600, animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both' }}>
+            <div className={`input-shell${focused ? ' focused' : ''}`}>
+              <div className="input-row">
+                <textarea
+                  ref={textareaRef}
+                  className="input-textarea"
+                  value={input}
+                  onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  placeholder={dynamicPlaceholder}
+                />
+              </div>
+              <div className="input-footer">
+                <div className="agent-pills">
+                  <button className="agent-pill targeted luca">luca</button>
+                  <div className="pill-sep" />
+                  <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>guardian</button>
+                </div>
+                <select
+                  value={thinkingEffort}
+                  onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                  className="effort-select"
+                >
+                  <option value="low">Light</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">Deep</option>
+                </select>
+                <button
+                  className="send-btn"
+                  onClick={sendMessage}
+                >
+                  <span className="send-icon">
+                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4" /></svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : (
+    /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
       {/* Header */}
       <div className="flex items-center flex-shrink-0" style={{
@@ -720,69 +824,6 @@ export default function ChatView() {
         }}
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
-          {/* Empty state with welcome back awareness */}
-          {messages.length === 0 && !isStreaming && (
-            <div className="flex flex-col items-center justify-center" style={{ paddingTop: welcomeBack ? '12vh' : '20vh', animation: 'viewFadeIn 0.6s var(--ease-out) both' }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: '50%',
-                border: '1px solid var(--border-dim)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 20,
-                animation: 'breathe 4s ease-in-out infinite',
-              }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(220,219,216,0.15)' }} />
-              </div>
-
-              {welcomeBack ? (
-                <div
-                  style={{
-                    maxWidth: 420,
-                    textAlign: 'center',
-                    animation: 'viewFadeIn 0.8s var(--ease-out) 0.3s both',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => {
-                    // Dismiss welcome back and optionally start a conversation about it
-                    if (welcomeBack.type === 'initiation') {
-                      setInput(welcomeBack.content);
-                    }
-                    setWelcomeBack(null);
-                  }}
-                >
-                  <span className="text-[10px] uppercase" style={{
-                    color: 'var(--text-whisper)',
-                    letterSpacing: '0.08em',
-                    display: 'block',
-                    marginBottom: 10,
-                  }}>
-                    {welcomeBack.type === 'initiation' ? 'i\u2019ve been thinking about something...'
-                      : welcomeBack.type === 'journal' ? 'while you were away...'
-                      : 'a thought surfaced...'}
-                  </span>
-                  <span style={{
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    color: 'var(--text-tertiary)',
-                    fontStyle: 'italic',
-                    display: 'block',
-                  }}>
-                    {welcomeBack.content}
-                  </span>
-                  <span className="text-[9px]" style={{
-                    color: 'var(--text-whisper)',
-                    display: 'block',
-                    marginTop: 12,
-                  }}>
-                    click to dismiss
-                  </span>
-                </div>
-              ) : (
-                <span className="text-xs" style={{ color: 'var(--text-ghost)', letterSpacing: '0.04em' }}>
-                  begin a conversation
-                </span>
-              )}
-            </div>
-          )}
 
           {/* Message list */}
           {messages.map((msg, i) => (
