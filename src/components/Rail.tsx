@@ -64,6 +64,7 @@ export default function Rail() {
   const activeView = location.pathname.startsWith('/chat') ? 'chat'
     : location.pathname.startsWith('/memory') ? 'memory'
     : location.pathname.startsWith('/mind') ? 'mind'
+    : location.pathname.startsWith('/import') ? 'import'
     : location.pathname.startsWith('/dashboard') ? 'mind'
     : 'chat';
 
@@ -157,6 +158,7 @@ export default function Rail() {
           <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
           <NavIcon icon="memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
           <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
+          <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
           <NavIcon icon="settings" active={settingsOpen} onClick={openSettings} />
 
           {/* New thread */}
@@ -240,6 +242,7 @@ export default function Rail() {
             <SidebarAction label="New thread" icon="+" onClick={handleNewThread} />
             <SidebarAction label="Memory" icon="◉" onClick={() => { navigate('/memory'); setExpanded(false); }} />
             <SidebarAction label="Mind" icon="◎" onClick={() => { navigate('/mind'); setExpanded(false); }} />
+            <SidebarAction label="Import" icon="↑" onClick={() => { navigate('/import'); setExpanded(false); }} />
             <SidebarAction label="Settings" icon="⚙" onClick={() => { openSettings(); setExpanded(false); }} />
           </div>
         </div>
