@@ -108,6 +108,22 @@ function wordSetOverlap(a: string, b: string): number {
   return overlap / Math.min(setA.size, setB.size);
 }
 
+const IMPORT_CONFIDENCE_CEILING = 0.85;
+const EXTRACTION_MODEL = "google/gemini-2.5-flash";
+
+function calculateStalenessRisk(createTime: number): "low" | "medium" | "high" {
+  const ageMs = Date.now() - createTime * 1000;
+  const sixMonths = 6 * 30 * 86400 * 1000;
+  const twelveMonths = 12 * 30 * 86400 * 1000;
+  if (ageMs < sixMonths) return "low";
+  if (ageMs < twelveMonths) return "medium";
+  return "high";
+}
+
+function getEstimatedDate(createTime: number): string {
+  return new Date(createTime * 1000).toISOString().split("T")[0];
+}
+
 // ─── Single-pass extraction prompt ───
 
 const EXTRACTION_PROMPT = `You are a memory extraction system for an AI companion. You will analyze a batch of conversations and extract meaningful memories about the USER in a single pass.
