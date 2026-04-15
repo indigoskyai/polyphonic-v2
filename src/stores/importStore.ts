@@ -310,7 +310,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
         }
       }
 
-      // Stage 2: Synthesize
+      // Stage 2: Synthesize — refresh token first
+      token = await getToken();
       set({ stage: 'synthesizing', pipelineDetail: '' });
       await callWithRetry(`${supabaseUrl}/functions/v1/memory-synthesize`, {
         method: 'POST',
@@ -321,7 +322,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
         body: JSON.stringify({ import_id: importId }),
       });
 
-      // Stage 3: Deep psychological analysis
+      // Stage 3: Deep psychological analysis — refresh token first
+      token = await getToken();
       set({ stage: 'profiling', pipelineDetail: '' });
       await callWithRetry(`${supabaseUrl}/functions/v1/profile-deep-analysis`, {
         method: 'POST',
