@@ -431,7 +431,7 @@ ${batchText}`;
           summary: m.summary || null,
           staleness_risk: batchStaleness,
           estimated_date: batchEstimatedDate,
-          import_needs_confirmation: needsConfirmation,
+          needs_confirmation: needsConfirmation,
           provenance: {
             source: "chatgpt_import",
             import_id,
