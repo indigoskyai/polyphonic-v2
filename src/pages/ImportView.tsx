@@ -133,13 +133,22 @@ export default function ImportView() {
       const data = JSON.parse(text);
       const platform = detectPlatform(data);
 
-      if (platform !== 'chatgpt') {
-        setState((s) => ({ ...s, stage: 'error', error: 'Currently only ChatGPT exports are supported. Export from ChatGPT → Settings → Data Controls → Export.' }));
+      if (platform === 'unknown') {
+        setState((s) => ({ ...s, stage: 'error', error: 'Unrecognized format. Supports ChatGPT (.json with mapping) and Claude (.json with chat_messages) exports.' }));
         return;
       }
 
-      const conversations = Array.isArray(data) ? data : [];
-      const validConvos = conversations.filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      // Normalize both formats into ChatGPT-compatible structure
+      let normalizedConvos: any[];
+      if (platform === 'claude') {
+        const rawConvos = Array.isArray(data) ? data : [];
+        normalizedConvos = convertClaudeToMapping(rawConvos);
+      } else {
+        const rawConvos = Array.isArray(data) ? data : [];
+        normalizedConvos = rawConvos.filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      }
+
+      const validConvos = normalizedConvos;
       const totalChunks = Math.ceil(validConvos.length / CHUNK_SIZE);
 
       setState((s) => ({
