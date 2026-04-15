@@ -706,15 +706,15 @@ export default function ChatView() {
           {/* Title + Echo particle field */}
           <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
             <EchoField
-              size={180}
-              particleCount={12000}
+              size={280}
+              particleCount={18000}
               state={isStreaming ? 'thinking' : 'idle'}
-              style={{ margin: '0 auto 28px' }}
+              style={{ margin: '0 auto 32px' }}
             />
             <h1 style={{
-              fontSize: 28,
-              fontWeight: 300,
-              letterSpacing: '0.12em',
+              fontSize: 38,
+              fontWeight: 280,
+              letterSpacing: '0.16em',
               color: 'var(--text-tertiary)',
               fontFamily: 'var(--font-sans)',
               textTransform: 'lowercase',
