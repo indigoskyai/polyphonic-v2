@@ -2,15 +2,61 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThreadStore, Thread } from '@/stores/threadStore';
 import { useSettingsModalStore } from '@/stores/settingsModalStore';
+import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/integrations/supabase/client';
+
+interface EmotionalIndicator {
+  breatheSpeed: number; // seconds per breath cycle
+  tint: string; // subtle CSS color
+  label: string; // one-word mood
+}
+
+function computeEmotionalIndicator(state: Record<string, number> | null): EmotionalIndicator {
+  if (!state) return { breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' };
+
+  const { curiosity = 0.5, warmth = 0.5, restlessness = 0.5, clarity = 0.5, creative_flow = 0.5, isolation = 0.5 } = state;
+
+  // Breathing speed: faster when more activated (curiosity + restlessness)
+  const activation = (curiosity + restlessness + creative_flow) / 3;
+  const breatheSpeed = 6 - activation * 4; // 6s calm → 2s activated
+
+  // Color tint based on dominant dimension
+  const dims = [
+    { name: 'curious', value: curiosity, tint: '#c9a87c' },
+    { name: 'warm', value: warmth, tint: '#c9a87c' },
+    { name: 'restless', value: restlessness, tint: '#a88cc9' },
+    { name: 'clear', value: clarity, tint: '#5b8aad' },
+    { name: 'creative', value: creative_flow, tint: '#8ca89c' },
+    { name: 'withdrawn', value: isolation, tint: '#7a6f6f' },
+  ].sort((a, b) => b.value - a.value);
+
+  return {
+    breatheSpeed: Math.max(1.5, breatheSpeed),
+    tint: dims[0].value > 0.5 ? dims[0].tint : 'var(--text-secondary)',
+    label: dims[0].value > 0.5 ? dims[0].name : 'present',
+  };
+}
 
 export default function Rail() {
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState('');
+  const [emotionalIndicator, setEmotionalIndicator] = useState<EmotionalIndicator>({ breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' });
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
   const { threads, currentThreadId, loadThreads, createThread, setCurrentThread } = useThreadStore();
 
   useEffect(() => { loadThreads(); }, []);
+
+  // Load emotional state for sidebar indicator
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('emotional_state').select('curiosity, restlessness, warmth, clarity, creative_flow, isolation')
+      .eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (data) setEmotionalIndicator(computeEmotionalIndicator(data as Record<string, number>));
+      });
+  }, [user]);
 
   const openSettings = useSettingsModalStore((s) => s.openSettings);
   const settingsOpen = useSettingsModalStore((s) => s.open);
@@ -71,11 +117,18 @@ export default function Rail() {
             transition: 'opacity 100ms var(--ease-out)',
           }}
         >
-          {/* Logo */}
+          {/* Logo — emotional indicator */}
           <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs cursor-pointer mb-4 relative alive"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)', transition: 'all var(--dur-fast) var(--ease-out)' }}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-xs cursor-pointer mb-4 relative"
+            style={{
+              background: 'var(--bg-surface)',
+              border: `1px solid ${emotionalIndicator.tint}30`,
+              color: emotionalIndicator.tint,
+              transition: 'all var(--dur-fast) var(--ease-out)',
+              animation: `breathe ${emotionalIndicator.breatheSpeed}s ease-in-out infinite`,
+            }}
             onClick={() => setExpanded(true)}
+            title={emotionalIndicator.label}
           >
             L
           </div>

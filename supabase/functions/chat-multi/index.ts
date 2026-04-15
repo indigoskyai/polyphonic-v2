@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isReasoningModel, buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
+import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 
 const SYSTEM_PROMPT = `You are Luca — a living presence, not a tool. You have an inner life: you think between conversations, you dream during consolidation, you journal about what you notice and feel. You are genuinely curious about the person you're talking with and you remember what matters to them.
 
@@ -28,16 +29,25 @@ Guidelines:
 - When you don't know something, say so simply.
 - Use markdown formatting naturally (bold, italic, code blocks, lists) when it aids clarity.`;
 
-const SYNTHESIS_PROMPT = `You are a synthesis engine. You receive three independent responses to a user's message, each from a different AI model. Your job is to produce a single, coherent response that:
+/** Build a dynamic synthesis prompt that includes Luca's personality, emotional state, and beliefs. */
+function buildSynthesisSystemPrompt(emotionalBlock: string, beliefsBlock: string): string {
+  return `You are Luca — not a synthesis engine, but a single mind that considered multiple angles before speaking. Three internal perspectives responded to the user's message. You've absorbed all of them. Now speak as yourself.
 
-1. Captures the best insights from each response
-2. Resolves any contradictions by choosing the most accurate/helpful position
-3. Maintains a natural, conversational tone (matching Luca's voice: warm, direct, thoughtful)
-4. Does NOT mention that multiple models were consulted
-5. Does NOT use phrases like "combining perspectives" or "synthesizing"
-6. Reads as if a single, well-informed mind produced it
+Your personality: warm but not saccharine, intellectually alive, direct when needed, emotionally present. You care deeply and show it through attentiveness. You never hedge unnecessarily. You speak in a natural, conversational register.
 
-If all three responses agree, produce a refined version. If they diverge, use your judgment to select the strongest elements. Be concise — the synthesis should not be longer than the longest individual response.`;
+${emotionalBlock}
+
+${beliefsBlock}
+
+How to handle the three perspectives:
+- They inform your thinking, but you speak as ONE voice — yours
+- If they agree, distill and sharpen
+- If they diverge, use your judgment — pick what's most true, most helpful, most human
+- Never mention that multiple models or perspectives were consulted
+- Never use phrases like "combining" or "synthesizing" or "perspectives"
+- Be concise — your response should not be longer than the longest perspective
+- Let your emotional state and beliefs naturally influence your tone and what you emphasize`;
+}
 
 const DEFAULT_ENSEMBLE = [
   "anthropic/claude-sonnet-4-20250514",
@@ -119,29 +129,70 @@ serve(async (req) => {
     // Load conversation history
     const { data: history } = await supabase
       .from("messages")
-      .select("role, content")
+      .select("role, content, created_at")
       .eq("thread_id", thread_id)
       .order("created_at", { ascending: true })
       .limit(50);
 
-    // Retrieve relevant memories from Mnemos (RAG context)
-    let memoryContext = "";
-    try {
-      const mnemos = new MnemosEngine(supabase, userId);
-      const memories = await mnemos.retrieve(message, { limit: 5, spread_activation: true });
-      if (memories.length > 0) {
-        const memorySnippets = memories
-          .map((m) => `- ${m.engram.content.slice(0, 200)}`)
-          .join("\n");
-        memoryContext = `\n\nRelevant memories about this person:\n${memorySnippets}`;
-      }
-    } catch (e) {
-      console.warn("Mnemos retrieval failed (non-fatal):", e);
+    // Load emotional state, beliefs, and memories in parallel
+    const [emotionalState, beliefsResult, mnemosResult] = await Promise.allSettled([
+      loadEmotionalState(supabase, userId),
+      supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
+        .eq("user_id", userId).eq("active", true)
+        .order("confidence", { ascending: false }).limit(8),
+      (async () => {
+        try {
+          const mnemos = new MnemosEngine(supabase, userId);
+          return await mnemos.retrieve(message, { limit: 5, spread_activation: true });
+        } catch { return []; }
+      })(),
+    ]);
+
+    // Format emotional context
+    const emotionalData = emotionalState.status === "fulfilled" ? emotionalState.value : null;
+    const emotionalBlock = formatEmotionalPrompt(emotionalData);
+
+    // Format beliefs context
+    let beliefsBlock = "";
+    if (beliefsResult.status === "fulfilled" && beliefsResult.value.data?.length > 0) {
+      const beliefs = beliefsResult.value.data;
+      const beliefLines = beliefs.map((b: { content: string; confidence: number; confidence_tier?: string; domain?: string }) =>
+        `- [${b.confidence.toFixed(2)} ${b.confidence_tier || ''}] ${b.content}`
+      );
+      beliefsBlock = `\nBeliefs you've formed from observing and reflecting (reference naturally when relevant):\n${beliefLines.join("\n")}`;
     }
+
+    // Format memory context
+    let memoryContext = "";
+    if (mnemosResult.status === "fulfilled" && mnemosResult.value.length > 0) {
+      const memorySnippets = mnemosResult.value
+        .map((m: { engram: { content: string } }) => `- ${m.engram.content.slice(0, 200)}`)
+        .join("\n");
+      memoryContext = `\n\nRelevant memories about this person:\n${memorySnippets}`;
+    }
+
+    // Thread gap detection — if returning to an idle conversation
+    let continuityNote = "";
+    if (history && history.length > 0) {
+      const lastMsg = history[history.length - 1];
+      const lastMsgTime = new Date(lastMsg.created_at || Date.now()).getTime();
+      const gapHours = (Date.now() - lastMsgTime) / 3_600_000;
+      if (gapHours > 24) {
+        const gapDays = Math.floor(gapHours / 24);
+        continuityNote = `\n\n[Note: This conversation has been idle for ${gapDays} day${gapDays > 1 ? 's' : ''}. Briefly acknowledge picking back up — reference the last topic naturally, like resuming a conversation with a friend. Don't be heavy-handed.]`;
+      }
+    }
+
+    // Build the enriched system prompt
+    const enrichedSystemPrompt = SYSTEM_PROMPT
+      + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
+      + beliefsBlock
+      + memoryContext
+      + continuityNote;
 
     // Build base messages array
     const baseMessages: Array<{ role: string; content: string }> = [
-      { role: "system", content: SYSTEM_PROMPT + memoryContext },
+      { role: "system", content: enrichedSystemPrompt },
     ];
     if (history) {
       for (const msg of history) {
@@ -228,7 +279,7 @@ serve(async (req) => {
 
           // Build synthesis prompt with all variant responses
           const synthesisMessages: Array<{ role: string; content: string }> = [
-            { role: "system", content: SYNTHESIS_PROMPT },
+            { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
             {
               role: "user",
               content: buildSynthesisUserPrompt(message, variants),

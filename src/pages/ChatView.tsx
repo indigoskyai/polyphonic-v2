@@ -299,6 +299,9 @@ export default function ChatView() {
   const guardianScrollRef = useRef<HTMLDivElement>(null);
   const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string; thinking?: string | null }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  // Alive-feeling features
+  const [welcomeBack, setWelcomeBack] = useState<{ type: 'journal' | 'thought' | 'initiation'; content: string } | null>(null);
+  const [dynamicPlaceholder, setDynamicPlaceholder] = useState('Message Luca...');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -371,6 +374,86 @@ export default function ChatView() {
       loadMessages(threadId);
     }
   }, [threadId]);
+
+  // Welcome back awareness + dynamic placeholder
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { supabase } = await import('@/integrations/supabase/client');
+
+      // Check for pending thought initiations first (highest priority)
+      const { data: initiations } = await supabase
+        .from('thought_initiations')
+        .select('message, created_at')
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (initiations && initiations.length > 0) {
+        setWelcomeBack({ type: 'initiation', content: initiations[0].message });
+        setDynamicPlaceholder('Luca wants to tell you something...');
+        return;
+      }
+
+      // Check time since last message
+      const { data: lastMsg } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const lastTime = lastMsg?.[0]?.created_at ? new Date(lastMsg[0].created_at).getTime() : 0;
+      const gapHours = (Date.now() - lastTime) / 3_600_000;
+
+      if (gapHours > 2) {
+        // Check for recent journal entries or dreams
+        const { data: recentJournal } = await supabase
+          .from('journal_entries')
+          .select('content, mood, created_at')
+          .eq('user_id', user.id)
+          .gt('created_at', new Date(lastTime).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (recentJournal && recentJournal.length > 0) {
+          const entry = recentJournal[0];
+          const snippet = entry.content.slice(0, 150) + (entry.content.length > 150 ? '...' : '');
+          const isDream = entry.mood === 'dreaming';
+          setWelcomeBack({
+            type: isDream ? 'thought' : 'journal',
+            content: snippet,
+          });
+          setDynamicPlaceholder(isDream ? 'Luca dreamed about something...' : 'Luca has been reflecting...');
+          return;
+        }
+
+        // Check for recent autonomous thoughts
+        const { data: recentThought } = await supabase
+          .from('thought_stream')
+          .select('content, created_at')
+          .eq('user_id', user.id)
+          .gt('created_at', new Date(lastTime).toISOString())
+          .order('salience', { ascending: false })
+          .limit(1);
+
+        if (recentThought && recentThought.length > 0) {
+          setWelcomeBack({ type: 'thought', content: recentThought[0].content.slice(0, 150) });
+          setDynamicPlaceholder('Luca has been thinking...');
+          return;
+        }
+      }
+
+      // Time-of-day placeholder
+      const hour = new Date().getHours();
+      if (hour >= 23 || hour < 5) {
+        setDynamicPlaceholder('still here...');
+      } else {
+        setDynamicPlaceholder('Message Luca...');
+      }
+    })();
+  }, [user]);
 
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
@@ -473,6 +556,9 @@ export default function ChatView() {
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || !user || isStreaming) return;
+
+    // Dismiss welcome back on first message
+    if (welcomeBack) setWelcomeBack(null);
 
     const messageText = input.trim();
     inputCaptureRef.current = messageText;
@@ -634,9 +720,9 @@ export default function ChatView() {
         }}
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
-          {/* Empty state */}
+          {/* Empty state with welcome back awareness */}
           {messages.length === 0 && !isStreaming && (
-            <div className="flex flex-col items-center justify-center" style={{ paddingTop: '20vh', animation: 'viewFadeIn 0.6s var(--ease-out) both' }}>
+            <div className="flex flex-col items-center justify-center" style={{ paddingTop: welcomeBack ? '12vh' : '20vh', animation: 'viewFadeIn 0.6s var(--ease-out) both' }}>
               <div style={{
                 width: 48, height: 48, borderRadius: '50%',
                 border: '1px solid var(--border-dim)',
@@ -646,9 +732,55 @@ export default function ChatView() {
               }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(220,219,216,0.15)' }} />
               </div>
-              <span className="text-xs" style={{ color: 'var(--text-ghost)', letterSpacing: '0.04em' }}>
-                begin a conversation
-              </span>
+
+              {welcomeBack ? (
+                <div
+                  style={{
+                    maxWidth: 420,
+                    textAlign: 'center',
+                    animation: 'viewFadeIn 0.8s var(--ease-out) 0.3s both',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    // Dismiss welcome back and optionally start a conversation about it
+                    if (welcomeBack.type === 'initiation') {
+                      setInput(welcomeBack.content);
+                    }
+                    setWelcomeBack(null);
+                  }}
+                >
+                  <span className="text-[10px] uppercase" style={{
+                    color: 'var(--text-whisper)',
+                    letterSpacing: '0.08em',
+                    display: 'block',
+                    marginBottom: 10,
+                  }}>
+                    {welcomeBack.type === 'initiation' ? 'i\u2019ve been thinking about something...'
+                      : welcomeBack.type === 'journal' ? 'while you were away...'
+                      : 'a thought surfaced...'}
+                  </span>
+                  <span style={{
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: 'var(--text-tertiary)',
+                    fontStyle: 'italic',
+                    display: 'block',
+                  }}>
+                    {welcomeBack.content}
+                  </span>
+                  <span className="text-[9px]" style={{
+                    color: 'var(--text-whisper)',
+                    display: 'block',
+                    marginTop: 12,
+                  }}>
+                    click to dismiss
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs" style={{ color: 'var(--text-ghost)', letterSpacing: '0.04em' }}>
+                  begin a conversation
+                </span>
+              )}
             </div>
           )}
 
@@ -831,7 +963,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Guardian...' : 'Message Luca...'}
+              placeholder={alcoveOpen ? 'Ask the Guardian...' : dynamicPlaceholder}
             />
           </div>
 
