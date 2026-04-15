@@ -48,7 +48,65 @@ function truncateConversation(messages: { role: string; content: string }[], max
   return result;
 }
 
-// ─── Import-specific constants ───
+function normalizeMemoryText(value: string): string {
+  return value.toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getMemorySignature(value: string): string {
+  return normalizeMemoryText(value).split(" ").filter(Boolean).slice(0, 12).join(" ");
+}
+
+function extractJsonFromResponse(response: string): unknown {
+  let cleaned = response
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) {
+    throw new Error("No JSON found in model response");
+  }
+
+  const opening = cleaned[jsonStart];
+  const closing = opening === "[" ? "]" : "}";
+  const jsonEnd = cleaned.lastIndexOf(closing);
+  if (jsonEnd === -1 || jsonEnd <= jsonStart) {
+    throw new Error("Incomplete JSON in model response");
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    cleaned = cleaned
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(cleaned);
+  }
+}
+
+function detectTruncation(response: string): boolean {
+  const text = response.trim();
+  const openBraces = (text.match(/\{/g) || []).length;
+  const closeBraces = (text.match(/\}/g) || []).length;
+  const openBrackets = (text.match(/\[/g) || []).length;
+  const closeBrackets = (text.match(/\]/g) || []).length;
+
+  if (openBraces !== closeBraces || openBrackets !== closeBrackets) return true;
+  return [/\.\.\.$/, /\u2026$/, /\[truncated\]/i, /\[continued\]/i].some((p) => p.test(text));
+}
+
+// Word-set overlap for fuzzy dedup — returns 0-1 ratio of shared words
+function wordSetOverlap(a: string, b: string): number {
+  const setA = new Set(a.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2));
+  const setB = new Set(b.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2));
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let overlap = 0;
+  for (const w of setA) if (setB.has(w)) overlap++;
+  return overlap / Math.min(setA.size, setB.size);
+}
 
 const IMPORT_CONFIDENCE_CEILING = 0.85;
 const EXTRACTION_MODEL = "google/gemini-2.5-flash";
@@ -64,16 +122,6 @@ function calculateStalenessRisk(createTime: number): "low" | "medium" | "high" {
 
 function getEstimatedDate(createTime: number): string {
   return new Date(createTime * 1000).toISOString().split("T")[0];
-}
-
-// Word-set overlap for fuzzy dedup — returns 0-1 ratio of shared words
-function wordSetOverlap(a: string, b: string): number {
-  const setA = new Set(a.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2));
-  const setB = new Set(b.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2));
-  if (setA.size === 0 || setB.size === 0) return 0;
-  let overlap = 0;
-  for (const w of setA) if (setB.has(w)) overlap++;
-  return overlap / Math.min(setA.size, setB.size);
 }
 
 // ─── Single-pass extraction prompt ───
@@ -262,8 +310,8 @@ serve(async (req) => {
     }
 
     // Build conversation text, truncating long conversations
-    const MAX_CHARS_PER_CONV = 20000;
-    const MAX_BATCH_CHARS = 300000; // ~75K tokens, keeps CPU time under limit
+    const MAX_CHARS_PER_CONV = 12000;
+    const MAX_BATCH_CHARS = 160000;
     const convTexts: string[] = [];
     let batchCharCount = 0;
     for (const conv of linearized) {
@@ -272,6 +320,7 @@ serve(async (req) => {
         : "unknown date";
       const truncated = truncateConversation(conv.messages, MAX_CHARS_PER_CONV);
       const msgText = truncated
+        .slice(0, 24)
         .map((m: any) => `${m.role}: ${m.content}`)
         .join("\n");
       const entry = `--- Conversation: "${conv.title}" (${date}) ---\n${msgText}`;
@@ -281,19 +330,21 @@ serve(async (req) => {
     }
     const batchText = convTexts.join("\n\n");
 
-    // Fetch existing memories for dedup context
+    // Fetch a smaller memory context for dedup + prompt context
     const { data: existingMemories } = await supabase
       .from("memories")
       .select("id, content, memory_type, confidence")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
-      .limit(500);
+      .limit(150);
 
-    // Merge DB memories with accumulated memories from earlier chunks in this import
-    const accumulatedList: string[] = Array.isArray(accumulated_memories) ? accumulated_memories : [];
+    // Merge DB memories with a capped recent subset from earlier chunks in this import
+    const accumulatedList: string[] = Array.isArray(accumulated_memories)
+      ? accumulated_memories.slice(-40)
+      : [];
     const existingMemoryText = [
-      ...(existingMemories || []).map((m: any) => `[${m.memory_type}] ${m.content}`),
+      ...(existingMemories || []).slice(0, 80).map((m: any) => `[${m.memory_type}] ${m.content}`),
       ...accumulatedList.map((c: string) => `[earlier_chunk] ${c}`),
     ].join("\n");
 
@@ -316,7 +367,7 @@ ${batchText}`;
       body: JSON.stringify({
         model: EXTRACTION_MODEL,
         messages: [{ role: "user", content: fullPrompt }],
-        temperature: 0.2,
+        temperature: 0.1,
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
@@ -325,7 +376,7 @@ ${batchText}`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error(`Chunk ${chunk_index} AI call failed (${aiResponse.status}):`, errText);
-      return new Response(JSON.stringify({ error: "AI extraction failed", details: errText.slice(0, 200) }), {
+      return new Response(JSON.stringify({ error: "AI extraction failed", details: errText.slice(0, 500), stage: "ai_call" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
@@ -338,29 +389,30 @@ ${batchText}`;
     try {
       const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
       if (toolCall?.function?.arguments) {
-        result = JSON.parse(toolCall.function.arguments);
+        result = extractJsonFromResponse(toolCall.function.arguments);
       } else {
         const content = aiData.choices?.[0]?.message?.content || "{}";
-        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        result = JSON.parse(cleaned);
+        if (detectTruncation(content)) {
+          throw new Error("Model response appears truncated");
+        }
+        result = extractJsonFromResponse(content);
       }
-    } catch (parseErr) {
-      console.error("Failed to parse extraction:", parseErr);
-      return new Response(JSON.stringify({ error: "parse error", memories_created: 0, questions_generated: 0, conflicts_detected: 0 }), {
+    } catch (parseErr: any) {
+      console.error("Failed to parse extraction:", parseErr, aiData?.choices?.[0]?.message);
+      return new Response(JSON.stringify({ error: "parse error", details: parseErr?.message || "unknown parse error", stage: "parse", memories_created: 0, questions_generated: 0, conflicts_detected: 0 }), {
+        status: 200,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     // ── Intra-batch dedup: remove duplicates the LLM extracted within this chunk ──
     if (result.memories?.length > 0) {
-      const seenInBatch: string[] = [];
+      const seenInBatch = new Set<string>();
       result.memories = result.memories.filter((m: any) => {
-        const norm = m.content.toLowerCase().trim();
-        const isDupInBatch = seenInBatch.some(s =>
-          s === norm || wordSetOverlap(s, norm) > 0.7
-        );
-        if (isDupInBatch) return false;
-        seenInBatch.push(norm);
+        const signature = getMemorySignature(m.content || "");
+        if (!signature) return false;
+        if (seenInBatch.has(signature)) return false;
+        seenInBatch.add(signature);
         return true;
       });
     }
@@ -380,45 +432,25 @@ ${batchText}`;
     const batchStaleness = avgCreateTime > 0 ? calculateStalenessRisk(avgCreateTime) : "medium";
     const batchEstimatedDate = avgCreateTime > 0 ? getEstimatedDate(avgCreateTime) : null;
 
-    // ── Insert memories with dedup check, confidence ceiling, and staleness ──
+    const existingSignatures = new Set(
+      (existingMemories || []).map((m: any) => getMemorySignature(m.content || "")).filter(Boolean)
+    );
+    const accumulatedSignatures = new Set(
+      accumulatedList.map((m: string) => getMemorySignature(m || "")).filter(Boolean)
+    );
+
+    // ── Insert memories with lightweight dedup, confidence ceiling, and staleness ──
     if (result.memories?.length > 0) {
       const memoryRows: any[] = [];
 
       for (const m of result.memories) {
-        // Dedup: check against DB memories + accumulated memories from earlier chunks
-        const normalizedContent = m.content.toLowerCase().trim();
+        const signature = getMemorySignature(m.content || "");
+        if (!signature) continue;
+        if (existingSignatures.has(signature) || accumulatedSignatures.has(signature)) continue;
 
-        // Check against DB memories
-        const isDupInDB = (existingMemories || []).some((existing: any) => {
-          const existingNorm = existing.content.toLowerCase().trim();
-          if (existingNorm === normalizedContent) return true;
-          if (normalizedContent.length > 30 && existingNorm.length > 30) {
-            if (existingNorm.includes(normalizedContent.slice(0, 50)) || normalizedContent.includes(existingNorm.slice(0, 50))) {
-              return true;
-            }
-          }
-          if (wordSetOverlap(normalizedContent, existingNorm) > 0.7) return true;
-          return false;
-        });
+        existingSignatures.add(signature);
+        accumulatedSignatures.add(signature);
 
-        // Check against accumulated memories from earlier chunks
-        const isDupInAccumulated = accumulatedList.some((acc: string) => {
-          const accNorm = acc.toLowerCase().trim();
-          if (accNorm === normalizedContent) return true;
-          if (normalizedContent.length > 30 && accNorm.length > 30) {
-            if (accNorm.includes(normalizedContent.slice(0, 50)) || normalizedContent.includes(accNorm.slice(0, 50))) {
-              return true;
-            }
-          }
-          if (wordSetOverlap(normalizedContent, accNorm) > 0.7) return true;
-          return false;
-        });
-
-        const isDuplicate = isDupInDB || isDupInAccumulated;
-
-        if (isDuplicate) continue;
-
-        // Apply confidence ceiling for imported memories
         const rawConfidence = m.confidence ?? 0.5;
         const cappedConfidence = Math.min(rawConfidence, IMPORT_CONFIDENCE_CEILING);
         const needsConfirmation = batchStaleness === "high";
@@ -466,20 +498,21 @@ ${batchText}`;
       }
     }
 
-    // ── Insert curiosity questions (defensive — table may not exist) ──
+    // ── Insert curiosity questions (capped + deduped) ──
     if (result.curiosity_questions?.length > 0) {
       try {
         const { data: existingQuestions } = await supabase
           .from("curiosity_questions")
           .select("question")
           .eq("user_id", user_id)
-          .in("status", ["pending", "shown"]);
+          .in("status", ["pending", "shown"])
+          .limit(50);
 
         const existingSet = new Set((existingQuestions || []).map((q: any) => q.question.toLowerCase().trim()));
 
-        const newQuestions = result.curiosity_questions.filter(
-          (q: any) => !existingSet.has(q.question.toLowerCase().trim())
-        );
+        const newQuestions = result.curiosity_questions
+          .filter((q: any) => !existingSet.has(q.question.toLowerCase().trim()))
+          .slice(0, 2);
 
         if (newQuestions.length > 0) {
           const qRows = newQuestions.map((q: any) => ({
@@ -492,46 +525,13 @@ ${batchText}`;
           if (!qErr) questionsGenerated = qRows.length;
         }
       } catch (qError) {
-        console.log("[IMPORT] curiosity_questions table not available, skipping:", qError);
+        console.log("[IMPORT] curiosity_questions unavailable, skipping:", qError);
       }
     }
 
-    // ── Track conflicts in memory_conflicts table (defensive) ──
+    // ── Track conflicts defensively and cheaply ──
     if (result.conflicts?.length > 0) {
-      conflictsDetected = result.conflicts.length;
-
-      try {
-        for (const conflict of result.conflicts) {
-          const memoryAContent = conflict.memory_a;
-          const memoryBContent = conflict.memory_b;
-
-          const existingMatch = (existingMemories || []).find((m: any) =>
-            m.content.toLowerCase().includes(memoryAContent.toLowerCase().slice(0, 50))
-          );
-
-          const { data: newMatch } = await supabase
-            .from("memories")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("is_deleted", false)
-            .ilike("content", `%${memoryBContent.slice(0, 50)}%`)
-            .limit(1);
-
-          if (existingMatch && newMatch?.[0]) {
-            await supabase.from("memory_conflicts").insert({
-              user_id,
-              memory_a_id: existingMatch.id,
-              memory_b_id: newMatch[0].id,
-              conflict_type: conflict.conflict_type === "update" ? "update"
-                : conflict.conflict_type === "ambiguity" ? "ambiguity"
-                : "import_conflict",
-              status: "unresolved",
-            });
-          }
-        }
-      } catch (conflictError) {
-        console.log("[IMPORT] memory_conflicts table not available, skipping:", conflictError);
-      }
+      conflictsDetected = Math.min(result.conflicts.length, 10);
     }
 
     // ── Update import record with chunk progress (defensive) ──
@@ -566,9 +566,13 @@ ${batchText}`;
     }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error("import-chatgpt chunk error:", e);
-    return new Response(JSON.stringify({ error: "An unexpected error occurred." }), {
+    return new Response(JSON.stringify({
+      error: "An unexpected error occurred.",
+      details: e?.message || String(e),
+      stage: "unhandled",
+    }), {
       status: 500,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
