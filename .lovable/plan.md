@@ -1,92 +1,71 @@
 
 
-# Conversation Data Upload & Deep Psychological Profiling System
+# Large-Dataset Import with Global Progress Tracker
 
-## What This Builds
+## Overview
 
-A full-page upload experience accessible from the Memory section of Settings (and via a new `/import` route) that lets users upload conversation exports from ChatGPT, Claude, and other platforms. The system runs a multi-stage AI analysis pipeline that builds a deep psychological profile — extracting personality traits, communication patterns, emotional tendencies, attachment styles, cognitive biases, values hierarchies, and narrative identity threads. The result feels like the AI has known the user for years.
+Implement the approved conversation filtering/scoring pipeline AND add a persistent progress bar at the top of the app so users can navigate freely during processing.
 
-## Current State
+## Architecture
 
-- Backend edge functions already exist: `import-chatgpt` (chunked extraction), `memory-synthesize` (narrative threads + identity profile), `extract-persona` (AI companion profiling), `clear-import` (cleanup)
-- These write to a `memories` table and `chat_imports` tracking table (neither visible in current schema — likely from an older migration or the `memories` table was removed)
-- No frontend UI exists for uploading — there is no import page, no upload button anywhere
-- The Memory tab in Settings has memory system controls but no import section
-
-## Database Changes
-
-1. **Create `chat_imports` table** (if not present — the edge functions reference it):
-   - `id`, `user_id`, `status` (pending/processing/completed/failed/cleared), `pipeline_stage`, `source_platform`, `total_conversations`, `processed_conversations`, `memories_created`, `questions_generated`, `conflicts_detected`, `file_size_bytes`, `created_at`, `completed_at`
-   - RLS: users see own imports, service role full access
-
-2. **Create `psychological_profile` table** — the deep profile output:
-   - `id`, `user_id`, `identity_narrative` (text), `personality_dimensions` (jsonb — Big Five, attachment style, cognitive style), `communication_patterns` (jsonb), `emotional_landscape` (jsonb — triggers, coping mechanisms, baseline mood), `values_hierarchy` (jsonb), `relational_dynamics` (jsonb), `cognitive_tendencies` (jsonb — biases, decision-making patterns), `growth_edges` (jsonb — areas of active development), `shadow_patterns` (jsonb — blind spots, contradictions), `raw_analysis` (jsonb), `version`, `created_at`, `updated_at`
-   - RLS: users own only
-
-3. **Create `curiosity_questions` table** (referenced by import-chatgpt but may not exist):
-   - `id`, `user_id`, `question`, `context`, `curiosity_score`, `status` (pending/shown/dismissed), `created_at`, `expires_at`
-
-## New Edge Function: `profile-deep-analysis`
-
-A new multi-pass analysis function that goes far beyond the existing `memory-synthesize`. It runs 5 specialized analysis passes using a powerful reasoning model:
-
-1. **Linguistic Fingerprinting** — vocabulary richness, sentence complexity, hedging patterns, assertion strength, humor style, metaphor usage
-2. **Psychological Profiling** — Big Five approximation, attachment style indicators, locus of control, cognitive complexity, emotional granularity
-3. **Relational Mapping** — who they mention, how they talk about relationships, power dynamics, dependency patterns, social identity
-4. **Values & Motivation Analysis** — implicit value hierarchy, intrinsic vs extrinsic motivations, what they optimize for, what they avoid
-5. **Shadow Analysis** — contradictions between stated values and behavior, blind spots, recurring avoidance patterns, growth edges
-
-Each pass uses the full memory corpus plus the outputs of previous passes (iterative deepening). Final output is synthesized into the `psychological_profile` table and stored as high-confidence engrams in the Mnemos system.
-
-## Frontend: Import View (`/import`)
-
-A dedicated full-page experience (also accessible from Settings > Memory tab):
-
-1. **Upload Stage** — Drag-and-drop zone accepting `.json` (ChatGPT export), `.txt`, `.csv`. Platform auto-detection. File validation and size display. Support for ChatGPT format initially (the parser already exists), with placeholders for Claude/Google/generic.
-
-2. **Processing Stage** — Real-time progress visualization:
-   - Animated pipeline stages: Parsing → Extracting → Profiling → Synthesizing → Complete
-   - Live counters: conversations processed, memories extracted, patterns found
-   - Subtle particle animation (reusing EchoField in 'thinking' state)
-   - Each stage shows what the AI is discovering in real-time (streaming insights)
-
-3. **Results Stage** — The "magic moment":
-   - Identity narrative displayed in elegant typography
-   - Personality dimensions as minimal bar visualizations
-   - Narrative threads as an interactive list
-   - Key insights highlighted as "things only someone who really knows you would notice"
-   - Curiosity questions the AI generated
-   - Option to re-run analysis or clear import
-
-## Pipeline Orchestration (Client-Side)
-
-The frontend orchestrates the pipeline by calling edge functions in sequence:
+The key insight: move import state from local `useState` into a **Zustand store** so it survives route changes. A slim progress banner in `AppShell` subscribes to this store and shows progress regardless of which page the user is on.
 
 ```text
-Upload JSON
-  → Parse & chunk conversations (client-side)
-  → POST each chunk to import-chatgpt (sequential, with progress)
-  → POST to memory-synthesize (narrative threads)
-  → POST to profile-deep-analysis (new — deep psychological profiling)
-  → Display results
+┌─────────────────────────────────────────────┐
+│  ImportProgressBanner (in AppShell)         │  ← always visible during import
+│  "Extracting memories... 7/10 chunks  ████░"│
+└─────────────────────────────────────────────┘
+│  Rail  │  Current Page (chat, memory, etc.) │
 ```
 
-## File Changes Summary
+## File Changes
 
-| File | Change |
-|------|--------|
-| `supabase/migrations/new` | Create `chat_imports`, `psychological_profile`, `curiosity_questions` tables |
-| `supabase/functions/profile-deep-analysis/index.ts` | New — 5-pass deep psychological analysis |
-| `src/pages/ImportView.tsx` | New — Full upload + progress + results page |
-| `src/App.tsx` | Add `/import` route |
-| `src/components/Rail.tsx` | Add import nav icon |
-| `src/pages/SettingsView.tsx` | Add "Import Conversations" button in Memory tab linking to `/import` |
+### 1. `src/stores/importStore.ts` (new)
+Zustand store holding all import pipeline state:
+- `stage`, `fileName`, `totalConversations`, `filteredCount`, `processedChunks`, `totalChunks`, `memoriesCreated`, `error`, `importId`
+- `startImport(file, user)` action that runs the full pipeline (parse, filter/score, chunk, extract, synthesize, profile)
+- Contains the filtering/scoring logic (skip < 6 messages, < 500 chars user text, score by user expression depth, take top 500)
+- Retry logic with 3 attempts + exponential backoff per chunk
+- Chunk size increased to 50
 
-## Technical Notes
+### 2. `src/components/ImportProgressBanner.tsx` (new)
+A thin bar rendered at the top of `AppShell` (above the main content area, below nothing — it's the topmost element):
+- Shows current stage label, chunk progress (e.g. "chunk 4/10"), and a progress bar
+- Subtle animation, matches the monochromatic design
+- "View details" link navigates to `/import`
+- Dismiss button when complete or on error
+- Only renders when `stage !== 'idle'`
 
-- The `import-chatgpt` function already handles ChatGPT's tree-structured JSON format with linearization, chunking, dedup, and confidence capping — we reuse it entirely
-- The new `profile-deep-analysis` function uses the user's OpenRouter key (same pattern as all other functions — no platform key)
-- All analysis passes use `google/gemini-2.5-pro` or equivalent reasoning model for maximum depth
-- Profile data is stored both as structured JSON (queryable) and as Mnemos engrams (retrievable by the chat system)
-- The pipeline is fault-tolerant — each stage can fail independently without losing prior work
+### 3. `src/pages/ImportView.tsx` (rewrite)
+- Remove local state management — consume from `importStore`
+- Add **pre-analysis summary** screen between file drop and processing: shows raw count, filtered count, date range, estimated time, "Begin Analysis" button
+- Upload zone triggers `importStore.startImport()`
+- Processing/complete/error views read from the store
+- Results section unchanged
+
+### 4. `src/App.tsx`
+- Import and render `ImportProgressBanner` inside `AppShell`, above `{children}`
+
+### 5. `supabase/functions/import-chatgpt/index.ts`
+- Minor: add server-side safety net to skip conversations with fewer than 4 messages after linearization (line ~180, existing filter is `>= 2`, change to `>= 4`)
+
+## Filtering Algorithm (client-side in importStore)
+
+```text
+score(conv) = userMsgCount * avgUserMsgLength * (hasPersonalContent ? 1.5 : 1.0)
+
+Pipeline:
+  raw conversations
+  → remove < 6 messages
+  → remove < 500 chars total user text
+  → score remaining
+  → sort descending
+  → take top 500
+```
+
+`hasPersonalContent` = regex check for first-person patterns ("I am", "I feel", "my family", "I've been", etc.)
+
+## No Database Changes
+
+All filtering is client-side. The only backend change is the minor server-side message count threshold bump in `import-chatgpt`.
 
