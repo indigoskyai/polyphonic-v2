@@ -4,6 +4,7 @@ import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import ReactMarkdown from 'react-markdown';
+import EchoField from '@/components/EchoField';
 
 /* ─── Typewriter hook: reveals text character by character ─── */
 function useTypewriter(text: string, speed = 12, active = true) {
@@ -702,17 +703,14 @@ export default function ChatView() {
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
         <div className="flex-1 flex flex-col items-center justify-center" style={{ padding: '0 32px' }}>
-          {/* Title + breathing dot */}
+          {/* Title + Echo particle field */}
           <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: '50%',
-              border: '1px solid rgba(220,219,216,0.06)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 24px',
-              animation: 'breathe 4s ease-in-out infinite',
-            }}>
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(220,219,216,0.12)' }} />
-            </div>
+            <EchoField
+              size={180}
+              particleCount={12000}
+              state={isStreaming ? 'thinking' : 'idle'}
+              style={{ margin: '0 auto 28px' }}
+            />
             <h1 style={{
               fontSize: 28,
               fontWeight: 300,
