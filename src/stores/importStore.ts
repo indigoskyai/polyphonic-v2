@@ -247,11 +247,15 @@ export const useImportStore = create<ImportState>((set, get) => ({
       if (!importId) throw new Error('Failed to create import record');
       set({ importId });
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error('No auth session');
-
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      const getToken = async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!data?.session?.access_token) throw new Error('No auth session');
+        return data.session.access_token;
+      };
+
+      let token = await getToken();
 
       // Stage 1: Extract in chunks with retry
       let accumulatedMemories: string[] = [];
@@ -306,7 +310,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
         }
       }
 
-      // Stage 2: Synthesize
+      // Stage 2: Synthesize — refresh token first
+      token = await getToken();
       set({ stage: 'synthesizing', pipelineDetail: '' });
       await callWithRetry(`${supabaseUrl}/functions/v1/memory-synthesize`, {
         method: 'POST',
@@ -317,7 +322,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
         body: JSON.stringify({ import_id: importId }),
       });
 
-      // Stage 3: Deep psychological analysis
+      // Stage 3: Deep psychological analysis — refresh token first
+      token = await getToken();
       set({ stage: 'profiling', pipelineDetail: '' });
       await callWithRetry(`${supabaseUrl}/functions/v1/profile-deep-analysis`, {
         method: 'POST',
