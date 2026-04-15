@@ -48,8 +48,38 @@ const STAGE_ORDER: PipelineStage[] = ['parsing', 'extracting', 'synthesizing', '
 
 function detectPlatform(data: any): string {
   if (Array.isArray(data) && data[0]?.mapping) return 'chatgpt';
-  if (Array.isArray(data) && data[0]?.uuid) return 'claude';
+  if (Array.isArray(data) && data[0]?.uuid && data[0]?.chat_messages) return 'claude';
   return 'unknown';
+}
+
+/**
+ * Convert Claude conversations into ChatGPT-compatible format
+ * so they can be processed by the same import-chatgpt edge function.
+ * Claude format: { uuid, name, created_at, chat_messages: [{sender, text, created_at_utc}] }
+ * ChatGPT format: { title, create_time, mapping: { [nodeId]: { message: { author: { role }, content: { parts }, create_time } } } }
+ */
+function convertClaudeToMapping(conversations: any[]): any[] {
+  return conversations
+    .filter((c: any) => c.chat_messages?.length >= 2)
+    .map((conv: any) => {
+      const mapping: Record<string, any> = {};
+      conv.chat_messages.forEach((msg: any, i: number) => {
+        const role = msg.sender === 'human' ? 'user' : msg.sender === 'assistant' ? 'assistant' : null;
+        if (!role || !msg.text?.trim()) return;
+        mapping[`node-${i}`] = {
+          message: {
+            author: { role },
+            content: { parts: [msg.text] },
+            create_time: msg.created_at_utc ? new Date(msg.created_at_utc).getTime() / 1000 : (conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0) + i,
+          },
+        };
+      });
+      return {
+        title: conv.name || 'Untitled',
+        create_time: conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0,
+        mapping,
+      };
+    });
 }
 
 export default function ImportView() {
@@ -103,13 +133,22 @@ export default function ImportView() {
       const data = JSON.parse(text);
       const platform = detectPlatform(data);
 
-      if (platform !== 'chatgpt') {
-        setState((s) => ({ ...s, stage: 'error', error: 'Currently only ChatGPT exports are supported. Export from ChatGPT → Settings → Data Controls → Export.' }));
+      if (platform === 'unknown') {
+        setState((s) => ({ ...s, stage: 'error', error: 'Unrecognized format. Supports ChatGPT (.json with mapping) and Claude (.json with chat_messages) exports.' }));
         return;
       }
 
-      const conversations = Array.isArray(data) ? data : [];
-      const validConvos = conversations.filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      // Normalize both formats into ChatGPT-compatible structure
+      let normalizedConvos: any[];
+      if (platform === 'claude') {
+        const rawConvos = Array.isArray(data) ? data : [];
+        normalizedConvos = convertClaudeToMapping(rawConvos);
+      } else {
+        const rawConvos = Array.isArray(data) ? data : [];
+        normalizedConvos = rawConvos.filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      }
+
+      const validConvos = normalizedConvos;
       const totalChunks = Math.ceil(validConvos.length / CHUNK_SIZE);
 
       setState((s) => ({
@@ -302,15 +341,18 @@ export default function ImportView() {
                   Drop your export file here
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>
-                  Supports ChatGPT JSON exports • .json
+                  Supports ChatGPT and Claude JSON exports
                 </div>
                 <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileSelect} style={{ display: 'none' }} />
               </div>
 
               <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.6, padding: '0 8px' }}>
                 <div style={{ fontWeight: 500, color: 'var(--text-tertiary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10 }}>How to export</div>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → Download the .zip → extract conversations.json
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → extract conversations.json from the .zip
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
                 </div>
               </div>
             </div>
