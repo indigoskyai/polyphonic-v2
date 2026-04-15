@@ -341,15 +341,18 @@ export default function ImportView() {
                   Drop your export file here
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>
-                  Supports ChatGPT JSON exports • .json
+                  Supports ChatGPT and Claude JSON exports
                 </div>
                 <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileSelect} style={{ display: 'none' }} />
               </div>
 
               <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.6, padding: '0 8px' }}>
                 <div style={{ fontWeight: 500, color: 'var(--text-tertiary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10 }}>How to export</div>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → Download the .zip → extract conversations.json
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → extract conversations.json from the .zip
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
                 </div>
               </div>
             </div>
