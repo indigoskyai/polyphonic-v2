@@ -550,9 +550,13 @@ ${batchText}`;
     }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error("import-chatgpt chunk error:", e);
-    return new Response(JSON.stringify({ error: "An unexpected error occurred." }), {
+    return new Response(JSON.stringify({
+      error: "An unexpected error occurred.",
+      details: e?.message || String(e),
+      stage: "unhandled",
+    }), {
       status: 500,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
