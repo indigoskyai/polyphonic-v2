@@ -247,11 +247,15 @@ export const useImportStore = create<ImportState>((set, get) => ({
       if (!importId) throw new Error('Failed to create import record');
       set({ importId });
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error('No auth session');
-
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      const getToken = async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!data?.session?.access_token) throw new Error('No auth session');
+        return data.session.access_token;
+      };
+
+      let token = await getToken();
 
       // Stage 1: Extract in chunks with retry
       let accumulatedMemories: string[] = [];
