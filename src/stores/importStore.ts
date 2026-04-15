@@ -39,7 +39,7 @@ interface ImportState {
   dismiss: () => void;
 }
 
-const CHUNK_SIZE = 10;
+const CHUNK_SIZE = 5;
 const MAX_CONVERSATIONS = 500;
 
 const PERSONAL_PATTERN = /\b(I am|I'm|I was|I feel|I felt|I think|I've been|I have been|my family|my wife|my husband|my partner|my kid|my child|my son|my daughter|my mom|my dad|my mother|my father|my friend|my job|my work|my career|I love|I hate|I want|I need|I wish|I believe|I struggle|I learned)\b/i;
