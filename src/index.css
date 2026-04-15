@@ -670,21 +670,9 @@
   position: relative;
 }
 .agent-pill:hover { color: var(--text-tertiary); background: var(--bg-surface); }
-.agent-pill.targeted { font-weight: 500; background: rgba(220,219,216,0.035); }
-.agent-pill.targeted.luca { color: rgba(220,219,216,0.7); }
-.agent-pill.targeted.guardian { color: rgba(220,219,216,0.7); }
-.agent-pill.targeted::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 8px;
-  right: 8px;
-  height: 1px;
-  border-radius: 1px;
-  background: rgba(220,219,216,0.15);
-}
-.agent-pill.targeted.luca::after { background: rgba(220,219,216,0.15); }
-.agent-pill.targeted.guardian::after { background: rgba(220,219,216,0.15); }
+.agent-pill.targeted { font-weight: 500; background: transparent; }
+.agent-pill.targeted.luca { color: rgba(220,219,216,0.75); text-shadow: 0 0 8px rgba(220,219,216,0.15); }
+.agent-pill.targeted.guardian { color: rgba(220,219,216,0.75); text-shadow: 0 0 8px rgba(220,219,216,0.15); }
 .pill-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--text-whisper); }
 
 .send-btn {
