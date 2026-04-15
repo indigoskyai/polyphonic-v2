@@ -262,8 +262,11 @@ serve(async (req) => {
     }
 
     // Build conversation text, truncating long conversations
-    const MAX_CHARS_PER_CONV = 80000;
-    const batchText = linearized.map((conv: any) => {
+    const MAX_CHARS_PER_CONV = 30000;
+    const MAX_BATCH_CHARS = 600000; // ~150K tokens, safe for 1M context with prompt overhead
+    const convTexts: string[] = [];
+    let batchCharCount = 0;
+    for (const conv of linearized) {
       const date = conv.create_time
         ? new Date(conv.create_time * 1000).toISOString().split("T")[0]
         : "unknown date";
@@ -271,8 +274,12 @@ serve(async (req) => {
       const msgText = truncated
         .map((m: any) => `${m.role}: ${m.content}`)
         .join("\n");
-      return `--- Conversation: "${conv.title}" (${date}) ---\n${msgText}`;
-    }).join("\n\n");
+      const entry = `--- Conversation: "${conv.title}" (${date}) ---\n${msgText}`;
+      if (batchCharCount + entry.length > MAX_BATCH_CHARS) break;
+      convTexts.push(entry);
+      batchCharCount += entry.length;
+    }
+    const batchText = convTexts.join("\n\n");
 
     // Fetch existing memories for dedup context
     const { data: existingMemories } = await supabase
