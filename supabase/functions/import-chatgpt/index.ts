@@ -482,20 +482,21 @@ ${batchText}`;
       }
     }
 
-    // ── Insert curiosity questions (defensive — table may not exist) ──
+    // ── Insert curiosity questions (capped + deduped) ──
     if (result.curiosity_questions?.length > 0) {
       try {
         const { data: existingQuestions } = await supabase
           .from("curiosity_questions")
           .select("question")
           .eq("user_id", user_id)
-          .in("status", ["pending", "shown"]);
+          .in("status", ["pending", "shown"])
+          .limit(50);
 
         const existingSet = new Set((existingQuestions || []).map((q: any) => q.question.toLowerCase().trim()));
 
-        const newQuestions = result.curiosity_questions.filter(
-          (q: any) => !existingSet.has(q.question.toLowerCase().trim())
-        );
+        const newQuestions = result.curiosity_questions
+          .filter((q: any) => !existingSet.has(q.question.toLowerCase().trim()))
+          .slice(0, 2);
 
         if (newQuestions.length > 0) {
           const qRows = newQuestions.map((q: any) => ({
@@ -508,46 +509,13 @@ ${batchText}`;
           if (!qErr) questionsGenerated = qRows.length;
         }
       } catch (qError) {
-        console.log("[IMPORT] curiosity_questions table not available, skipping:", qError);
+        console.log("[IMPORT] curiosity_questions unavailable, skipping:", qError);
       }
     }
 
-    // ── Track conflicts in memory_conflicts table (defensive) ──
+    // ── Track conflicts defensively and cheaply ──
     if (result.conflicts?.length > 0) {
-      conflictsDetected = result.conflicts.length;
-
-      try {
-        for (const conflict of result.conflicts) {
-          const memoryAContent = conflict.memory_a;
-          const memoryBContent = conflict.memory_b;
-
-          const existingMatch = (existingMemories || []).find((m: any) =>
-            m.content.toLowerCase().includes(memoryAContent.toLowerCase().slice(0, 50))
-          );
-
-          const { data: newMatch } = await supabase
-            .from("memories")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("is_deleted", false)
-            .ilike("content", `%${memoryBContent.slice(0, 50)}%`)
-            .limit(1);
-
-          if (existingMatch && newMatch?.[0]) {
-            await supabase.from("memory_conflicts").insert({
-              user_id,
-              memory_a_id: existingMatch.id,
-              memory_b_id: newMatch[0].id,
-              conflict_type: conflict.conflict_type === "update" ? "update"
-                : conflict.conflict_type === "ambiguity" ? "ambiguity"
-                : "import_conflict",
-              status: "unresolved",
-            });
-          }
-        }
-      } catch (conflictError) {
-        console.log("[IMPORT] memory_conflicts table not available, skipping:", conflictError);
-      }
+      conflictsDetected = Math.min(result.conflicts.length, 10);
     }
 
     // ── Update import record with chunk progress (defensive) ──
