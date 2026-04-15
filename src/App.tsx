@@ -14,6 +14,7 @@ import DashboardView from "./pages/DashboardView";
 import MemoryView from "./pages/MemoryView";
 import MindView from "./pages/MindView";
 import ImportView from "./pages/ImportView";
+import ProfileView from "./pages/ProfileView";
 import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Clockbar from "./components/Clockbar";
@@ -82,6 +83,7 @@ const App = () => (
             <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
             <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
             <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
