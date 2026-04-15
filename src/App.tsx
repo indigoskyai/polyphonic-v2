@@ -19,6 +19,7 @@ import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Clockbar from "./components/Clockbar";
 import CommandPalette from "./components/CommandPalette";
+import ImportProgressBanner from "./components/ImportProgressBanner";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen" style={{ background: 'var(--bg-primary)' }}>
       <Rail />
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+        <ImportProgressBanner />
         {children}
         {clockbarVisible && <Clockbar />}
       </div>
