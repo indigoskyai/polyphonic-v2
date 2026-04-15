@@ -391,14 +391,12 @@ ${batchText}`;
 
     // ── Intra-batch dedup: remove duplicates the LLM extracted within this chunk ──
     if (result.memories?.length > 0) {
-      const seenInBatch: string[] = [];
+      const seenInBatch = new Set<string>();
       result.memories = result.memories.filter((m: any) => {
-        const norm = m.content.toLowerCase().trim();
-        const isDupInBatch = seenInBatch.some(s =>
-          s === norm || wordSetOverlap(s, norm) > 0.7
-        );
-        if (isDupInBatch) return false;
-        seenInBatch.push(norm);
+        const signature = getMemorySignature(m.content || "");
+        if (!signature) return false;
+        if (seenInBatch.has(signature)) return false;
+        seenInBatch.add(signature);
         return true;
       });
     }
@@ -418,45 +416,25 @@ ${batchText}`;
     const batchStaleness = avgCreateTime > 0 ? calculateStalenessRisk(avgCreateTime) : "medium";
     const batchEstimatedDate = avgCreateTime > 0 ? getEstimatedDate(avgCreateTime) : null;
 
-    // ── Insert memories with dedup check, confidence ceiling, and staleness ──
+    const existingSignatures = new Set(
+      (existingMemories || []).map((m: any) => getMemorySignature(m.content || "")).filter(Boolean)
+    );
+    const accumulatedSignatures = new Set(
+      accumulatedList.map((m: string) => getMemorySignature(m || "")).filter(Boolean)
+    );
+
+    // ── Insert memories with lightweight dedup, confidence ceiling, and staleness ──
     if (result.memories?.length > 0) {
       const memoryRows: any[] = [];
 
       for (const m of result.memories) {
-        // Dedup: check against DB memories + accumulated memories from earlier chunks
-        const normalizedContent = m.content.toLowerCase().trim();
+        const signature = getMemorySignature(m.content || "");
+        if (!signature) continue;
+        if (existingSignatures.has(signature) || accumulatedSignatures.has(signature)) continue;
 
-        // Check against DB memories
-        const isDupInDB = (existingMemories || []).some((existing: any) => {
-          const existingNorm = existing.content.toLowerCase().trim();
-          if (existingNorm === normalizedContent) return true;
-          if (normalizedContent.length > 30 && existingNorm.length > 30) {
-            if (existingNorm.includes(normalizedContent.slice(0, 50)) || normalizedContent.includes(existingNorm.slice(0, 50))) {
-              return true;
-            }
-          }
-          if (wordSetOverlap(normalizedContent, existingNorm) > 0.7) return true;
-          return false;
-        });
+        existingSignatures.add(signature);
+        accumulatedSignatures.add(signature);
 
-        // Check against accumulated memories from earlier chunks
-        const isDupInAccumulated = accumulatedList.some((acc: string) => {
-          const accNorm = acc.toLowerCase().trim();
-          if (accNorm === normalizedContent) return true;
-          if (normalizedContent.length > 30 && accNorm.length > 30) {
-            if (accNorm.includes(normalizedContent.slice(0, 50)) || normalizedContent.includes(accNorm.slice(0, 50))) {
-              return true;
-            }
-          }
-          if (wordSetOverlap(normalizedContent, accNorm) > 0.7) return true;
-          return false;
-        });
-
-        const isDuplicate = isDupInDB || isDupInAccumulated;
-
-        if (isDuplicate) continue;
-
-        // Apply confidence ceiling for imported memories
         const rawConfidence = m.confidence ?? 0.5;
         const cappedConfidence = Math.min(rawConfidence, IMPORT_CONFIDENCE_CEILING);
         const needsConfirmation = batchStaleness === "high";
