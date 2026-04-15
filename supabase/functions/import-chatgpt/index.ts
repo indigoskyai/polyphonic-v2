@@ -48,22 +48,54 @@ function truncateConversation(messages: { role: string; content: string }[], max
   return result;
 }
 
-// ─── Import-specific constants ───
-
-const IMPORT_CONFIDENCE_CEILING = 0.85;
-const EXTRACTION_MODEL = "google/gemini-2.5-flash";
-
-function calculateStalenessRisk(createTime: number): "low" | "medium" | "high" {
-  const ageMs = Date.now() - createTime * 1000;
-  const sixMonths = 6 * 30 * 86400 * 1000;
-  const twelveMonths = 12 * 30 * 86400 * 1000;
-  if (ageMs < sixMonths) return "low";
-  if (ageMs < twelveMonths) return "medium";
-  return "high";
+function normalizeMemoryText(value: string): string {
+  return value.toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function getEstimatedDate(createTime: number): string {
-  return new Date(createTime * 1000).toISOString().split("T")[0];
+function getMemorySignature(value: string): string {
+  return normalizeMemoryText(value).split(" ").filter(Boolean).slice(0, 12).join(" ");
+}
+
+function extractJsonFromResponse(response: string): unknown {
+  let cleaned = response
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) {
+    throw new Error("No JSON found in model response");
+  }
+
+  const opening = cleaned[jsonStart];
+  const closing = opening === "[" ? "]" : "}";
+  const jsonEnd = cleaned.lastIndexOf(closing);
+  if (jsonEnd === -1 || jsonEnd <= jsonStart) {
+    throw new Error("Incomplete JSON in model response");
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    cleaned = cleaned
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(cleaned);
+  }
+}
+
+function detectTruncation(response: string): boolean {
+  const text = response.trim();
+  const openBraces = (text.match(/\{/g) || []).length;
+  const closeBraces = (text.match(/\}/g) || []).length;
+  const openBrackets = (text.match(/\[/g) || []).length;
+  const closeBrackets = (text.match(/\]/g) || []).length;
+
+  if (openBraces !== closeBraces || openBrackets !== closeBrackets) return true;
+  return [/\.\.\.$/, /\u2026$/, /\[truncated\]/i, /\[continued\]/i].some((p) => p.test(text));
 }
 
 // Word-set overlap for fuzzy dedup — returns 0-1 ratio of shared words
