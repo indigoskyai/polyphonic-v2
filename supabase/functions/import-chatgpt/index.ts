@@ -247,7 +247,7 @@ serve(async (req) => {
         messages: linearizeMapping(conv.mapping),
         create_time: conv.create_time || 0,
       }))
-      .filter((c: any) => c.messages.length >= 2);
+      .filter((c: any) => c.messages.length >= 4);
 
     if (linearized.length === 0) {
       return new Response(JSON.stringify({
