@@ -294,8 +294,8 @@ serve(async (req) => {
     }
 
     // Build conversation text, truncating long conversations
-    const MAX_CHARS_PER_CONV = 20000;
-    const MAX_BATCH_CHARS = 300000; // ~75K tokens, keeps CPU time under limit
+    const MAX_CHARS_PER_CONV = 12000;
+    const MAX_BATCH_CHARS = 160000;
     const convTexts: string[] = [];
     let batchCharCount = 0;
     for (const conv of linearized) {
@@ -304,6 +304,7 @@ serve(async (req) => {
         : "unknown date";
       const truncated = truncateConversation(conv.messages, MAX_CHARS_PER_CONV);
       const msgText = truncated
+        .slice(0, 24)
         .map((m: any) => `${m.role}: ${m.content}`)
         .join("\n");
       const entry = `--- Conversation: "${conv.title}" (${date}) ---\n${msgText}`;
@@ -313,19 +314,21 @@ serve(async (req) => {
     }
     const batchText = convTexts.join("\n\n");
 
-    // Fetch existing memories for dedup context
+    // Fetch a smaller memory context for dedup + prompt context
     const { data: existingMemories } = await supabase
       .from("memories")
       .select("id, content, memory_type, confidence")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
-      .limit(500);
+      .limit(150);
 
-    // Merge DB memories with accumulated memories from earlier chunks in this import
-    const accumulatedList: string[] = Array.isArray(accumulated_memories) ? accumulated_memories : [];
+    // Merge DB memories with a capped recent subset from earlier chunks in this import
+    const accumulatedList: string[] = Array.isArray(accumulated_memories)
+      ? accumulated_memories.slice(-40)
+      : [];
     const existingMemoryText = [
-      ...(existingMemories || []).map((m: any) => `[${m.memory_type}] ${m.content}`),
+      ...(existingMemories || []).slice(0, 80).map((m: any) => `[${m.memory_type}] ${m.content}`),
       ...accumulatedList.map((c: string) => `[earlier_chunk] ${c}`),
     ].join("\n");
 
@@ -348,7 +351,7 @@ ${batchText}`;
       body: JSON.stringify({
         model: EXTRACTION_MODEL,
         messages: [{ role: "user", content: fullPrompt }],
-        temperature: 0.2,
+        temperature: 0.1,
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
@@ -357,7 +360,7 @@ ${batchText}`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error(`Chunk ${chunk_index} AI call failed (${aiResponse.status}):`, errText);
-      return new Response(JSON.stringify({ error: "AI extraction failed", details: errText.slice(0, 200) }), {
+      return new Response(JSON.stringify({ error: "AI extraction failed", details: errText.slice(0, 500), stage: "ai_call" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
@@ -370,15 +373,18 @@ ${batchText}`;
     try {
       const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
       if (toolCall?.function?.arguments) {
-        result = JSON.parse(toolCall.function.arguments);
+        result = extractJsonFromResponse(toolCall.function.arguments);
       } else {
         const content = aiData.choices?.[0]?.message?.content || "{}";
-        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        result = JSON.parse(cleaned);
+        if (detectTruncation(content)) {
+          throw new Error("Model response appears truncated");
+        }
+        result = extractJsonFromResponse(content);
       }
-    } catch (parseErr) {
-      console.error("Failed to parse extraction:", parseErr);
-      return new Response(JSON.stringify({ error: "parse error", memories_created: 0, questions_generated: 0, conflicts_detected: 0 }), {
+    } catch (parseErr: any) {
+      console.error("Failed to parse extraction:", parseErr, aiData?.choices?.[0]?.message);
+      return new Response(JSON.stringify({ error: "parse error", details: parseErr?.message || "unknown parse error", stage: "parse", memories_created: 0, questions_generated: 0, conflicts_detected: 0 }), {
+        status: 200,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
