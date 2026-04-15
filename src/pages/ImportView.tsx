@@ -48,8 +48,38 @@ const STAGE_ORDER: PipelineStage[] = ['parsing', 'extracting', 'synthesizing', '
 
 function detectPlatform(data: any): string {
   if (Array.isArray(data) && data[0]?.mapping) return 'chatgpt';
-  if (Array.isArray(data) && data[0]?.uuid) return 'claude';
+  if (Array.isArray(data) && data[0]?.uuid && data[0]?.chat_messages) return 'claude';
   return 'unknown';
+}
+
+/**
+ * Convert Claude conversations into ChatGPT-compatible format
+ * so they can be processed by the same import-chatgpt edge function.
+ * Claude format: { uuid, name, created_at, chat_messages: [{sender, text, created_at_utc}] }
+ * ChatGPT format: { title, create_time, mapping: { [nodeId]: { message: { author: { role }, content: { parts }, create_time } } } }
+ */
+function convertClaudeToMapping(conversations: any[]): any[] {
+  return conversations
+    .filter((c: any) => c.chat_messages?.length >= 2)
+    .map((conv: any) => {
+      const mapping: Record<string, any> = {};
+      conv.chat_messages.forEach((msg: any, i: number) => {
+        const role = msg.sender === 'human' ? 'user' : msg.sender === 'assistant' ? 'assistant' : null;
+        if (!role || !msg.text?.trim()) return;
+        mapping[`node-${i}`] = {
+          message: {
+            author: { role },
+            content: { parts: [msg.text] },
+            create_time: msg.created_at_utc ? new Date(msg.created_at_utc).getTime() / 1000 : (conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0) + i,
+          },
+        };
+      });
+      return {
+        title: conv.name || 'Untitled',
+        create_time: conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0,
+        mapping,
+      };
+    });
 }
 
 export default function ImportView() {
