@@ -27,9 +27,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       style={{
         animation: 'settingsOverlayIn 300ms var(--ease-premium) both',
       }}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
+      onClick={onClose}
     >
       {/* Blurred backdrop */}
       <div
@@ -44,13 +42,14 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       {/* Floating card */}
       <div
         className="relative flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: 'min(780px, 90vw)',
           height: 'min(600px, 85vh)',
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-xl)',
-          boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.02)',
           animation: 'settingsCardIn 400ms var(--ease-premium) both',
         }}
       >
