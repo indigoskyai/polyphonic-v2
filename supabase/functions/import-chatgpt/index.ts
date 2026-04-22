@@ -124,9 +124,9 @@ function getEstimatedDate(createTime: number): string {
   return new Date(createTime * 1000).toISOString().split("T")[0];
 }
 
-// ─── Single-pass extraction prompt ───
+// ─── Single-pass extraction prompts (one per source_type) ───
 
-const EXTRACTION_PROMPT = `You are a memory extraction system for an AI companion. You will analyze a batch of conversations and extract meaningful memories about the USER in a single pass.
+const EXTRACTION_PROMPT_CHAT = `You are a memory extraction system for an AI companion. You will analyze a batch of conversations and extract meaningful memories about the USER in a single pass.
 
 Focus on what actually matters for a companion who knows this person:
 
@@ -172,6 +172,64 @@ Confidence sources:
 Also generate 2-3 curiosity questions — things a companion might genuinely wonder about based on these conversations. They should feel natural and caring, not interrogative.
 
 Flag any contradictions you notice between different conversations in this batch OR with existing memories.`;
+
+const EXTRACTION_PROMPT_TWEETS = `You are a memory extraction system for an AI companion. The input below is a batch of the USER's own social media posts (tweets) — NO AI counterpart. Each "conversation" contains multiple short user-only utterances posted publicly.
+
+Treat tweets as windows into the user's voice, opinions, interests, and identity. They show what the person chooses to broadcast — strong signal for personality, values, taste, and recurring themes.
+
+**HIGH PRIORITY:**
+- Stated opinions, beliefs, or stances on topics
+- Recurring interests (what subjects come up repeatedly?)
+- Emotional patterns — frustration, enthusiasm, humor style, sarcasm
+- Self-disclosures (work, relationships, struggles, wins)
+- People they mention by handle or name (relational map)
+- Aesthetic and cultural preferences (music, books, art, technology)
+- How they think (analytical, poetic, contrarian, supportive)
+- Values revealed by what they call out or celebrate
+
+**SKIP:**
+- Pure links or media descriptions with no personal angle
+- One-off retweet-like reactions with no original content
+- Generic observations without personal stake
+
+CONFIDENCE RULES (tweets are public, often performative — be cautious):
+- Direct first-person statements ("I am / I love / I hate") → 0.65 max
+- Stated opinions / strong reactions → 0.55 max
+- Inferred personality patterns from style → 0.45 max
+- NEVER exceed 0.70 for tweet-derived memories
+- Use "user_explicit" only when the tweet directly states a fact about themselves
+
+Use detail_level "brief" for most tweets, "standard" for substantive disclosures, "detailed" only for clear identity-level statements.
+
+Generate 2-3 curiosity questions a companion might wonder about based on patterns across the tweets.`;
+
+const EXTRACTION_PROMPT_DMS = `You are a memory extraction system for an AI companion. The input below is a batch of the USER's direct messages — private conversations between the user and other people. The "user" role is the archive owner; "assistant" role represents the OTHER person they're talking to.
+
+Treat DMs as relational data: who they talk to, how they show up in close conversations, the dynamics with specific people, and personal disclosures made in private.
+
+**HIGH PRIORITY:**
+- The user's relational style (warm, terse, playful, vulnerable, formal)
+- Disclosures the user makes about themselves
+- Recurring people and the user's relationship to them
+- Emotional dynamics (support, conflict, intimacy, humor)
+- Plans, commitments, shared history with specific contacts
+
+**SKIP:**
+- What the OTHER person says about themselves (only capture what it tells us about the USER)
+- Logistics that have no personal weight ("on my way", "ok cool")
+
+CONFIDENCE RULES:
+- Direct first-person disclosures in private → 0.75 max (private = more candid)
+- Inferred relational dynamics → 0.55 max
+- NEVER exceed 0.80 for DM-derived memories
+
+Generate 2-3 curiosity questions about the user's relationships or relational patterns.`;
+
+function getExtractionPrompt(sourceType?: string): string {
+  if (sourceType === 'tweets') return EXTRACTION_PROMPT_TWEETS;
+  if (sourceType === 'dms') return EXTRACTION_PROMPT_DMS;
+  return EXTRACTION_PROMPT_CHAT;
+}
 
 // ─── Tool schema ───
 
