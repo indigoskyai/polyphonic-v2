@@ -26,10 +26,8 @@ export default function ImportView() {
   const {
     stage, fileName, fileSize, totalConversations, filteredCount,
     processedChunks, totalChunks, memoriesCreated, conflictsDetected,
-    pipelineDetail, error, filterStats, profileData, platform,
-    detectedSources, adapterContext, adapterOverride,
+    pipelineDetail, error, filterStats, profileData,
     parseAndFilter, startImport, reset,
-    setAdapterOverride, setAdapterContext, applyAdapterSelection,
   } = useImportStore();
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -88,8 +86,8 @@ export default function ImportView() {
               >
                 <div style={{ fontSize: 32, color: 'var(--text-ghost)', marginBottom: 12, fontWeight: 200 }}>↑</div>
                 <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>Drop your export file here</div>
-                <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>JSON, ZIP, or TXT — ChatGPT, Claude, Gemini, Grok, X/Twitter</div>
-                <input ref={fileInputRef} type="file" accept=".json,.zip,.txt,.js" onChange={handleFileSelect} style={{ display: 'none' }} />
+                <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>Supports ChatGPT and Claude JSON exports</div>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileSelect} style={{ display: 'none' }} />
               </div>
 
               <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.6, padding: '0 8px' }}>
@@ -97,17 +95,8 @@ export default function ImportView() {
                 <div style={{ marginBottom: 6 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → extract conversations.json from the .zip
                 </div>
-                <div style={{ marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Gemini:</span> takeout.google.com → select "Gemini Apps" → use the MyActivity.json file
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Grok:</span> X/Grok Settings → Data → Export Conversations → use the JSON file
-                </div>
                 <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>X / Twitter:</span> Settings → Your account → Download an archive of your data → upload the entire .zip (we'll find tweets &amp; DMs)
+                  <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
                 </div>
               </div>
             </div>
@@ -134,67 +123,6 @@ export default function ImportView() {
                 </h2>
                 <div style={{ fontSize: 13, color: 'var(--text-ghost)' }}>{fileName}</div>
               </div>
-
-              {/* Detected platform / source confirmation */}
-              {detectedSources.length > 0 && (
-                <div style={{ padding: '20px 24px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', marginBottom: 24 }}>
-                  <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 12 }}>Detected Source</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>
-                    {platform || detectedSources.map((s) => s.adapterLabel).join(' + ')}
-                    {detectedSources.length > 1 && (
-                      <span style={{ fontSize: 11, color: 'var(--text-ghost)', marginLeft: 8 }}>
-                        ({detectedSources.length} files)
-                      </span>
-                    )}
-                  </div>
-
-                  {/* X archive: include tweets / DMs toggles */}
-                  {detectedSources.some((s) => s.adapterId === 'x-tweets' || s.adapterId === 'x-dms') && (
-                    <div className="flex items-center gap-4" style={{ marginBottom: 12 }}>
-                      {detectedSources.some((s) => s.adapterId === 'x-tweets') && (
-                        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          <input
-                            type="checkbox"
-                            checked={adapterContext.includeTweets !== false}
-                            onChange={(e) => { setAdapterContext({ includeTweets: e.target.checked }); applyAdapterSelection(); }}
-                          />
-                          Include tweets
-                        </label>
-                      )}
-                      {detectedSources.some((s) => s.adapterId === 'x-dms') && (
-                        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          <input
-                            type="checkbox"
-                            checked={adapterContext.includeDMs !== false}
-                            onChange={(e) => { setAdapterContext({ includeDMs: e.target.checked }); applyAdapterSelection(); }}
-                          />
-                          Include DMs
-                        </label>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Manual override (only when single source) */}
-                  {detectedSources.length === 1 && (
-                    <div style={{ fontSize: 11, color: 'var(--text-ghost)' }}>
-                      Wrong platform?{' '}
-                      <select
-                        value={adapterOverride || detectedSources[0].adapterId}
-                        onChange={(e) => { setAdapterOverride(e.target.value); applyAdapterSelection(); }}
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', fontSize: 11, padding: '2px 6px' }}
-                      >
-                        <option value="chatgpt">ChatGPT</option>
-                        <option value="claude">Claude</option>
-                        <option value="gemini">Gemini</option>
-                        <option value="grok">Grok</option>
-                        <option value="x-tweets">X / Twitter — Tweets</option>
-                        <option value="x-dms">X / Twitter — DMs</option>
-                        <option value="generic">Generic / Other</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Filter stats */}
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 32 }}>
