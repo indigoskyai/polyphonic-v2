@@ -177,16 +177,15 @@ ${memoryDump}`;
     // Use gemini-2.5-pro for synthesis (better reasoning for cross-referencing)
     const synthesisModel = "google/gemini-2.5-pro";
 
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openrouterKey}`,
+        Authorization: `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: synthesisModel,
         messages: [{ role: "user", content: fullPrompt }],
-        temperature: 0.3,
         tools: [synthesisTool],
         tool_choice: { type: "function", function: { name: "synthesize_memories" } },
       }),
