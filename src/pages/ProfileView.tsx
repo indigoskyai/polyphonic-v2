@@ -193,14 +193,24 @@ export default function ProfileView() {
             v{profile.version} · updated {new Date(profile.updated_at).toLocaleDateString()} · {memoryStats?.total || 0} memories analyzed
           </div>
         </div>
-        <button
-          onClick={loadData}
-          className="text-[10px] px-3 py-1.5 rounded"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
-        >
-          Refresh
-        </button>
-      </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generateProfile}
+            disabled={generating}
+            className="text-[10px] px-3 py-1.5 rounded"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: generating ? 'var(--text-ghost)' : 'var(--text-tertiary)', cursor: generating ? 'wait' : 'pointer' }}
+            title="Re-run the 5-pass deep analysis on your latest memories"
+          >
+            {generating ? 'Regenerating...' : 'Regenerate'}
+          </button>
+          <button
+            onClick={loadData}
+            className="text-[10px] px-3 py-1.5 rounded"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
+          >
+            Refresh
+          </button>
+        </div>
 
       {/* Tabs */}
       <div className="flex gap-0.5 shrink-0 overflow-x-auto" style={{ padding: '8px 24px', scrollbarWidth: 'none' }}>
