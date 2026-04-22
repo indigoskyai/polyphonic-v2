@@ -503,8 +503,11 @@ serve(async (req) => {
 
 After the shadow analysis, synthesize ALL five passes into a complete structured profile using the save_psychological_profile tool.
 
-MEMORY CORPUS:
-${memoryCorpus}
+HIGH-SIGNAL MEMORY EXCERPT:
+${memoryExcerpt}
+
+FULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):
+${memoryCorpus.slice(0, 30000)}
 
 --- PASS 1 (Linguistic Fingerprint) ---
 ${pass1}
@@ -530,7 +533,7 @@ ${pass4}`;
           model: ANALYSIS_MODEL,
           messages: [{ role: "user", content: finalPrompt }],
           temperature: 0.3,
-          max_tokens: 12000,
+          max_tokens: 7000,
           tools: [profileTool],
           tool_choice: {
             type: "function",
@@ -690,6 +693,8 @@ ${pass4}`;
       // @ts-ignore
       EdgeRuntime.waitUntil(bgTask);
     }
+
+    console.log(`profile-deep-analysis request accepted for user ${user_id}`);
 
     return new Response(
       JSON.stringify({
