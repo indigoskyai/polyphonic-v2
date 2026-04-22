@@ -277,11 +277,10 @@ serve(async (req) => {
       });
     }
 
-    // Get user's API key
-    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
-    const openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
-    if (!openrouterKey) {
-      return new Response(JSON.stringify({ error: "No API key. User must add their OpenRouter key in Settings." }), {
+    // Use Lovable AI Gateway (no user key required)
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableApiKey) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
         status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
@@ -357,17 +356,16 @@ ${existingMemoryText || "None yet — this is the first batch."}
 CONVERSATIONS TO ANALYZE (chunk ${chunk_index + 1} of ${total_chunks}):
 ${batchText}`;
 
-    // Single AI call with tool calling
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // Single AI call with tool calling via Lovable AI Gateway
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openrouterKey}`,
+        Authorization: `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: EXTRACTION_MODEL,
         messages: [{ role: "user", content: fullPrompt }],
-        temperature: 0.1,
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
