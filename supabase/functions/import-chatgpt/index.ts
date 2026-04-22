@@ -407,7 +407,7 @@ serve(async (req) => {
     ].join("\n");
 
     // Build prompt
-    const fullPrompt = `${EXTRACTION_PROMPT}
+    const fullPrompt = `${getExtractionPrompt(sourceType)}
 
 ALREADY KNOWN MEMORIES (do NOT duplicate these — skip if the information is already captured):
 ${existingMemoryText || "None yet — this is the first batch."}
@@ -530,6 +530,7 @@ ${batchText}`;
           needs_confirmation: needsConfirmation,
           provenance: {
             source: "chatgpt_import",
+            source_type: sourceType,
             import_id,
             chunk_index,
             pipeline: "chunked_single_pass_v3",
