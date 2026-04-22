@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import InnerCosmos from '@/components/profile/InnerCosmos';
 
 type Profile = {
   identity_narrative: string | null;
@@ -38,6 +39,8 @@ export default function ProfileView() {
   const [activeTab, setActiveTab] = useState<Tab>('Portrait');
   const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode = searchParams.get('view') === 'classic' ? 'classic' : 'cosmos';
 
   const starterPrompts = useMemo(() => {
     const prompts: string[] = [];
@@ -232,6 +235,19 @@ export default function ProfileView() {
     );
   }
 
+  if (viewMode === 'cosmos') {
+    return (
+      <InnerCosmos
+        profile={profile}
+        memoryCount={memoryStats?.total ?? 0}
+        generating={generating}
+        onRegenerate={generateProfile}
+        onRefresh={loadData}
+        onSwitchToClassic={() => setSearchParams({ view: 'classic' })}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -272,6 +288,14 @@ export default function ProfileView() {
               style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
             >
               Refresh
+            </button>
+            <button
+              onClick={() => setSearchParams({})}
+              className="text-[10px] px-3 py-1.5 rounded"
+              style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-ghost)', cursor: 'pointer' }}
+              title="Switch to the Inner Cosmos view"
+            >
+              Cosmos view
             </button>
           </div>
         </div>
