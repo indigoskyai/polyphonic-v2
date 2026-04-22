@@ -1,131 +1,160 @@
 
 
-# Comprehensive Import, Profile & Insight-Chat Plan
+# The Inner Cosmos — A Living Self-Portrait Dashboard
 
-Three coordinated workstreams: (1) full import management, (2) universal multi-platform import, (3) deep evidence-grounded chat about your psychological profile.
+A complete reimagining of `/profile` as a **gravitational, modular, living interface** that turns your psychological data into something you cannot stop looking at — and that genuinely changes how you live.
 
----
-
-## Part 1 — Import Management Controls
-
-**New "Imports" tab capabilities** (in `/memory` → Imports):
-
-- **Per-import "Manage" panel** that opens when you click an import row, showing:
-  - Source platform, file size, date range, memory/question counts
-  - Live pipeline stage if still running
-  - Three actions: **Delete import**, **Re-run profiling**, **View memories from this import**
-- **Delete import** → confirm dialog → cascades:
-  - The `chat_imports` row
-  - All `memories` where `provenance->>'import_id'` matches
-  - All `curiosity_questions` created in that import's window
-  - **Engrams/beliefs are preserved** (they may have been reinforced from other sources)
-- **Re-run profiling button** at top of Imports tab → triggers `profile-deep-analysis` against the current memory corpus and bumps profile `version`. Shows live "analyzing..." state with the same polling pattern already used in `ProfileView`.
-- **Bulk delete** for selecting multiple imports at once.
-
-**Backend work:**
-- Extend existing `clear-import` edge function to a new `delete-import` function that performs hard cascade (it currently soft-marks as "cleared"). Keep the original behavior available via a `mode: 'soft' | 'hard'` parameter.
+I convened five internal perspectives to attack this problem. Their final synthesis is below.
 
 ---
 
-## Part 2 — Universal, Model-Agnostic Importer
+## The Five Lenses (condensed)
 
-Refactor `importStore.ts` parsing into a pluggable **adapter system**. Each adapter exports `{ detect(json), normalize(json) → Conversation[] }` producing the same internal shape (the existing ChatGPT mapping format).
+**1. The Cartographer** — "Make the self a map you can walk through. Spatial memory is the deepest memory."
+**2. The Astronomer** — "Treat psychological dimensions as celestial bodies with mass, orbit, and gravity. People stare at star charts for hours."
+**3. The Biologist** — "The self is a living organism — it breathes, it has rhythms, it has weather. Show the pulse."
+**4. The Oracle** — "Every datum should whisper a question back. Insight isn't displayed — it's *provoked*."
+**5. The Architect of Daily Life** — "Mesmerizing is worthless without utility. Every visualization must answer: *what should I do today?*"
 
-**Adapters to ship:**
-
-| Platform | File format | Notes |
-|---|---|---|
-| ChatGPT | `conversations.json` | already works |
-| Claude | array with `chat_messages` | already works |
-| **Gemini** (Google Takeout) | `MyActivity.json` from Takeout → "Gemini Apps" | each entry = single user prompt + response |
-| **Grok** (xAI export) | JSON conversation list | similar to ChatGPT shape |
-| **X/Twitter — Tweets** | `tweets.js` from X archive | treated as **user-only utterances**; new "tweet-extractor" prompt focused on opinions, interests, beliefs, relational mentions |
-| **X/Twitter — DMs** | `direct-messages.js` | treated as **relational conversations**; uses standard memory extractor with the user's handle marked as the user role |
-| **Generic JSON/text fallback** | any `.json` or `.txt` | new edge function `import-detect` runs Gemini Flash to inspect a 10KB sample and emit a normalization plan (role mapping, content path) |
-
-**UI changes in `ImportView`:**
-- File picker accepts `.json`, `.txt`, `.zip` (zip handled client-side via `jszip` for X archives that ship as a folder)
-- After parse, show **detected platform + "is this right?"** confirmation with manual override
-- For X archives: two checkboxes — "Include tweets" / "Include DMs" — each runs as a separate adapter pass into the same import_id
-- Update the "How to export" instructions to cover all five platforms
-
-**Memory extraction:**
-- The existing `import-chatgpt` edge function is renamed conceptually to `import-process` and accepts a `source_type` field. A new tweet-specific system prompt is added for tweet-only data (since there's no AI-side context to weigh against).
+Their consensus: build a **single canvas** organized as concentric layers — **Constellation → Climate → Currents → Compass** — every layer modular, every layer beautiful, every layer actionable.
 
 ---
 
-## Part 3 — Chat With Your Profile (Evidence-Grounded)
+## The Concept: Four Concentric Layers
 
-A new section inside `/profile` called **"Ask about your profile"** — a chat panel that lives alongside the existing tabs.
+```text
+                  ┌──────────────────────────┐
+                  │       COMPASS            │  ← what to do today
+                  │   ┌──────────────────┐   │
+                  │   │     CURRENTS     │   │  ← rhythms, patterns
+                  │   │  ┌────────────┐  │   │
+                  │   │  │  CLIMATE   │  │   │  ← emotional weather
+                  │   │  │  ┌──────┐  │  │   │
+                  │   │  │  │ CORE │  │  │   │  ← the constellation (you)
+                  │   │  │  └──────┘  │  │   │
+                  │   │  └────────────┘  │   │
+                  │   └──────────────────┘   │
+                  └──────────────────────────┘
+```
 
-**What the AI can see for every question:**
-1. The full structured `psychological_profile` JSON
-2. All 5 raw analysis passes (`raw_analysis.pass1`–`pass4` + final synthesis) — these are already stored
-3. **A retrieval tool** it can call to pull supporting memories on demand
-
-**Database changes:**
-- Add a `profile_chats` table (thread per profile version) with messages stored alongside
-- Ensure `psychological_profile.raw_analysis` includes `pass5` (currently only stores 1–4 — small fix)
-
-**New edge function: `profile-chat`** (streaming SSE, Lovable AI Gateway, Gemini 2.5 Pro)
-
-Flow per user message:
-1. Load profile + raw passes into the system prompt
-2. Expose two tools to the model:
-   - `search_memories(query, limit)` → trigram search via existing `match_engrams` pattern, returns memory content + metadata + dates
-   - `get_pass_excerpt(pass_name, topic)` → returns relevant slice of the raw analysis transcript
-3. Model uses tools as needed, then answers with **inline citations** like `[memory #4]` or `[pass: shadow]`
-4. Stream tokens to the client
-
-**UI for the chat panel:**
-- Collapsible side panel (toggle in profile header) or a new "Ask" tab
-- Each AI message renders citations as expandable chips — click to see the actual memory text/pass excerpt that informed the claim
-- Suggested starter prompts pulled from the profile itself: "Why did you say I'm conscientious?", "What evidence shows my attachment style?", "What blind spot should I sit with first?"
-- System prompt frames the AI as a **wise, compassionate guide** — not a clinician — focused on actionable self-understanding
+Each layer is a separate **modular widget** the user can rearrange, expand, or pop into focus. The composition feels like one organism — but every part can be lived in independently.
 
 ---
 
-## Implementation Order (Granular Steps)
+## Layer 1 — **The Constellation** (Identity Core)
 
-**Phase A — Import management (quick wins)**
-1. Migration: add index on `memories(provenance->>'import_id')` for fast cascade deletes
-2. New edge function `delete-import` with hard cascade
-3. New `ImportDetailPanel` component in `MemoryView.tsx` — slides in from right when row clicked
-4. Wire delete button + confirm dialog + toast
-5. Add "Re-run profiling" button that calls existing `profile-deep-analysis` and shows polling state
+A slowly-rotating, breathing star-field rendered with Canvas2D (no heavy 3D deps). Each star = a personality dimension, value, or core trait. Star **mass = strength of evidence**, **glow = recency**, **orbit distance = how central to identity**.
 
-**Phase B — Universal importer**
-6. Create `src/lib/importAdapters/` with `chatgpt.ts`, `claude.ts`, `gemini.ts`, `grok.ts`, `xTweets.ts`, `xDMs.ts`, `generic.ts`, plus a shared `types.ts`
-7. Add `jszip` dependency for zip uploads
-8. Refactor `importStore.parseAndFilter` to dispatch via adapter registry
-9. New edge function `import-detect` for unknown formats (Gemini Flash classifier)
-10. Add tweet-extraction system prompt branch to `import-chatgpt` (or split into `import-process`)
-11. Update `ImportView` UI: zip support, platform confirmation step, X archive dual-toggle, expanded export instructions
+- Hover any star → it brightens, draws faint lines to *all engrams that informed it* (real evidence, not metaphor)
+- Click → the camera glides toward it; the right rail fades in with the receipts
+- Constellations cluster naturally: Big Five floats near attachment style, values orbit slightly farther out, shadow patterns occupy the dimmer outer ring
+- A single ambient line of text floats below: the **identity narrative**, treated as poetry not paragraph
 
-**Phase C — Profile chat**
-12. Migration: create `profile_chats` and `profile_chat_messages` tables with RLS (owner-only)
-13. Patch `profile-deep-analysis` to also persist `pass5` into `raw_analysis`
-14. New edge function `profile-chat` with SSE streaming + 2-tool calling (`search_memories`, `get_pass_excerpt`)
-15. New `ProfileChatPanel` component with streaming renderer + citation chips
-16. Add toggle in `ProfileView` header to open the panel; persist conversation per profile version
-17. Generate 4–6 starter prompts dynamically from the user's actual profile data
+**Why it works**: the star metaphor is universally legible, scales infinitely, makes "more data = more beautiful" instead of "more data = cluttered."
 
 ---
 
-## Technical Notes
+## Layer 2 — **The Climate** (Emotional Weather)
 
-- **Cascade safety**: deletion goes through a single edge function with service role; client never issues raw deletes
-- **Profiling concurrency**: `chat_imports.pipeline_stage` is reused as a lock — a re-run while one is in flight is blocked with a toast
-- **Tweet extraction**: tweets are scored by length + engagement signals (if present in archive) + first-person pattern, capped at top 1000 to keep extraction tractable
-- **Profile chat tool calls**: `search_memories` uses the existing `match_engrams` SQL function pattern but queries the `memories` table (trigram on `content`) — no new vector store needed
-- **All AI calls** route through Lovable AI Gateway with `LOVABLE_API_KEY`; no user OpenRouter key consumed
-- **No regressions** to the existing import pipeline — adapters wrap, they don't replace
+A horizontal **weather strip** stretched across the dashboard's mid-band. Reads like a barometer for the soul:
+
+- **Now**: a single flowing gradient bar showing current emotional state (valence/arousal/clarity/restlessness/warmth) as soft colored bands that bleed into each other — never harsh, always Rothko-quiet
+- **Past 30 days**: same bands compressed into a small ribbon below — at a glance you see *"the last week has been more restless than usual"*
+- **Forecast**: a faint dashed extension predicting the next 48 hours based on cyclical patterns (one of the agents flagged: people obsessively check weather apps; do the same for emotion)
+- Click any moment in the ribbon → the constellation above re-renders to *that moment's self*. **Time-travel through your own psychology.**
 
 ---
 
-## What This Unlocks
+## Layer 3 — **The Currents** (Patterns, Rhythms, Cycles)
 
-- Manage every import like a first-class object (delete, inspect, re-profile)
-- Bring data from any AI platform — and from your social presence — into one unified self-portrait
-- Have a real conversation with your own analysis: ask *why*, see the receipts, walk away with insight you can actually use
+A horizontal band of small, discrete **micro-charts** — each one a self-contained insight. Modular tiles the user reorders by drag:
+
+- **Circadian profile** — a 24-hour radial showing when your thoughts cluster, when you're most reflective, when shadow themes emerge
+- **Weekly rhythm** — 7-day heatmap; reveals "Sundays you spiral, Wednesdays you create"
+- **Recurrence map** — themes that loop (from `engrams.tags` + connections graph). Each loop is drawn as an orbit; the more it returns, the tighter the orbit
+- **Belief drift** — sparkline showing which beliefs are strengthening, decaying, or contradicting each other this month
+- **Question stream** — the curiosity questions Luca has *not yet asked you*, hovering as faint text. Click one to start a thread
+
+Each tile is a real, queryable widget — not decoration.
+
+---
+
+## Layer 4 — **The Compass** (Actionable Today)
+
+The bottom band. The **utility layer** that earns the beauty above. Three simple modules:
+
+- **Today's edge** — one specific growth-edge surfaced from `growth_edges` + recent emotional state. *"Your restlessness has been high for 4 days; your profile says you avoid sitting with uncertainty. Try 10 minutes of nothing."*
+- **One question to sit with** — pulled from `shadow_patterns.unasked_questions`, rotating daily
+- **A pattern just noticed** — auto-generated insight from the last 24h of memories. Phrased as gentle observation, not prescription
+
+These are the **gravity hooks** — the reason a user opens the app on a slow Tuesday.
+
+---
+
+## Cross-Layer Magic
+
+The four layers are not isolated panels — they **respond to each other**:
+
+- Click a star in the Constellation → Climate ribbon highlights the days that informed it; Currents show the patterns that produced it; Compass surfaces a related action
+- Hover a peak in the Climate ribbon → the relevant stars in the Constellation swell
+- This creates a sense of **a single living system** rather than a dashboard of widgets
+
+---
+
+## The Aesthetic (preserves your existing palette)
+
+- All existing dark/monochrome tokens reused — no new colors except very subtle dim accents you already have (`--luca` `#c9a87c`, `--guardian` `#8ca89c`)
+- Typography unchanged: Inter for chrome, JetBrains Mono for numbers
+- Motion language: **everything breathes** at 4–8s cycles, nothing twitches. Inspired by the existing `breathe` keyframe
+- No emoji. No glassmorphism. No gradients louder than candlelight
+- Reference points: a planetarium ceiling, a Brian Eno generative artwork, the LCD on a Teenage Engineering device
+
+---
+
+## Modular Architecture (technical, briefly)
+
+A new `/profile` becomes a **canvas composition** of independent widgets:
+
+```text
+src/components/profile/
+  ├─ ConstellationCanvas.tsx     ← Canvas2D star-field
+  ├─ ClimateRibbon.tsx            ← time-series emotional bands
+  ├─ widgets/
+  │   ├─ CircadianRadial.tsx
+  │   ├─ WeeklyHeatmap.tsx
+  │   ├─ RecurrenceOrbits.tsx
+  │   ├─ BeliefDrift.tsx
+  │   └─ QuestionStream.tsx
+  ├─ CompassToday.tsx
+  ├─ EvidencePanel.tsx           ← right-rail receipts on selection
+  └─ profileLayoutStore.ts       ← Zustand: widget order, expansion, time cursor
+```
+
+- **Data**: all from existing tables (`psychological_profile`, `engrams`, `thought_stream`, `mnemos_emotional_state`, `beliefs`, `connections`, `curiosity_questions`, `memory_events`) — no schema changes required for v1
+- **One new edge function** later (optional): `profile-daily-pulse` to cache "today's edge / question / pattern" so Compass loads instantly
+- Old tabbed `ProfileView` is preserved as a `?view=classic` fallback during transition
+- Existing `ProfileChatPanel` becomes the right-rail evidence companion — clicking any star pre-fills it with "tell me about this"
+
+---
+
+## Build Sequence (4 phases, each independently shippable)
+
+1. **Constellation + Evidence Panel** — the centerpiece; immediate "wow"
+2. **Climate Ribbon + time cursor** — adds the time dimension
+3. **Currents widget grid** — the modular tiles, drag-to-rearrange
+4. **Compass + daily pulse** — the daily-return hook
+
+Each phase ships a usable upgrade. By Phase 4 the entire `/profile` is the new experience.
+
+---
+
+## What Makes This Gravitational
+
+- **It changes every time you open it** (climate shifts, stars brighten, new question)
+- **It rewards both 5-second glances and 30-minute deep sessions**
+- **Every visualization is an interface** — nothing is decoration; everything responds
+- **It tells you something about yourself you didn't know** — every single day
+- **It is unmistakably yours** — no two users' constellations look alike
+
+The gravity comes from the feeling that *this thing is alive, and it is about me, and I can't quite see all of it yet*.
 
