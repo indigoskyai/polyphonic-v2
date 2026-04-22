@@ -661,17 +661,37 @@ ${pass4}`;
     }
 
     console.log(`Deep analysis complete for user ${user_id}`);
+    }; // end runAnalysis
+
+    // Kick off the analysis in the background and return immediately.
+    // Edge functions enforce a 150s idle timeout; the 5-pass run takes
+    // 3-6 minutes, so we use EdgeRuntime.waitUntil to keep it alive
+    // after the response is sent. The client polls psychological_profile.
+    const bgTask = runAnalysis().catch(async (e) => {
+      console.error("profile-deep-analysis background error:", e);
+      if (import_id) {
+        await supabase.from("chat_imports").update({
+          status: "failed",
+          pipeline_stage: "error",
+        }).eq("id", import_id).catch(() => {});
+      }
+    });
+
+    // @ts-ignore — EdgeRuntime is provided by the Supabase edge runtime
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(bgTask);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        profile_saved: !upsertErr,
-        engrams_created: engramInserts.length,
-        has_identity_narrative: !!profile.identity_narrative,
-        has_big_five: !!profile.personality_dimensions?.big_five,
-        has_shadow: !!profile.shadow_patterns,
+        status: "processing",
+        message:
+          "Deep analysis started in background. Typically takes 3-6 minutes.",
       }),
       {
+        status: 202,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       },
     );
