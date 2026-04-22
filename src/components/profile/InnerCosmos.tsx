@@ -3,6 +3,7 @@ import ConstellationCanvas from './ConstellationCanvas';
 import EvidencePanel from './EvidencePanel';
 import ClimateRibbon from './ClimateRibbon';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import CurrentsGrid from './widgets/CurrentsGrid';
 import { useProfileLayoutStore } from './profileLayoutStore';
 
 interface Props {
