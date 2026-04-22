@@ -187,7 +187,7 @@ export default function ProfileView() {
                   opacity: generating ? 0.7 : 1,
                 }}
               >
-                {generating ? 'Analyzing... (2–5 min)' : 'Generate Profile'}
+                {generating ? 'Analyzing... (3–6 min)' : 'Generate Profile'}
               </button>
             ) : (
               <button
