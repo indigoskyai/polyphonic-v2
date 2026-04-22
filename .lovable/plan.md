@@ -1,77 +1,131 @@
 
 
-# Autonomous Build Loop — Inner Cosmos Phases 1→4
+# Pivot — From Static Cosmos to a Generative Dashboard
 
-## The Loop (applied to every phase)
+You're right: the current Cosmos is beautiful but inert. The constellation was never going to map to anything you'd use daily, and the widgets are static. Let's pivot to something that earns its place: **a dashboard you compose by talking to it.**
+
+---
+
+## The New Concept — "The Atelier"
+
+A dashboard where you **prompt your own widgets into existence**. Type what you want to see (*"show me when I'm most self-critical"*, *"map my recurring fears to the people I trust"*, *"give me a daily 1-line read on my cognitive state"*) — the AI designs and generates a real, data-bound widget against your memories, beliefs, emotional state, and conversations. It pins to your dashboard, refreshes itself, and stays.
+
+Three layers of intelligence:
+
+1. **The Pulse** (always-on top strip) — single AI-generated paragraph each morning: a one-paragraph read on your inner state right now, plus one specific thing to notice today. Replaces the "Compass."
+2. **The Atelier** (your composed dashboard) — every widget here was generated from a prompt you wrote. Drag, resize, pin, archive, regenerate, fork into a new variant.
+3. **The Studio** (prompt bar + library) — the bottom command bar where you type new widgets into existence, plus a curated library of starter widgets across three pillars: **Inner Mind**, **Behavioral Patterns**, **Cognitive Genome**.
+
+The Constellation, Climate Ribbon, and current widget grid are **retired**. The classic tabbed view stays as a fallback at `?view=classic`.
+
+---
+
+## How widget generation works
+
+You type a prompt → AI returns a structured widget spec (not freeform code). Spec is a JSON contract:
 
 ```text
-  ┌──────────────────────────────────────────────┐
-  │ 1. BUILD / PATCH the phase                   │
-  │ 2. OPEN in sandbox browser at /profile       │
-  │ 3. INSPECT: screenshot + observe + console   │
-  │ 4. INTERACT: hover, click, scroll, resize    │
-  │ 5. ASSESS against pass criteria              │
-  │     ├─ FAIL → diagnose, patch, GOTO step 2   │
-  │     └─ PASS → commit phase, advance          │
-  │ 6. After Phase 4: full end-to-end QA pass    │
-  └──────────────────────────────────────────────┘
+{ kind: "metric" | "timeline" | "heatmap" | "list" | "scatter" | "narrative" | "comparison" | "radial" | "quote_stream",
+  title, subtitle, query: { tables: [...], filter, group_by, time_range },
+  derive: { calc: "..." }, render_hints: { palette, density, sparkline } }
 ```
 
-Hard cap: 3 patch iterations per phase. If still failing, surface findings before continuing.
+A small set of **renderer components** in the frontend knows how to draw each `kind` from the data the spec returns. The AI never writes code — it composes from a fixed vocabulary of safe, validated query primitives over the existing tables (`engrams`, `beliefs`, `mnemos_emotional_state`, `thought_stream`, `messages`, `psychological_profile`, `curiosity_questions`, `connections`). This keeps it secure, fast, and recoverable.
 
-## Phase 0 — Fix Phase 1 bugs (current state is broken)
+The user can re-prompt any widget ("make this last 90 days instead", "compare against last month", "rephrase the title softer") and the spec updates in place.
 
-The Constellation hit-testing is mis-aligned (mouse must be far from a star to register). Root cause to fix:
+---
 
-- Hit-test uses `performance.now()` but render loop uses its own `t0` baseline → rotation drift between draw and pick. Use a shared `tRef` written each frame.
-- DPR scaling: `ctx.scale(dpr, dpr)` runs on every effect re-run, compounding the transform when `hoverId`/`selected` changes (effect re-subscribes). Move the render setup so DPR is applied once per resize, and read state via refs inside the RAF loop instead of re-creating the loop on every hover.
-- Star tolerance is too tight on a large viewport — scale tolerance with `baseR`.
-- Add a 1-frame cache of star screen positions so picking and drawing always agree.
+## Model routing — Lovable AI default, OpenRouter override
 
-Pass criteria:
-- Cursor turns pointer exactly when over the visible glow of a star.
-- Click reliably opens the evidence rail for the hovered star.
-- No console errors; smooth 60fps; rotation continues during hover.
+- **Default**: Lovable AI Gateway, model `openai/gpt-5` for widget design (high reasoning), `google/gemini-3-flash-preview` for the daily Pulse and quick re-prompts. No setup required for the user.
+- **Override**: If the user has an OpenRouter key in `user_api_keys` (already supported), they can pick any model in a small selector ("Generated with: GPT-5 · change"). Their key is used server-side only.
+- All AI calls go through one new edge function: `dashboard-generate` — handles widget design, daily pulse, and re-prompting. Streams responses for snappy feel.
 
-## Phase 2 — Climate Ribbon
+---
 
-Build `ClimateRibbon.tsx`:
-- Three stacked horizontal bands: Now (current `mnemos_emotional_state`), Past 30d (aggregated daily snapshots from `mnemos_emotional_state_history` if present, else derived from `engrams.created_at` + valence tags), Forecast 48h (faint dashed continuation using simple cyclic mean).
-- Soft Rothko bleed via `createLinearGradient` with valence/arousal/clarity/restlessness/warmth → existing palette tints only.
-- Time cursor: drag/click sets `timeCursor` in `profileLayoutStore`. Constellation subscribes and dims stars whose `last_updated` is after the cursor.
-- Loop until: cursor scrubbing visibly re-tints stars; bands render at correct heights; tooltip on hover shows date + dominant dimension.
+## Starter library (one-tap install widgets)
 
-## Phase 3 — Currents widget grid
+When the dashboard is empty, surface ~12 curated prompts grouped:
 
-Add `src/components/profile/widgets/`:
-- `CircadianRadial.tsx` — 24-spoke radial of `thought_stream.created_at` density.
-- `WeeklyHeatmap.tsx` — 7×N grid from `engrams` counts.
-- `RecurrenceOrbits.tsx` — top tag clusters from `engrams.tags` + `connections`.
-- `BeliefDrift.tsx` — sparkline of `beliefs.confidence` deltas.
-- `QuestionStream.tsx` — `curiosity_questions` not yet asked, click → opens chat with prefill.
+- **Inner Mind** — "Today's emotional weather", "Your top 3 active beliefs and which way they're drifting", "What you've been quietly avoiding lately"
+- **Behavioral Patterns** — "When you're most reflective vs reactive across the week", "Topics that loop for you", "How your tone shifts when you're tired"
+- **Cognitive Genome** — "Your 5 strongest cognitive tendencies with examples", "Map of how your values trade off against each other", "Which questions you keep almost-asking but never do"
 
-Tile container: CSS grid, drag-to-reorder via `@dnd-kit/core` (already idiomatic for this stack). Order persisted in `profileLayoutStore` → `localStorage`.
+Each starter is just a saved prompt — clicking generates it the same way a custom prompt would.
 
-Loop until: every tile renders with real data (or quiet empty state), drag reorder persists across reload, no layout overflow at 1280–1920 widths.
+---
 
-## Phase 4 — Compass + daily pulse
+## The Pulse (replaces Compass)
 
-- `CompassToday.tsx`: three modules (Today's edge, Question to sit with, Pattern just noticed).
-- New edge function `profile-daily-pulse`: composes today's content from `growth_edges`, `shadow_patterns.unasked_questions`, last-24h `engrams`. Cached per-user per-day in a new table `profile_daily_pulse(user_id, day, payload jsonb)`.
-- Frontend calls function on mount; falls back to client-side composition if function 5xxs.
+A single, breathing strip across the top of the dashboard. Each morning a background job runs `dashboard-generate` in `pulse` mode and writes one paragraph + one suggested action to `profile_daily_pulse` (table already exists). Reads in <100ms; refresh button regenerates on demand.
 
-Loop until: Compass renders within 800ms, content rotates daily, refresh button regenerates.
+---
 
-## Cross-layer wiring (final pass)
+## What gets removed / kept
 
-- Selecting a star highlights climate days that informed it (filter by `engrams` linked via tags).
-- Hovering a climate peak swells matching stars (write `hoveredCategory` to store).
-- Final QA at 1366, 1536, 1746, 1920 widths + console-clean check.
+- **Removed**: `ConstellationCanvas`, `ClimateRibbon`, `CurrentsGrid` and its widgets, `CompassToday`, `EvidencePanel`, `constellationModel`, `profileLayoutStore` (replaced by `dashboardStore`). Edge function `profile-daily-pulse` is folded into `dashboard-generate`.
+- **Kept**: `ProfileChatPanel` (still useful for asking about specific widgets), classic tabbed `ProfileView` at `?view=classic`, all backend tables and analysis pipeline.
 
-## Technical notes
+---
 
-- All work stays in `src/components/profile/**` plus one edge function and one migration.
-- Reuses existing tokens (`--luca`, `--guardian`, `--text-*`); no new colors.
-- Animation budget: single shared RAF loop in `InnerCosmos.tsx` distributes `t` to children via context to avoid 4 independent loops.
-- Browser loop uses `navigate_to_sandbox` → `screenshot` → `observe` → `act` → `read_console_logs`; max 3 patch cycles per phase, then escalate.
+## Architecture
+
+```text
+src/components/dashboard/
+  ├─ DashboardView.tsx          ← replaces InnerCosmos as default
+  ├─ Pulse.tsx                  ← top strip, daily AI-generated read
+  ├─ Atelier.tsx                ← responsive grid of user widgets (dnd-kit)
+  ├─ Studio.tsx                 ← prompt bar + starter library + model picker
+  ├─ widgets/
+  │   ├─ Widget.tsx             ← shell: title, refresh, edit-prompt, pin, archive
+  │   ├─ MetricCard.tsx         ← kind: "metric"
+  │   ├─ TimelineChart.tsx      ← kind: "timeline"
+  │   ├─ HeatmapGrid.tsx        ← kind: "heatmap"
+  │   ├─ ScatterField.tsx       ← kind: "scatter"
+  │   ├─ ListBlock.tsx          ← kind: "list"
+  │   ├─ NarrativeCard.tsx      ← kind: "narrative" (AI-written paragraph)
+  │   ├─ ComparisonBars.tsx     ← kind: "comparison"
+  │   ├─ RadialChart.tsx        ← kind: "radial"
+  │   └─ QuoteStream.tsx        ← kind: "quote_stream" (memory excerpts)
+  ├─ widgetRunner.ts            ← executes spec.query against Supabase, returns data
+  ├─ widgetLibrary.ts           ← curated starter prompts
+  └─ dashboardStore.ts          ← Zustand: widgets, layout, model preference
+
+supabase/functions/dashboard-generate/index.ts
+  modes:
+    - "design"   → prompt → widget spec (tool-calling, strict schema)
+    - "pulse"    → today's paragraph + action (cached daily)
+    - "narrate"  → for narrative/quote_stream widgets that need AI text from data
+```
+
+New table:
+
+```text
+dashboard_widgets (
+  id uuid pk, user_id uuid, prompt text, spec jsonb,
+  position int, pinned bool, archived bool,
+  model text, created_at, updated_at, last_run_at
+)
+```
+
+---
+
+## Build phases
+
+1. **Phase A — Skeleton + Pulse**: new `DashboardView` mounted at `/profile` (cosmos retired, classic preserved). Pulse strip live with cached daily generation.
+2. **Phase B — Studio + first 3 renderers** (`metric`, `narrative`, `list`): you can prompt → generate → pin a widget end-to-end. Starter library visible when empty.
+3. **Phase C — Remaining renderers** (`timeline`, `heatmap`, `scatter`, `comparison`, `radial`, `quote_stream`) + drag-to-reorder + edit-prompt-in-place.
+4. **Phase D — Model selector + OpenRouter override** + per-widget refresh schedules + small polish pass.
+
+Each phase is shippable on its own. After Phase B you already have a working generative dashboard.
+
+---
+
+## Why this works
+
+- **Useful from minute one** — the Pulse alone is a daily reason to open the page.
+- **Personal in a way no static dashboard can be** — every screen is composed by you, about you.
+- **Bounded and safe** — AI never generates code; it composes from a fixed vocabulary the renderers understand.
+- **Aesthetic preserved** — same dark monochrome palette, same `--luca` accent, same typography. The widgets render quietly; the prompt bar is the only new chrome.
 
