@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  readFileToSources,
+  normalizeSources,
+  adapters,
+  type AdapterContext,
+  type NormalizedConversation,
+} from '@/lib/importAdapters';
 
 export type PipelineStage = 'idle' | 'filtering' | 'parsing' | 'extracting' | 'synthesizing' | 'profiling' | 'complete' | 'error';
 
@@ -10,6 +17,13 @@ interface FilterStats {
   skippedLowText: number;
   dateRange: { earliest: string; latest: string } | null;
   estimatedMinutes: number;
+}
+
+interface DetectedSource {
+  adapterId: string;
+  adapterLabel: string;
+  fileName: string;
+  rawData: unknown;
 }
 
 interface ImportState {
@@ -27,13 +41,21 @@ interface ImportState {
   error: string | null;
   importId: string | null;
   filterStats: FilterStats | null;
-  preparedConversations: any[] | null;
+  preparedConversations: NormalizedConversation[] | null;
   platform: string | null;
   dismissed: boolean;
   profileData: any | null;
 
+  // Detected sources before user confirmation
+  detectedSources: DetectedSource[];
+  adapterOverride: string | null;
+  adapterContext: AdapterContext;
+
   // Actions
   parseAndFilter: (file: File) => Promise<void>;
+  setAdapterOverride: (adapterId: string | null) => void;
+  setAdapterContext: (ctx: Partial<AdapterContext>) => void;
+  applyAdapterSelection: () => void;
   startImport: (userId: string) => Promise<void>;
   reset: () => void;
   dismiss: () => void;
@@ -44,37 +66,7 @@ const MAX_CONVERSATIONS = 500;
 
 const PERSONAL_PATTERN = /\b(I am|I'm|I was|I feel|I felt|I think|I've been|I have been|my family|my wife|my husband|my partner|my kid|my child|my son|my daughter|my mom|my dad|my mother|my father|my friend|my job|my work|my career|I love|I hate|I want|I need|I wish|I believe|I struggle|I learned)\b/i;
 
-function detectPlatform(data: any): string {
-  if (Array.isArray(data) && data[0]?.mapping) return 'chatgpt';
-  if (Array.isArray(data) && data[0]?.uuid && data[0]?.chat_messages) return 'claude';
-  return 'unknown';
-}
-
-function convertClaudeToMapping(conversations: any[]): any[] {
-  return conversations
-    .filter((c: any) => c.chat_messages?.length >= 2)
-    .map((conv: any) => {
-      const mapping: Record<string, any> = {};
-      conv.chat_messages.forEach((msg: any, i: number) => {
-        const role = msg.sender === 'human' ? 'user' : msg.sender === 'assistant' ? 'assistant' : null;
-        if (!role || !msg.text?.trim()) return;
-        mapping[`node-${i}`] = {
-          message: {
-            author: { role },
-            content: { parts: [msg.text] },
-            create_time: msg.created_at_utc ? new Date(msg.created_at_utc).getTime() / 1000 : (conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0) + i,
-          },
-        };
-      });
-      return {
-        title: conv.name || 'Untitled',
-        create_time: conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0,
-        mapping,
-      };
-    });
-}
-
-function extractMessages(conv: any): { role: string; content: string; create_time: number }[] {
+function extractMessages(conv: NormalizedConversation): { role: string; content: string; create_time: number }[] {
   const msgs: { role: string; content: string; create_time: number }[] = [];
   if (!conv.mapping) return msgs;
   for (const nodeId of Object.keys(conv.mapping)) {
@@ -91,7 +83,7 @@ function extractMessages(conv: any): { role: string; content: string; create_tim
   return msgs;
 }
 
-function scoreConversation(conv: any): number {
+function scoreConversation(conv: NormalizedConversation): number {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   if (userMsgs.length === 0) return 0;
@@ -102,11 +94,17 @@ function scoreConversation(conv: any): number {
   return userMsgs.length * avgLen * personalBoost;
 }
 
-function getConversationMeta(conv: any) {
+function getConversationMeta(conv: NormalizedConversation) {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   const totalUserChars = userMsgs.reduce((sum, m) => sum + m.content.length, 0);
+  // Tweet-only conversations have user-only messages and low per-msg counts; lower threshold
   return { messageCount: msgs.length, userMessageCount: userMsgs.length, totalUserChars };
+}
+
+function isUserOnlySource(convs: NormalizedConversation[]): boolean {
+  // If majority are tweets/dms-style (user-only or imbalanced), apply softer filter
+  return convs.length > 0 && convs[0].source_type === 'tweets';
 }
 
 async function callWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
