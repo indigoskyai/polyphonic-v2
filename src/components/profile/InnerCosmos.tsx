@@ -4,6 +4,7 @@ import EvidencePanel from './EvidencePanel';
 import ClimateRibbon from './ClimateRibbon';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
 import CurrentsGrid from './widgets/CurrentsGrid';
+import CompassToday from './CompassToday';
 import { useProfileLayoutStore } from './profileLayoutStore';
 
 interface Props {
@@ -119,22 +120,13 @@ export default function InnerCosmos({
         {/* Currents — modular widget grid */}
         <CurrentsGrid />
 
-        {/* Compass placeholder — arrives in Phase 4 */}
-        <div
-          className="shrink-0"
-          style={{
-            borderTop: '1px solid var(--border-subtle)',
-            padding: '10px 24px',
-            color: 'var(--text-ghost)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            background: 'var(--bg-deep)',
+        {/* Compass — daily pulse: edge / question / pattern */}
+        <CompassToday
+          onAskInChat={(p) => {
+            setSeedPrompt(p);
+            setChatOpen(true);
           }}
-        >
-          <span style={{ opacity: 0.3 }}>compass · arriving</span>
-        </div>
+        />
       </div>
 
       {/* Right rails — evidence first; chat overlays on top when opened */}
