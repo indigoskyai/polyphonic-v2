@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import ConstellationCanvas from './ConstellationCanvas';
 import EvidencePanel from './EvidencePanel';
+import ClimateRibbon from './ClimateRibbon';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
 import { useProfileLayoutStore } from './profileLayoutStore';
 
@@ -13,13 +14,6 @@ interface Props {
   memoryCount: number;
 }
 
-/**
- * Phase 1 of "The Inner Cosmos": Constellation centerpiece + Evidence right-rail
- * + escalation into the existing ProfileChatPanel.
- *
- * Climate / Currents / Compass layers are stubbed below the canvas as placeholders
- * so the spatial composition is already correct when later phases land.
- */
 export default function InnerCosmos({
   profile,
   onSwitchToClassic,
@@ -58,25 +52,16 @@ export default function InnerCosmos({
           style={{ padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)' }}
         >
           <div>
-            <h1
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}
-            >
+            <h1 className="text-sm font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>
               Inner Cosmos
             </h1>
-            <div
-              className="text-[10px] mt-0.5"
-              style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}
-            >
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
               v{profile?.version ?? 1} · {memoryCount} memories woven into the field
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                setSeedPrompt(null);
-                setChatOpen((v) => !v);
-              }}
+              onClick={() => { setSeedPrompt(null); setChatOpen((v) => !v); }}
               className="text-[10px] px-3 py-1.5 rounded"
               style={{
                 background: chatOpen ? 'var(--bg-surface)' : 'transparent',
@@ -104,24 +89,14 @@ export default function InnerCosmos({
             <button
               onClick={onRefresh}
               className="text-[10px] px-3 py-1.5 rounded"
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-              }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
             >
               Refresh
             </button>
             <button
               onClick={onSwitchToClassic}
               className="text-[10px] px-3 py-1.5 rounded"
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-ghost)',
-                cursor: 'pointer',
-              }}
+              style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-ghost)', cursor: 'pointer' }}
               title="Switch to the classic tabbed view"
             >
               Classic view
@@ -137,7 +112,10 @@ export default function InnerCosmos({
           />
         </div>
 
-        {/* Placeholder layers — Climate / Currents / Compass arrive in Phases 2–4 */}
+        {/* Climate ribbon — emotional weather + time cursor */}
+        <ClimateRibbon />
+
+        {/* Placeholder layers — Currents / Compass arrive in Phases 3–4 */}
         <div
           className="shrink-0"
           style={{
@@ -153,7 +131,6 @@ export default function InnerCosmos({
             background: 'var(--bg-deep)',
           }}
         >
-          <span style={{ opacity: 0.5 }}>climate · arriving</span>
           <span style={{ opacity: 0.4 }}>currents · arriving</span>
           <span style={{ opacity: 0.3 }}>compass · arriving</span>
         </div>
@@ -162,10 +139,7 @@ export default function InnerCosmos({
       {/* Right rails — evidence first; chat overlays on top when opened */}
       {selected && !chatOpen && (
         <EvidencePanel
-          onAskInChat={(p) => {
-            setSeedPrompt(p);
-            setChatOpen(true);
-          }}
+          onAskInChat={(p) => { setSeedPrompt(p); setChatOpen(true); }}
         />
       )}
       {chatOpen && (
