@@ -492,12 +492,17 @@ serve(async (req) => {
     );
     console.log("Pass 4 (Values) complete");
 
-    // Pass 5: Shadow Analysis + Portrait (final synthesis using tool calling)
+    // Pass 5: Shadow Analysis (standalone, so we capture the raw text for citations)
     if (import_id) {
       await supabase.from("chat_imports").update({
         pipeline_stage: "profiling:shadow",
       }).eq("id", import_id);
     }
+    const pass5 = await aiCall(
+      SHADOW_PROMPT,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}\n\n--- PASS 4 (Values) ---\n${pass4}`,
+    );
+    console.log("Pass 5 (Shadow) complete");
 
     const finalPrompt = `${SHADOW_PROMPT}
 
@@ -519,7 +524,10 @@ ${pass2}
 ${pass3}
 
 --- PASS 4 (Values & Motivation) ---
-${pass4}`;
+${pass4}
+
+--- PASS 5 (Shadow Analysis) ---
+${pass5}`;
 
     const finalResponse = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -579,7 +587,7 @@ ${pass4}`;
       profile = {
         identity_narrative:
           "Analysis completed but structured parsing failed. Raw data stored.",
-        raw_passes: { pass1, pass2, pass3, pass4 },
+        raw_passes: { pass1, pass2, pass3, pass4, pass5 },
       };
     }
 
@@ -597,7 +605,7 @@ ${pass4}`;
         cognitive_tendencies: profile.cognitive_tendencies || {},
         growth_edges: profile.growth_edges || {},
         shadow_patterns: profile.shadow_patterns || {},
-        raw_analysis: { pass1, pass2, pass3, pass4 },
+        raw_analysis: { pass1, pass2, pass3, pass4, pass5 },
         version: 1,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });

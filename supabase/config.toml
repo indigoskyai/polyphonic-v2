@@ -86,3 +86,10 @@ verify_jwt = false
 
 [functions.chat-guardian]
 verify_jwt = false
+
+[functions.delete-import]
+verify_jwt = false
+
+[functions.profile-chat]
+verify_jwt = false
+
