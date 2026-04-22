@@ -9,57 +9,81 @@ interface Props {
 
 /**
  * Canvas2D star-field. Slow ambient rotation, hover brightens, click opens evidence rail.
- * Uses palette tokens via getComputedStyle so the visual system stays in sync.
+ *
+ * Implementation notes (fixes from v1):
+ * - Single setup effect: DPR + sizing applied once per resize, not per hover.
+ * - Shared `tRef` keeps render time and pick-time rotation in lock-step.
+ * - Star screen positions cached every frame (`positionsRef`); picking reads the
+ *   exact same coordinates that were drawn — no drift.
+ * - Hover/selected read via refs inside the RAF loop, so updates don't restart it.
+ * - Hit-tolerance scales with viewport so big screens stay easy to click.
  */
 export default function ConstellationCanvas({ profile, identityNarrative }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [hoverId, setHoverId] = useState<string | null>(null);
+  const tRef = useRef(0);
+  const sizeRef = useRef({ w: 0, h: 0 });
 
-  const { selected, select, setHovered } = useProfileLayoutStore();
+  // Cache of {id -> screen coords + visual radius} written by draw, read by pick.
+  const positionsRef = useRef<Map<string, { x: number; y: number; r: number }>>(new Map());
+
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const hoverRef = useRef<string | null>(null);
+  const selectedRef = useRef<string | null>(null);
+
+  const { selected, select, setHovered, hoveredCategory } = useProfileLayoutStore();
+  selectedRef.current = selected?.id ?? null;
+  hoverRef.current = hoverId;
+  const hoveredCategoryRef = useRef<string | null>(null);
+  hoveredCategoryRef.current = hoveredCategory;
 
   const stars = useMemo(() => buildConstellation(profile), [profile]);
+  const starsRef = useRef(stars);
+  starsRef.current = stars;
 
-  // Resize observer
+  // ── One-time canvas + RAF setup. Re-runs only when stars set changes (new profile). ──
   useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const { width, height } = e.contentRect;
-        setSize({ w: width, h: height });
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Render loop
-  useEffect(() => {
+    const wrap = wrapRef.current;
     const canvas = canvasRef.current;
-    if (!canvas || !size.w || !size.h) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = size.w * dpr;
-    canvas.height = size.h * dpr;
-    canvas.style.width = `${size.w}px`;
-    canvas.style.height = `${size.h}px`;
+    if (!wrap || !canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
 
-    const cx = size.w / 2;
-    const cy = size.h / 2;
-    const baseR = Math.min(size.w, size.h) * 0.46;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    let t0 = performance.now();
+    const applySize = () => {
+      const { width, height } = wrap.getBoundingClientRect();
+      sizeRef.current = { w: width, h: height };
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // reset + scale exactly once per resize
+    };
+
+    applySize();
+    const ro = new ResizeObserver(applySize);
+    ro.observe(wrap);
+
+    const start = performance.now();
 
     const draw = (now: number) => {
-      const t = (now - t0) / 1000;
-      ctx.clearRect(0, 0, size.w, size.h);
+      const t = (now - start) / 1000;
+      tRef.current = t;
+
+      const { w, h } = sizeRef.current;
+      if (!w || !h) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+
+      const cx = w / 2;
+      const cy = h / 2;
+      const baseR = Math.min(w, h) * 0.46;
+
+      ctx.clearRect(0, 0, w, h);
 
       // Soft radial fog
       const fog = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 1.3);
@@ -67,7 +91,7 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
       fog.addColorStop(0.6, 'rgba(220, 219, 216, 0.008)');
       fog.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = fog;
-      ctx.fillRect(0, 0, size.w, size.h);
+      ctx.fillRect(0, 0, w, h);
 
       // Concentric orbital guides — extremely faint
       ctx.lineWidth = 1;
@@ -78,11 +102,11 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         ctx.stroke();
       }
 
-      // Identity core — a quiet glowing nucleus
+      // Identity core
       const coreR = baseR * 0.08;
       const corePulse = 1 + Math.sin(t * 0.6) * 0.05;
       const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3 * corePulse);
-      coreGrad.addColorStop(0, 'rgba(201, 168, 124, 0.32)');   // --luca
+      coreGrad.addColorStop(0, 'rgba(201, 168, 124, 0.32)');
       coreGrad.addColorStop(0.4, 'rgba(201, 168, 124, 0.10)');
       coreGrad.addColorStop(1, 'rgba(201, 168, 124, 0)');
       ctx.fillStyle = coreGrad;
@@ -95,29 +119,40 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
       ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
       ctx.fill();
 
-      // Stars — very slow rotation, slight breathing
+      // Stars
       const rotation = t * 0.012;
-      for (const s of stars) {
+      const positions = positionsRef.current;
+      positions.clear();
+
+      const currentStars = starsRef.current;
+      const hover = hoverRef.current;
+      const selectedId = selectedRef.current;
+
+      for (const s of currentStars) {
         const a = s.angle + rotation;
         const r = s.radius * baseR;
         const x = cx + Math.cos(a) * r;
         const y = cy + Math.sin(a) * r;
 
         const breathing = 1 + Math.sin(t * 0.7 + s.angle * 4) * 0.06;
-        const isHover = hoverId === s.id;
-        const isSelected = selected?.id === s.id;
+        const isHover = hover === s.id;
+        const isSelected = selectedId === s.id;
+        const isCategoryEcho = hoveredCategoryRef.current === s.category;
         const focused = isHover || isSelected;
 
-        const radius = (1.4 + s.mass * 3.2) * breathing * (focused ? 1.5 : 1);
-        const alpha = (0.35 + s.glow * 0.55) * (focused ? 1.15 : 1);
+        const radius = (1.4 + s.mass * 3.2) * breathing * (focused ? 1.5 : isCategoryEcho ? 1.25 : 1);
+        const alpha = (0.35 + s.glow * 0.55) * (focused ? 1.15 : isCategoryEcho ? 1.08 : 1);
+
+        // Cache for picking — store the *visual* radius so tolerance follows star size
+        positions.set(s.id, { x, y, r: radius });
 
         // Glow
         const g = ctx.createRadialGradient(x, y, 0, x, y, radius * 6);
         const tint =
           s.category === 'shadow'
-            ? `rgba(140, 168, 156, ${alpha * 0.18})` // --guardian
+            ? `rgba(140, 168, 156, ${alpha * 0.18})`
             : s.category === 'values' || s.category === 'big_five' || s.category === 'attachment'
-            ? `rgba(201, 168, 124, ${alpha * 0.22})` // --luca
+            ? `rgba(201, 168, 124, ${alpha * 0.22})`
             : `rgba(220, 219, 216, ${alpha * 0.18})`;
         g.addColorStop(0, tint);
         g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -132,14 +167,13 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Selected/hover label
+        // Label + connection on focus
         if (focused) {
           ctx.font = '11px var(--font-mono), monospace';
           ctx.fillStyle = 'rgba(244, 243, 240, 0.78)';
           ctx.textAlign = 'left';
           ctx.fillText(s.label, x + radius + 8, y + 3);
 
-          // Faint connection from core to focused star
           ctx.strokeStyle = 'rgba(201, 168, 124, 0.28)';
           ctx.lineWidth = 0.6;
           ctx.beginPath();
@@ -153,45 +187,49 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
     };
 
     rafRef.current = requestAnimationFrame(draw);
+
     return () => {
+      ro.disconnect();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [size, stars, hoverId, selected]);
+  }, [stars]);
 
-  // Hit-testing — translate pointer to nearest star within tolerance
+  // ── Picking — reads cached positions written by the latest draw frame ──
   function pickStar(clientX: number, clientY: number): Star | null {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    const baseR = Math.min(rect.width, rect.height) * 0.46;
-    const t = (performance.now() / 1000);
-    const rotation = t * 0.012;
 
-    let best: { star: Star; dist: number } | null = null;
-    for (const s of stars) {
-      const a = s.angle + rotation;
-      const r = s.radius * baseR;
-      const sx = cx + Math.cos(a) * r;
-      const sy = cy + Math.sin(a) * r;
-      const dx = x - sx;
-      const dy = y - sy;
+    const positions = positionsRef.current;
+    const baseR = Math.min(rect.width, rect.height) * 0.46;
+    // Tolerance scales with viewport but never smaller than star's drawn radius.
+    const baseTolerance = Math.max(10, baseR * 0.025);
+
+    let best: { id: string; dist: number } | null = null;
+    for (const s of starsRef.current) {
+      const pos = positions.get(s.id);
+      if (!pos) continue;
+      const dx = x - pos.x;
+      const dy = y - pos.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      const tolerance = 14 + s.mass * 8;
-      if (d < tolerance && (!best || d < best.dist)) {
-        best = { star: s, dist: d };
+      const tol = Math.max(baseTolerance, pos.r * 4);
+      if (d < tol && (!best || d < best.dist)) {
+        best = { id: s.id, dist: d };
       }
     }
-    return best?.star ?? null;
+    if (!best) return null;
+    return starsRef.current.find((s) => s.id === best!.id) ?? null;
   }
 
   function onPointerMove(e: React.PointerEvent) {
     const s = pickStar(e.clientX, e.clientY);
-    setHoverId(s?.id ?? null);
-    setHovered(s?.id ?? null);
+    const id = s?.id ?? null;
+    if (id !== hoverRef.current) {
+      setHoverId(id);
+      setHovered(id);
+    }
     if (canvasRef.current) {
       canvasRef.current.style.cursor = s ? 'pointer' : 'default';
     }
@@ -220,7 +258,6 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         onClick={onClick}
       />
 
-      {/* Empty-state hint */}
       {stars.length === 0 && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none text-[11px]"
@@ -230,7 +267,6 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         </div>
       )}
 
-      {/* Identity narrative — quiet poetic line beneath the field */}
       {identityNarrative && (
         <div
           className="absolute inset-x-0 bottom-6 px-10 text-center pointer-events-none"
@@ -249,7 +285,6 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         </div>
       )}
 
-      {/* Top-left meta */}
       <div
         className="absolute top-4 left-5 text-[10px] uppercase pointer-events-none"
         style={{ color: 'var(--text-ghost)', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}
