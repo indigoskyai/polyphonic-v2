@@ -127,6 +127,34 @@ async function callWithRetry(url: string, options: RequestInit, retries = 3): Pr
   throw new Error('Exhausted retries');
 }
 
+async function waitForProfile(userId: string, timeoutMs = 10 * 60 * 1000, intervalMs = 8000) {
+  const startedAt = Date.now();
+  let baselineUpdatedAt: string | null = null;
+
+  const { data: baseline } = await supabase
+    .from('psychological_profile')
+    .select('updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  baselineUpdatedAt = baseline?.updated_at ?? null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const { data: latest } = await supabase
+      .from('psychological_profile')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (latest?.updated_at && latest.updated_at !== baselineUpdatedAt) {
+      return latest;
+    }
+  }
+
+  throw new Error('Deep analysis is still running in the background. Please check back in a few minutes.');
+}
+
 const initialState = {
   stage: 'idle' as PipelineStage,
   fileName: '',
@@ -325,7 +353,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
       // Stage 3: Deep psychological analysis — refresh token first
       token = await getToken();
       set({ stage: 'profiling', pipelineDetail: '' });
-      await callWithRetry(`${supabaseUrl}/functions/v1/profile-deep-analysis`, {
+      const profileResponse = await callWithRetry(`${supabaseUrl}/functions/v1/profile-deep-analysis`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -334,12 +362,14 @@ export const useImportStore = create<ImportState>((set, get) => ({
         body: JSON.stringify({ import_id: importId }),
       });
 
-      // Load profile
-      const { data: profileData } = await supabase
-        .from('psychological_profile')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+      if (!profileResponse.ok) {
+        const err = await profileResponse.json().catch(() => ({ error: `HTTP ${profileResponse.status}` }));
+        throw new Error(err.error || `Failed (${profileResponse.status})`);
+      }
+
+      set({ pipelineDetail: 'running in background' });
+
+      const profileData = await waitForProfile(userId);
 
       // Update import record
       await supabase
