@@ -313,7 +313,8 @@ serve(async (req) => {
     }
 
     const user_id = user.id;
-    ({ import_id } = await req.json());
+    const body = await req.json().catch(() => ({}));
+    import_id = body?.import_id;
 
     // Use Lovable AI Gateway (no user API key required)
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -330,13 +331,40 @@ serve(async (req) => {
       );
     }
 
-    // Update pipeline stage
+    // Quick pre-check: ensure we have enough memories before kicking off bg work
+    const { count: memCount } = await supabase
+      .from("memories")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user_id)
+      .eq("is_deleted", false);
+
+    if (!memCount || memCount < 3) {
+      return new Response(
+        JSON.stringify({
+          error: "Insufficient data for deep analysis",
+          memories_found: memCount || 0,
+        }),
+        {
+          status: 400,
+          headers: {
+            ...getCorsHeaders(req),
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    // Update pipeline stage immediately so UI shows progress
     if (import_id) {
       await supabase.from("chat_imports").update({
         pipeline_stage: "profiling",
       }).eq("id", import_id);
     }
 
+    // Run the heavy 5-pass analysis in the background so the request can
+    // return immediately. Edge functions enforce a 150s idle timeout, but
+    // EdgeRuntime.waitUntil allows the work to keep running after response.
+    const runAnalysis = async () => {
     // Fetch all memories
     const { data: allMemories } = await supabase
       .from("memories")
@@ -349,19 +377,7 @@ serve(async (req) => {
       .limit(800);
 
     if (!allMemories || allMemories.length < 3) {
-      return new Response(
-        JSON.stringify({
-          error: "Insufficient data for deep analysis",
-          memories_found: allMemories?.length || 0,
-        }),
-        {
-          status: 400,
-          headers: {
-            ...getCorsHeaders(req),
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      throw new Error("Insufficient data for deep analysis");
     }
 
     const memoryCorpus = allMemories
