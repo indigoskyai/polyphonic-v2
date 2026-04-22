@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
-import InnerCosmos from '@/components/profile/InnerCosmos';
+import DashboardView from '@/components/dashboard/DashboardView';
 
 type Profile = {
   identity_narrative: string | null;
@@ -237,7 +237,7 @@ export default function ProfileView() {
 
   if (viewMode === 'cosmos') {
     return (
-      <InnerCosmos
+      <DashboardView
         profile={profile}
         memoryCount={memoryStats?.total ?? 0}
         generating={generating}

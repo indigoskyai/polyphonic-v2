@@ -287,6 +287,48 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_widgets: {
+        Row: {
+          archived: boolean
+          created_at: string
+          id: string
+          last_run_at: string | null
+          model: string | null
+          pinned: boolean
+          position: number
+          prompt: string
+          spec: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          last_run_at?: string | null
+          model?: string | null
+          pinned?: boolean
+          position?: number
+          prompt: string
+          spec?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          last_run_at?: string | null
+          model?: string | null
+          pinned?: boolean
+          position?: number
+          prompt?: string
+          spec?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       engram_archive: {
         Row: {
           archived_at: string | null
