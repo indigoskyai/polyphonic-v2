@@ -26,8 +26,10 @@ export default function ImportView() {
   const {
     stage, fileName, fileSize, totalConversations, filteredCount,
     processedChunks, totalChunks, memoriesCreated, conflictsDetected,
-    pipelineDetail, error, filterStats, profileData,
+    pipelineDetail, error, filterStats, profileData, platform,
+    detectedSources, adapterContext, adapterOverride,
     parseAndFilter, startImport, reset,
+    setAdapterOverride, setAdapterContext, applyAdapterSelection,
   } = useImportStore();
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -86,8 +88,8 @@ export default function ImportView() {
               >
                 <div style={{ fontSize: 32, color: 'var(--text-ghost)', marginBottom: 12, fontWeight: 200 }}>↑</div>
                 <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>Drop your export file here</div>
-                <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>Supports ChatGPT and Claude JSON exports</div>
-                <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileSelect} style={{ display: 'none' }} />
+                <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>JSON, ZIP, or TXT — ChatGPT, Claude, Gemini, Grok, X/Twitter</div>
+                <input ref={fileInputRef} type="file" accept=".json,.zip,.txt,.js" onChange={handleFileSelect} style={{ display: 'none' }} />
               </div>
 
               <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.6, padding: '0 8px' }}>
@@ -95,8 +97,17 @@ export default function ImportView() {
                 <div style={{ marginBottom: 6 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>ChatGPT:</span> Settings → Data Controls → Export Data → extract conversations.json from the .zip
                 </div>
-                <div>
+                <div style={{ marginBottom: 6 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Gemini:</span> takeout.google.com → select "Gemini Apps" → use the MyActivity.json file
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Grok:</span> X/Grok Settings → Data → Export Conversations → use the JSON file
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>X / Twitter:</span> Settings → Your account → Download an archive of your data → upload the entire .zip (we'll find tweets &amp; DMs)
                 </div>
               </div>
             </div>
