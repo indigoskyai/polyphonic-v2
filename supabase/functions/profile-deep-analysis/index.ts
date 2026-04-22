@@ -201,6 +201,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+  let import_id: string | undefined;
 
   try {
     // Authenticate
@@ -228,7 +229,7 @@ serve(async (req) => {
     }
 
     const user_id = user.id;
-    const { import_id } = await req.json();
+    ({ import_id } = await req.json());
 
     // Get API key
     const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
@@ -292,7 +293,12 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`AI call failed (${response.status}): ${errText.slice(0, 200)}`);
+        const message = response.status === 402
+          ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
+          : `AI call failed (${response.status}): ${errText.slice(0, 200)}`;
+        const error = new Error(message) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
       }
 
       const data = await response.json();
@@ -362,7 +368,12 @@ ${pass4}`;
 
     if (!finalResponse.ok) {
       const errText = await finalResponse.text();
-      throw new Error(`Final synthesis failed: ${errText.slice(0, 200)}`);
+      const message = finalResponse.status === 402
+        ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
+        : `Final synthesis failed: ${errText.slice(0, 200)}`;
+      const error = new Error(message) as Error & { status?: number };
+      error.status = finalResponse.status;
+      throw error;
     }
 
     const finalData = await finalResponse.json();
@@ -489,8 +500,9 @@ ${pass4}`;
     if (import_id) {
       await supabase.from("chat_imports").update({ status: "failed", pipeline_stage: "error" }).eq("id", import_id).catch(() => {});
     }
-    return new Response(JSON.stringify({ error: e.message || "An unexpected error occurred" }), {
-      status: 500,
+    const status = e instanceof Error && "status" in e && typeof e.status === "number" ? e.status : 500;
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "An unexpected error occurred" }), {
+      status,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
