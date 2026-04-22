@@ -547,12 +547,12 @@ function MemoryDetailPanel({ memory, editingContent, setEditingContent, onSave, 
 
       {/* Metadata */}
       <div className="flex flex-col gap-2 mt-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
-        <MetaRow label="Confidence" value={`${(memory.confidence * 100).toFixed(0)}%`} />
+        <MetaRow label="Confidence" value={`${((memory.confidence ?? 0) * 100).toFixed(0)}%`} />
         <MetaRow label="Source" value={memory.confidence_source || 'unknown'} />
         <MetaRow label="Detail" value={memory.detail_level || 'standard'} />
         <MetaRow label="Staleness" value={memory.staleness_risk || 'low'} />
-        {memory.emotional_valence !== null && <MetaRow label="Valence" value={memory.emotional_valence.toFixed(2)} />}
-        {memory.emotional_intensity !== null && <MetaRow label="Intensity" value={memory.emotional_intensity.toFixed(2)} />}
+        {memory.emotional_valence != null && <MetaRow label="Valence" value={memory.emotional_valence.toFixed(2)} />}
+        {memory.emotional_intensity != null && <MetaRow label="Intensity" value={memory.emotional_intensity.toFixed(2)} />}
         {memory.estimated_date && <MetaRow label="Est. Date" value={memory.estimated_date} />}
         <MetaRow label="Created" value={new Date(memory.created_at).toLocaleString()} />
         <MetaRow label="Updated" value={new Date(memory.updated_at).toLocaleString()} />
