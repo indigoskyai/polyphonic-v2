@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import {
+  getCorsHeaders,
+  handleCorsPreflightIfNeeded,
+} from "../_shared/cors.ts";
 
 const ANALYSIS_MODEL = "google/gemini-2.5-pro";
 
 // ── Pass 1: Linguistic Fingerprinting ──
-const LINGUISTIC_PROMPT = `You are a computational linguist. Analyze the USER's messages (not the AI's) across all conversations to build a detailed linguistic fingerprint.
+const LINGUISTIC_PROMPT =
+  `You are a computational linguist. Analyze the USER's messages (not the AI's) across all conversations to build a detailed linguistic fingerprint.
 
 Extract:
 - **Vocabulary profile**: richness, sophistication level, domain-specific jargon frequency
@@ -22,7 +26,8 @@ Extract:
 Be specific. Quote actual patterns you observe. This is forensic-level analysis.`;
 
 // ── Pass 2: Psychological Profiling ──
-const PSYCHOLOGICAL_PROMPT = `You are a research psychologist. Using the conversation corpus AND the linguistic fingerprint from Pass 1, build a detailed psychological profile.
+const PSYCHOLOGICAL_PROMPT =
+  `You are a research psychologist. Using the conversation corpus AND the linguistic fingerprint from Pass 1, build a detailed psychological profile.
 
 Analyze:
 - **Big Five approximation**: Score each dimension 0-100 with detailed justification
@@ -43,7 +48,8 @@ Analyze:
 Ground every claim in observed behavior from the conversations. No speculation without evidence.`;
 
 // ── Pass 3: Relational Mapping ──
-const RELATIONAL_PROMPT = `You are a social psychologist. Using the conversation corpus and previous analyses, map this person's relational world.
+const RELATIONAL_PROMPT =
+  `You are a social psychologist. Using the conversation corpus and previous analyses, map this person's relational world.
 
 Analyze:
 - **Key relationships mentioned**: Who are the important people? Map roles (partner, friend, parent, colleague, etc.)
@@ -60,7 +66,8 @@ Analyze:
 Be forensic about what their relational language reveals about their inner world.`;
 
 // ── Pass 4: Values & Motivation ──
-const VALUES_PROMPT = `You are a motivational psychologist. Using all prior analyses and the raw conversations, map this person's values and motivational structure.
+const VALUES_PROMPT =
+  `You are a motivational psychologist. Using all prior analyses and the raw conversations, map this person's values and motivational structure.
 
 Analyze:
 - **Implicit value hierarchy**: Rank their top 8-10 values with evidence (e.g., autonomy, connection, achievement, creativity, security, justice, knowledge, pleasure, status, meaning)
@@ -75,7 +82,8 @@ Analyze:
 Distinguish between stated values and revealed preferences (what they say they care about vs what their behavior shows).`;
 
 // ── Pass 5: Shadow Analysis ──
-const SHADOW_PROMPT = `You are a depth psychologist specializing in shadow work. Using ALL previous analyses and the raw conversations, identify the hidden patterns — the things this person might not see about themselves.
+const SHADOW_PROMPT =
+  `You are a depth psychologist specializing in shadow work. Using ALL previous analyses and the raw conversations, identify the hidden patterns — the things this person might not see about themselves.
 
 Analyze with compassion but unflinching honesty:
 - **Contradictions**: Where do their stated values conflict with observed behavior? (e.g., values authenticity but carefully manages their image)
@@ -100,21 +108,61 @@ const profileTool = {
     parameters: {
       type: "object",
       properties: {
-        identity_narrative: { type: "string", description: "The Portrait — a flowing paragraph capturing their essence" },
+        identity_narrative: {
+          type: "string",
+          description:
+            "The Portrait — a flowing paragraph capturing their essence",
+        },
         personality_dimensions: {
           type: "object",
           properties: {
             big_five: {
               type: "object",
               properties: {
-                openness: { type: "object", properties: { score: { type: "number" }, evidence: { type: "string" } } },
-                conscientiousness: { type: "object", properties: { score: { type: "number" }, evidence: { type: "string" } } },
-                extraversion: { type: "object", properties: { score: { type: "number" }, evidence: { type: "string" } } },
-                agreeableness: { type: "object", properties: { score: { type: "number" }, evidence: { type: "string" } } },
-                neuroticism: { type: "object", properties: { score: { type: "number" }, evidence: { type: "string" } } },
+                openness: {
+                  type: "object",
+                  properties: {
+                    score: { type: "number" },
+                    evidence: { type: "string" },
+                  },
+                },
+                conscientiousness: {
+                  type: "object",
+                  properties: {
+                    score: { type: "number" },
+                    evidence: { type: "string" },
+                  },
+                },
+                extraversion: {
+                  type: "object",
+                  properties: {
+                    score: { type: "number" },
+                    evidence: { type: "string" },
+                  },
+                },
+                agreeableness: {
+                  type: "object",
+                  properties: {
+                    score: { type: "number" },
+                    evidence: { type: "string" },
+                  },
+                },
+                neuroticism: {
+                  type: "object",
+                  properties: {
+                    score: { type: "number" },
+                    evidence: { type: "string" },
+                  },
+                },
               },
             },
-            attachment_style: { type: "object", properties: { primary: { type: "string" }, evidence: { type: "string" } } },
+            attachment_style: {
+              type: "object",
+              properties: {
+                primary: { type: "string" },
+                evidence: { type: "string" },
+              },
+            },
             cognitive_style: { type: "string" },
             locus_of_control: { type: "string" },
           },
@@ -144,7 +192,17 @@ const profileTool = {
         values_hierarchy: {
           type: "object",
           properties: {
-            ranked_values: { type: "array", items: { type: "object", properties: { value: { type: "string" }, rank: { type: "number" }, evidence: { type: "string" } } } },
+            ranked_values: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  value: { type: "string" },
+                  rank: { type: "number" },
+                  evidence: { type: "string" },
+                },
+              },
+            },
             stated_vs_revealed: { type: "string" },
             decision_framework: { type: "string" },
             temporal_orientation: { type: "string" },
@@ -153,7 +211,16 @@ const profileTool = {
         relational_dynamics: {
           type: "object",
           properties: {
-            key_relationships: { type: "array", items: { type: "object", properties: { role: { type: "string" }, dynamic: { type: "string" } } } },
+            key_relationships: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  role: { type: "string" },
+                  dynamic: { type: "string" },
+                },
+              },
+            },
             conflict_style: { type: "string" },
             power_orientation: { type: "string" },
             intimacy_comfort: { type: "string" },
@@ -175,7 +242,10 @@ const profileTool = {
           properties: {
             active_growth: { type: "array", items: { type: "string" } },
             emerging_awareness: { type: "array", items: { type: "string" } },
-            integration_opportunities: { type: "array", items: { type: "string" } },
+            integration_opportunities: {
+              type: "array",
+              items: { type: "string" },
+            },
           },
         },
         shadow_patterns: {
@@ -184,12 +254,25 @@ const profileTool = {
             contradictions: { type: "array", items: { type: "string" } },
             blind_spots: { type: "array", items: { type: "string" } },
             avoidance_patterns: { type: "array", items: { type: "string" } },
-            compensatory_behaviors: { type: "array", items: { type: "string" } },
+            compensatory_behaviors: {
+              type: "array",
+              items: { type: "string" },
+            },
             unasked_questions: { type: "array", items: { type: "string" } },
           },
         },
       },
-      required: ["identity_narrative", "personality_dimensions", "communication_patterns", "emotional_landscape", "values_hierarchy", "relational_dynamics", "cognitive_tendencies", "growth_edges", "shadow_patterns"],
+      required: [
+        "identity_narrative",
+        "personality_dimensions",
+        "communication_patterns",
+        "emotional_landscape",
+        "values_hierarchy",
+        "relational_dynamics",
+        "cognitive_tendencies",
+        "growth_edges",
+        "shadow_patterns",
+      ],
     },
   },
 };
@@ -217,10 +300,11 @@ serve(async (req) => {
     const supabaseAuth = createClient(
       supabaseUrl,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAuth.auth
+      .getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -232,8 +316,12 @@ serve(async (req) => {
     ({ import_id } = await req.json());
 
     // Get API key
-    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
-    const openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
+    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", {
+      p_user_id: user_id,
+    });
+    const openrouterKey = typeof decryptedKey === "string"
+      ? decryptedKey.trim()
+      : "";
     if (!openrouterKey) {
       return new Response(JSON.stringify({ error: "No API key configured" }), {
         status: 400,
@@ -243,26 +331,36 @@ serve(async (req) => {
 
     // Update pipeline stage
     if (import_id) {
-      await supabase.from("chat_imports").update({ pipeline_stage: "profiling" }).eq("id", import_id);
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling",
+      }).eq("id", import_id);
     }
 
     // Fetch all memories
     const { data: allMemories } = await supabase
       .from("memories")
-      .select("content, memory_type, confidence, emotional_valence, emotional_intensity, narrative_thread, tags")
+      .select(
+        "content, memory_type, confidence, emotional_valence, emotional_intensity, narrative_thread, tags",
+      )
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("confidence", { ascending: false })
       .limit(800);
 
     if (!allMemories || allMemories.length < 3) {
-      return new Response(JSON.stringify({
-        error: "Insufficient data for deep analysis",
-        memories_found: allMemories?.length || 0,
-      }), {
-        status: 400,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Insufficient data for deep analysis",
+          memories_found: allMemories?.length || 0,
+        }),
+        {
+          status: 400,
+          headers: {
+            ...getCorsHeaders(req),
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
 
     const memoryCorpus = allMemories
@@ -273,23 +371,29 @@ serve(async (req) => {
       .join("\n");
 
     // Helper for AI calls
-    async function aiCall(systemPrompt: string, userContent: string): Promise<string> {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openrouterKey}`,
-          "Content-Type": "application/json",
+    async function aiCall(
+      systemPrompt: string,
+      userContent: string,
+    ): Promise<string> {
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openrouterKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: ANALYSIS_MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userContent },
+            ],
+            temperature: 0.4,
+            max_tokens: 8000,
+          }),
         },
-        body: JSON.stringify({
-          model: ANALYSIS_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0.4,
-          max_tokens: 8000,
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errText = await response.text();
@@ -306,30 +410,64 @@ serve(async (req) => {
     }
 
     // ── Run 5-pass analysis with iterative deepening ──
-    console.log(`Starting 5-pass deep analysis for user ${user_id} with ${allMemories.length} memories`);
+    console.log(
+      `Starting 5-pass deep analysis for user ${user_id} with ${allMemories.length} memories`,
+    );
 
     // Pass 1: Linguistic Fingerprinting
-    if (import_id) await supabase.from("chat_imports").update({ pipeline_stage: "profiling:linguistic" }).eq("id", import_id);
-    const pass1 = await aiCall(LINGUISTIC_PROMPT, `MEMORY CORPUS (${allMemories.length} memories):\n${memoryCorpus}`);
+    if (import_id) {
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling:linguistic",
+      }).eq("id", import_id);
+    }
+    const pass1 = await aiCall(
+      LINGUISTIC_PROMPT,
+      `MEMORY CORPUS (${allMemories.length} memories):\n${memoryCorpus}`,
+    );
     console.log("Pass 1 (Linguistic) complete");
 
     // Pass 2: Psychological Profiling
-    if (import_id) await supabase.from("chat_imports").update({ pipeline_stage: "profiling:psychological" }).eq("id", import_id);
-    const pass2 = await aiCall(PSYCHOLOGICAL_PROMPT, `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`);
+    if (import_id) {
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling:psychological",
+      }).eq("id", import_id);
+    }
+    const pass2 = await aiCall(
+      PSYCHOLOGICAL_PROMPT,
+      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`,
+    );
     console.log("Pass 2 (Psychological) complete");
 
     // Pass 3: Relational Mapping
-    if (import_id) await supabase.from("chat_imports").update({ pipeline_stage: "profiling:relational" }).eq("id", import_id);
-    const pass3 = await aiCall(RELATIONAL_PROMPT, `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`);
+    if (import_id) {
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling:relational",
+      }).eq("id", import_id);
+    }
+    const pass3 = await aiCall(
+      RELATIONAL_PROMPT,
+      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`,
+    );
     console.log("Pass 3 (Relational) complete");
 
     // Pass 4: Values & Motivation
-    if (import_id) await supabase.from("chat_imports").update({ pipeline_stage: "profiling:values" }).eq("id", import_id);
-    const pass4 = await aiCall(VALUES_PROMPT, `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`);
+    if (import_id) {
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling:values",
+      }).eq("id", import_id);
+    }
+    const pass4 = await aiCall(
+      VALUES_PROMPT,
+      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`,
+    );
     console.log("Pass 4 (Values) complete");
 
     // Pass 5: Shadow Analysis + Portrait (final synthesis using tool calling)
-    if (import_id) await supabase.from("chat_imports").update({ pipeline_stage: "profiling:shadow" }).eq("id", import_id);
+    if (import_id) {
+      await supabase.from("chat_imports").update({
+        pipeline_stage: "profiling:shadow",
+      }).eq("id", import_id);
+    }
 
     const finalPrompt = `${SHADOW_PROMPT}
 
@@ -350,21 +488,27 @@ ${pass3}
 --- PASS 4 (Values & Motivation) ---
 ${pass4}`;
 
-    const finalResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openrouterKey}`,
-        "Content-Type": "application/json",
+    const finalResponse = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: ANALYSIS_MODEL,
+          messages: [{ role: "user", content: finalPrompt }],
+          temperature: 0.3,
+          max_tokens: 12000,
+          tools: [profileTool],
+          tool_choice: {
+            type: "function",
+            function: { name: "save_psychological_profile" },
+          },
+        }),
       },
-      body: JSON.stringify({
-        model: ANALYSIS_MODEL,
-        messages: [{ role: "user", content: finalPrompt }],
-        temperature: 0.3,
-        max_tokens: 12000,
-        tools: [profileTool],
-        tool_choice: { type: "function", function: { name: "save_psychological_profile" } },
-      }),
-    });
+    );
 
     if (!finalResponse.ok) {
       const errText = await finalResponse.text();
@@ -385,14 +529,18 @@ ${pass4}`;
         profile = JSON.parse(toolCall.function.arguments);
       } else {
         const content = finalData.choices?.[0]?.message?.content || "{}";
-        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const cleaned = content.replace(/```json\n?/g, "").replace(
+          /```\n?/g,
+          "",
+        ).trim();
         profile = JSON.parse(cleaned);
       }
     } catch (parseErr) {
       console.error("Failed to parse final profile:", parseErr);
       // Store raw analysis even if structured parsing fails
       profile = {
-        identity_narrative: "Analysis completed but structured parsing failed. Raw data stored.",
+        identity_narrative:
+          "Analysis completed but structured parsing failed. Raw data stored.",
         raw_passes: { pass1, pass2, pass3, pass4 },
       };
     }
@@ -460,7 +608,9 @@ ${pass4}`;
     if (profile.shadow_patterns?.blind_spots?.length) {
       engramInserts.push({
         user_id,
-        content: `SHADOW PATTERNS — Blind spots: ${profile.shadow_patterns.blind_spots.join("; ")}`,
+        content: `SHADOW PATTERNS — Blind spots: ${
+          profile.shadow_patterns.blind_spots.join("; ")
+        }`,
         engram_type: "semantic",
         strength: 0.85,
         stability: 0.8,
@@ -485,25 +635,39 @@ ${pass4}`;
 
     console.log(`Deep analysis complete for user ${user_id}`);
 
-    return new Response(JSON.stringify({
-      success: true,
-      profile_saved: !upsertErr,
-      engrams_created: engramInserts.length,
-      has_identity_narrative: !!profile.identity_narrative,
-      has_big_five: !!profile.personality_dimensions?.big_five,
-      has_shadow: !!profile.shadow_patterns,
-    }), {
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        profile_saved: !upsertErr,
+        engrams_created: engramInserts.length,
+        has_identity_narrative: !!profile.identity_narrative,
+        has_big_five: !!profile.personality_dimensions?.big_five,
+        has_shadow: !!profile.shadow_patterns,
+      }),
+      {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      },
+    );
   } catch (e) {
     console.error("profile-deep-analysis error:", e);
     if (import_id) {
-      await supabase.from("chat_imports").update({ status: "failed", pipeline_stage: "error" }).eq("id", import_id).catch(() => {});
+      await supabase.from("chat_imports").update({
+        status: "failed",
+        pipeline_stage: "error",
+      }).eq("id", import_id).catch(() => {});
     }
-    const status = e instanceof Error && "status" in e && typeof e.status === "number" ? e.status : 500;
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "An unexpected error occurred" }), {
-      status,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
+    const status =
+      e instanceof Error && "status" in e && typeof e.status === "number"
+        ? e.status
+        : 500;
+    return new Response(
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "An unexpected error occurred",
+      }),
+      {
+        status,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      },
+    );
   }
 });
