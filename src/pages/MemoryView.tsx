@@ -485,10 +485,10 @@ function MemoryRow({ memory, selected, bulkChecked, onClick, onToggleBulk }: {
       {/* Confidence */}
       <div className="shrink-0 flex flex-col items-end gap-1">
         <span className="text-[10px]" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-whisper)' }}>
-          {(memory.confidence * 100).toFixed(0)}%
+          {((memory.confidence ?? 0) * 100).toFixed(0)}%
         </span>
         <div style={{ width: 32, height: 2, background: 'var(--bg-deep)', borderRadius: 1, overflow: 'hidden' }}>
-          <div style={{ width: `${memory.confidence * 100}%`, height: '100%', background: 'var(--luca)', opacity: 0.5, borderRadius: 1 }} />
+          <div style={{ width: `${(memory.confidence ?? 0) * 100}%`, height: '100%', background: 'var(--luca)', opacity: 0.5, borderRadius: 1 }} />
         </div>
       </div>
     </div>
