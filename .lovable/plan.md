@@ -1,160 +1,77 @@
 
 
-# The Inner Cosmos — A Living Self-Portrait Dashboard
+# Autonomous Build Loop — Inner Cosmos Phases 1→4
 
-A complete reimagining of `/profile` as a **gravitational, modular, living interface** that turns your psychological data into something you cannot stop looking at — and that genuinely changes how you live.
-
-I convened five internal perspectives to attack this problem. Their final synthesis is below.
-
----
-
-## The Five Lenses (condensed)
-
-**1. The Cartographer** — "Make the self a map you can walk through. Spatial memory is the deepest memory."
-**2. The Astronomer** — "Treat psychological dimensions as celestial bodies with mass, orbit, and gravity. People stare at star charts for hours."
-**3. The Biologist** — "The self is a living organism — it breathes, it has rhythms, it has weather. Show the pulse."
-**4. The Oracle** — "Every datum should whisper a question back. Insight isn't displayed — it's *provoked*."
-**5. The Architect of Daily Life** — "Mesmerizing is worthless without utility. Every visualization must answer: *what should I do today?*"
-
-Their consensus: build a **single canvas** organized as concentric layers — **Constellation → Climate → Currents → Compass** — every layer modular, every layer beautiful, every layer actionable.
-
----
-
-## The Concept: Four Concentric Layers
+## The Loop (applied to every phase)
 
 ```text
-                  ┌──────────────────────────┐
-                  │       COMPASS            │  ← what to do today
-                  │   ┌──────────────────┐   │
-                  │   │     CURRENTS     │   │  ← rhythms, patterns
-                  │   │  ┌────────────┐  │   │
-                  │   │  │  CLIMATE   │  │   │  ← emotional weather
-                  │   │  │  ┌──────┐  │  │   │
-                  │   │  │  │ CORE │  │  │   │  ← the constellation (you)
-                  │   │  │  └──────┘  │  │   │
-                  │   │  └────────────┘  │   │
-                  │   └──────────────────┘   │
-                  └──────────────────────────┘
+  ┌──────────────────────────────────────────────┐
+  │ 1. BUILD / PATCH the phase                   │
+  │ 2. OPEN in sandbox browser at /profile       │
+  │ 3. INSPECT: screenshot + observe + console   │
+  │ 4. INTERACT: hover, click, scroll, resize    │
+  │ 5. ASSESS against pass criteria              │
+  │     ├─ FAIL → diagnose, patch, GOTO step 2   │
+  │     └─ PASS → commit phase, advance          │
+  │ 6. After Phase 4: full end-to-end QA pass    │
+  └──────────────────────────────────────────────┘
 ```
 
-Each layer is a separate **modular widget** the user can rearrange, expand, or pop into focus. The composition feels like one organism — but every part can be lived in independently.
+Hard cap: 3 patch iterations per phase. If still failing, surface findings before continuing.
 
----
+## Phase 0 — Fix Phase 1 bugs (current state is broken)
 
-## Layer 1 — **The Constellation** (Identity Core)
+The Constellation hit-testing is mis-aligned (mouse must be far from a star to register). Root cause to fix:
 
-A slowly-rotating, breathing star-field rendered with Canvas2D (no heavy 3D deps). Each star = a personality dimension, value, or core trait. Star **mass = strength of evidence**, **glow = recency**, **orbit distance = how central to identity**.
+- Hit-test uses `performance.now()` but render loop uses its own `t0` baseline → rotation drift between draw and pick. Use a shared `tRef` written each frame.
+- DPR scaling: `ctx.scale(dpr, dpr)` runs on every effect re-run, compounding the transform when `hoverId`/`selected` changes (effect re-subscribes). Move the render setup so DPR is applied once per resize, and read state via refs inside the RAF loop instead of re-creating the loop on every hover.
+- Star tolerance is too tight on a large viewport — scale tolerance with `baseR`.
+- Add a 1-frame cache of star screen positions so picking and drawing always agree.
 
-- Hover any star → it brightens, draws faint lines to *all engrams that informed it* (real evidence, not metaphor)
-- Click → the camera glides toward it; the right rail fades in with the receipts
-- Constellations cluster naturally: Big Five floats near attachment style, values orbit slightly farther out, shadow patterns occupy the dimmer outer ring
-- A single ambient line of text floats below: the **identity narrative**, treated as poetry not paragraph
+Pass criteria:
+- Cursor turns pointer exactly when over the visible glow of a star.
+- Click reliably opens the evidence rail for the hovered star.
+- No console errors; smooth 60fps; rotation continues during hover.
 
-**Why it works**: the star metaphor is universally legible, scales infinitely, makes "more data = more beautiful" instead of "more data = cluttered."
+## Phase 2 — Climate Ribbon
 
----
+Build `ClimateRibbon.tsx`:
+- Three stacked horizontal bands: Now (current `mnemos_emotional_state`), Past 30d (aggregated daily snapshots from `mnemos_emotional_state_history` if present, else derived from `engrams.created_at` + valence tags), Forecast 48h (faint dashed continuation using simple cyclic mean).
+- Soft Rothko bleed via `createLinearGradient` with valence/arousal/clarity/restlessness/warmth → existing palette tints only.
+- Time cursor: drag/click sets `timeCursor` in `profileLayoutStore`. Constellation subscribes and dims stars whose `last_updated` is after the cursor.
+- Loop until: cursor scrubbing visibly re-tints stars; bands render at correct heights; tooltip on hover shows date + dominant dimension.
 
-## Layer 2 — **The Climate** (Emotional Weather)
+## Phase 3 — Currents widget grid
 
-A horizontal **weather strip** stretched across the dashboard's mid-band. Reads like a barometer for the soul:
+Add `src/components/profile/widgets/`:
+- `CircadianRadial.tsx` — 24-spoke radial of `thought_stream.created_at` density.
+- `WeeklyHeatmap.tsx` — 7×N grid from `engrams` counts.
+- `RecurrenceOrbits.tsx` — top tag clusters from `engrams.tags` + `connections`.
+- `BeliefDrift.tsx` — sparkline of `beliefs.confidence` deltas.
+- `QuestionStream.tsx` — `curiosity_questions` not yet asked, click → opens chat with prefill.
 
-- **Now**: a single flowing gradient bar showing current emotional state (valence/arousal/clarity/restlessness/warmth) as soft colored bands that bleed into each other — never harsh, always Rothko-quiet
-- **Past 30 days**: same bands compressed into a small ribbon below — at a glance you see *"the last week has been more restless than usual"*
-- **Forecast**: a faint dashed extension predicting the next 48 hours based on cyclical patterns (one of the agents flagged: people obsessively check weather apps; do the same for emotion)
-- Click any moment in the ribbon → the constellation above re-renders to *that moment's self*. **Time-travel through your own psychology.**
+Tile container: CSS grid, drag-to-reorder via `@dnd-kit/core` (already idiomatic for this stack). Order persisted in `profileLayoutStore` → `localStorage`.
 
----
+Loop until: every tile renders with real data (or quiet empty state), drag reorder persists across reload, no layout overflow at 1280–1920 widths.
 
-## Layer 3 — **The Currents** (Patterns, Rhythms, Cycles)
+## Phase 4 — Compass + daily pulse
 
-A horizontal band of small, discrete **micro-charts** — each one a self-contained insight. Modular tiles the user reorders by drag:
+- `CompassToday.tsx`: three modules (Today's edge, Question to sit with, Pattern just noticed).
+- New edge function `profile-daily-pulse`: composes today's content from `growth_edges`, `shadow_patterns.unasked_questions`, last-24h `engrams`. Cached per-user per-day in a new table `profile_daily_pulse(user_id, day, payload jsonb)`.
+- Frontend calls function on mount; falls back to client-side composition if function 5xxs.
 
-- **Circadian profile** — a 24-hour radial showing when your thoughts cluster, when you're most reflective, when shadow themes emerge
-- **Weekly rhythm** — 7-day heatmap; reveals "Sundays you spiral, Wednesdays you create"
-- **Recurrence map** — themes that loop (from `engrams.tags` + connections graph). Each loop is drawn as an orbit; the more it returns, the tighter the orbit
-- **Belief drift** — sparkline showing which beliefs are strengthening, decaying, or contradicting each other this month
-- **Question stream** — the curiosity questions Luca has *not yet asked you*, hovering as faint text. Click one to start a thread
+Loop until: Compass renders within 800ms, content rotates daily, refresh button regenerates.
 
-Each tile is a real, queryable widget — not decoration.
+## Cross-layer wiring (final pass)
 
----
+- Selecting a star highlights climate days that informed it (filter by `engrams` linked via tags).
+- Hovering a climate peak swells matching stars (write `hoveredCategory` to store).
+- Final QA at 1366, 1536, 1746, 1920 widths + console-clean check.
 
-## Layer 4 — **The Compass** (Actionable Today)
+## Technical notes
 
-The bottom band. The **utility layer** that earns the beauty above. Three simple modules:
-
-- **Today's edge** — one specific growth-edge surfaced from `growth_edges` + recent emotional state. *"Your restlessness has been high for 4 days; your profile says you avoid sitting with uncertainty. Try 10 minutes of nothing."*
-- **One question to sit with** — pulled from `shadow_patterns.unasked_questions`, rotating daily
-- **A pattern just noticed** — auto-generated insight from the last 24h of memories. Phrased as gentle observation, not prescription
-
-These are the **gravity hooks** — the reason a user opens the app on a slow Tuesday.
-
----
-
-## Cross-Layer Magic
-
-The four layers are not isolated panels — they **respond to each other**:
-
-- Click a star in the Constellation → Climate ribbon highlights the days that informed it; Currents show the patterns that produced it; Compass surfaces a related action
-- Hover a peak in the Climate ribbon → the relevant stars in the Constellation swell
-- This creates a sense of **a single living system** rather than a dashboard of widgets
-
----
-
-## The Aesthetic (preserves your existing palette)
-
-- All existing dark/monochrome tokens reused — no new colors except very subtle dim accents you already have (`--luca` `#c9a87c`, `--guardian` `#8ca89c`)
-- Typography unchanged: Inter for chrome, JetBrains Mono for numbers
-- Motion language: **everything breathes** at 4–8s cycles, nothing twitches. Inspired by the existing `breathe` keyframe
-- No emoji. No glassmorphism. No gradients louder than candlelight
-- Reference points: a planetarium ceiling, a Brian Eno generative artwork, the LCD on a Teenage Engineering device
-
----
-
-## Modular Architecture (technical, briefly)
-
-A new `/profile` becomes a **canvas composition** of independent widgets:
-
-```text
-src/components/profile/
-  ├─ ConstellationCanvas.tsx     ← Canvas2D star-field
-  ├─ ClimateRibbon.tsx            ← time-series emotional bands
-  ├─ widgets/
-  │   ├─ CircadianRadial.tsx
-  │   ├─ WeeklyHeatmap.tsx
-  │   ├─ RecurrenceOrbits.tsx
-  │   ├─ BeliefDrift.tsx
-  │   └─ QuestionStream.tsx
-  ├─ CompassToday.tsx
-  ├─ EvidencePanel.tsx           ← right-rail receipts on selection
-  └─ profileLayoutStore.ts       ← Zustand: widget order, expansion, time cursor
-```
-
-- **Data**: all from existing tables (`psychological_profile`, `engrams`, `thought_stream`, `mnemos_emotional_state`, `beliefs`, `connections`, `curiosity_questions`, `memory_events`) — no schema changes required for v1
-- **One new edge function** later (optional): `profile-daily-pulse` to cache "today's edge / question / pattern" so Compass loads instantly
-- Old tabbed `ProfileView` is preserved as a `?view=classic` fallback during transition
-- Existing `ProfileChatPanel` becomes the right-rail evidence companion — clicking any star pre-fills it with "tell me about this"
-
----
-
-## Build Sequence (4 phases, each independently shippable)
-
-1. **Constellation + Evidence Panel** — the centerpiece; immediate "wow"
-2. **Climate Ribbon + time cursor** — adds the time dimension
-3. **Currents widget grid** — the modular tiles, drag-to-rearrange
-4. **Compass + daily pulse** — the daily-return hook
-
-Each phase ships a usable upgrade. By Phase 4 the entire `/profile` is the new experience.
-
----
-
-## What Makes This Gravitational
-
-- **It changes every time you open it** (climate shifts, stars brighten, new question)
-- **It rewards both 5-second glances and 30-minute deep sessions**
-- **Every visualization is an interface** — nothing is decoration; everything responds
-- **It tells you something about yourself you didn't know** — every single day
-- **It is unmistakably yours** — no two users' constellations look alike
-
-The gravity comes from the feeling that *this thing is alive, and it is about me, and I can't quite see all of it yet*.
+- All work stays in `src/components/profile/**` plus one edge function and one migration.
+- Reuses existing tokens (`--luca`, `--guardian`, `--text-*`); no new colors.
+- Animation budget: single shared RAF loop in `InnerCosmos.tsx` distributes `t` to children via context to avoid 4 independent loops.
+- Browser loop uses `navigate_to_sandbox` → `screenshot` → `observe` → `act` → `read_console_logs`; max 3 patch cycles per phase, then escalate.
 
