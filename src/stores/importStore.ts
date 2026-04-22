@@ -168,11 +168,61 @@ const initialState = {
   error: null as string | null,
   importId: null as string | null,
   filterStats: null as FilterStats | null,
-  preparedConversations: null as any[] | null,
+  preparedConversations: null as NormalizedConversation[] | null,
   platform: null as string | null,
   dismissed: false,
   profileData: null as any | null,
+  detectedSources: [] as DetectedSource[],
+  adapterOverride: null as string | null,
+  adapterContext: { includeTweets: true, includeDMs: true } as AdapterContext,
 };
+
+function runFilterPipeline(
+  conversations: NormalizedConversation[],
+  fileName: string,
+  fileSize: number,
+) {
+  const rawCount = conversations.length;
+  let skippedShort = 0;
+  let skippedLowText = 0;
+
+  // Tweets are user-only short utterances; allow them through with looser thresholds
+  const userOnly = isUserOnlySource(conversations);
+  const minMessages = userOnly ? 1 : 6;
+  const minUserChars = userOnly ? 60 : 500;
+
+  const substantial = conversations.filter((conv) => {
+    const meta = getConversationMeta(conv);
+    if (meta.messageCount < minMessages) { skippedShort++; return false; }
+    if (meta.totalUserChars < minUserChars) { skippedLowText++; return false; }
+    return true;
+  });
+
+  const scored = substantial.map((conv) => ({ conv, score: scoreConversation(conv) }));
+  scored.sort((a, b) => b.score - a.score);
+  const selected = scored.slice(0, MAX_CONVERSATIONS).map((s) => s.conv);
+
+  const times = selected.map((c) => c.create_time).filter((t: number) => t > 0);
+  const dateRange = times.length > 0 ? {
+    earliest: new Date(Math.min(...times) * 1000).toLocaleDateString(),
+    latest: new Date(Math.max(...times) * 1000).toLocaleDateString(),
+  } : null;
+
+  const totalChunks = Math.ceil(selected.length / CHUNK_SIZE);
+  const estimatedMinutes = Math.max(1, Math.ceil(totalChunks * 1.5) + 3);
+
+  return {
+    selected,
+    rawCount,
+    skippedShort,
+    skippedLowText,
+    dateRange,
+    totalChunks,
+    estimatedMinutes,
+    fileName,
+    fileSize,
+  };
+}
 
 export const useImportStore = create<ImportState>((set, get) => ({
   ...initialState,
@@ -181,68 +231,100 @@ export const useImportStore = create<ImportState>((set, get) => ({
     set({ ...initialState, stage: 'filtering', fileName: file.name, fileSize: file.size });
 
     try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      const platform = detectPlatform(data);
-
-      if (platform === 'unknown') {
-        set({ stage: 'error', error: 'Unrecognized format. Supports ChatGPT and Claude JSON exports.' });
+      const sources = await readFileToSources(file);
+      if (sources.length === 0) {
+        set({ stage: 'error', error: 'No readable conversation data found in this file.' });
         return;
       }
 
-      let normalized: any[];
-      if (platform === 'claude') {
-        normalized = convertClaudeToMapping(Array.isArray(data) ? data : []);
-      } else {
-        normalized = (Array.isArray(data) ? data : []).filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      const detectedSources: DetectedSource[] = sources.map((s) => ({
+        adapterId: s.adapterId,
+        adapterLabel: adapters[s.adapterId]?.label || s.adapterId,
+        fileName: s.fileName,
+        rawData: s.data,
+      }));
+
+      const ctx = get().adapterContext;
+      const { conversations, usedAdapters } = normalizeSources(sources, ctx);
+
+      if (conversations.length === 0) {
+        set({
+          stage: 'error',
+          error: `Detected ${detectedSources.map((d) => d.adapterLabel).join(', ')} but couldn't extract any conversations.`,
+          detectedSources,
+        });
+        return;
       }
 
-      const rawCount = normalized.length;
-      let skippedShort = 0;
-      let skippedLowText = 0;
-
-      // Filter
-      const substantial = normalized.filter(conv => {
-        const meta = getConversationMeta(conv);
-        if (meta.messageCount < 6) { skippedShort++; return false; }
-        if (meta.totalUserChars < 500) { skippedLowText++; return false; }
-        return true;
-      });
-
-      // Score and sort
-      const scored = substantial.map(conv => ({ conv, score: scoreConversation(conv) }));
-      scored.sort((a, b) => b.score - a.score);
-      const selected = scored.slice(0, MAX_CONVERSATIONS).map(s => s.conv);
-
-      // Date range
-      const times = selected.map(c => c.create_time).filter((t: number) => t > 0);
-      const dateRange = times.length > 0 ? {
-        earliest: new Date(Math.min(...times) * 1000).toLocaleDateString(),
-        latest: new Date(Math.max(...times) * 1000).toLocaleDateString(),
-      } : null;
-
-      const totalChunks = Math.ceil(selected.length / CHUNK_SIZE);
-      const estimatedMinutes = Math.max(1, Math.ceil(totalChunks * 1.5) + 3);
+      const result = runFilterPipeline(conversations, file.name, file.size);
+      const platformLabel = usedAdapters.map((id) => adapters[id]?.label || id).join(' + ');
 
       set({
         stage: 'idle',
-        totalConversations: rawCount,
-        filteredCount: selected.length,
-        platform,
-        preparedConversations: selected,
-        totalChunks,
+        totalConversations: result.rawCount,
+        filteredCount: result.selected.length,
+        platform: platformLabel,
+        preparedConversations: result.selected,
+        totalChunks: result.totalChunks,
+        detectedSources,
         filterStats: {
-          rawCount,
-          filteredCount: selected.length,
-          skippedShort,
-          skippedLowText,
-          dateRange,
-          estimatedMinutes,
+          rawCount: result.rawCount,
+          filteredCount: result.selected.length,
+          skippedShort: result.skippedShort,
+          skippedLowText: result.skippedLowText,
+          dateRange: result.dateRange,
+          estimatedMinutes: result.estimatedMinutes,
         },
       });
     } catch (err: any) {
       set({ stage: 'error', error: err.message || 'Failed to parse file' });
     }
+  },
+
+  setAdapterOverride: (adapterId: string | null) => {
+    set({ adapterOverride: adapterId });
+  },
+
+  setAdapterContext: (ctx: Partial<AdapterContext>) => {
+    set({ adapterContext: { ...get().adapterContext, ...ctx } });
+  },
+
+  applyAdapterSelection: () => {
+    const { detectedSources, adapterOverride, adapterContext, fileName, fileSize } = get();
+    if (detectedSources.length === 0) return;
+
+    // Apply override (if any) only when there's a single source
+    const sources = detectedSources.map((d) => ({
+      adapterId: adapterOverride && detectedSources.length === 1 ? adapterOverride : d.adapterId,
+      data: d.rawData,
+      fileName: d.fileName,
+    }));
+
+    const { conversations, usedAdapters } = normalizeSources(sources, adapterContext);
+    if (conversations.length === 0) {
+      set({ stage: 'error', error: 'No conversations matched the selected source type.' });
+      return;
+    }
+
+    const result = runFilterPipeline(conversations, fileName, fileSize);
+    const platformLabel = usedAdapters.map((id) => adapters[id]?.label || id).join(' + ');
+
+    set({
+      stage: 'idle',
+      totalConversations: result.rawCount,
+      filteredCount: result.selected.length,
+      platform: platformLabel,
+      preparedConversations: result.selected,
+      totalChunks: result.totalChunks,
+      filterStats: {
+        rawCount: result.rawCount,
+        filteredCount: result.selected.length,
+        skippedShort: result.skippedShort,
+        skippedLowText: result.skippedLowText,
+        dateRange: result.dateRange,
+        estimatedMinutes: result.estimatedMinutes,
+      },
+    });
   },
 
   startImport: async (userId: string) => {
