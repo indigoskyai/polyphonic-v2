@@ -96,3 +96,6 @@ verify_jwt = false
 [functions.profile-daily-pulse]
 verify_jwt = false
 
+[functions.dashboard-generate]
+verify_jwt = false
+
