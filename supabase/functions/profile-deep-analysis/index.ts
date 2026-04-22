@@ -374,13 +374,21 @@ serve(async (req) => {
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("confidence", { ascending: false })
-      .limit(800);
+      .limit(400);
 
     if (!allMemories || allMemories.length < 3) {
       throw new Error("Insufficient data for deep analysis");
     }
 
     const memoryCorpus = allMemories
+      .map((m: any) => {
+        const tags = m.tags?.length ? ` [${m.tags.join(", ")}]` : "";
+        return `[${m.memory_type}|conf:${m.confidence}] ${m.content}${tags}`;
+      })
+      .join("\n");
+
+    const memoryExcerpt = allMemories
+      .slice(0, 120)
       .map((m: any) => {
         const tags = m.tags?.length ? ` [${m.tags.join(", ")}]` : "";
         return `[${m.memory_type}|conf:${m.confidence}] ${m.content}${tags}`;
@@ -407,7 +415,7 @@ serve(async (req) => {
               { role: "user", content: userContent },
             ],
             temperature: 0.4,
-            max_tokens: 8000,
+            max_tokens: 5000,
           }),
         },
       );
@@ -444,7 +452,7 @@ serve(async (req) => {
     }
     const pass1 = await aiCall(
       LINGUISTIC_PROMPT,
-      `MEMORY CORPUS (${allMemories.length} memories):\n${memoryCorpus}`,
+      `MEMORY CORPUS (${allMemories.length} memories):\n${memoryExcerpt}`,
     );
     console.log("Pass 1 (Linguistic) complete");
 
@@ -456,7 +464,7 @@ serve(async (req) => {
     }
     const pass2 = await aiCall(
       PSYCHOLOGICAL_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`,
     );
     console.log("Pass 2 (Psychological) complete");
 
@@ -468,7 +476,7 @@ serve(async (req) => {
     }
     const pass3 = await aiCall(
       RELATIONAL_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`,
     );
     console.log("Pass 3 (Relational) complete");
 
@@ -480,7 +488,7 @@ serve(async (req) => {
     }
     const pass4 = await aiCall(
       VALUES_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`,
     );
     console.log("Pass 4 (Values) complete");
 
@@ -495,8 +503,11 @@ serve(async (req) => {
 
 After the shadow analysis, synthesize ALL five passes into a complete structured profile using the save_psychological_profile tool.
 
-MEMORY CORPUS:
-${memoryCorpus}
+HIGH-SIGNAL MEMORY EXCERPT:
+${memoryExcerpt}
+
+FULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):
+${memoryCorpus.slice(0, 30000)}
 
 --- PASS 1 (Linguistic Fingerprint) ---
 ${pass1}
@@ -522,7 +533,7 @@ ${pass4}`;
           model: ANALYSIS_MODEL,
           messages: [{ role: "user", content: finalPrompt }],
           temperature: 0.3,
-          max_tokens: 12000,
+          max_tokens: 7000,
           tools: [profileTool],
           tool_choice: {
             type: "function",
@@ -682,6 +693,8 @@ ${pass4}`;
       // @ts-ignore
       EdgeRuntime.waitUntil(bgTask);
     }
+
+    console.log(`profile-deep-analysis request accepted for user ${user_id}`);
 
     return new Response(
       JSON.stringify({

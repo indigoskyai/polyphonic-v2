@@ -57,7 +57,11 @@ export default function ProfileView() {
         throw new Error(err.error || `Failed (${res.status})`);
       }
 
-      // Backend now runs the 5-pass analysis in the background (returns 202).
+      if (res.status !== 202 && res.status !== 200) {
+        throw new Error(`Unexpected response (${res.status})`);
+      }
+
+      // Backend now runs the analysis asynchronously.
       // Poll psychological_profile for completion (cap ~10 min).
       const startedAt = Date.now();
       const baselineUpdatedAt = profile?.updated_at ?? null;
@@ -77,7 +81,7 @@ export default function ProfileView() {
         }
       }
 
-      throw new Error('Analysis is taking longer than expected — it may still finish in the background. Try Refresh in a few minutes.');
+      throw new Error('Analysis is still running in the background. Give it a few minutes, then click Refresh.');
     } catch (e: any) {
       setGenError(e.message || 'Profile generation failed');
     } finally {
