@@ -452,7 +452,7 @@ serve(async (req) => {
     }
     const pass1 = await aiCall(
       LINGUISTIC_PROMPT,
-      `MEMORY CORPUS (${allMemories.length} memories):\n${memoryCorpus}`,
+      `MEMORY CORPUS (${allMemories.length} memories):\n${memoryExcerpt}`,
     );
     console.log("Pass 1 (Linguistic) complete");
 
@@ -464,7 +464,7 @@ serve(async (req) => {
     }
     const pass2 = await aiCall(
       PSYCHOLOGICAL_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 RESULTS (Linguistic Fingerprint) ---\n${pass1}`,
     );
     console.log("Pass 2 (Psychological) complete");
 
@@ -476,7 +476,7 @@ serve(async (req) => {
     }
     const pass3 = await aiCall(
       RELATIONAL_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}`,
     );
     console.log("Pass 3 (Relational) complete");
 
@@ -488,7 +488,7 @@ serve(async (req) => {
     }
     const pass4 = await aiCall(
       VALUES_PROMPT,
-      `MEMORY CORPUS:\n${memoryCorpus}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`,
+      `HIGH-SIGNAL MEMORY EXCERPT:\n${memoryExcerpt}\n\nFULL CORPUS SUMMARY SOURCE (${allMemories.length} memories):\n${memoryCorpus.slice(0, 30000)}\n\n--- PASS 1 (Linguistic) ---\n${pass1}\n\n--- PASS 2 (Psychological) ---\n${pass2}\n\n--- PASS 3 (Relational) ---\n${pass3}`,
     );
     console.log("Pass 4 (Values) complete");
 
