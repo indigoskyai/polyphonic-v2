@@ -235,6 +235,19 @@ export default function ProfileView() {
     );
   }
 
+  if (viewMode === 'cosmos') {
+    return (
+      <InnerCosmos
+        profile={profile}
+        memoryCount={memoryStats?.total ?? 0}
+        generating={generating}
+        onRegenerate={generateProfile}
+        onRefresh={loadData}
+        onSwitchToClassic={() => setSearchParams({ view: 'classic' })}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
