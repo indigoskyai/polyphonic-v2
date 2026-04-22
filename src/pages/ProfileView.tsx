@@ -129,25 +129,55 @@ export default function ProfileView() {
   }
 
   if (!profile) {
+    const hasMemories = (memoryStats?.total ?? 0) >= 3;
     return (
       <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
-        <div className="text-center" style={{ maxWidth: 400 }}>
-          <div className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>No profile data yet</div>
-          <div className="text-xs mb-4" style={{ color: 'var(--text-ghost)' }}>
-            Import your conversation data to generate a deep psychological profile.
+        <div className="text-center" style={{ maxWidth: 460 }}>
+          <div className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+            {hasMemories ? 'Profile not yet generated' : 'No profile data yet'}
           </div>
-          <button
-            onClick={() => navigate('/import')}
-            className="text-xs px-4 py-2 rounded"
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            Import Conversations
-          </button>
+          <div className="text-xs mb-5" style={{ color: 'var(--text-ghost)', lineHeight: 1.6 }}>
+            {hasMemories ? (
+              <>
+                You have <span style={{ color: 'var(--text-soft)' }}>{memoryStats?.total}</span> memories ready for analysis.
+                Generate your deep psychological profile — a 5-pass analysis (linguistic, psychological, relational,
+                values, shadow) using Gemini 2.5 Pro. This takes 2–5 minutes.
+              </>
+            ) : (
+              'Import your conversation data to generate a deep psychological profile.'
+            )}
+          </div>
+          {genError && (
+            <div className="text-[11px] mb-3 px-3 py-2 rounded" style={{ background: 'rgba(220,80,80,0.08)', border: '1px solid rgba(220,80,80,0.2)', color: '#e88' }}>
+              {genError}
+            </div>
+          )}
+          <div className="flex gap-2 justify-center">
+            {hasMemories ? (
+              <button
+                onClick={generateProfile}
+                disabled={generating}
+                className="text-xs px-4 py-2 rounded"
+                style={{
+                  background: generating ? 'var(--bg-surface)' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                  color: generating ? 'var(--text-ghost)' : 'var(--bg-deep)',
+                  cursor: generating ? 'wait' : 'pointer',
+                  opacity: generating ? 0.7 : 1,
+                }}
+              >
+                {generating ? 'Analyzing... (2–5 min)' : 'Generate Profile'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/import')}
+                className="text-xs px-4 py-2 rounded"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                Import Conversations
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
