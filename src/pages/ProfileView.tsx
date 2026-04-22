@@ -56,7 +56,28 @@ export default function ProfileView() {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(err.error || `Failed (${res.status})`);
       }
-      await loadData();
+
+      // Backend now runs the 5-pass analysis in the background (returns 202).
+      // Poll psychological_profile for completion (cap ~10 min).
+      const startedAt = Date.now();
+      const baselineUpdatedAt = profile?.updated_at ?? null;
+      const MAX_WAIT_MS = 10 * 60 * 1000;
+      const POLL_INTERVAL_MS = 8000;
+
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const { data: latest } = await supabase
+          .from('psychological_profile')
+          .select('updated_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (latest?.updated_at && latest.updated_at !== baselineUpdatedAt) {
+          await loadData();
+          return;
+        }
+      }
+
+      throw new Error('Analysis is taking longer than expected — it may still finish in the background. Try Refresh in a few minutes.');
     } catch (e: any) {
       setGenError(e.message || 'Profile generation failed');
     } finally {
