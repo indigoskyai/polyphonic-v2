@@ -371,9 +371,26 @@ export const useImportStore = create<ImportState>((set, get) => ({
       let totalQuestions = 0;
       let totalConflicts = 0;
 
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = convos.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        set({ processedChunks: i, pipelineDetail: `chunk ${i + 1}/${totalChunks}` });
+      // Group by source_type so each chunk uses a consistent extraction prompt
+      const grouped: Record<string, NormalizedConversation[]> = {};
+      for (const conv of convos) {
+        const key = conv.source_type || 'chat';
+        (grouped[key] ||= []).push(conv);
+      }
+
+      // Build chunks across all source types, tagged with source_type
+      const taggedChunks: { chunk: NormalizedConversation[]; source_type: string }[] = [];
+      for (const [sourceType, list] of Object.entries(grouped)) {
+        for (let i = 0; i < list.length; i += CHUNK_SIZE) {
+          taggedChunks.push({ chunk: list.slice(i, i + CHUNK_SIZE), source_type: sourceType });
+        }
+      }
+      const computedTotal = taggedChunks.length;
+      set({ totalChunks: computedTotal });
+
+      for (let i = 0; i < taggedChunks.length; i++) {
+        const { chunk, source_type } = taggedChunks[i];
+        set({ processedChunks: i, pipelineDetail: `chunk ${i + 1}/${computedTotal} (${source_type})` });
 
         try {
           const response = await callWithRetry(`${supabaseUrl}/functions/v1/import-chatgpt`, {
@@ -386,7 +403,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
               conversations: chunk,
               import_id: importId,
               chunk_index: i,
-              total_chunks: totalChunks,
+              total_chunks: computedTotal,
+              source_type,
               accumulated_memories: accumulatedMemories.slice(-100),
             }),
           });
@@ -394,7 +412,6 @@ export const useImportStore = create<ImportState>((set, get) => ({
           if (!response.ok) {
             const err = await response.json().catch(() => ({ error: 'Unknown error' }));
             console.error(`Chunk ${i + 1} failed:`, err.error);
-            // Continue to next chunk instead of aborting
             continue;
           }
 
@@ -414,7 +431,6 @@ export const useImportStore = create<ImportState>((set, get) => ({
           });
         } catch (chunkErr: any) {
           console.error(`Chunk ${i + 1} error after retries:`, chunkErr.message);
-          // Continue to next chunk
         }
       }
 
