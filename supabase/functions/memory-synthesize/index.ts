@@ -128,10 +128,14 @@ serve(async (req) => {
     const user_id = claimsData.claims.sub as string;
     const { import_id } = await req.json();
 
-    // Use user's own API key if available
-    const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
-    const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-    const openrouterKey = userApiKey!;
+    // Use Lovable AI Gateway (no user key required)
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableApiKey) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     // Update import stage
     if (import_id) {
