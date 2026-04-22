@@ -135,6 +135,67 @@ export default function ImportView() {
                 <div style={{ fontSize: 13, color: 'var(--text-ghost)' }}>{fileName}</div>
               </div>
 
+              {/* Detected platform / source confirmation */}
+              {detectedSources.length > 0 && (
+                <div style={{ padding: '20px 24px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 12 }}>Detected Source</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>
+                    {platform || detectedSources.map((s) => s.adapterLabel).join(' + ')}
+                    {detectedSources.length > 1 && (
+                      <span style={{ fontSize: 11, color: 'var(--text-ghost)', marginLeft: 8 }}>
+                        ({detectedSources.length} files)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* X archive: include tweets / DMs toggles */}
+                  {detectedSources.some((s) => s.adapterId === 'x-tweets' || s.adapterId === 'x-dms') && (
+                    <div className="flex items-center gap-4" style={{ marginBottom: 12 }}>
+                      {detectedSources.some((s) => s.adapterId === 'x-tweets') && (
+                        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <input
+                            type="checkbox"
+                            checked={adapterContext.includeTweets !== false}
+                            onChange={(e) => { setAdapterContext({ includeTweets: e.target.checked }); applyAdapterSelection(); }}
+                          />
+                          Include tweets
+                        </label>
+                      )}
+                      {detectedSources.some((s) => s.adapterId === 'x-dms') && (
+                        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <input
+                            type="checkbox"
+                            checked={adapterContext.includeDMs !== false}
+                            onChange={(e) => { setAdapterContext({ includeDMs: e.target.checked }); applyAdapterSelection(); }}
+                          />
+                          Include DMs
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Manual override (only when single source) */}
+                  {detectedSources.length === 1 && (
+                    <div style={{ fontSize: 11, color: 'var(--text-ghost)' }}>
+                      Wrong platform?{' '}
+                      <select
+                        value={adapterOverride || detectedSources[0].adapterId}
+                        onChange={(e) => { setAdapterOverride(e.target.value); applyAdapterSelection(); }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', fontSize: 11, padding: '2px 6px' }}
+                      >
+                        <option value="chatgpt">ChatGPT</option>
+                        <option value="claude">Claude</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="grok">Grok</option>
+                        <option value="x-tweets">X / Twitter — Tweets</option>
+                        <option value="x-dms">X / Twitter — DMs</option>
+                        <option value="generic">Generic / Other</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Filter stats */}
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 32 }}>
                 <StatCard label="Total conversations" value={String(filterStats.rawCount)} />
