@@ -315,18 +315,19 @@ serve(async (req) => {
     const user_id = user.id;
     ({ import_id } = await req.json());
 
-    // Get API key
-    const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", {
-      p_user_id: user_id,
-    });
-    const openrouterKey = typeof decryptedKey === "string"
-      ? decryptedKey.trim()
-      : "";
-    if (!openrouterKey) {
-      return new Response(JSON.stringify({ error: "No API key configured" }), {
-        status: 400,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+    // Use Lovable AI Gateway (no user API key required)
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableApiKey) {
+      return new Response(
+        JSON.stringify({ error: "Lovable AI is not configured" }),
+        {
+          status: 500,
+          headers: {
+            ...getCorsHeaders(req),
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
 
     // Update pipeline stage
@@ -376,11 +377,11 @@ serve(async (req) => {
       userContent: string,
     ): Promise<string> {
       const response = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${openrouterKey}`,
+            Authorization: `Bearer ${lovableApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -397,9 +398,14 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        const message = response.status === 402
-          ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
-          : `AI call failed (${response.status}): ${errText.slice(0, 200)}`;
+        let message: string;
+        if (response.status === 402) {
+          message = "Lovable AI credits are exhausted. Add credits in Settings → Workspace → Usage, then try again.";
+        } else if (response.status === 429) {
+          message = "Lovable AI rate limit reached. Please wait a moment and try again.";
+        } else {
+          message = `AI call failed (${response.status}): ${errText.slice(0, 200)}`;
+        }
         const error = new Error(message) as Error & { status?: number };
         error.status = response.status;
         throw error;
@@ -489,11 +495,11 @@ ${pass3}
 ${pass4}`;
 
     const finalResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${openrouterKey}`,
+          Authorization: `Bearer ${lovableApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -512,9 +518,14 @@ ${pass4}`;
 
     if (!finalResponse.ok) {
       const errText = await finalResponse.text();
-      const message = finalResponse.status === 402
-        ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
-        : `Final synthesis failed: ${errText.slice(0, 200)}`;
+      let message: string;
+      if (finalResponse.status === 402) {
+        message = "Lovable AI credits are exhausted. Add credits in Settings → Workspace → Usage, then try again.";
+      } else if (finalResponse.status === 429) {
+        message = "Lovable AI rate limit reached. Please wait a moment and try again.";
+      } else {
+        message = `Final synthesis failed: ${errText.slice(0, 200)}`;
+      }
       const error = new Error(message) as Error & { status?: number };
       error.status = finalResponse.status;
       throw error;
