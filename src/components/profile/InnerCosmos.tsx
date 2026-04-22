@@ -116,14 +116,15 @@ export default function InnerCosmos({
         {/* Climate ribbon — emotional weather + time cursor */}
         <ClimateRibbon />
 
-        {/* Placeholder layers — Currents / Compass arrive in Phases 3–4 */}
+        {/* Currents — modular widget grid */}
+        <CurrentsGrid />
+
+        {/* Compass placeholder — arrives in Phase 4 */}
         <div
           className="shrink-0"
           style={{
             borderTop: '1px solid var(--border-subtle)',
             padding: '10px 24px',
-            display: 'flex',
-            gap: 14,
             color: 'var(--text-ghost)',
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
@@ -132,7 +133,6 @@ export default function InnerCosmos({
             background: 'var(--bg-deep)',
           }}
         >
-          <span style={{ opacity: 0.4 }}>currents · arriving</span>
           <span style={{ opacity: 0.3 }}>compass · arriving</span>
         </div>
       </div>
