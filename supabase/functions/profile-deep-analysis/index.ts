@@ -374,13 +374,21 @@ serve(async (req) => {
       .eq("user_id", user_id)
       .eq("is_deleted", false)
       .order("confidence", { ascending: false })
-      .limit(800);
+      .limit(400);
 
     if (!allMemories || allMemories.length < 3) {
       throw new Error("Insufficient data for deep analysis");
     }
 
     const memoryCorpus = allMemories
+      .map((m: any) => {
+        const tags = m.tags?.length ? ` [${m.tags.join(", ")}]` : "";
+        return `[${m.memory_type}|conf:${m.confidence}] ${m.content}${tags}`;
+      })
+      .join("\n");
+
+    const memoryExcerpt = allMemories
+      .slice(0, 120)
       .map((m: any) => {
         const tags = m.tags?.length ? ` [${m.tags.join(", ")}]` : "";
         return `[${m.memory_type}|conf:${m.confidence}] ${m.content}${tags}`;
@@ -407,7 +415,7 @@ serve(async (req) => {
               { role: "user", content: userContent },
             ],
             temperature: 0.4,
-            max_tokens: 8000,
+            max_tokens: 5000,
           }),
         },
       );
