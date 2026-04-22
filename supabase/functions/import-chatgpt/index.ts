@@ -356,17 +356,16 @@ ${existingMemoryText || "None yet — this is the first batch."}
 CONVERSATIONS TO ANALYZE (chunk ${chunk_index + 1} of ${total_chunks}):
 ${batchText}`;
 
-    // Single AI call with tool calling
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // Single AI call with tool calling via Lovable AI Gateway
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openrouterKey}`,
+        Authorization: `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: EXTRACTION_MODEL,
         messages: [{ role: "user", content: fullPrompt }],
-        temperature: 0.1,
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
