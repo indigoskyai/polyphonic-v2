@@ -377,11 +377,11 @@ serve(async (req) => {
       userContent: string,
     ): Promise<string> {
       const response = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${openrouterKey}`,
+            Authorization: `Bearer ${lovableApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -398,9 +398,14 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        const message = response.status === 402
-          ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
-          : `AI call failed (${response.status}): ${errText.slice(0, 200)}`;
+        let message: string;
+        if (response.status === 402) {
+          message = "Lovable AI credits are exhausted. Add credits in Settings → Workspace → Usage, then try again.";
+        } else if (response.status === 429) {
+          message = "Lovable AI rate limit reached. Please wait a moment and try again.";
+        } else {
+          message = `AI call failed (${response.status}): ${errText.slice(0, 200)}`;
+        }
         const error = new Error(message) as Error & { status?: number };
         error.status = response.status;
         throw error;
