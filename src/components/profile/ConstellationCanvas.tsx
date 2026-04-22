@@ -32,9 +32,11 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
   const hoverRef = useRef<string | null>(null);
   const selectedRef = useRef<string | null>(null);
 
-  const { selected, select, setHovered } = useProfileLayoutStore();
+  const { selected, select, setHovered, hoveredCategory } = useProfileLayoutStore();
   selectedRef.current = selected?.id ?? null;
   hoverRef.current = hoverId;
+  const hoveredCategoryRef = useRef<string | null>(null);
+  hoveredCategoryRef.current = hoveredCategory;
 
   const stars = useMemo(() => buildConstellation(profile), [profile]);
   const starsRef = useRef(stars);
@@ -135,10 +137,11 @@ export default function ConstellationCanvas({ profile, identityNarrative }: Prop
         const breathing = 1 + Math.sin(t * 0.7 + s.angle * 4) * 0.06;
         const isHover = hover === s.id;
         const isSelected = selectedId === s.id;
+        const isCategoryEcho = hoveredCategoryRef.current === s.category;
         const focused = isHover || isSelected;
 
-        const radius = (1.4 + s.mass * 3.2) * breathing * (focused ? 1.5 : 1);
-        const alpha = (0.35 + s.glow * 0.55) * (focused ? 1.15 : 1);
+        const radius = (1.4 + s.mass * 3.2) * breathing * (focused ? 1.5 : isCategoryEcho ? 1.25 : 1);
+        const alpha = (0.35 + s.glow * 0.55) * (focused ? 1.15 : isCategoryEcho ? 1.08 : 1);
 
         // Cache for picking — store the *visual* radius so tolerance follows star size
         positions.set(s.id, { x, y, r: radius });
