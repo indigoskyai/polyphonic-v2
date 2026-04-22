@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import InnerCosmos from '@/components/profile/InnerCosmos';
 
 type Profile = {
   identity_narrative: string | null;
