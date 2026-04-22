@@ -289,6 +289,14 @@ export default function ProfileView() {
             >
               Refresh
             </button>
+            <button
+              onClick={() => setSearchParams({})}
+              className="text-[10px] px-3 py-1.5 rounded"
+              style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-ghost)', cursor: 'pointer' }}
+              title="Switch to the Inner Cosmos view"
+            >
+              Cosmos view
+            </button>
           </div>
         </div>
 
