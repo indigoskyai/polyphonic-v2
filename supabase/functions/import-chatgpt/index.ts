@@ -326,7 +326,8 @@ serve(async (req) => {
     }
 
     const user_id = user.id;
-    const { conversations, import_id, chunk_index, total_chunks, accumulated_memories } = await req.json();
+    const { conversations, import_id, chunk_index, total_chunks, accumulated_memories, source_type } = await req.json();
+    const sourceType: string = typeof source_type === 'string' ? source_type : 'chat';
 
     if (!conversations || !Array.isArray(conversations) || !import_id || chunk_index === undefined) {
       return new Response(JSON.stringify({ error: "Invalid request: need conversations, import_id, chunk_index" }), {
