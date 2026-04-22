@@ -39,6 +39,8 @@ export default function ProfileView() {
   const [activeTab, setActiveTab] = useState<Tab>('Portrait');
   const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode = searchParams.get('view') === 'classic' ? 'classic' : 'cosmos';
 
   const starterPrompts = useMemo(() => {
     const prompts: string[] = [];
