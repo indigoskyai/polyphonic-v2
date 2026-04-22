@@ -211,6 +211,7 @@ export default function ProfileView() {
             Refresh
           </button>
         </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-0.5 shrink-0 overflow-x-auto" style={{ padding: '8px 24px', scrollbarWidth: 'none' }}>
