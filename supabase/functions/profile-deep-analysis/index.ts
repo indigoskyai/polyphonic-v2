@@ -495,11 +495,11 @@ ${pass3}
 ${pass4}`;
 
     const finalResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${openrouterKey}`,
+          Authorization: `Bearer ${lovableApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -518,9 +518,14 @@ ${pass4}`;
 
     if (!finalResponse.ok) {
       const errText = await finalResponse.text();
-      const message = finalResponse.status === 402
-        ? "Your OpenRouter credits are exhausted. Add credits to your OpenRouter account, then try generating the profile again."
-        : `Final synthesis failed: ${errText.slice(0, 200)}`;
+      let message: string;
+      if (finalResponse.status === 402) {
+        message = "Lovable AI credits are exhausted. Add credits in Settings → Workspace → Usage, then try again.";
+      } else if (finalResponse.status === 429) {
+        message = "Lovable AI rate limit reached. Please wait a moment and try again.";
+      } else {
+        message = `Final synthesis failed: ${errText.slice(0, 200)}`;
+      }
       const error = new Error(message) as Error & { status?: number };
       error.status = finalResponse.status;
       throw error;
