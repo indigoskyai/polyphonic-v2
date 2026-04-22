@@ -44,7 +44,7 @@ export const xDMsAdapter: ImportAdapter = {
     if (!ownerId) return [];
 
     return convs
-      .map((c: any) => {
+      .map((c: any): NormalizedConversation | null => {
         const dmConv = c.dmConversation;
         if (!dmConv?.messages) return null;
         const rawMsgs = dmConv.messages
