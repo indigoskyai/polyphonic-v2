@@ -93,3 +93,6 @@ verify_jwt = false
 [functions.profile-chat]
 verify_jwt = false
 
+[functions.profile-daily-pulse]
+verify_jwt = false
+
