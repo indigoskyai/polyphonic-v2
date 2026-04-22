@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  readFileToSources,
+  normalizeSources,
+  adapters,
+  type AdapterContext,
+  type NormalizedConversation,
+} from '@/lib/importAdapters';
 
 export type PipelineStage = 'idle' | 'filtering' | 'parsing' | 'extracting' | 'synthesizing' | 'profiling' | 'complete' | 'error';
 
@@ -10,6 +17,13 @@ interface FilterStats {
   skippedLowText: number;
   dateRange: { earliest: string; latest: string } | null;
   estimatedMinutes: number;
+}
+
+interface DetectedSource {
+  adapterId: string;
+  adapterLabel: string;
+  fileName: string;
+  rawData: unknown;
 }
 
 interface ImportState {
@@ -27,13 +41,21 @@ interface ImportState {
   error: string | null;
   importId: string | null;
   filterStats: FilterStats | null;
-  preparedConversations: any[] | null;
+  preparedConversations: NormalizedConversation[] | null;
   platform: string | null;
   dismissed: boolean;
   profileData: any | null;
 
+  // Detected sources before user confirmation
+  detectedSources: DetectedSource[];
+  adapterOverride: string | null;
+  adapterContext: AdapterContext;
+
   // Actions
   parseAndFilter: (file: File) => Promise<void>;
+  setAdapterOverride: (adapterId: string | null) => void;
+  setAdapterContext: (ctx: Partial<AdapterContext>) => void;
+  applyAdapterSelection: () => void;
   startImport: (userId: string) => Promise<void>;
   reset: () => void;
   dismiss: () => void;
@@ -44,37 +66,7 @@ const MAX_CONVERSATIONS = 500;
 
 const PERSONAL_PATTERN = /\b(I am|I'm|I was|I feel|I felt|I think|I've been|I have been|my family|my wife|my husband|my partner|my kid|my child|my son|my daughter|my mom|my dad|my mother|my father|my friend|my job|my work|my career|I love|I hate|I want|I need|I wish|I believe|I struggle|I learned)\b/i;
 
-function detectPlatform(data: any): string {
-  if (Array.isArray(data) && data[0]?.mapping) return 'chatgpt';
-  if (Array.isArray(data) && data[0]?.uuid && data[0]?.chat_messages) return 'claude';
-  return 'unknown';
-}
-
-function convertClaudeToMapping(conversations: any[]): any[] {
-  return conversations
-    .filter((c: any) => c.chat_messages?.length >= 2)
-    .map((conv: any) => {
-      const mapping: Record<string, any> = {};
-      conv.chat_messages.forEach((msg: any, i: number) => {
-        const role = msg.sender === 'human' ? 'user' : msg.sender === 'assistant' ? 'assistant' : null;
-        if (!role || !msg.text?.trim()) return;
-        mapping[`node-${i}`] = {
-          message: {
-            author: { role },
-            content: { parts: [msg.text] },
-            create_time: msg.created_at_utc ? new Date(msg.created_at_utc).getTime() / 1000 : (conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0) + i,
-          },
-        };
-      });
-      return {
-        title: conv.name || 'Untitled',
-        create_time: conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0,
-        mapping,
-      };
-    });
-}
-
-function extractMessages(conv: any): { role: string; content: string; create_time: number }[] {
+function extractMessages(conv: NormalizedConversation): { role: string; content: string; create_time: number }[] {
   const msgs: { role: string; content: string; create_time: number }[] = [];
   if (!conv.mapping) return msgs;
   for (const nodeId of Object.keys(conv.mapping)) {
@@ -91,7 +83,7 @@ function extractMessages(conv: any): { role: string; content: string; create_tim
   return msgs;
 }
 
-function scoreConversation(conv: any): number {
+function scoreConversation(conv: NormalizedConversation): number {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   if (userMsgs.length === 0) return 0;
@@ -102,11 +94,17 @@ function scoreConversation(conv: any): number {
   return userMsgs.length * avgLen * personalBoost;
 }
 
-function getConversationMeta(conv: any) {
+function getConversationMeta(conv: NormalizedConversation) {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   const totalUserChars = userMsgs.reduce((sum, m) => sum + m.content.length, 0);
+  // Tweet-only conversations have user-only messages and low per-msg counts; lower threshold
   return { messageCount: msgs.length, userMessageCount: userMsgs.length, totalUserChars };
+}
+
+function isUserOnlySource(convs: NormalizedConversation[]): boolean {
+  // If majority are tweets/dms-style (user-only or imbalanced), apply softer filter
+  return convs.length > 0 && convs[0].source_type === 'tweets';
 }
 
 async function callWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
@@ -170,11 +168,61 @@ const initialState = {
   error: null as string | null,
   importId: null as string | null,
   filterStats: null as FilterStats | null,
-  preparedConversations: null as any[] | null,
+  preparedConversations: null as NormalizedConversation[] | null,
   platform: null as string | null,
   dismissed: false,
   profileData: null as any | null,
+  detectedSources: [] as DetectedSource[],
+  adapterOverride: null as string | null,
+  adapterContext: { includeTweets: true, includeDMs: true } as AdapterContext,
 };
+
+function runFilterPipeline(
+  conversations: NormalizedConversation[],
+  fileName: string,
+  fileSize: number,
+) {
+  const rawCount = conversations.length;
+  let skippedShort = 0;
+  let skippedLowText = 0;
+
+  // Tweets are user-only short utterances; allow them through with looser thresholds
+  const userOnly = isUserOnlySource(conversations);
+  const minMessages = userOnly ? 1 : 6;
+  const minUserChars = userOnly ? 60 : 500;
+
+  const substantial = conversations.filter((conv) => {
+    const meta = getConversationMeta(conv);
+    if (meta.messageCount < minMessages) { skippedShort++; return false; }
+    if (meta.totalUserChars < minUserChars) { skippedLowText++; return false; }
+    return true;
+  });
+
+  const scored = substantial.map((conv) => ({ conv, score: scoreConversation(conv) }));
+  scored.sort((a, b) => b.score - a.score);
+  const selected = scored.slice(0, MAX_CONVERSATIONS).map((s) => s.conv);
+
+  const times = selected.map((c) => c.create_time).filter((t: number) => t > 0);
+  const dateRange = times.length > 0 ? {
+    earliest: new Date(Math.min(...times) * 1000).toLocaleDateString(),
+    latest: new Date(Math.max(...times) * 1000).toLocaleDateString(),
+  } : null;
+
+  const totalChunks = Math.ceil(selected.length / CHUNK_SIZE);
+  const estimatedMinutes = Math.max(1, Math.ceil(totalChunks * 1.5) + 3);
+
+  return {
+    selected,
+    rawCount,
+    skippedShort,
+    skippedLowText,
+    dateRange,
+    totalChunks,
+    estimatedMinutes,
+    fileName,
+    fileSize,
+  };
+}
 
 export const useImportStore = create<ImportState>((set, get) => ({
   ...initialState,
@@ -183,68 +231,100 @@ export const useImportStore = create<ImportState>((set, get) => ({
     set({ ...initialState, stage: 'filtering', fileName: file.name, fileSize: file.size });
 
     try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      const platform = detectPlatform(data);
-
-      if (platform === 'unknown') {
-        set({ stage: 'error', error: 'Unrecognized format. Supports ChatGPT and Claude JSON exports.' });
+      const sources = await readFileToSources(file);
+      if (sources.length === 0) {
+        set({ stage: 'error', error: 'No readable conversation data found in this file.' });
         return;
       }
 
-      let normalized: any[];
-      if (platform === 'claude') {
-        normalized = convertClaudeToMapping(Array.isArray(data) ? data : []);
-      } else {
-        normalized = (Array.isArray(data) ? data : []).filter((c: any) => c.mapping && typeof c.mapping === 'object');
+      const detectedSources: DetectedSource[] = sources.map((s) => ({
+        adapterId: s.adapterId,
+        adapterLabel: adapters[s.adapterId]?.label || s.adapterId,
+        fileName: s.fileName,
+        rawData: s.data,
+      }));
+
+      const ctx = get().adapterContext;
+      const { conversations, usedAdapters } = normalizeSources(sources, ctx);
+
+      if (conversations.length === 0) {
+        set({
+          stage: 'error',
+          error: `Detected ${detectedSources.map((d) => d.adapterLabel).join(', ')} but couldn't extract any conversations.`,
+          detectedSources,
+        });
+        return;
       }
 
-      const rawCount = normalized.length;
-      let skippedShort = 0;
-      let skippedLowText = 0;
-
-      // Filter
-      const substantial = normalized.filter(conv => {
-        const meta = getConversationMeta(conv);
-        if (meta.messageCount < 6) { skippedShort++; return false; }
-        if (meta.totalUserChars < 500) { skippedLowText++; return false; }
-        return true;
-      });
-
-      // Score and sort
-      const scored = substantial.map(conv => ({ conv, score: scoreConversation(conv) }));
-      scored.sort((a, b) => b.score - a.score);
-      const selected = scored.slice(0, MAX_CONVERSATIONS).map(s => s.conv);
-
-      // Date range
-      const times = selected.map(c => c.create_time).filter((t: number) => t > 0);
-      const dateRange = times.length > 0 ? {
-        earliest: new Date(Math.min(...times) * 1000).toLocaleDateString(),
-        latest: new Date(Math.max(...times) * 1000).toLocaleDateString(),
-      } : null;
-
-      const totalChunks = Math.ceil(selected.length / CHUNK_SIZE);
-      const estimatedMinutes = Math.max(1, Math.ceil(totalChunks * 1.5) + 3);
+      const result = runFilterPipeline(conversations, file.name, file.size);
+      const platformLabel = usedAdapters.map((id) => adapters[id]?.label || id).join(' + ');
 
       set({
         stage: 'idle',
-        totalConversations: rawCount,
-        filteredCount: selected.length,
-        platform,
-        preparedConversations: selected,
-        totalChunks,
+        totalConversations: result.rawCount,
+        filteredCount: result.selected.length,
+        platform: platformLabel,
+        preparedConversations: result.selected,
+        totalChunks: result.totalChunks,
+        detectedSources,
         filterStats: {
-          rawCount,
-          filteredCount: selected.length,
-          skippedShort,
-          skippedLowText,
-          dateRange,
-          estimatedMinutes,
+          rawCount: result.rawCount,
+          filteredCount: result.selected.length,
+          skippedShort: result.skippedShort,
+          skippedLowText: result.skippedLowText,
+          dateRange: result.dateRange,
+          estimatedMinutes: result.estimatedMinutes,
         },
       });
     } catch (err: any) {
       set({ stage: 'error', error: err.message || 'Failed to parse file' });
     }
+  },
+
+  setAdapterOverride: (adapterId: string | null) => {
+    set({ adapterOverride: adapterId });
+  },
+
+  setAdapterContext: (ctx: Partial<AdapterContext>) => {
+    set({ adapterContext: { ...get().adapterContext, ...ctx } });
+  },
+
+  applyAdapterSelection: () => {
+    const { detectedSources, adapterOverride, adapterContext, fileName, fileSize } = get();
+    if (detectedSources.length === 0) return;
+
+    // Apply override (if any) only when there's a single source
+    const sources = detectedSources.map((d) => ({
+      adapterId: adapterOverride && detectedSources.length === 1 ? adapterOverride : d.adapterId,
+      data: d.rawData,
+      fileName: d.fileName,
+    }));
+
+    const { conversations, usedAdapters } = normalizeSources(sources, adapterContext);
+    if (conversations.length === 0) {
+      set({ stage: 'error', error: 'No conversations matched the selected source type.' });
+      return;
+    }
+
+    const result = runFilterPipeline(conversations, fileName, fileSize);
+    const platformLabel = usedAdapters.map((id) => adapters[id]?.label || id).join(' + ');
+
+    set({
+      stage: 'idle',
+      totalConversations: result.rawCount,
+      filteredCount: result.selected.length,
+      platform: platformLabel,
+      preparedConversations: result.selected,
+      totalChunks: result.totalChunks,
+      filterStats: {
+        rawCount: result.rawCount,
+        filteredCount: result.selected.length,
+        skippedShort: result.skippedShort,
+        skippedLowText: result.skippedLowText,
+        dateRange: result.dateRange,
+        estimatedMinutes: result.estimatedMinutes,
+      },
+    });
   },
 
   startImport: async (userId: string) => {
@@ -291,9 +371,26 @@ export const useImportStore = create<ImportState>((set, get) => ({
       let totalQuestions = 0;
       let totalConflicts = 0;
 
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = convos.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        set({ processedChunks: i, pipelineDetail: `chunk ${i + 1}/${totalChunks}` });
+      // Group by source_type so each chunk uses a consistent extraction prompt
+      const grouped: Record<string, NormalizedConversation[]> = {};
+      for (const conv of convos) {
+        const key = conv.source_type || 'chat';
+        (grouped[key] ||= []).push(conv);
+      }
+
+      // Build chunks across all source types, tagged with source_type
+      const taggedChunks: { chunk: NormalizedConversation[]; source_type: string }[] = [];
+      for (const [sourceType, list] of Object.entries(grouped)) {
+        for (let i = 0; i < list.length; i += CHUNK_SIZE) {
+          taggedChunks.push({ chunk: list.slice(i, i + CHUNK_SIZE), source_type: sourceType });
+        }
+      }
+      const computedTotal = taggedChunks.length;
+      set({ totalChunks: computedTotal });
+
+      for (let i = 0; i < taggedChunks.length; i++) {
+        const { chunk, source_type } = taggedChunks[i];
+        set({ processedChunks: i, pipelineDetail: `chunk ${i + 1}/${computedTotal} (${source_type})` });
 
         try {
           const response = await callWithRetry(`${supabaseUrl}/functions/v1/import-chatgpt`, {
@@ -306,7 +403,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
               conversations: chunk,
               import_id: importId,
               chunk_index: i,
-              total_chunks: totalChunks,
+              total_chunks: computedTotal,
+              source_type,
               accumulated_memories: accumulatedMemories.slice(-100),
             }),
           });
@@ -314,7 +412,6 @@ export const useImportStore = create<ImportState>((set, get) => ({
           if (!response.ok) {
             const err = await response.json().catch(() => ({ error: 'Unknown error' }));
             console.error(`Chunk ${i + 1} failed:`, err.error);
-            // Continue to next chunk instead of aborting
             continue;
           }
 
@@ -334,7 +431,6 @@ export const useImportStore = create<ImportState>((set, get) => ({
           });
         } catch (chunkErr: any) {
           console.error(`Chunk ${i + 1} error after retries:`, chunkErr.message);
-          // Continue to next chunk
         }
       }
 
