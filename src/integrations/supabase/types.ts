@@ -568,6 +568,71 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_chat_messages: {
+        Row: {
+          chat_id: string
+          citations: Json | null
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          citations?: Json | null
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          citations?: Json | null
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_chat_messages_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "profile_chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_chats: {
+        Row: {
+          created_at: string
+          id: string
+          profile_version: number
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_version?: number
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_version?: number
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -859,6 +924,22 @@ export type Database = {
           tags: string[]
           updated_at: string
           user_id: string
+        }[]
+      }
+      match_memories: {
+        Args: { match_count?: number; p_user_id?: string; query_text: string }
+        Returns: {
+          confidence: number
+          content: string
+          created_at: string
+          emotional_intensity: number
+          emotional_valence: number
+          estimated_date: string
+          id: string
+          memory_type: string
+          provenance: Json
+          similarity: number
+          tags: string[]
         }[]
       }
       save_user_api_key: { Args: { p_key: string }; Returns: undefined }
