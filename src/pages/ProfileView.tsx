@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import ProfileChatPanel from '@/components/ProfileChatPanel';
 
 type Profile = {
   identity_narrative: string | null;
@@ -35,7 +36,30 @@ export default function ProfileView() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('Portrait');
+  const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
+
+  const starterPrompts = useMemo(() => {
+    const prompts: string[] = [];
+    if (profile?.personality_dimensions?.big_five) {
+      const traits = Object.entries(profile.personality_dimensions.big_five) as [string, any][];
+      const top = traits.sort((a, b) => (b[1]?.score ?? 0) - (a[1]?.score ?? 0))[0];
+      if (top) prompts.push(`Why did you score me high on ${top[0]}?`);
+    }
+    if (profile?.shadow_patterns?.blind_spots?.length) {
+      prompts.push('Which blind spot should I sit with first, and why?');
+    }
+    if (profile?.values_hierarchy?.ranked_values?.length) {
+      const v = profile.values_hierarchy.ranked_values[0]?.value;
+      if (v) prompts.push(`What evidence shows that "${v}" is one of my core values?`);
+    }
+    if (profile?.personality_dimensions?.attachment_style?.primary) {
+      prompts.push(`What memories made you conclude my attachment style is ${profile.personality_dimensions.attachment_style.primary}?`);
+    }
+    prompts.push('What is one thing about me you think I would be surprised to hear?');
+    prompts.push('Based on my patterns, what should I focus on this month?');
+    return prompts.slice(0, 6);
+  }, [profile]);
 
   async function generateProfile() {
     if (!user) return;
@@ -209,67 +233,84 @@ export default function ProfileView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0" style={{ padding: '16px 24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-        <div>
-          <h1 className="text-sm font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>Psychological Profile</h1>
-          <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
-            v{profile.version} · updated {new Date(profile.updated_at).toLocaleDateString()} · {memoryStats?.total || 0} memories analyzed
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between shrink-0" style={{ padding: '16px 24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div>
+            <h1 className="text-sm font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>Psychological Profile</h1>
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
+              v{profile.version} · updated {new Date(profile.updated_at).toLocaleDateString()} · {memoryStats?.total || 0} memories analyzed
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setChatOpen((v) => !v)}
+              className="text-[10px] px-3 py-1.5 rounded"
+              style={{
+                background: chatOpen ? 'var(--bg-surface)' : 'transparent',
+                border: `1px solid ${chatOpen ? 'var(--border)' : 'var(--border-subtle)'}`,
+                color: chatOpen ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                cursor: 'pointer',
+              }}
+              title="Chat with the AI about your profile — it can pull memories that informed each insight"
+            >
+              {chatOpen ? 'Close chat' : 'Ask about profile'}
+            </button>
+            <button
+              onClick={generateProfile}
+              disabled={generating}
+              className="text-[10px] px-3 py-1.5 rounded"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: generating ? 'var(--text-ghost)' : 'var(--text-tertiary)', cursor: generating ? 'wait' : 'pointer' }}
+              title="Re-run the 5-pass deep analysis on your latest memories"
+            >
+              {generating ? 'Regenerating...' : 'Regenerate'}
+            </button>
+            <button
+              onClick={loadData}
+              className="text-[10px] px-3 py-1.5 rounded"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
+            >
+              Refresh
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={generateProfile}
-            disabled={generating}
-            className="text-[10px] px-3 py-1.5 rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: generating ? 'var(--text-ghost)' : 'var(--text-tertiary)', cursor: generating ? 'wait' : 'pointer' }}
-            title="Re-run the 5-pass deep analysis on your latest memories"
-          >
-            {generating ? 'Regenerating...' : 'Regenerate'}
-          </button>
-          <button
-            onClick={loadData}
-            className="text-[10px] px-3 py-1.5 rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
-          >
-            Refresh
-          </button>
+
+        {/* Tabs */}
+        <div className="flex gap-0.5 shrink-0 overflow-x-auto" style={{ padding: '8px 24px', scrollbarWidth: 'none' }}>
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="text-[11px] px-3 py-1.5 rounded whitespace-nowrap"
+              style={{
+                background: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
+                color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-ghost)',
+                border: activeTab === tab ? '1px solid var(--border)' : '1px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 150ms ease',
+              }}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto" style={{ padding: '8px 24px 24px', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
+          {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
+          {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
+          {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
+          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} />}
+          {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} />}
+          {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
+          {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} />}
+          {activeTab === 'Growth' && <GrowthTab data={profile.growth_edges} />}
+          {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} />}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0.5 shrink-0 overflow-x-auto" style={{ padding: '8px 24px', scrollbarWidth: 'none' }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="text-[11px] px-3 py-1.5 rounded whitespace-nowrap"
-            style={{
-              background: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
-              color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-ghost)',
-              border: activeTab === tab ? '1px solid var(--border)' : '1px solid transparent',
-              cursor: 'pointer',
-              transition: 'all 150ms ease',
-            }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: '8px 24px 24px', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
-        {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
-        {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
-        {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
-        {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} />}
-        {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} />}
-        {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
-        {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} />}
-        {activeTab === 'Growth' && <GrowthTab data={profile.growth_edges} />}
-        {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} />}
-      </div>
+      {chatOpen && <ProfileChatPanel onClose={() => setChatOpen(false)} starterPrompts={starterPrompts} />}
     </div>
   );
 }

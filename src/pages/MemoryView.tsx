@@ -5,7 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import GraphTab from '@/components/memory/GraphTab';
 import EngramsTab from '@/components/memory/EngramsTab';
 import BeliefsTab from '@/components/memory/BeliefsTab';
+import ImportDetailPanel from '@/components/ImportDetailPanel';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 const TABS = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports'] as const;
 type Tab = typeof TABS[number];
@@ -605,22 +607,54 @@ function MemoryDetailPanel({ memory, editingContent, setEditingContent, onSave, 
 function ImportsTab() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [imports, setImports] = useState<ImportRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedImport, setSelectedImport] = useState<ImportRecord | null>(null);
+  const [reprofiling, setReprofiling] = useState(false);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { data } = await supabase
       .from('chat_imports')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        if (data) setImports(data as ImportRecord[]);
-        setLoading(false);
-      });
+      .limit(50);
+    if (data) setImports(data as ImportRecord[]);
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function handleGlobalReprofile() {
+    setReprofiling(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profile-deep-analysis`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Failed (${res.status})`);
+      }
+      toast({
+        title: 'Re-analysis started',
+        description: 'Running on your full memory corpus. Check Profile in 3–6 minutes.',
+      });
+    } catch (e: any) {
+      toast({ title: 'Could not start analysis', description: e.message, variant: 'destructive' });
+    } finally {
+      setReprofiling(false);
+    }
+  }
 
   if (loading) return <div className="flex items-center justify-center py-20" style={{ color: 'var(--text-ghost)', fontSize: 11 }}>Loading...</div>;
 
@@ -637,45 +671,85 @@ function ImportsTab() {
   }
 
   return (
-    <div style={{ padding: '16px 24px' }}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-[10px] uppercase font-medium" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>Import History</div>
-        <button onClick={() => navigate('/import')} className="text-[11px] px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
-          New Import
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {imports.map((imp) => (
-          <div key={imp.id} style={{ padding: '14px 16px', background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-medium uppercase" style={{ color: 'var(--text-soft)', letterSpacing: '0.04em' }}>
-                  {imp.source_platform || 'unknown'}
-                </span>
-                <StatusBadge status={imp.status} />
-              </div>
-              <span className="text-[10px]" style={{ color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
-                {new Date(imp.created_at).toLocaleDateString()}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4 flex-wrap">
-              {imp.total_conversations && <MiniStat label="Conversations" value={imp.total_conversations} />}
-              {imp.processed_conversations !== null && <MiniStat label="Processed" value={imp.processed_conversations} />}
-              {imp.memories_created !== null && <MiniStat label="Memories" value={imp.memories_created} />}
-              {imp.questions_generated !== null && imp.questions_generated > 0 && <MiniStat label="Questions" value={imp.questions_generated} />}
-              {imp.conflicts_detected !== null && imp.conflicts_detected > 0 && <MiniStat label="Conflicts" value={imp.conflicts_detected} />}
-            </div>
-
-            {imp.pipeline_stage && imp.status === 'processing' && (
-              <div className="text-[10px] mt-2" style={{ color: 'var(--text-ghost)' }}>
-                Stage: <span style={{ color: 'var(--text-soft)' }}>{imp.pipeline_stage}</span>
-              </div>
-            )}
+    <div className="flex h-full min-h-0">
+      <div className="flex-1 overflow-y-auto" style={{ padding: '16px 24px' }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[10px] uppercase font-medium" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>Import History</div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGlobalReprofile}
+              disabled={reprofiling}
+              className="text-[11px] px-3 py-1.5 rounded"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                color: reprofiling ? 'var(--text-ghost)' : 'var(--text-tertiary)',
+                cursor: reprofiling ? 'wait' : 'pointer',
+              }}
+              title="Re-run the 5-pass deep psychological analysis on your latest memories"
+            >
+              {reprofiling ? 'Starting…' : 'Re-run profiling'}
+            </button>
+            <button onClick={() => navigate('/import')} className="text-[11px] px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+              New Import
+            </button>
           </div>
-        ))}
+        </div>
+
+        <div className="space-y-3">
+          {imports.map((imp) => (
+            <div
+              key={imp.id}
+              onClick={() => setSelectedImport(imp)}
+              className="cursor-pointer"
+              style={{
+                padding: '14px 16px',
+                background: selectedImport?.id === imp.id ? 'var(--bg-surface)' : 'var(--card-bg)',
+                border: `1px solid ${selectedImport?.id === imp.id ? 'var(--border)' : 'var(--border-subtle)'}`,
+                borderRadius: 'var(--radius-md)',
+                transition: 'all 120ms ease',
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-medium uppercase" style={{ color: 'var(--text-soft)', letterSpacing: '0.04em' }}>
+                    {imp.source_platform || 'unknown'}
+                  </span>
+                  <StatusBadge status={imp.status} />
+                </div>
+                <span className="text-[10px]" style={{ color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(imp.created_at).toLocaleDateString()}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4 flex-wrap">
+                {imp.total_conversations && <MiniStat label="Conversations" value={imp.total_conversations} />}
+                {imp.processed_conversations !== null && <MiniStat label="Processed" value={imp.processed_conversations} />}
+                {imp.memories_created !== null && <MiniStat label="Memories" value={imp.memories_created} />}
+                {imp.questions_generated !== null && imp.questions_generated > 0 && <MiniStat label="Questions" value={imp.questions_generated} />}
+                {imp.conflicts_detected !== null && imp.conflicts_detected > 0 && <MiniStat label="Conflicts" value={imp.conflicts_detected} />}
+              </div>
+
+              {imp.pipeline_stage && imp.status === 'processing' && (
+                <div className="text-[10px] mt-2" style={{ color: 'var(--text-ghost)' }}>
+                  Stage: <span style={{ color: 'var(--text-soft)' }}>{imp.pipeline_stage}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
+
+      {selectedImport && (
+        <ImportDetailPanel
+          imp={selectedImport}
+          onClose={() => setSelectedImport(null)}
+          onDeleted={() => {
+            setSelectedImport(null);
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
