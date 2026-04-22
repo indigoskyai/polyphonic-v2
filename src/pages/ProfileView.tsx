@@ -32,8 +32,37 @@ export default function ProfileView() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('Portrait');
   const navigate = useNavigate();
+
+  async function generateProfile() {
+    if (!user) return;
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profile-deep-analysis`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Failed (${res.status})`);
+      }
+      await loadData();
+    } catch (e: any) {
+      setGenError(e.message || 'Profile generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
