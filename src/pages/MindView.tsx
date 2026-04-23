@@ -139,15 +139,26 @@ function ThoughtsTab() {
       {/* List */}
       <div style={{ width: 320, borderRight: '1px solid var(--border-subtle)', overflow: 'auto', flexShrink: 0 }}>
         {thoughts.map((t, i) => (
-          <div
+          <button
             key={t.id}
+            type="button"
             onClick={() => setSelected(i)}
+            aria-current={i === selected ? 'true' : undefined}
+            className="thought-row"
             style={{
-              padding: '10px 14px',
+              padding: '12px 14px',
               borderBottom: '1px solid var(--border-subtle)',
-              cursor: 'pointer',
-              background: i === selected ? 'var(--bg-surface)' : undefined,
+              background: i === selected ? 'var(--bg-surface)' : 'transparent',
               transition: 'background var(--dur-fast) var(--ease-out)',
+              width: '100%',
+              textAlign: 'left',
+              border: 0,
+              borderBottomWidth: 1,
+              borderBottomStyle: 'solid',
+              borderBottomColor: 'var(--border-subtle)',
+              cursor: 'pointer',
+              appearance: 'none',
+              outline: 'none',
             }}
           >
             <div className="flex items-center gap-2 mb-1">
@@ -165,7 +176,7 @@ function ThoughtsTab() {
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {t.content}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 

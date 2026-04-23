@@ -8,17 +8,12 @@ interface Props {
 /** Generic sidebar row — label on the left, optional count on the right. */
 export default function SidebarRow({ label, active, count, onClick }: Props) {
   return (
-    <div
-      className="flex items-center cursor-pointer"
-      style={{
-        padding: '7px 12px',
-        borderRadius: 'var(--radius-sm)',
-        background: active ? 'var(--overlay-active)' : undefined,
-        transition: 'background var(--dur-fast) var(--ease-out)',
-      }}
+    <button
+      type="button"
+      className="sidebar-row w-full flex items-center cursor-pointer text-left"
+      data-active={active ? 'true' : undefined}
       onClick={onClick}
-      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)'; }}
-      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = ''; }}
+      aria-current={active ? 'page' : undefined}
     >
       <span
         className="flex-1 truncate"
@@ -45,6 +40,6 @@ export default function SidebarRow({ label, active, count, onClick }: Props) {
           {count}
         </span>
       )}
-    </div>
+    </button>
   );
 }

@@ -887,3 +887,50 @@
 }
 .msg-body p { margin-bottom: 12px; }
 .msg-body p:last-child { margin-bottom: 0; }
+
+/* Sidebar navigation row — proper button semantics, keyboard focus, hover, touch target. */
+.sidebar-row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 8px 12px;
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  outline: none;
+}
+.sidebar-row:hover {
+  background: var(--overlay-hover);
+}
+.sidebar-row[data-active="true"] {
+  background: var(--overlay-active);
+}
+.sidebar-row:focus-visible {
+  outline: 1px solid var(--border-focus, var(--text-ghost));
+  outline-offset: -1px;
+  background: var(--overlay-hover);
+}
+/* Larger hit area on touch without visual change — meets 44px min touch target. */
+@media (hover: none) and (pointer: coarse) {
+  .sidebar-row {
+    min-height: 44px;
+  }
+}
+
+/* Thought-row button (Mind > Thoughts master list) — keyboard + hover feedback. */
+.thought-row:hover { background: var(--overlay-hover) !important; }
+.thought-row:focus-visible {
+  background: var(--overlay-hover) !important;
+  outline: 1px solid var(--border-focus, var(--text-ghost));
+  outline-offset: -2px;
+}
+
+/* Respect prefers-reduced-motion: kill non-essential animation, keep structural transitions snappy. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
