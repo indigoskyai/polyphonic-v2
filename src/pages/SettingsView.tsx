@@ -122,7 +122,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
     >
       <div className="absolute rounded-full" style={{
         width: 14, height: 14, top: 1, left: on ? 19 : 1,
-        background: on ? 'rgba(244, 243, 240, 0.94)' : 'var(--text-tertiary)',
+        background: on ? 'var(--text-body)' : 'var(--text-tertiary)',
         transition: 'all 300ms var(--ease-out)',
       }} />
     </div>
@@ -135,7 +135,7 @@ function RadioGroup({ options, value, onChange }: { options: string[]; value: st
       {options.map((opt) => (
         <div key={opt} className="flex items-center gap-3 cursor-pointer" onClick={() => onChange(opt.toLowerCase())}>
           <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${value === opt.toLowerCase() ? 'var(--border-focus)' : 'var(--border-dim)'}`, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color var(--dur-fast) var(--ease-out)' }}>
-            {value === opt.toLowerCase() && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(244,243,240,0.72)' }} />}
+            {value === opt.toLowerCase() && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-body)' }} />}
           </div>
           <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt}</span>
         </div>

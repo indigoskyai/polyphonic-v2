@@ -20,22 +20,22 @@
   --bg-surface-hover: rgba(220, 219, 216, 0.05);
   --bg-glass:         rgba(10, 10, 10, 0.88);
 
-  --ink:              rgba(244, 243, 240, 0.95);
-  --text-primary:     rgba(244, 243, 240, 0.92);
-  --text-body:        rgba(214, 212, 208, 0.78);
-  --text-mid:         rgba(202, 200, 196, 0.70);
-  --text-secondary:   rgba(202, 200, 196, 0.66);
-  --text-soft:        rgba(178, 176, 172, 0.56);
-  --text-tertiary:    rgba(178, 176, 172, 0.48);
-  --text-faint:       rgba(156, 154, 150, 0.36);
-  --text-ghost:       rgba(156, 154, 150, 0.32);
-  --text-whisper:     rgba(146, 143, 139, 0.22);
+  --ink:              rgba(244, 243, 240, 0.84);
+  --text-primary:     rgba(244, 243, 240, 0.76);
+  --text-body:        rgba(214, 212, 208, 0.66);
+  --text-mid:         rgba(202, 200, 196, 0.58);
+  --text-secondary:   rgba(202, 200, 196, 0.52);
+  --text-soft:        rgba(178, 176, 172, 0.42);
+  --text-tertiary:    rgba(178, 176, 172, 0.32);
+  --text-faint:       rgba(156, 154, 150, 0.24);
+  --text-ghost:       rgba(156, 154, 150, 0.20);
+  --text-whisper:     rgba(146, 143, 139, 0.13);
 
-  --border:           rgba(220, 219, 216, 0.08);
-  --border-subtle:    rgba(220, 219, 216, 0.045);
-  --border-dim:       rgba(220, 219, 216, 0.06);
-  --border-strong:    rgba(220, 219, 216, 0.10);
-  --border-focus:     rgba(228, 225, 220, 0.18);
+  --border:           rgba(220, 219, 216, 0.07);
+  --border-subtle:    rgba(220, 219, 216, 0.04);
+  --border-dim:       rgba(220, 219, 216, 0.05);
+  --border-strong:    rgba(220, 219, 216, 0.09);
+  --border-focus:     rgba(228, 225, 220, 0.14);
 
   --card:             rgba(220, 219, 216, 0.03);
   --card-hover:       rgba(220, 219, 216, 0.045);
@@ -75,9 +75,9 @@
   --surface-5: #222229;   /* top elevation (rare) */
 
   /* Phase-2 overlays */
-  --overlay-hover:    rgba(220, 219, 216, 0.04);
-  --overlay-active:   rgba(220, 219, 216, 0.07);
-  --overlay-selected: rgba(220, 219, 216, 0.10);
+  --overlay-hover:    rgba(220, 219, 216, 0.03);
+  --overlay-active:   rgba(220, 219, 216, 0.055);
+  --overlay-selected: rgba(220, 219, 216, 0.08);
 
   /* Phase-2 borders (canonical scale) */
   --border-faint:  rgba(220, 219, 216, 0.045);
@@ -89,7 +89,7 @@
   --anima-full:  #c97ca8;
 
   /* Guardian / Observer */
-  --guardian-tone:    rgba(244, 243, 240, 0.85);
+  --guardian-tone:    rgba(244, 243, 240, 0.72);
   --guardian-whisper: rgba(244, 243, 240, 0.30);
   --guardian-accent:  rgba(220, 219, 216, 0.12);
 
@@ -746,11 +746,11 @@
   background: var(--overlay-hover);
 }
 .ensemble-pill.armed {
-  color: rgba(220, 219, 216, 0.78);
+  color: var(--text-body);
   background: var(--overlay-hover);
 }
 .ensemble-pill.locked {
-  color: rgba(244, 243, 240, 0.92);
+  color: var(--text-primary);
   background: var(--overlay-active);
 }
 .ensemble-pill svg { width: 11px; height: 11px; opacity: 0.75; }
@@ -778,7 +778,7 @@
 .send-btn.streaming .stop-icon { opacity: 1; transform: scale(1); }
 .send-btn.streaming { color: var(--text-secondary); }
 .send-btn.ensemble-armed {
-  color: rgba(220, 219, 216, 0.85);
+  color: var(--text-body);
 }
 .send-btn.ensemble-armed:hover {
   color: var(--text-primary);
