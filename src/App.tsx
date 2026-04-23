@@ -18,6 +18,7 @@ import ProfileView from "./pages/ProfileView";
 import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import TopBar from "./components/TopBar";
+import ThreadsPanel from "./components/ThreadsPanel";
 import Clockbar from "./components/Clockbar";
 import CommandPalette from "./components/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
@@ -55,13 +56,15 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Rail />
+        <ThreadsPanel />
         <div
           className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
           style={{
+            marginLeft: 'var(--chrome-gap)',
             marginRight: 'var(--chrome-gap)',
             marginBottom: 'var(--chrome-gap)',
             borderRadius: 'var(--inset-radius)',
-            background: 'var(--bg-primary)',
+            background: 'var(--bg-deep)',
             border: '1px solid var(--border-subtle)',
           }}
         >
