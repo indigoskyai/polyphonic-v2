@@ -350,8 +350,8 @@ function EnsembleSettings() {
 
   return (
     <>
-      <SectionTitle>Multi-Model Synthesis</SectionTitle>
-      <SettingRow label="Enabled" description="Send messages to multiple models and synthesize a response">
+      <SectionTitle>Ensemble Skill</SectionTitle>
+      <SettingRow label="Default ensemble to on" description="When on, the ensemble pill is pre-armed for every new message. You can still toggle it per-message with ⌘E.">
         <Toggle on={multi_model_enabled} onChange={() => updateSetting('multi_model_enabled', !multi_model_enabled)} />
       </SettingRow>
 
