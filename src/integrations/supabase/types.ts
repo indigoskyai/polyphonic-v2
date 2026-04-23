@@ -329,6 +329,42 @@ export type Database = {
         }
         Relationships: []
       }
+      emotional_state: {
+        Row: {
+          clarity: number
+          creative_flow: number
+          curiosity: number
+          isolation: number
+          mood_summary: string | null
+          restlessness: number
+          updated_at: string
+          user_id: string
+          warmth: number
+        }
+        Insert: {
+          clarity?: number
+          creative_flow?: number
+          curiosity?: number
+          isolation?: number
+          mood_summary?: string | null
+          restlessness?: number
+          updated_at?: string
+          user_id: string
+          warmth?: number
+        }
+        Update: {
+          clarity?: number
+          creative_flow?: number
+          curiosity?: number
+          isolation?: number
+          mood_summary?: string | null
+          restlessness?: number
+          updated_at?: string
+          user_id?: string
+          warmth?: number
+        }
+        Relationships: []
+      }
       engram_archive: {
         Row: {
           archived_at: string | null
@@ -424,6 +460,33 @@ export type Database = {
           surprise_score?: number | null
           tags?: string[] | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      journal_entries: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          mood: string | null
+          trigger_type: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          mood?: string | null
+          trigger_type?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          mood?: string | null
+          trigger_type?: string | null
           user_id?: string
         }
         Relationships: []
@@ -780,6 +843,33 @@ export type Database = {
           user_id?: string
           values_hierarchy?: Json | null
           version?: number
+        }
+        Relationships: []
+      }
+      thought_initiations: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          status: string
+          trigger_reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          status?: string
+          trigger_reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          status?: string
+          trigger_reason?: string | null
+          user_id?: string
         }
         Relationships: []
       }
