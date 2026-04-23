@@ -94,6 +94,7 @@ export default function Rail() {
         bottom: 'var(--chrome-gap)',
         width: 'var(--sidebar-width)',
         background: 'var(--bg-deep)',
+        borderRight: '1px solid var(--border-subtle)',
         zIndex: 0,
         overflow: 'hidden',
       }}

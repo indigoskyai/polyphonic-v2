@@ -67,7 +67,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             borderBottomLeftRadius: 0,
             borderTopRightRadius: 'var(--inset-radius)',
             borderBottomRightRadius: 'var(--inset-radius)',
-            background: 'var(--bg-deep)',
+            background: 'var(--bg-primary)',
             border: '1px solid var(--border-subtle)',
             borderLeft: 'none',
             transition: 'margin-left var(--dur-slow) var(--ease-premium)',
