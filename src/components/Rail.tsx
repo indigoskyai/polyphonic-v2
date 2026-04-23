@@ -155,7 +155,7 @@ export default function Rail() {
             ))}
           </div>
 
-          <div className="flex-1" />
+          <div className="flex-1 w-full" onClick={() => setExpanded(true)} />
 
           {/* Divider */}
           <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
