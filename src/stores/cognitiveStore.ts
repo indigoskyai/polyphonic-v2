@@ -118,11 +118,14 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   loaded: false,
 
   load: async (userId: string) => {
-    const [cogRes, thoughtsRes, eventsRes] = await Promise.all([
-      supabase.from('cognitive_state').select('*').eq('user_id', userId).single(),
+    const settled = await Promise.allSettled([
+      supabase.from('cognitive_state').select('*').eq('user_id', userId).maybeSingle(),
       supabase.from('thought_stream').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
       supabase.from('memory_events').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
     ]);
+    const cogRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: null };
+    const thoughtsRes = settled[1].status === 'fulfilled' ? settled[1].value : { data: [] };
+    const eventsRes = settled[2].status === 'fulfilled' ? settled[2].value : { data: [] };
 
     const cog = cogRes.data;
     const mods = cog?.modulators as Record<string, number> | null;
@@ -184,6 +187,15 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .order('created_at', { ascending: false })
       .limit(50);
 
+    // Load beliefs from the beliefs table (the Overview Belief card was reading a stale JSONB column).
+    const beliefsTablePromise = supabase
+      .from('beliefs')
+      .select('id, content, confidence, domain, active')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('confidence', { ascending: false })
+      .limit(20);
+
     // Memory stats
     const statsPromises = [
       supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -194,9 +206,26 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     ];
 
-    const [dreamsRes, insightsRes, reflectionsRes, wanderingsRes, journalRes, ...statsRes] = await Promise.all([
-      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, journalPromise, ...statsPromises,
+    // Use allSettled so a single failure (e.g. missing journal_entries table) doesn't nuke all mind data.
+    const results = await Promise.allSettled([
+      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, journalPromise, beliefsTablePromise, ...statsPromises,
     ]);
+    const pick = <T,>(i: number): { data?: T[]; count?: number } => {
+      const r = results[i];
+      if (r.status === 'fulfilled') return r.value as { data?: T[]; count?: number };
+      return {};
+    };
+    const dreamsRes = pick<MindEngram>(0);
+    const insightsRes = pick<MindEngram>(1);
+    const reflectionsRes = pick<MindEngram>(2);
+    const wanderingsRes = pick<Thought>(3);
+    const journalRes = pick<JournalEntry>(4);
+    const beliefsTableRes = pick<{ content: string; confidence: number }>(5);
+
+    const beliefsFromTable: Belief[] = (beliefsTableRes.data ?? []).map((b) => ({
+      text: b.content,
+      strength: b.confidence,
+    }));
 
     set({
       dreams: (dreamsRes.data ?? []) as MindEngram[],
@@ -204,13 +233,15 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       reflections: (reflectionsRes.data ?? []) as MindEngram[],
       wanderings: (wanderingsRes.data ?? []) as Thought[],
       journalEntries: (journalRes.data ?? []) as JournalEntry[],
+      // Prefer beliefs from the table (live, authoritative) over whatever stale JSONB was in cognitive_state.
+      ...(beliefsFromTable.length > 0 ? { beliefs: beliefsFromTable } : {}),
       memoryStats: {
-        total_engrams: statsRes[0].count ?? 0,
-        active: statsRes[1].count ?? 0,
-        dormant: statsRes[2].count ?? 0,
-        archived: statsRes[3].count ?? 0,
-        connections: statsRes[4].count ?? 0,
-        beliefs_count: statsRes[5].count ?? 0,
+        total_engrams: pick(6).count ?? 0,
+        active: pick(7).count ?? 0,
+        dormant: pick(8).count ?? 0,
+        archived: pick(9).count ?? 0,
+        connections: pick(10).count ?? 0,
+        beliefs_count: pick(11).count ?? 0,
       },
     });
   },
