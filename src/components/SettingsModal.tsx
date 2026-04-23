@@ -35,7 +35,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         style={{
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          background: 'rgba(6, 6, 8, 0.65)',
+          background: 'rgba(6, 6, 8, 0.72)',
         }}
       />
 
@@ -44,12 +44,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         className="relative flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(780px, 90vw)',
-          height: 'min(600px, 85vh)',
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border)',
+          width: 'min(840px, 92vw)',
+          height: 'min(640px, 86vh)',
+          background: 'var(--surface-3)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-xl)',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.02)',
+          boxShadow: 'var(--shadow-modal)',
           animation: 'settingsCardIn 400ms var(--ease-premium) both',
         }}
       >
@@ -65,7 +65,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = 'var(--text-secondary)';
-            e.currentTarget.style.background = 'var(--bg-surface)';
+            e.currentTarget.style.background = 'var(--overlay-hover)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.color = 'var(--text-ghost)';

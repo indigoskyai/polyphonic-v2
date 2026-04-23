@@ -22,26 +22,57 @@ export default function SettingsView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
-      <div className="flex items-center flex-shrink-0" style={{ height: 44, padding: '0 24px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Settings</span>
+      {/* Header — § folio + title, matches sidebar pattern */}
+      <div style={{ padding: '16px 24px 6px', flexShrink: 0 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            letterSpacing: 'var(--track-folio)',
+            color: 'var(--text-ghost)',
+            textTransform: 'uppercase',
+          }}
+        >
+          § 09
+        </div>
+      </div>
+      <div style={{ padding: '0 24px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: 15,
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            letterSpacing: 'var(--track-display)',
+          }}
+        >
+          Settings
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Nav */}
-        <div className="shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '24px 0' }}>
+        <div className="shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid var(--border-subtle)', padding: '20px 12px' }}>
           {TABS.map((tab) => (
             <div
               key={tab}
               className="flex items-center gap-3 cursor-pointer relative"
               style={{
-                height: 36, padding: '10px 16px', fontSize: 12, fontWeight: 420,
+                height: 32,
+                padding: '0 10px',
+                fontSize: 12,
+                fontWeight: 450,
+                letterSpacing: 'var(--track-body)',
+                borderRadius: 'var(--radius-sm)',
                 color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                background: activeTab === tab ? 'var(--bg-surface)' : undefined,
+                background: activeTab === tab ? 'var(--overlay-active)' : undefined,
                 transition: 'all var(--dur-fast) var(--ease-out)',
+                marginBottom: 2,
               }}
               onClick={() => setActiveTab(tab)}
+              onMouseEnter={(e) => { if (activeTab !== tab) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)'; }}
+              onMouseLeave={(e) => { if (activeTab !== tab) (e.currentTarget as HTMLDivElement).style.background = ''; }}
             >
-              {activeTab === tab && <div className="absolute left-0 top-0 bottom-0" style={{ width: 2, background: 'var(--text-ghost)', borderRadius: '0 2px 2px 0' }} />}
               <span style={{ color: 'inherit', display: 'flex' }}>{TAB_ICONS[tab]}</span>
               {tab}
             </div>
@@ -49,7 +80,7 @@ export default function SettingsView() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: 32, background: 'var(--bg-primary)' }}>
+        <div className="flex-1 overflow-y-auto" style={{ padding: 32 }}>
           <div style={{ maxWidth: 640 }}>
             {activeTab === 'General' && <GeneralTab />}
             {activeTab === 'Models' && <ModelsTab />}
@@ -67,7 +98,7 @@ export default function SettingsView() {
 /* ====== Shared Form Controls ====== */
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 13, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', marginBottom: 16 }}>{children}</div>;
+  return <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', color: 'var(--text-ghost)', marginBottom: 16 }}>{children}</div>;
 }
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
