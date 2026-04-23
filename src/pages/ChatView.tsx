@@ -897,55 +897,54 @@ export default function ChatView() {
           {messages.map((msg, i) => (
             <div
               key={msg.id}
-              className="chat-message"
+              className="msg-row"
               style={{
-                marginBottom: 28,
                 animation: `msgEnter var(--dur-settle) var(--ease-premium) both`,
                 animationDelay: `${Math.min(i * 30, 150)}ms`,
               }}
             >
-              {/* Role label */}
-              <div className="text-[11px] font-medium uppercase mb-1.5" style={{
-                letterSpacing: '0.06em',
-                color: msg.role === 'user' ? 'var(--text-soft)' : 'var(--text-secondary)',
-              }}>
-                {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Observer' : 'Luca'}
+              <div className="msg-sidehead">
+                {showTimestamps && (
+                  <div className="msg-time">
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </div>
+                )}
+                <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
+                  {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Observer' : 'Luca'}
+                </div>
               </div>
 
-              {/* Thinking block — always show if thinking_content is a real string */}
-              {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
-                <ThinkingBlock content={msg.thinking_content} state="complete" />
-              )}
+              <div className="msg-body">
+                {/* Thinking block — always show if thinking_content is a real string */}
+                {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
+                  <ThinkingBlock content={msg.thinking_content} state="complete" />
+                )}
 
-              {/* Message content */}
-              <MessageContent content={msg.content} />
+                {/* Message content */}
+                <MessageContent content={msg.content} />
 
-              {/* Model variants (expandable) — from variants field or legacy JSON thinking_content */}
-              {(msg as any).variants && (
-                <VariantsPanel variants={(msg as any).variants} />
-              )}
-              {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
-                <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
-              )}
-
-              {/* Timestamp */}
-              {showTimestamps && (
-                <div className="text-[10px] mt-2" style={{ color: 'var(--text-whisper)' }}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                </div>
-              )}
+                {/* Model variants (expandable) — from variants field or legacy JSON thinking_content */}
+                {(msg as any).variants && (
+                  <VariantsPanel variants={(msg as any).variants} />
+                )}
+                {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
+                  <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
+                )}
+              </div>
             </div>
           ))}
 
           {/* Streaming message */}
           {isStreaming && (
-            <div className="chat-message" style={{ marginBottom: 28, animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}>
-              <div className="text-[11px] font-medium uppercase mb-1.5" style={{
-                letterSpacing: '0.06em',
-                color: 'var(--text-secondary)',
-              }}>
-                Luca
+            <div className="msg-row" style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}>
+              <div className="msg-sidehead">
+                <div className="msg-time">
+                  {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                </div>
+                <div className="msg-author">Luca</div>
               </div>
+
+              <div className="msg-body">
 
               {/* Thinking block — always visible during streaming, 4-state lifecycle */}
               {showThinking && !streamingContent && (
@@ -1001,6 +1000,7 @@ export default function ChatView() {
                   style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}
                 />
               )}
+              </div>
             </div>
           )}
         </div>
