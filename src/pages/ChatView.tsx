@@ -870,14 +870,32 @@ export default function ChatView() {
     ) : (
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
-      {/* Header */}
+      {/* Header — participant dot + title + subtle meta */}
       <div className="flex items-center flex-shrink-0" style={{
-        height: 44,
-        padding: '0 24px',
-        borderBottom: '1px solid var(--border-subtle)',
+        height: 48,
+        padding: '0 28px',
+        borderBottom: '1px solid var(--border-faint)',
+        gap: 10,
       }}>
-        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>
+        <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--luca-full)', opacity: 0.78 }} />
+        <span style={{
+          fontFamily: 'var(--font-sans)',
+          fontSize: 12.5,
+          fontWeight: 450,
+          letterSpacing: 'var(--track-body)',
+          color: 'var(--text-body)',
+        }}>
           {threadTitle || 'New conversation'}
+        </span>
+        <div style={{ flex: 1 }} />
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-mono)',
+          textTransform: 'uppercase',
+          color: 'var(--text-whisper)',
+        }}>
+          luca · opus-4.7
         </span>
       </div>
 
