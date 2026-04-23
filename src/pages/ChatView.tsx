@@ -820,7 +820,7 @@ export default function ChatView() {
                   onBlur={() => setFocused(false)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={dynamicPlaceholder}
+                  placeholder={ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer">
