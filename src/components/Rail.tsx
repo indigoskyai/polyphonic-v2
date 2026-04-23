@@ -37,6 +37,7 @@ function computeEmotionalIndicator(state: Record<string, number> | null): Emotio
 }
 
 export default function Rail() {
+  const expanded = useRailStore((s) => s.expanded);
   const toggle = useRailStore((s) => s.toggle);
   const setExpanded = useRailStore((s) => s.setExpanded);
   const [emotionalIndicator, setEmotionalIndicator] = useState<EmotionalIndicator>({ breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' });
@@ -103,60 +104,80 @@ export default function Rail() {
         L
       </div>
 
-      {/* Thread dots */}
+      {/* Middle region — fades out when panel is expanded (everything here is
+          already surfaced inside the ThreadsPanel) */}
       <div
-        className="flex flex-col items-center gap-0.5 flex-1 w-full px-2 overflow-y-auto overflow-x-hidden"
-        style={{ scrollbarWidth: 'none' }}
+        className="flex flex-col items-center w-full"
+        style={{
+          flex: 1,
+          gap: 4,
+          minHeight: 0,
+          opacity: expanded ? 0 : 1,
+          pointerEvents: expanded ? 'none' : 'auto',
+          transition: 'opacity var(--dur-normal) var(--ease-out)',
+        }}
       >
-        {threads.slice(0, 10).map((t) => (
-          <div
-            key={t.id}
-            className={`w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center cursor-pointer shrink-0 ${t.id === currentThreadId ? 'active' : ''}`}
-            style={{
-              color: t.id === currentThreadId ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              background: t.id === currentThreadId ? 'var(--bg-surface)' : undefined,
-              transition: 'all var(--dur-fast) var(--ease-out)',
-              fontSize: 12,
-            }}
-            onClick={() => { navigate(`/chat/${t.id}`); }}
-          >
+        {/* Thread dots */}
+        <div
+          className="flex flex-col items-center gap-0.5 flex-1 w-full px-2 overflow-y-auto overflow-x-hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {threads.slice(0, 10).map((t) => (
             <div
-              className="w-[5px] h-[5px] rounded-full"
+              key={t.id}
+              className={`w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center cursor-pointer shrink-0 ${t.id === currentThreadId ? 'active' : ''}`}
               style={{
-                background: 'currentColor',
-                animation: t.id === currentThreadId ? undefined : 'pulse-thread 1.5s ease-in-out infinite',
+                color: t.id === currentThreadId ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                background: t.id === currentThreadId ? 'var(--bg-surface)' : undefined,
+                transition: 'all var(--dur-fast) var(--ease-out)',
+                fontSize: 12,
               }}
-            />
-          </div>
-        ))}
+              onClick={() => { navigate(`/chat/${t.id}`); }}
+            >
+              <div
+                className="w-[5px] h-[5px] rounded-full"
+                style={{
+                  background: 'currentColor',
+                  animation: t.id === currentThreadId ? undefined : 'pulse-thread 1.5s ease-in-out infinite',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex-1 w-full" onClick={() => setExpanded(true)} />
+
+        {/* Divider */}
+        <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
+
+        {/* Nav icons */}
+        <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
+        <NavIcon icon="memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
+        <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
+        <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
+        <NavIcon icon="profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
+        <NavIcon icon="settings" active={settingsOpen} onClick={openSettings} />
+
+        {/* New thread */}
+        <div
+          className="w-8 h-8 rounded flex items-center justify-center cursor-pointer shrink-0 mt-2"
+          style={{ color: 'var(--text-tertiary)', fontSize: 16, fontWeight: 300, transition: 'all var(--dur-fast) var(--ease-out)' }}
+          onClick={handleNewThread}
+        >
+          +
+        </div>
       </div>
 
-      <div className="flex-1 w-full" onClick={() => setExpanded(true)} />
-
-      {/* Divider */}
-      <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
-
-      {/* Nav icons */}
-      <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
-      <NavIcon icon="memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
-      <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
-      <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
-      <NavIcon icon="profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
-      <NavIcon icon="settings" active={settingsOpen} onClick={openSettings} />
-
-      {/* New thread */}
-      <div
-        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer shrink-0 mt-2"
-        style={{ color: 'var(--text-tertiary)', fontSize: 16, fontWeight: 300, transition: 'all var(--dur-fast) var(--ease-out)' }}
-        onClick={handleNewThread}
-      >
-        +
-      </div>
-
-      {/* Toggle */}
+      {/* Toggle — always visible, rotates 180° when expanded so it reads as
+          "collapse" instead of "expand" */}
       <div
         className="w-8 h-8 rounded flex items-center justify-center cursor-pointer shrink-0 mb-1"
-        style={{ color: 'var(--text-tertiary)', opacity: 0.4, transition: 'opacity 150ms ease' }}
+        style={{
+          color: 'var(--text-tertiary)',
+          opacity: 0.4,
+          transform: expanded ? 'rotate(180deg)' : 'rotate(0)',
+          transition: 'opacity 150ms ease, transform var(--dur-normal) var(--ease-out)',
+        }}
         onClick={toggle}
       >
         <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}>
