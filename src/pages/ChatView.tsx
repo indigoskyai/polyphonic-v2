@@ -288,11 +288,16 @@ export default function ChatView() {
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
+  const defaultEnsembleOn = useSettingsStore((s) => s.multi_model_enabled);
 
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
+  // Ensemble skill: armed = next message only; locked = persistent until toggled off
+  const [ensembleArmed, setEnsembleArmed] = useState(false);
+  const [ensembleLocked, setEnsembleLocked] = useState(false);
+  const ensembleActive = ensembleArmed || ensembleLocked;
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
