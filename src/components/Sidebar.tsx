@@ -38,8 +38,8 @@ export default function Sidebar() {
         className="flex flex-col"
         style={{ width: 'var(--sidebar-width)', height: '100%' }}
       >
-      {/* Header */}
-      <div className="flex items-center" style={{ padding: '14px 16px 10px', minHeight: 44 }}>
+      {/* Header — § folio + title */}
+      <div style={{ padding: '16px 16px 2px' }}>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -52,10 +52,11 @@ export default function Sidebar() {
           § 01
         </div>
       </div>
-      <div style={{ padding: '0 16px 10px' }}>
+      <div style={{ padding: '2px 16px 10px' }}>
         <div
           style={{
-            fontSize: 14,
+            fontFamily: 'var(--font-sans)',
+            fontSize: 15,
             fontWeight: 500,
             color: 'var(--text-primary)',
             letterSpacing: 'var(--track-display)',
@@ -122,9 +123,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       style={{
         fontFamily: 'var(--font-mono)',
         fontSize: 9,
-        letterSpacing: 'var(--track-folio)',
+        fontWeight: 500,
+        letterSpacing: 'var(--track-meta)',
         color: 'var(--text-ghost)',
-        padding: '12px 8px 6px',
+        padding: '14px 8px 6px',
       }}
     >
       {children}
@@ -134,25 +136,33 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function ThreadItem({ thread, active, onClick }: { thread: Thread; active: boolean; onClick: () => void }) {
   const heat = thread.heat || 'warm';
-  const opacityMap: Record<string, number> = { hot: 1, warm: 0.72, cool: 0.48, ghost: 0.3 };
+  const opacityMap: Record<string, number> = { hot: 1, warm: 0.82, cool: 0.54, ghost: 0.32 };
   return (
     <div
-      className="flex items-center gap-2 cursor-pointer"
+      className="flex items-center gap-2.5 cursor-pointer"
       style={{
-        padding: '6px 8px',
+        padding: '7px 10px',
         borderRadius: 'var(--radius-sm)',
         background: active ? 'var(--overlay-active)' : undefined,
-        opacity: active ? 1 : opacityMap[heat] || 0.72,
+        opacity: active ? 1 : opacityMap[heat] || 0.82,
         transition: 'background var(--dur-fast) var(--ease-out), opacity var(--dur-normal) var(--ease-out)',
       }}
       onClick={onClick}
+      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)'; }}
+      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = ''; }}
     >
-      <div className="w-1 h-1 rounded-full shrink-0" style={{ background: active ? 'var(--luca-full)' : 'var(--text-tertiary)' }} />
+      <div
+        className="w-1 h-1 rounded-full shrink-0"
+        style={{ background: active ? 'var(--luca-full)' : 'var(--text-tertiary)' }}
+      />
       <span
-        className="text-xs flex-1 truncate"
+        className="flex-1 truncate"
         style={{
-          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: 12.5,
           fontWeight: 400,
+          letterSpacing: 'var(--track-body)',
+          color: active ? 'var(--text-primary)' : 'var(--text-body)',
         }}
       >
         {thread.title || 'New conversation'}
