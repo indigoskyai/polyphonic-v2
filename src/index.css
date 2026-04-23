@@ -675,6 +675,40 @@
 .agent-pill.targeted.guardian { color: rgba(220,219,216,0.75); text-shadow: 0 0 8px rgba(220,219,216,0.15); }
 .pill-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--text-whisper); }
 
+/* ── Ensemble Pill (per-message skill toggle) ── */
+.ensemble-pill {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 420;
+  letter-spacing: 0.02em;
+  color: var(--text-ghost);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+  margin-left: 2px;
+}
+.ensemble-pill:hover {
+  color: var(--text-tertiary);
+  border-color: var(--border);
+  background: var(--bg-surface);
+}
+.ensemble-pill.armed {
+  color: rgba(220, 219, 216, 0.78);
+  border-color: rgba(220, 219, 216, 0.16);
+  background: rgba(220, 219, 216, 0.025);
+  box-shadow: 0 0 0 1px rgba(220, 219, 216, 0.04), 0 0 12px rgba(220, 219, 216, 0.06);
+}
+.ensemble-pill.locked {
+  color: rgba(244, 243, 240, 0.92);
+  border-color: rgba(220, 219, 216, 0.22);
+  background: rgba(220, 219, 216, 0.06);
+  box-shadow: 0 0 0 1px rgba(220, 219, 216, 0.06), 0 0 14px rgba(220, 219, 216, 0.08);
+}
+
 .send-btn {
   width: 30px;
   height: 30px;
@@ -696,6 +730,14 @@
 .send-btn.streaming .send-icon { opacity: 0; transform: scale(0.6); }
 .send-btn.streaming .stop-icon { opacity: 1; transform: scale(1); }
 .send-btn.streaming { color: var(--text-secondary); }
+.send-btn.ensemble-armed {
+  color: rgba(220, 219, 216, 0.78);
+  box-shadow: 0 0 12px rgba(220, 219, 216, 0.08);
+}
+.send-btn.ensemble-armed:hover {
+  color: var(--text-primary);
+  box-shadow: 0 0 14px rgba(220, 219, 216, 0.12);
+}
 
 /* ======================================================================
    STREAMING CURSOR
