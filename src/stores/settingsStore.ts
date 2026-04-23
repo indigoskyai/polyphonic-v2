@@ -35,7 +35,7 @@ const defaults: Settings = {
   font_size: 14,
   show_timestamps: true,
   show_agent_colors: true,
-  clockbar_visible: true,
+  clockbar_visible: false,
   // Multi-model defaults
   multi_model_enabled: true,
   ensemble_models: [

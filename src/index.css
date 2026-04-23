@@ -58,6 +58,10 @@
   --sidebar-width: 260px;
   --message-max-width: 720px;
 
+  --topbar-height: 36px;
+  --chrome-gap: 8px;
+  --inset-radius: var(--radius-lg);
+
   --font-sans: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
 

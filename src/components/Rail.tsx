@@ -101,8 +101,7 @@ export default function Rail() {
         style={{
           width: expanded ? 'var(--sidebar-width)' : 'var(--rail-width)',
           minWidth: expanded ? 'var(--sidebar-width)' : 'var(--rail-width)',
-          background: 'var(--bg-deep)',
-          borderRight: '1px solid var(--border-subtle)',
+          background: 'var(--bg-void)',
           transition: 'width var(--dur-slow) var(--ease-premium), min-width var(--dur-slow) var(--ease-premium)',
           zIndex: expanded ? 20 : 10,
         }}
@@ -111,7 +110,7 @@ export default function Rail() {
         <div
           className="flex flex-col items-center h-full cursor-pointer"
           style={{
-            padding: '44px 0 16px',
+            padding: '12px 0 16px',
             gap: 4,
             width: 'var(--rail-width)',
             opacity: expanded ? 0 : 1,
@@ -187,8 +186,15 @@ export default function Rail() {
 
         {/* Expanded sidebar */}
         <div
-          className="absolute inset-0 flex flex-col"
+          className="absolute flex flex-col overflow-hidden"
           style={{
+            top: 0,
+            left: 0,
+            right: 'var(--chrome-gap)',
+            bottom: 'var(--chrome-gap)',
+            background: 'var(--bg-deep)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--inset-radius)',
             opacity: expanded ? 1 : 0,
             pointerEvents: expanded ? 'auto' : 'none',
             transition: expanded ? 'opacity 200ms var(--ease-out) 150ms' : 'opacity 150ms var(--ease-out) 100ms',
