@@ -508,7 +508,7 @@ export default function ChatView() {
       if (!resp.ok) {
         const errText = await resp.text().catch(() => '');
         console.error('Guardian error:', resp.status, errText);
-        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: `Guardian could not respond (${resp.status}). Check that your API key is configured in Settings.` }]);
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: `Observer could not respond (${resp.status}). Check that your API key is configured in Settings.` }]);
         return;
       }
 
@@ -532,7 +532,7 @@ export default function ChatView() {
                 setGuardianStreamingContent(fullContent);
               } else if (data.type === 'error') {
                 console.error('Guardian stream error:', data.text);
-                setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Guardian encountered an error.' }]);
+                setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Observer encountered an error.' }]);
                 fullContent = ''; // Don't add empty message on done
               } else if (data.type === 'done') {
                 if (fullContent) {
@@ -733,8 +733,15 @@ export default function ChatView() {
     }
   };
 
-  const ensembleLabel = ensembleLocked ? 'ensemble · on' : ensembleArmed ? 'ensemble · armed' : 'ensemble';
   const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
+  const EnsembleIcon = () => (
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2}>
+      <circle cx={3} cy={3.5} r={1.3} fill="currentColor" />
+      <circle cx={11} cy={4} r={1.3} fill="currentColor" />
+      <circle cx={7} cy={10.5} r={1.3} fill="currentColor" />
+      <path d="M3 3.5 L11 4 L7 10.5 Z" opacity={0.45} />
+    </svg>
+  );
 
   const stopStreaming = () => abortRef.current?.abort();
 
@@ -827,13 +834,13 @@ export default function ChatView() {
                 <div className="agent-pills">
                   <button className="agent-pill targeted luca">luca</button>
                   <div className="pill-sep" />
-                  <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>guardian</button>
+                  <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>observer</button>
                   <div className="pill-sep" />
                   <button
                     className={ensemblePillClass}
                     onClick={toggleEnsemble}
                     title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
-                  >{ensembleLabel}</button>
+                  ><EnsembleIcon />ensemble</button>
                 </div>
                 <select
                   value={thinkingEffort}
@@ -899,7 +906,7 @@ export default function ChatView() {
                 letterSpacing: '0.06em',
                 color: msg.role === 'user' ? 'var(--text-soft)' : 'var(--text-secondary)',
               }}>
-                {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Guardian' : 'Luca'}
+                {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Observer' : 'Luca'}
               </div>
 
               {/* Thinking block — always show if thinking_content is a real string */}
@@ -1008,7 +1015,7 @@ export default function ChatView() {
               <div className="alcove-content">
                 <div className="alcove-header">
                   <div className="guardian-dot" />
-                  <div className="guardian-label">guardian</div>
+                  <div className="guardian-label">observer</div>
                   <div className="alcove-sep" />
                   <div className="alcove-status">observing your conversation</div>
                   <div className="alcove-spacer" />
@@ -1062,7 +1069,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Guardian...' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? 'Ask the Observer...' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -1077,7 +1084,7 @@ export default function ChatView() {
               <button
                 className={`agent-pill${alcoveOpen ? ' targeted guardian' : ''}`}
                 onClick={() => setAlcoveOpen(!alcoveOpen)}
-              >guardian</button>
+              >observer</button>
               {!alcoveOpen && (
                 <>
                   <div className="pill-sep" />
@@ -1085,7 +1092,7 @@ export default function ChatView() {
                     className={ensemblePillClass}
                     onClick={toggleEnsemble}
                     title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
-                  >{ensembleLabel}</button>
+                  ><EnsembleIcon />ensemble</button>
                 </>
               )}
             </div>
