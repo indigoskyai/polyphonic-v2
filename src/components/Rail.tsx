@@ -109,7 +109,7 @@ export default function Rail() {
       >
         {/* Collapsed rail */}
         <div
-          className="flex flex-col items-center h-full"
+          className="flex flex-col items-center h-full cursor-pointer"
           style={{
             padding: '44px 0 16px',
             gap: 4,
@@ -117,6 +117,11 @@ export default function Rail() {
             opacity: expanded ? 0 : 1,
             pointerEvents: expanded ? 'none' : 'auto',
             transition: 'opacity 100ms var(--ease-out)',
+          }}
+          onClick={(e) => {
+            // Only expand if click landed on the container itself (empty space),
+            // not on an interactive child (which calls stopPropagation or has its own handler).
+            if (e.target === e.currentTarget) setExpanded(true);
           }}
         >
           {/* Logo — emotional indicator */}
