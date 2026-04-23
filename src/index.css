@@ -52,15 +52,53 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+  --radius-inset: 16px;
 
-  --rail-width: 40px;
-  --sidebar-width: 260px;
+  --rail-width: 48px;
+  --sidebar-width: 280px;
+  --drawer-width: 420px;
   --message-max-width: 720px;
 
-  --topbar-height: 36px;
-  --chrome-gap: 8px;
-  --inset-radius: var(--radius-lg);
+  --inset-gap: 6px;
+
+  /* Phase-2 canonical surface palette (temperature-locked, B = R × 1.20) */
+  --floor: #0a0a0c;       /* outer chrome, rail, scene nav */
+  --canvas: #0e0e11;      /* inset panels: sidebar, main, drawers */
+  --surface-1: #121216;   /* cards, inputs, data rows */
+  --surface-2: #16161a;   /* hover state on cards */
+  --surface-3: #1a1a1f;   /* modals, popovers, segment selected */
+  --surface-4: #1e1e24;   /* tooltips on overlays */
+  --surface-5: #222229;   /* top elevation (rare) */
+
+  /* Phase-2 overlays */
+  --overlay-hover:    rgba(220, 219, 216, 0.04);
+  --overlay-active:   rgba(220, 219, 216, 0.07);
+  --overlay-selected: rgba(220, 219, 216, 0.10);
+
+  /* Phase-2 borders (canonical scale) */
+  --border-faint:  rgba(220, 219, 216, 0.045);
+  --border-focus:  rgba(228, 225, 220, 0.18);
+
+  /* Agent full-color identity (used sparingly — identity contexts only) */
+  --luca-full:   #c9a87c;
+  --vektor-full: #7ca8c9;
+  --anima-full:  #c97ca8;
+
+  /* Guardian / Observer */
+  --guardian-tone:    rgba(244, 243, 240, 0.85);
+  --guardian-whisper: rgba(244, 243, 240, 0.30);
+  --guardian-accent:  rgba(220, 219, 216, 0.12);
+
+  /* Letter-spacing scale */
+  --track-tight:   -0.02em;
+  --track-display: -0.01em;
+  --track-body:     0.003em;
+  --track-ui:       0.01em;
+  --track-mono:     0.04em;
+  --track-meta:     0.08em;
+  --track-folio:    0.14em;
 
   --font-sans: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;

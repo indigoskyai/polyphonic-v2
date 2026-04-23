@@ -17,9 +17,8 @@ import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
-import TopBar from "./components/TopBar";
+import Sidebar from "./components/Sidebar";
 import Clockbar from "./components/Clockbar";
-import { useRailStore } from "@/stores/railStore";
 import CommandPalette from "./components/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 
@@ -46,39 +45,33 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const { open: settingsOpen, closeSettings } = useSettingsModalStore();
-  const railExpanded = useRailStore((s) => s.expanded);
 
   useEffect(() => {
     if (user) loadSettings(user.id);
   }, [user]);
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--bg-void)' }}>
-      <TopBar />
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        <Rail />
-        <div
-          className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
-          style={{
-            marginLeft: railExpanded ? 'var(--sidebar-width)' : 'var(--rail-width)',
-            marginRight: 'var(--chrome-gap)',
-            marginBottom: 'var(--chrome-gap)',
-            borderTopLeftRadius: 0,
-            borderBottomLeftRadius: 0,
-            borderTopRightRadius: 'var(--inset-radius)',
-            borderBottomRightRadius: 'var(--inset-radius)',
-            background: 'var(--bg-primary)',
-            border: '1px solid var(--border-subtle)',
-            borderLeft: 'none',
-            transition: 'margin-left var(--dur-slow) var(--ease-premium)',
-            position: 'relative',
-            zIndex: 10,
-          }}
-        >
-          <ImportProgressBanner />
-          {children}
-          {clockbarVisible && <Clockbar />}
-        </div>
+    <div
+      className="h-screen flex overflow-hidden"
+      style={{
+        background: 'var(--floor)',
+        padding: 'var(--inset-gap)',
+        gap: 'var(--inset-gap)',
+      }}
+    >
+      <Rail />
+      <Sidebar />
+      <div
+        className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+        style={{
+          background: 'var(--canvas)',
+          border: '1px solid var(--border-faint)',
+          borderRadius: 'var(--radius-inset)',
+        }}
+      >
+        <ImportProgressBanner />
+        {children}
+        {clockbarVisible && <Clockbar />}
       </div>
       <SettingsModal open={settingsOpen} onClose={closeSettings} />
       <CommandPalette />
