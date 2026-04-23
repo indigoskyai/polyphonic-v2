@@ -91,7 +91,7 @@ serve(async (req) => {
 
     const userId = user.id;
     const body = await req.json();
-    const { thread_id, message, reasoning_effort: effortOverride } = body;
+    const { thread_id, message, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
       return new Response(JSON.stringify({ error: "Invalid request" }), {
@@ -110,7 +110,12 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const multiModelEnabled = settings?.multi_model_enabled !== false;
+    // Per-message ensemble flag overrides the user's default setting.
+    // - true → force ensemble path
+    // - false → force single-model path
+    // - undefined → fall back to saved default
+    const defaultMultiModel = settings?.multi_model_enabled !== false;
+    const multiModelEnabled = typeof ensembleOverride === "boolean" ? ensembleOverride : defaultMultiModel;
     const ensembleModels: string[] = settings?.ensemble_models || DEFAULT_ENSEMBLE;
     const synthesisModel = settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL;
     const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
