@@ -216,11 +216,7 @@ serve(async (req) => {
       await supabase.from("emotional_state").insert(stateRow);
     }
 
-    // Append to history
-    await supabase.from("emotional_history").insert({
-      user_id,
-      state: smoothed,
-    });
+    // emotional_history table does not exist in current schema — skip history append/trim.
 
     // Log mood shift only if significant
     if (prevState) {
@@ -239,27 +235,6 @@ serve(async (req) => {
           content: { state: smoothed, delta },
           source: "autonomous",
         });
-      }
-    }
-
-    // Trim old history (keep last 500)
-    const { count: histCount } = await supabase
-      .from("emotional_history")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user_id);
-
-    if (histCount && histCount > 500) {
-      const { data: oldest } = await supabase
-        .from("emotional_history")
-        .select("id")
-        .eq("user_id", user_id)
-        .order("timestamp", { ascending: true })
-        .limit(histCount - 500);
-      if (oldest && oldest.length > 0) {
-        await supabase
-          .from("emotional_history")
-          .delete()
-          .in("id", oldest.map((o: any) => o.id));
       }
     }
 
