@@ -116,13 +116,8 @@ serve(async (req) => {
         .gte("created_at", since24h)
         .order("created_at", { ascending: false })
         .limit(3),
-      supabase
-        .from("observer_logs")
-        .select("observations, synthesis")
-        .eq("user_id", user_id)
-        .gte("created_at", since24h)
-        .order("created_at", { ascending: false })
-        .limit(2),
+      // observer_logs table does not exist — return empty
+      Promise.resolve({ data: [] as any[] }),
       supabase
         .from("emotional_state")
         .select("*")
@@ -222,8 +217,8 @@ Write ONLY the message. Nothing else.`;
       .insert({
         user_id,
         message,
-        salience_total: salienceTotal,
-        source_thought_ids: sourceThoughts.slice(0, 10),
+        status: "pending",
+        trigger_reason: `salience=${Math.round(salienceTotal * 100) / 100}; sources=${sourceThoughts.slice(0, 3).join(" | ").slice(0, 400)}`,
       })
       .select("id")
       .single();
