@@ -28,8 +28,9 @@ export default function Sidebar() {
         background: 'var(--canvas)',
         border: visible ? '1px solid var(--border-faint)' : '1px solid transparent',
         borderRadius: 'var(--radius-inset)',
-        transition:
-          'width var(--dur-drawer) var(--ease-premium), min-width var(--dur-drawer) var(--ease-premium), margin-right var(--dur-drawer) var(--ease-premium), opacity var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out)',
+        transition: visible
+          ? 'width 560ms var(--ease-premium), min-width 560ms var(--ease-premium), margin-right 560ms var(--ease-premium), opacity 320ms var(--ease-out) 200ms, border-color 320ms var(--ease-out) 200ms'
+          : 'width 560ms var(--ease-premium), min-width 560ms var(--ease-premium), margin-right 560ms var(--ease-premium), opacity 240ms var(--ease-out), border-color 240ms var(--ease-out)',
         pointerEvents: visible ? 'auto' : 'none',
       }}
     >
