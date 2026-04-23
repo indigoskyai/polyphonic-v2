@@ -1062,7 +1062,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Guardian...' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? 'Ask the Guardian...' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -1078,6 +1078,16 @@ export default function ChatView() {
                 className={`agent-pill${alcoveOpen ? ' targeted guardian' : ''}`}
                 onClick={() => setAlcoveOpen(!alcoveOpen)}
               >guardian</button>
+              {!alcoveOpen && (
+                <>
+                  <div className="pill-sep" />
+                  <button
+                    className={ensemblePillClass}
+                    onClick={toggleEnsemble}
+                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
+                  >{ensembleLabel}</button>
+                </>
+              )}
             </div>
 
             {/* Thinking effort selector */}
@@ -1092,7 +1102,7 @@ export default function ChatView() {
             </select>
 
             <button
-              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}`}
+              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : sendMessage)}
             >
               <span className="send-icon">
