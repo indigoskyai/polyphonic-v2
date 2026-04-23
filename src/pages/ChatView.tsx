@@ -828,6 +828,12 @@ export default function ChatView() {
                   <button className="agent-pill targeted luca">luca</button>
                   <div className="pill-sep" />
                   <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>guardian</button>
+                  <div className="pill-sep" />
+                  <button
+                    className={ensemblePillClass}
+                    onClick={toggleEnsemble}
+                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
+                  >{ensembleLabel}</button>
                 </div>
                 <select
                   value={thinkingEffort}
@@ -839,7 +845,7 @@ export default function ChatView() {
                   <option value="high">Deep</option>
                 </select>
                 <button
-                  className="send-btn"
+                  className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
                   onClick={sendMessage}
                 >
                   <span className="send-icon">
