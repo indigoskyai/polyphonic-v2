@@ -606,7 +606,7 @@ export default function ChatView() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort }),
+        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort, ensemble: ensembleActive }),
         signal: controller.signal,
       });
 
@@ -685,7 +685,56 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming]);
+  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive]);
+
+  // Auto-disarm ensemble after a successful send (locked stays on)
+  const prevStreamingRef = useRef(isStreaming);
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming && ensembleArmed) {
+      setEnsembleArmed(false);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, ensembleArmed]);
+
+  // Sync default ensemble preference → arm flag when user turns the setting on
+  useEffect(() => {
+    if (defaultEnsembleOn && !ensembleLocked && !ensembleArmed) {
+      setEnsembleArmed(true);
+    }
+  }, [defaultEnsembleOn]);
+
+  // ⌘E / Ctrl+E toggles ensemble arm
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setEnsembleLocked((v) => !v);
+        } else {
+          setEnsembleArmed((v) => !v);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const toggleEnsemble = (e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      setEnsembleLocked((v) => !v);
+      setEnsembleArmed(false);
+    } else {
+      if (ensembleLocked) {
+        setEnsembleLocked(false);
+        setEnsembleArmed(false);
+      } else {
+        setEnsembleArmed((v) => !v);
+      }
+    }
+  };
+
+  const ensembleLabel = ensembleLocked ? 'ensemble · on' : ensembleArmed ? 'ensemble · armed' : 'ensemble';
+  const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
 
   const stopStreaming = () => abortRef.current?.abort();
 
