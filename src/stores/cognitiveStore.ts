@@ -130,12 +130,11 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     const cog = cogRes.data;
     const mods = cog?.modulators as Record<string, number> | null;
     const emos = cog?.emotions as Record<string, number> | null;
-    const beliefs = (cog?.beliefs as Belief[] | null) ?? [];
 
+    // Beliefs are sourced from the beliefs table in loadMindData — don't set them here to avoid races.
     set({
       modulators: mods ? { ...defaultModulators, ...mods } : defaultModulators,
       emotions: emos ? { ...defaultEmotions, ...emos } : defaultEmotions,
-      beliefs,
       thoughts: (thoughtsRes.data ?? []) as Thought[],
       recentEvents: (eventsRes.data ?? []) as MemoryEvent[],
       loaded: true,
@@ -254,11 +253,11 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
         if (row) {
           const mods = row.modulators as Record<string, number> | null;
           const emos = row.emotions as Record<string, number> | null;
-          const beliefs = (row.beliefs as Belief[] | null) ?? [];
+          // Only update modulators/emotions here — beliefs come from the beliefs table (see loadMindData),
+          // not from the cognitive_state JSONB column, which has gone stale in this project.
           set({
             modulators: mods ? { ...defaultModulators, ...mods } : defaultModulators,
             emotions: emos ? { ...defaultEmotions, ...emos } : defaultEmotions,
-            beliefs,
           });
         }
       })
