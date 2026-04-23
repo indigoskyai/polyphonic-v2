@@ -75,9 +75,7 @@ export default function Rail() {
         minWidth: 'var(--rail-width)',
         padding: '12px 0 12px',
         gap: 4,
-        background: 'var(--canvas)',
-        border: '1px solid var(--border-faint)',
-        borderRadius: 'var(--radius-inset)',
+        background: 'transparent',
       }}
     >
       {/* Identity */}
