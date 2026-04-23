@@ -67,6 +67,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           background: 'var(--canvas)',
           border: '1px solid var(--border-faint)',
           borderRadius: 'var(--radius-inset)',
+          boxShadow: 'var(--shadow-panel)',
         }}
       >
         <ImportProgressBanner />

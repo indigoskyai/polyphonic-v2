@@ -58,12 +58,16 @@
   --radius-pill: 999px;
   --radius-inset: 16px;
 
-  --rail-width: 48px;
+  --rail-width: 40px;
   --sidebar-width: 280px;
   --drawer-width: 420px;
   --message-max-width: 720px;
 
   --inset-gap: 6px;
+
+  /* Elevation shadows */
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 16px rgba(0, 0, 0, 0.22);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.35);
 
   /* Phase-2 canonical surface palette (temperature-locked, B = R × 1.20) */
   --floor: #0a0a0c;       /* outer chrome, rail, scene nav */
