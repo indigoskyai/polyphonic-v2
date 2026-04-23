@@ -16,24 +16,38 @@ interface ModelMeta {
 
 export const REASONING_MODELS: Record<string, ModelMeta> = {
   // Anthropic — uses thinking.type + budget_tokens
-  'anthropic/claude-sonnet-4-20250514': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4' },
-  'anthropic/claude-opus-4-20250514': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4' },
-  'anthropic/claude-haiku-3.5-20241022': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Haiku 3.5' },
+  'anthropic/claude-opus-4.7': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
+  'anthropic/claude-opus-4.6': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6' },
+  'anthropic/claude-opus-4.6-fast': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6 Fast' },
+  'anthropic/claude-opus-4.5': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.5' },
+  'anthropic/claude-opus-4.1': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.1' },
+  'anthropic/claude-opus-4': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4' },
+  'anthropic/claude-sonnet-4.6': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4.6' },
+  'anthropic/claude-sonnet-4.5': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4.5' },
+  'anthropic/claude-sonnet-4': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4' },
+  'anthropic/claude-haiku-4.5': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Haiku 4.5' },
+  'anthropic/claude-3.7-sonnet': { reasoning: true, paramStyle: 'anthropic', label: 'Claude 3.7 Sonnet' },
+  'anthropic/claude-3.7-sonnet:thinking': { reasoning: true, paramStyle: 'anthropic', label: 'Claude 3.7 Sonnet (thinking)' },
 
   // OpenAI GPT-5 series — uses reasoning.effort + reasoning_details in response
   'openai/gpt-5.4': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.4' },
   'openai/gpt-5.4-mini': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.4 Mini' },
+  'openai/gpt-5.4-nano': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.4 Nano' },
+  'openai/gpt-5.4-pro': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.4 Pro' },
   'openai/gpt-5.2': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.2' },
+  'openai/gpt-5.2-pro': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.2 Pro' },
   'openai/gpt-5.1': { reasoning: true, paramStyle: 'openai', label: 'GPT-5.1' },
   'openai/gpt-5': { reasoning: true, paramStyle: 'openai', label: 'GPT-5' },
+  'openai/gpt-5-mini': { reasoning: true, paramStyle: 'openai', label: 'GPT-5 Mini' },
+  'openai/gpt-5-pro': { reasoning: true, paramStyle: 'openai', label: 'GPT-5 Pro' },
 
   // Google Gemini 3.x — uses thinking.thinkingLevel
   'google/gemini-3.1-pro-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3.1 Pro' },
-  'google/gemini-3-pro-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3 Pro' },
   'google/gemini-3-flash-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3 Flash' },
 
-  // Google Gemini 2.5 (legacy) — uses thinking.enabled + budget_tokens
-  'google/gemini-2.5-pro-preview-03-25': { reasoning: true, paramStyle: 'google-v2', label: 'Gemini 2.5 Pro' },
+  // Google Gemini 2.5 — uses thinking.enabled + budget_tokens
+  'google/gemini-2.5-pro': { reasoning: true, paramStyle: 'google-v2', label: 'Gemini 2.5 Pro' },
+  'google/gemini-2.5-flash': { reasoning: true, paramStyle: 'google-v2', label: 'Gemini 2.5 Flash' },
 };
 
 /** Check if a model supports reasoning/thinking output. */

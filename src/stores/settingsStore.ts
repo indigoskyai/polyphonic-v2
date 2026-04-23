@@ -26,7 +26,7 @@ interface SettingsState extends Settings {
 }
 
 const defaults: Settings = {
-  default_model: 'anthropic/claude-sonnet-4',
+  default_model: 'anthropic/claude-sonnet-4.6',
   synthesis_style: 'conversational',
   stream_responses: true,
   show_thinking: true,
@@ -39,11 +39,11 @@ const defaults: Settings = {
   // Multi-model defaults
   multi_model_enabled: true,
   ensemble_models: [
-    'anthropic/claude-sonnet-4-20250514',
+    'anthropic/claude-sonnet-4.6',
     'openai/gpt-5.4',
     'google/gemini-3.1-pro-preview',
   ],
-  synthesis_model: 'anthropic/claude-sonnet-4-20250514',
+  synthesis_model: 'anthropic/claude-opus-4.7',
   reasoning_effort: 'medium',
 };
 

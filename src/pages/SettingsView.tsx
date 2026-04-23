@@ -206,11 +206,29 @@ function GeneralTab() {
           value={default_model}
           onChange={(v) => updateSetting('default_model', v)}
           options={[
-            { label: 'Claude Sonnet 4', value: 'anthropic/claude-sonnet-4' },
-            { label: 'Claude Opus 4', value: 'anthropic/claude-opus-4' },
-            { label: 'GPT-4o', value: 'openai/gpt-4o' },
+            // Anthropic — latest
+            { label: 'Claude Opus 4.7', value: 'anthropic/claude-opus-4.7' },
+            { label: 'Claude Opus 4.6', value: 'anthropic/claude-opus-4.6' },
+            { label: 'Claude Sonnet 4.6', value: 'anthropic/claude-sonnet-4.6' },
+            { label: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
+            // OpenAI — latest
+            { label: 'GPT-5.4', value: 'openai/gpt-5.4' },
+            { label: 'GPT-5.4 Mini', value: 'openai/gpt-5.4-mini' },
+            { label: 'GPT-5.4 Pro', value: 'openai/gpt-5.4-pro' },
+            { label: 'GPT-5.3 Chat', value: 'openai/gpt-5.3-chat' },
+            { label: 'GPT-5.2', value: 'openai/gpt-5.2' },
+            // Google — latest
+            { label: 'Gemini 3.1 Pro', value: 'google/gemini-3.1-pro-preview' },
+            { label: 'Gemini 3 Flash', value: 'google/gemini-3-flash-preview' },
             { label: 'Gemini 2.5 Pro', value: 'google/gemini-2.5-pro' },
-            { label: 'Llama 3.3 70B', value: 'meta-llama/llama-3.3-70b-instruct' },
+            { label: 'Gemini 2.5 Flash', value: 'google/gemini-2.5-flash' },
+            // xAI — latest
+            { label: 'Grok 4.20', value: 'x-ai/grok-4.20' },
+            { label: 'Grok 4.1 Fast', value: 'x-ai/grok-4.1-fast' },
+            // Open source
+            { label: 'DeepSeek V3.2', value: 'deepseek/deepseek-v3.2' },
+            { label: 'Llama 4 Maverick', value: 'meta-llama/llama-4-maverick' },
+            { label: 'Qwen3 Max', value: 'qwen/qwen3-max' },
           ]}
         />
       </div>
@@ -239,11 +257,16 @@ function GeneralTab() {
 }
 
 const MODEL_CARDS = [
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', desc: 'Balanced intelligence and speed', badge: 'fast' },
-  { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4', desc: 'Maximum reasoning depth', badge: 'deep' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o', desc: 'OpenAI multimodal flagship', badge: 'fast' },
-  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Google large context reasoning', badge: 'deep' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', desc: 'Open-source performant model', badge: 'fast' },
+  { id: 'anthropic/claude-opus-4.7', name: 'Claude Opus 4.7', desc: 'Anthropic frontier reasoning', badge: 'deep' },
+  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6', desc: 'Balanced intelligence and speed', badge: 'fast' },
+  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', desc: 'Fastest Claude generation', badge: 'fast' },
+  { id: 'openai/gpt-5.4', name: 'GPT-5.4', desc: 'OpenAI flagship reasoning model', badge: 'deep' },
+  { id: 'openai/gpt-5.4-mini', name: 'GPT-5.4 Mini', desc: 'Lightweight GPT-5.4 variant', badge: 'fast' },
+  { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', desc: 'Google next-gen multimodal', badge: 'deep' },
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Fast Gemini for everyday use', badge: 'fast' },
+  { id: 'x-ai/grok-4.20', name: 'Grok 4.20', desc: 'xAI flagship multi-agent', badge: 'deep' },
+  { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2', desc: 'Open-source frontier reasoning', badge: 'deep' },
+  { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', desc: 'Meta open-weights flagship', badge: 'fast' },
 ];
 
 function ModelsTab() {
@@ -326,20 +349,30 @@ function EnsembleSettings() {
   const { multi_model_enabled, ensemble_models, synthesis_model, reasoning_effort, updateSetting } = useSettingsStore();
 
   const AVAILABLE_MODELS = [
-    // Reasoning models (frontier)
-    { id: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (reasoning)' },
-    { id: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4 (reasoning)' },
+    // Anthropic — latest reasoning
+    { id: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7 (reasoning)' },
+    { id: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6 (reasoning)' },
+    { id: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6 (reasoning)' },
+    { id: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
+    // OpenAI GPT-5.x — reasoning
     { id: 'openai/gpt-5.4', label: 'GPT-5.4 (reasoning)' },
     { id: 'openai/gpt-5.4-mini', label: 'GPT-5.4 Mini (reasoning)' },
+    { id: 'openai/gpt-5.4-pro', label: 'GPT-5.4 Pro (reasoning)' },
+    { id: 'openai/gpt-5.3-chat', label: 'GPT-5.3 Chat' },
     { id: 'openai/gpt-5.2', label: 'GPT-5.2 (reasoning)' },
+    { id: 'openai/gpt-5.1', label: 'GPT-5.1 (reasoning)' },
+    // Google Gemini — latest
     { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (reasoning)' },
-    { id: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro (reasoning)' },
     { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (reasoning)' },
-    // Non-reasoning models
-    { id: 'anthropic/claude-haiku-3.5-20241022', label: 'Claude Haiku 3.5' },
-    { id: 'openai/gpt-4o', label: 'GPT-4o' },
-    { id: 'google/gemini-2.5-pro-preview-03-25', label: 'Gemini 2.5 Pro' },
-    { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+    { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    // xAI
+    { id: 'x-ai/grok-4.20', label: 'Grok 4.20' },
+    { id: 'x-ai/grok-4.1-fast', label: 'Grok 4.1 Fast' },
+    // Open source
+    { id: 'deepseek/deepseek-v3.2', label: 'DeepSeek V3.2' },
+    { id: 'meta-llama/llama-4-maverick', label: 'Llama 4 Maverick' },
+    { id: 'qwen/qwen3-max', label: 'Qwen3 Max' },
   ];
 
   const updateEnsembleModel = (index: number, modelId: string) => {
