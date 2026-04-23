@@ -96,8 +96,8 @@ export default function Rail() {
 
       {/* New thread */}
       <div
-        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer shrink-0"
-        style={{ color: 'var(--text-tertiary)', fontSize: 16, fontWeight: 300, transition: 'all var(--dur-fast) var(--ease-out)' }}
+        className="w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
+        style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 300, transition: 'all var(--dur-fast) var(--ease-out)' }}
         onClick={handleNewThread}
         title="New thread"
       >
@@ -106,7 +106,7 @@ export default function Rail() {
 
       {/* Settings */}
       <div
-        className="w-8 h-8 rounded flex items-center justify-center cursor-pointer shrink-0"
+        className="w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
         style={{
           color: settingsOpen ? 'var(--text-primary)' : 'var(--text-tertiary)',
           background: settingsOpen ? 'var(--bg-surface)' : undefined,
