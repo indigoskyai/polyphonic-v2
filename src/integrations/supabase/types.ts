@@ -287,6 +287,48 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_widgets: {
+        Row: {
+          archived: boolean
+          created_at: string
+          id: string
+          last_run_at: string | null
+          model: string | null
+          pinned: boolean
+          position: number
+          prompt: string
+          spec: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          last_run_at?: string | null
+          model?: string | null
+          pinned?: boolean
+          position?: number
+          prompt: string
+          spec?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          last_run_at?: string | null
+          model?: string | null
+          pinned?: boolean
+          position?: number
+          prompt?: string
+          spec?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       engram_archive: {
         Row: {
           archived_at: string | null
@@ -628,6 +670,33 @@ export type Database = {
           id?: string
           profile_version?: number
           title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profile_daily_pulse: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          payload: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          payload?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          payload?: Json
           updated_at?: string
           user_id?: string
         }

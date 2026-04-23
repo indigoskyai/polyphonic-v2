@@ -288,11 +288,16 @@ export default function ChatView() {
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
+  const defaultEnsembleOn = useSettingsStore((s) => s.multi_model_enabled);
 
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
+  // Ensemble skill: armed = next message only; locked = persistent until toggled off
+  const [ensembleArmed, setEnsembleArmed] = useState(false);
+  const [ensembleLocked, setEnsembleLocked] = useState(false);
+  const ensembleActive = ensembleArmed || ensembleLocked;
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
@@ -601,7 +606,7 @@ export default function ChatView() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort }),
+        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort, ensemble: ensembleActive }),
         signal: controller.signal,
       });
 
@@ -680,7 +685,56 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming]);
+  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive]);
+
+  // Auto-disarm ensemble after a successful send (locked stays on)
+  const prevStreamingRef = useRef(isStreaming);
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming && ensembleArmed) {
+      setEnsembleArmed(false);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, ensembleArmed]);
+
+  // Sync default ensemble preference → arm flag when user turns the setting on
+  useEffect(() => {
+    if (defaultEnsembleOn && !ensembleLocked && !ensembleArmed) {
+      setEnsembleArmed(true);
+    }
+  }, [defaultEnsembleOn]);
+
+  // ⌘E / Ctrl+E toggles ensemble arm
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setEnsembleLocked((v) => !v);
+        } else {
+          setEnsembleArmed((v) => !v);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const toggleEnsemble = (e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      setEnsembleLocked((v) => !v);
+      setEnsembleArmed(false);
+    } else {
+      if (ensembleLocked) {
+        setEnsembleLocked(false);
+        setEnsembleArmed(false);
+      } else {
+        setEnsembleArmed((v) => !v);
+      }
+    }
+  };
+
+  const ensembleLabel = ensembleLocked ? 'ensemble · on' : ensembleArmed ? 'ensemble · armed' : 'ensemble';
+  const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
 
   const stopStreaming = () => abortRef.current?.abort();
 
@@ -766,7 +820,7 @@ export default function ChatView() {
                   onBlur={() => setFocused(false)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={dynamicPlaceholder}
+                  placeholder={ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer">
@@ -774,6 +828,12 @@ export default function ChatView() {
                   <button className="agent-pill targeted luca">luca</button>
                   <div className="pill-sep" />
                   <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>guardian</button>
+                  <div className="pill-sep" />
+                  <button
+                    className={ensemblePillClass}
+                    onClick={toggleEnsemble}
+                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
+                  >{ensembleLabel}</button>
                 </div>
                 <select
                   value={thinkingEffort}
@@ -785,7 +845,7 @@ export default function ChatView() {
                   <option value="high">Deep</option>
                 </select>
                 <button
-                  className="send-btn"
+                  className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
                   onClick={sendMessage}
                 >
                   <span className="send-icon">
@@ -1002,7 +1062,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Guardian...' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? 'Ask the Guardian...' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -1018,6 +1078,16 @@ export default function ChatView() {
                 className={`agent-pill${alcoveOpen ? ' targeted guardian' : ''}`}
                 onClick={() => setAlcoveOpen(!alcoveOpen)}
               >guardian</button>
+              {!alcoveOpen && (
+                <>
+                  <div className="pill-sep" />
+                  <button
+                    className={ensemblePillClass}
+                    onClick={toggleEnsemble}
+                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
+                  >{ensembleLabel}</button>
+                </>
+              )}
             </div>
 
             {/* Thinking effort selector */}
@@ -1032,7 +1102,7 @@ export default function ChatView() {
             </select>
 
             <button
-              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}`}
+              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : sendMessage)}
             >
               <span className="send-icon">
