@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
-
-const TABS = ['Overview', 'Journal', 'Thoughts', 'Dreams', 'Wanderings', 'Insights', 'Reflections'] as const;
-type Tab = typeof TABS[number];
+import { useViewTabStore } from '@/stores/viewTabStore';
 
 /* ─── Overview Tab ─── */
 function OverviewTab() {
@@ -399,9 +397,9 @@ function timeAgo(date: string): string {
 
 /* ─── Main MindView ─── */
 export default function MindView() {
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const activeTab = useViewTabStore((s) => s.mindTab);
   const user = useAuthStore((s) => s.user);
-  const { loaded, load, loadMindData, subscribe, dreams, insights, reflections } = useCognitiveStore();
+  const { load, loadMindData, subscribe, dreams, insights, reflections } = useCognitiveStore();
 
   useEffect(() => {
     if (user) {
@@ -414,48 +412,6 @@ export default function MindView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
-      {/* Header */}
-      <div className="flex items-center flex-shrink-0" style={{
-        height: 44,
-        padding: '0 24px',
-        borderBottom: '1px solid var(--border-subtle)',
-        gap: 16,
-      }}>
-        <div className="flex items-center gap-2">
-          <div style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: loaded ? '#8ca89c' : 'var(--text-whisper)',
-            animation: loaded ? 'breathe 4s ease-in-out infinite' : undefined,
-          }} />
-          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>
-            Inner Life
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                height: 28,
-                padding: '0 10px',
-                fontSize: 11,
-                fontWeight: activeTab === tab ? 500 : 400,
-                color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-ghost)',
-                background: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
-                border: activeTab === tab ? '1px solid var(--border-subtle)' : '1px solid transparent',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                transition: 'all var(--dur-fast) var(--ease-out)',
-                fontFamily: 'var(--font-sans)',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Content */}
       <div className="flex-1 overflow-y-auto" style={{
         padding: activeTab === 'Thoughts' ? 0 : '24px 32px',

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import { useViewTabStore } from '@/stores/viewTabStore';
 
 type Profile = {
   identity_narrative: string | null;
@@ -35,7 +36,7 @@ export default function ProfileView() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('Portrait');
+  const activeTab = useViewTabStore((s) => s.profileTab);
   const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -276,27 +277,7 @@ export default function ProfileView() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0.5 shrink-0 overflow-x-auto" style={{ padding: '8px 24px', scrollbarWidth: 'none' }}>
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="text-[11px] px-3 py-1.5 rounded whitespace-nowrap"
-              style={{
-                background: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
-                color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-ghost)',
-                border: activeTab === tab ? '1px solid var(--border)' : '1px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 150ms ease',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
+        {/* Content (tabs now handled by sidebar) */}
         <div className="flex-1 overflow-y-auto" style={{ padding: '8px 24px 24px', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
           {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
           {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
+import { useViewTabStore } from '@/stores/viewTabStore';
 import { supabase } from '@/integrations/supabase/client';
 import GraphTab from '@/components/memory/GraphTab';
 import EngramsTab from '@/components/memory/EngramsTab';
@@ -48,7 +49,7 @@ type ImportRecord = {
 };
 
 export default function MemoryView() {
-  const [activeTab, setActiveTab] = useState<Tab>('Memories');
+  const activeTab = useViewTabStore((s) => s.memoryTab);
   const user = useAuthStore((s) => s.user);
   const { loading: engramLoading, loadAll, selectedEngram, setSelectedEngram } = useMemoryStore();
 
@@ -58,42 +59,7 @@ export default function MemoryView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
-      {/* Header */}
-      <div className="flex items-center flex-shrink-0" style={{
-        height: 44,
-        padding: '0 24px',
-        borderBottom: '1px solid var(--border-subtle)',
-        gap: 20,
-      }}>
-        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>
-          Memory
-        </span>
-        <div className="flex items-center gap-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                height: 28,
-                padding: '0 12px',
-                fontSize: 11,
-                fontWeight: activeTab === tab ? 500 : 400,
-                color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-ghost)',
-                background: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
-                border: activeTab === tab ? '1px solid var(--border-subtle)' : '1px solid transparent',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                transition: 'all var(--dur-fast) var(--ease-out)',
-                fontFamily: 'var(--font-sans)',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content area */}
+      {/* Content area (sidebar handles sub-view nav) */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto" style={{
           padding: activeTab === 'Graph' ? 0 : undefined,
@@ -216,10 +182,13 @@ const TYPE_COLORS: Record<string, string> = {
 
 function MemoriesTab() {
   const user = useAuthStore((s) => s.user);
-  const [memories, setMemories] = useState<Memory[]>([]);
+  const memories = useMemoryStore((s) => s.memories);
+  const setMemoriesStore = useMemoryStore((s) => s.setMemories);
+  const storeLoadMemories = useMemoryStore((s) => s.loadMemories);
+  const typeFilter = useViewTabStore((s) => s.memoryTypeFilter);
+  const pinnedOnly = useViewTabStore((s) => s.memoryPinnedOnly);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'confidence' | 'type'>('recent');
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [editingContent, setEditingContent] = useState('');
@@ -230,18 +199,16 @@ function MemoriesTab() {
   const loadMemories = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('memories')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (!error && data) setMemories(data as Memory[]);
+    await storeLoadMemories(user.id);
     setLoading(false);
-  }, [user]);
+  }, [user, storeLoadMemories]);
 
   useEffect(() => { loadMemories(); }, [loadMemories]);
+
+  const setMemories = (updater: Memory[] | ((prev: Memory[]) => Memory[])) => {
+    const next = typeof updater === 'function' ? (updater as (p: Memory[]) => Memory[])(memories) : updater;
+    setMemoriesStore(next);
+  };
 
   const memoryTypes = useMemo(() => {
     const types = new Set(memories.map(m => m.memory_type));
@@ -260,10 +227,11 @@ function MemoriesTab() {
       );
     }
     if (typeFilter) result = result.filter(m => m.memory_type === typeFilter);
+    if (pinnedOnly) result = result.filter(m => m.is_pinned);
     if (sortBy === 'confidence') result = [...result].sort((a, b) => b.confidence - a.confidence);
     if (sortBy === 'type') result = [...result].sort((a, b) => a.memory_type.localeCompare(b.memory_type));
     return result;
-  }, [memories, search, typeFilter, sortBy]);
+  }, [memories, search, typeFilter, pinnedOnly, sortBy]);
 
   const stats = useMemo(() => {
     const byType: Record<string, number> = {};
@@ -345,14 +313,6 @@ function MemoriesTab() {
             className="outline-none"
             style={{ height: 30, flex: 1, minWidth: 160, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}
           />
-          <select
-            value={typeFilter || ''}
-            onChange={(e) => setTypeFilter(e.target.value || null)}
-            style={{ height: 30, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer' }}
-          >
-            <option value="">All types</option>
-            {memoryTypes.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
