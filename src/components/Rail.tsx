@@ -82,11 +82,16 @@ export default function Rail() {
     >
       {/* Identity — click to toggle sidebar */}
       <div
-        className="w-7 h-7 rounded-full flex items-center justify-center text-xs cursor-pointer relative"
+        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer relative"
         style={{
           background: 'var(--overlay-hover)',
           border: `1px solid ${emotionalIndicator.tint}30`,
           color: emotionalIndicator.tint,
+          fontFamily: 'var(--font-serif)',
+          fontStyle: 'italic',
+          fontSize: 15,
+          lineHeight: 1,
+          paddingTop: 1,
           transition: 'all var(--dur-fast) var(--ease-out)',
           animation: `breathe ${emotionalIndicator.breatheSpeed}s ease-in-out infinite`,
         }}

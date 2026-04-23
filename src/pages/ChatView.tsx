@@ -856,7 +856,10 @@ export default function ChatView() {
                   onClick={sendMessage}
                 >
                   <span className="send-icon">
-                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4" /></svg>
+                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
+                      <path d="M12.5 1.5 L5.6 8" />
+                    </svg>
                   </span>
                 </button>
               </div>
@@ -1113,7 +1116,10 @@ export default function ChatView() {
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : sendMessage)}
             >
               <span className="send-icon">
-                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h10M8 3l4 4-4 4" /></svg>
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
+                  <path d="M12.5 1.5 L5.6 8" />
+                </svg>
               </span>
               <span className="stop-icon">
                 <svg viewBox="0 0 14 14" fill="currentColor"><rect x={3} y={3} width={8} height={8} rx={1.5} /></svg>

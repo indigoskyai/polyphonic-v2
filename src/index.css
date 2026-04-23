@@ -1,3 +1,5 @@
+@import url('https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@350;370;400;420;450;550&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 
@@ -100,8 +102,10 @@
   --track-meta:     0.08em;
   --track-folio:    0.14em;
 
-  --font-sans: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  --font-mono: 'SF Mono', 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Switzer', -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-grotesque: var(--font-sans);
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Geist Mono', 'Fira Code', ui-monospace, monospace;
+  --font-serif: 'Instrument Serif', serif;
 
   --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -666,19 +670,20 @@
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text-primary);
+  color: var(--text-body);
   font-family: var(--font-sans);
-  font-size: 14.5px;
-  font-weight: 370;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: var(--track-body);
   line-height: 1.55;
   padding: 14px 18px;
   min-height: 48px;
   max-height: 240px;
   resize: none;
-  caret-color: var(--text-secondary);
+  caret-color: var(--text-soft);
 }
-.input-textarea::placeholder { color: var(--text-ghost); font-weight: 350; }
-.input-textarea:focus::placeholder { color: var(--text-whisper); }
+.input-textarea::placeholder { color: var(--text-soft); font-weight: 400; letter-spacing: var(--track-body); }
+.input-textarea:focus::placeholder { color: var(--text-tertiary); }
 
 /* Input footer */
 .input-footer {
@@ -699,22 +704,23 @@
 .agent-pills { display: flex; gap: 2px; align-items: center; }
 .agent-pill {
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   border: none;
   background: transparent;
   font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 420;
-  color: var(--text-ghost);
+  font-weight: 450;
+  letter-spacing: var(--track-ui);
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
   position: relative;
 }
-.agent-pill:hover { color: var(--text-tertiary); background: var(--bg-surface); }
+.agent-pill:hover { color: var(--text-soft); background: var(--overlay-hover); }
 .agent-pill.targeted { font-weight: 500; background: transparent; }
-.agent-pill.targeted.luca { color: rgba(220,219,216,0.85); }
-.agent-pill.targeted.guardian { color: rgba(220,219,216,0.85); }
-.pill-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--text-whisper); }
+.agent-pill.targeted.luca { color: var(--text-body); }
+.agent-pill.targeted.guardian { color: var(--text-body); }
+.pill-sep { width: 2px; height: 2px; border-radius: 50%; background: var(--text-whisper); opacity: 0.6; }
 
 /* ── Ensemble Pill (per-message skill toggle) ── */
 .ensemble-pill {
@@ -753,10 +759,10 @@
 .send-btn {
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: transparent;
   border: none;
-  color: var(--text-ghost);
+  color: var(--text-soft);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -764,8 +770,8 @@
   transition: all var(--dur-fast) var(--ease-out);
   position: relative;
 }
-.send-btn:hover { background: var(--bg-surface-hover); color: var(--text-secondary); }
-.send-btn svg { width: 14px; height: 14px; }
+.send-btn:hover { background: var(--overlay-active); color: var(--text-body); }
+.send-btn svg { width: 13px; height: 13px; }
 .send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .send-btn .send-icon { transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .send-btn.streaming .send-icon { opacity: 0; transform: scale(0.6); }
