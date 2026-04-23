@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { useSettingsModalStore } from '@/stores/settingsModalStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { supabase } from '@/integrations/supabase/client';
 
 interface EmotionalIndicator {
@@ -43,6 +44,7 @@ export default function Rail() {
   const { createThread } = useThreadStore();
   const openSettings = useSettingsModalStore((s) => s.openSettings);
   const settingsOpen = useSettingsModalStore((s) => s.open);
+  const toggleSidebar = useSidebarStore((s) => s.toggle);
 
   useEffect(() => {
     if (!user) return;
@@ -78,7 +80,7 @@ export default function Rail() {
         background: 'transparent',
       }}
     >
-      {/* Identity */}
+      {/* Identity — click to toggle sidebar */}
       <div
         className="w-7 h-7 rounded-full flex items-center justify-center text-xs cursor-pointer relative"
         style={{
@@ -88,6 +90,7 @@ export default function Rail() {
           transition: 'all var(--dur-fast) var(--ease-out)',
           animation: `breathe ${emotionalIndicator.breatheSpeed}s ease-in-out infinite`,
         }}
+        onClick={toggleSidebar}
         title={emotionalIndicator.label}
       >
         L

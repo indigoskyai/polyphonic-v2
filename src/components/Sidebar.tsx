@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useThreadStore, Thread } from '@/stores/threadStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const { threads, currentThreadId, loadThreads } = useThreadStore();
+  const visible = useSidebarStore((s) => s.visible);
 
   useEffect(() => { loadThreads(); }, []);
 
@@ -17,15 +19,24 @@ export default function Sidebar() {
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col overflow-hidden"
+      className="flex-shrink-0 overflow-hidden"
       style={{
-        width: 'var(--sidebar-width)',
-        minWidth: 'var(--sidebar-width)',
+        width: visible ? 'var(--sidebar-width)' : 0,
+        minWidth: visible ? 'var(--sidebar-width)' : 0,
+        marginRight: visible ? 0 : 'calc(-1 * var(--inset-gap))',
+        opacity: visible ? 1 : 0,
         background: 'var(--canvas)',
-        border: '1px solid var(--border-faint)',
+        border: visible ? '1px solid var(--border-faint)' : '1px solid transparent',
         borderRadius: 'var(--radius-inset)',
+        transition:
+          'width var(--dur-drawer) var(--ease-premium), min-width var(--dur-drawer) var(--ease-premium), margin-right var(--dur-drawer) var(--ease-premium), opacity var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out)',
+        pointerEvents: visible ? 'auto' : 'none',
       }}
     >
+      <div
+        className="flex flex-col"
+        style={{ width: 'var(--sidebar-width)', height: '100%' }}
+      >
       {/* Header */}
       <div className="flex items-center" style={{ padding: '14px 16px 10px', minHeight: 44 }}>
         <div
@@ -97,6 +108,7 @@ export default function Sidebar() {
             onClick={() => navigate(`/chat/${t.id}`)}
           />
         ))}
+      </div>
       </div>
     </div>
   );
