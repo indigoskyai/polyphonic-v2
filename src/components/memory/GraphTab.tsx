@@ -149,7 +149,11 @@ export default function GraphTab() {
 
       const selectedId = selectedIdRef.current;
 
-      // Draw edges (highlight edges connected to selected node)
+      // Sharper rendering — no anti-alias smudging on hairlines
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+
+      // Edges — hairline cream; highlighted when touching selected node
       for (const edge of edgesRef.current) {
         const a = nodesRef.current.get(edge.source);
         const b = nodesRef.current.get(edge.target);
@@ -159,42 +163,54 @@ export default function GraphTab() {
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         if (isConnectedToSelected) {
-          ctx.strokeStyle = 'rgba(220,219,216,0.45)';
-          ctx.lineWidth = Math.max(0.8, edge.connection.weight * 2.5) / cam.zoom;
+          ctx.strokeStyle = EDGE_HIGHLIGHT;
+          ctx.lineWidth = 0.8 / cam.zoom;
         } else {
-          ctx.strokeStyle = CONN_COLORS[edge.connection.connection_type] || 'rgba(220,219,216,0.06)';
-          ctx.lineWidth = Math.max(0.5, edge.connection.weight * 2) / cam.zoom;
+          // Mild weight modulation but always hairline
+          const baseAlpha = 0.06 + Math.min(0.12, edge.connection.weight * 0.10);
+          ctx.strokeStyle = `rgba(220, 219, 216, ${baseAlpha.toFixed(3)})`;
+          ctx.lineWidth = 0.5 / cam.zoom;
         }
         ctx.stroke();
       }
 
-      // Draw nodes
+      // Nodes — small filled disc + 1px ring, like technical graph plots
       const nodes = Array.from(nodesRef.current.values());
       for (const node of nodes) {
-        ctx.beginPath();
         const r = node.radius / cam.zoom;
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        const color = TYPE_COLORS[node.engram.engram_type] || '#dcdbd8';
+        const tint = TYPE_COLORS[node.engram.engram_type] || 'rgba(220,219,216,1)';
         const isHovered = hoveredNode === node.id;
         const isSelected = selectedId === node.id;
-        ctx.fillStyle = isHovered || isSelected ? color : `${color}80`;
+
+        // Filled disc — very faint, tint only barely visible
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        if (isSelected || isHovered) {
+          // Slightly stronger tint when active
+          ctx.fillStyle = tint.replace(/, 1\)$/, ', 0.35)');
+        } else {
+          ctx.fillStyle = NODE_FILL_DIM;
+        }
         ctx.fill();
 
+        // Crisp 1px ring — base
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = isHovered ? NODE_STROKE_HOVER : NODE_STROKE;
+        ctx.lineWidth = 1 / cam.zoom;
+        ctx.stroke();
+
         if (isSelected) {
-          // Bright outer ring + halo
+          // Cool blue selection ring + soft halo
           ctx.beginPath();
-          ctx.arc(node.x, node.y, r + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(244, 243, 240, 0.95)';
-          ctx.lineWidth = 1.5 / cam.zoom;
+          ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = SELECT_RING;
+          ctx.lineWidth = 1.2 / cam.zoom;
           ctx.stroke();
 
           ctx.beginPath();
-          ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(244, 243, 240, 0.18)';
-          ctx.lineWidth = 1 / cam.zoom;
-          ctx.stroke();
-        } else if (isHovered) {
-          ctx.strokeStyle = color;
+          ctx.arc(node.x, node.y, r + 7, 0, Math.PI * 2);
+          ctx.strokeStyle = SELECT_HALO;
           ctx.lineWidth = 1 / cam.zoom;
           ctx.stroke();
         }
