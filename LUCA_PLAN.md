@@ -30,7 +30,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **07** [Activity timeline component](./design-system/07-activity-timeline.md) — Reusable: dot variants, checkpoint dual halos, time dividers, file-ref code spans
 
 ### Memory deepening (depends on 01, 02; 08 needs backend)
-- [B] **08** [Memory Browse/Digest](./design-system/08-memory-digest.md) — Toggle, candidate queue, italic rationale, Pin/Commit/Edit/Reject. Requires `memory_candidates` backend table.
+- [x] **08** [Memory Browse/Digest](./design-system/08-memory-digest.md) — Toggle, candidate queue, italic rationale, Pin/Commit/Edit/Reject. Requires `memory_candidates` backend table.
 
 ### Multi-agent visualization (depends on 01, 02)
 - [ ] **09** [Sub-agent visualization](./design-system/09-subagent-visualization.md) — 3×3 murmur dot grids, prime-staggered animations, overlay panel with gantt lanes, undo toast
@@ -67,7 +67,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 Each phase that needs Lovable work surfaces its prompt below. When you reach a `[B]` phase, copy the relevant prompt into Lovable, mark the phase `[B]` here, and continue with the next unblocked phase.
 
-- [ ] **08 Memory Digest** — see [phase doc](./design-system/08-memory-digest.md#backend-ask). Creates `memory_candidates` table + modifies `mnemos-consolidate` + adds `memory-candidate-action` edge function.
+- [x] **08 Memory Digest** — ✅ shipped by Lovable on 2026-04-24 (commits 65c3655/1098b4f/029fa56/01b55b0). Table + RLS + realtime + edge function live; `anima-consolidate` updated. Frontend consumption landed same day under phase 08.
 
 (Add more here as phases discover additional backend needs.)
 

@@ -2069,3 +2069,160 @@ html {
   transition: all var(--dur-fast) var(--ease-out);
 }
 .thread-info-btn:hover { color: var(--text-primary); background: var(--overlay-hover); }
+
+/* ======================================================================
+   PHASE 08 — MEMORY DIGEST (candidate queue + Browse/Digest toggle)
+   ====================================================================== */
+
+/* Mnemos mode toggle */
+.mnemos-mode-toggle {
+  display: inline-flex;
+  gap: 1px;
+  background: var(--surface-1);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+}
+.mnemos-mode-btn {
+  position: relative;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.mnemos-mode-btn:hover { background: var(--overlay-hover); }
+.mnemos-mode-btn[data-active="true"] {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.mnemos-mode-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--amber-accent);
+  box-shadow: var(--amber-glow);
+  vertical-align: middle;
+}
+
+/* Candidate card */
+.candidate {
+  background: var(--surface-1);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+}
+.cand-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cand-agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--luca);
+  flex-shrink: 0;
+}
+.cand-agent-dot[data-agent="vektor"] { background: var(--vektor-full); }
+.cand-agent-dot[data-agent="anima"]  { background: var(--anima-full); }
+.cand-agent-dot[data-agent="mnemos"] { background: var(--text-tertiary); }
+
+.cand-agent {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  letter-spacing: var(--track-mono);
+  text-transform: lowercase;
+  font-weight: 450;
+}
+.cand-type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+}
+.cand-conf {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-soft);
+  letter-spacing: var(--track-mono);
+  font-weight: 450;
+}
+.cand-content {
+  font-size: 13.5px;
+  color: var(--text-body);
+  line-height: 1.6;
+  letter-spacing: var(--track-body);
+  margin-bottom: 8px;
+}
+.cand-reason {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  letter-spacing: var(--track-body);
+  font-style: italic;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+.cand-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.cand-edit { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.cand-edit__type { display: flex; align-items: center; gap: 10px; }
+.cand-edit__type-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-meta);
+  color: var(--text-ghost);
+}
+
+/* Digest layout */
+.digest-wrap { max-width: 920px; margin: 0 auto; padding: 24px 28px; }
+.digest-title {
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: var(--track-display);
+  line-height: 1.12;
+  margin-bottom: 8px;
+}
+.digest-sub {
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.6;
+  letter-spacing: var(--track-body);
+  margin-bottom: 20px;
+}
+.digest-section { margin-bottom: 32px; }
+.digest-section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.digest-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-subtle);
+}

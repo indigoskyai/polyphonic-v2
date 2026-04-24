@@ -19,6 +19,9 @@ import MetaKV from '@/components/entry/MetaKV';
 import SectionLabel from '@/components/entry/SectionLabel';
 import Telemetry from '@/components/entry/Telemetry';
 import { formatDetailTime } from '@/lib/time';
+import MnemosModeToggle, { type MnemosMode } from '@/components/memory/MnemosModeToggle';
+import DigestView from '@/components/memory/DigestView';
+import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 
 const TABS = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports'] as const;
 type Tab = typeof TABS[number];
@@ -205,6 +208,17 @@ function MemoriesTab() {
   const typeFilter = useViewTabStore((s) => s.memoryTypeFilter);
   const pinnedOnly = useViewTabStore((s) => s.memoryPinnedOnly);
   const [loading, setLoading] = useState(true);
+  const [mnemosMode, setMnemosMode] = useState<MnemosMode>('browse');
+  const pendingCandidatesCount = useMemoryCandidatesStore((s) => s.items.length);
+  const loadCandidates = useMemoryCandidatesStore((s) => s.load);
+  const subscribeCandidates = useMemoryCandidatesStore((s) => s.subscribe);
+
+  useEffect(() => {
+    if (!user) return;
+    loadCandidates(user.id);
+    const unsub = subscribeCandidates(user.id);
+    return unsub;
+  }, [user, loadCandidates, subscribeCandidates]);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'confidence' | 'type'>('recent');
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
@@ -292,18 +306,36 @@ function MemoriesTab() {
     });
   };
 
+  if (mnemosMode === 'digest') {
+    return (
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="shrink-0 flex items-center justify-end gap-2" style={{ padding: '10px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <MnemosModeToggle mode={mnemosMode} onChange={setMnemosMode} pendingCount={pendingCandidatesCount} />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <DigestView />
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-20" style={{ color: 'var(--text-ghost)', fontSize: 11 }}>Loading memories...</div>;
   }
 
   if (memories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20" style={{ color: 'var(--text-ghost)' }}>
-        <div className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>No memories yet</div>
-        <div className="text-[11px] mb-4">Import conversation data to extract memories, or chat with Luca to build them organically.</div>
-        <button onClick={() => window.location.href = '/import'} className="text-[11px] px-4 py-2 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-          Import Conversations
-        </button>
+      <div className="flex flex-col h-full min-h-0">
+        <div className="shrink-0 flex items-center justify-end gap-2" style={{ padding: '10px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <MnemosModeToggle mode={mnemosMode} onChange={setMnemosMode} pendingCount={pendingCandidatesCount} />
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center py-20" style={{ color: 'var(--text-ghost)' }}>
+          <div className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>No memories yet</div>
+          <div className="text-[11px] mb-4">Import conversation data to extract memories, or chat with Luca to build them organically.</div>
+          <button onClick={() => window.location.href = '/import'} className="text-[11px] px-4 py-2 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            Import Conversations
+          </button>
+        </div>
       </div>
     );
   }
@@ -323,6 +355,7 @@ function MemoriesTab() {
 
         {/* Toolbar */}
         <div className="shrink-0 flex items-center gap-2 flex-wrap" style={{ padding: '8px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <MnemosModeToggle mode={mnemosMode} onChange={setMnemosMode} pendingCount={pendingCandidatesCount} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
