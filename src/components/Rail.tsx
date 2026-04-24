@@ -4,6 +4,8 @@ import { useThreadStore } from '@/stores/threadStore';
 import { useSettingsModalStore } from '@/stores/settingsModalStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useDrawerStore } from '@/stores/drawerStore';
+import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { supabase } from '@/integrations/supabase/client';
 
 interface EmotionalIndicator {
@@ -45,6 +47,9 @@ export default function Rail() {
   const openSettings = useSettingsModalStore((s) => s.openSettings);
   const settingsOpen = useSettingsModalStore((s) => s.open);
   const toggleSidebar = useSidebarStore((s) => s.toggle);
+  const openDrawer = useDrawerStore((s) => s.open);
+  const activeDrawer = useDrawerStore((s) => s.active);
+  const pendingCount = useNotificationStore(selectPendingInitiationsCount);
 
   useEffect(() => {
     if (!user) return;
@@ -110,6 +115,22 @@ export default function Rail() {
       <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
       <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
       <NavIcon icon="profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
+
+      {/* Notifications bell */}
+      <button
+        type="button"
+        className="rail-bell shrink-0"
+        data-active={activeDrawer === 'notifications' ? 'true' : undefined}
+        onClick={() => openDrawer('notifications')}
+        title="Activity"
+        aria-label={`Activity${pendingCount > 0 ? ` — ${pendingCount} pending` : ''}`}
+      >
+        <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6a4 4 0 1 1 8 0v2.2l1 1.6H2l1-1.6z" />
+          <path d="M5.7 11.4a1.5 1.5 0 0 0 2.6 0" />
+        </svg>
+        {pendingCount > 0 && <span className="rail-bell__dot" aria-hidden="true" />}
+      </button>
 
       {/* Divider */}
       <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-faint)', margin: '4px 0' }} />

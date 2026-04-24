@@ -22,7 +22,9 @@ import Clockbar from "./components/Clockbar";
 import CommandPalette from "./components/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
+import { useNotificationStore } from "./stores/notificationStore";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
+import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 
 const queryClient = new QueryClient();
 
@@ -47,10 +49,19 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const { open: settingsOpen, closeSettings } = useSettingsModalStore();
+  const loadNotifications = useNotificationStore((s) => s.load);
+  const subscribeNotifications = useNotificationStore((s) => s.subscribe);
 
   useEffect(() => {
     if (user) loadSettings(user.id);
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    loadNotifications(user.id);
+    const unsub = subscribeNotifications(user.id);
+    return unsub;
+  }, [user, loadNotifications, subscribeNotifications]);
 
   return (
     <div
@@ -88,11 +99,8 @@ function DrawerRouter() {
   const close = useDrawerStore((s) => s.close);
   const open = active !== null;
 
-  // Drawer content surfaces land in phases 05/06/08/etc. Until then,
-  // render a lightweight placeholder so the primitive itself is
-  // exercisable (and verification can drive open/close via store).
   const label =
-    active === 'notifications' ? 'Notifications'
+    active === 'notifications' ? 'Activity'
     : active === 'thread-detail' ? 'Thread detail'
     : active === 'memory-detail' ? 'Memory detail'
     : active === 'agent-inspector' ? 'Agent inspector'
@@ -100,18 +108,23 @@ function DrawerRouter() {
 
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
-      <DrawerHeader>
-        <DrawerTitle>{label}</DrawerTitle>
-        <DrawerEscChip />
-        <DrawerCloseBtn onClick={close} />
-      </DrawerHeader>
-      <DrawerBody>
-        <DrawerSection>
-          <p style={{ color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.6 }}>
-            Content arrives in a later phase.
-          </p>
-        </DrawerSection>
-      </DrawerBody>
+      {active === 'notifications' && <NotificationsDrawer />}
+      {active !== null && active !== 'notifications' && (
+        <>
+          <DrawerHeader>
+            <DrawerTitle>{label}</DrawerTitle>
+            <DrawerEscChip />
+            <DrawerCloseBtn onClick={close} />
+          </DrawerHeader>
+          <DrawerBody>
+            <DrawerSection>
+              <p style={{ color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.6 }}>
+                Content arrives in a later phase.
+              </p>
+            </DrawerSection>
+          </DrawerBody>
+        </>
+      )}
     </Drawer>
   );
 }

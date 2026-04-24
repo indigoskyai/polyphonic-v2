@@ -1639,3 +1639,183 @@ html {
   background: var(--border-subtle);
   margin: 0 6px 0 auto;
 }
+
+.drawer-header-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ======================================================================
+   PHASE 05 — NOTIFICATIONS DRAWER + RAIL BELL
+   ====================================================================== */
+
+/* Rail bell + amber pulse dot */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.rail-bell {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  background: transparent;
+  border: none;
+}
+.rail-bell:hover { color: var(--text-primary); background: var(--overlay-hover); }
+.rail-bell[data-active="true"] { color: var(--text-primary); background: var(--overlay-active); }
+.rail-bell__dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--amber-accent);
+  box-shadow: var(--amber-glow);
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+/* Filter chips row */
+.notif-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 22px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  background: var(--canvas);
+  z-index: 2;
+}
+.filter-count {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-mono);
+}
+
+/* Notification list */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Individual notification card */
+.notif-card {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  padding: 10px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.notif-card:hover { background: var(--overlay-hover); }
+.notif-card--read { opacity: 0.72; }
+
+/* Glyph common */
+.notif-glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--track-mono);
+  color: var(--text-body);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.notif-glyph--luca    { box-shadow: inset 0 0 0 1px rgba(201, 168, 124, 0.18); }
+.notif-glyph--vektor  { box-shadow: inset 0 0 0 1px rgba(124, 168, 201, 0.18); }
+.notif-glyph--anima   { box-shadow: inset 0 0 0 1px rgba(201, 124, 168, 0.18); }
+.notif-glyph--observer { color: var(--text-tertiary); }
+.notif-glyph--permission {
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+  color: var(--amber-accent);
+}
+
+/* Main content column */
+.notif-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.notif-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+  line-height: 1.45;
+}
+.notif-actor {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.notif-verb {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-body);
+}
+.notif-target {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-body);
+  font-weight: 450;
+}
+.notif-target.ref {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.notif-snippet {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.notif-meta-row {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-folio);
+  color: var(--text-ghost);
+}
+.notif-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+  letter-spacing: var(--track-mono);
+  flex-shrink: 0;
+}
+
+.notif-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
