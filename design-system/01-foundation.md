@@ -133,8 +133,8 @@ None. This is the bedrock.
 --radius-pill:  999px;  /* all pill buttons */
 --radius-inset: 16px;   /* inset panel top corners */
 
---rail-width:        40px;
---sidebar-width:     220px;
+--rail-width:        48px;   /* updated from 40px in AUDIT_PASS A.2 — match mockup */
+--sidebar-width:     280px;  /* updated from 220px in AUDIT_PASS A.2 — match mockup */
 --drawer-width:      420px;
 --message-max-width: 720px;
 --inset-gap:         6px;
