@@ -1053,8 +1053,8 @@ export default function ChatView() {
             </div>
           ))}
 
-          {/* Streaming message */}
-          {isStreaming && (
+          {/* Streaming message — stays mounted until typewriter settles, even after isStreaming flips */}
+          {(isStreaming || lingeringStream) && (
             <div className="msg-row" style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}>
               <div className="msg-sidehead">
                 <div className="msg-time">
@@ -1066,7 +1066,7 @@ export default function ChatView() {
               <div className="msg-body">
 
               {/* Thinking block — always visible during streaming, 4-state lifecycle */}
-              {showThinking && !streamingContent && (
+              {isStreaming && showThinking && !streamingContent && (
                 <ThinkingBlock
                   content={streamingThinking || ''}
                   state={
@@ -1078,7 +1078,7 @@ export default function ChatView() {
               )}
 
               {/* Thinking block settling — visible when content starts but thinking existed */}
-              {showThinking && streamingContent && streamingThinking && (
+              {isStreaming && showThinking && streamingContent && streamingThinking && (
                 <ThinkingBlock
                   content={streamingThinking}
                   state="settling"
@@ -1086,7 +1086,7 @@ export default function ChatView() {
               )}
 
               {/* Model variant collection indicator (below thinking block) */}
-              {streamingVariants.length > 0 && !streamingContent && !isSynthesizing && (
+              {isStreaming && streamingVariants.length > 0 && !streamingContent && !isSynthesizing && (
                 <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
                   <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
                     {streamingVariants.length}/3 models responded
@@ -1104,7 +1104,7 @@ export default function ChatView() {
               )}
 
               {/* Synthesizing indicator */}
-              {isSynthesizing && !streamingContent && (
+              {isStreaming && isSynthesizing && !streamingContent && (
                 <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
                   <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
                     synthesizing
@@ -1112,16 +1112,19 @@ export default function ChatView() {
                 </div>
               )}
 
-              {/* Streaming content with typewriter */}
-              {streamingContent && (
+              {/* Streaming content with typewriter — keep rendering through the catch-up phase */}
+              {(streamingContent || lingeringStream) && (
                 <StreamingText
-                  content={streamingContent}
+                  content={streamingContent || lingeringStream || ''}
+                  isStreaming={isStreaming}
                   style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}
+                  onSettled={() => setLingeringStream(null)}
                 />
               )}
               </div>
             </div>
           )}
+
         </div>
 
         {/* Bottom spacer for smooth scrolling */}
