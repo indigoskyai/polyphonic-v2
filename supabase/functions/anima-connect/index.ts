@@ -183,14 +183,14 @@ serve(async (req) => {
         });
 
         // Also create a thought about the connection
-        await supabase.from("thought_stream").insert({
+        const { error: insErr } = await supabase.from("thought_stream").insert({
           user_id,
           content: `connection discovered: ${description}`,
           source: "background",
           salience: Math.min(strength + 0.1, 1.0),
-          tags: ["connection", "memory"],
-          model_used: connectModel,
+          type: "reflection",
         });
+        if (insErr) console.error("[anima-connect] thought_stream insert failed:", insErr);
 
         connectionsFound++;
       } catch (e) {

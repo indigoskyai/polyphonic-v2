@@ -184,13 +184,13 @@ serve(async (req) => {
         const tagsA = (memA.tags || []).slice(0, 2);
         const tagsB = (memB.tags || []).slice(0, 2);
 
-        await supabase.from("journal_entries").insert({
+        const { error: dreamInsErr } = await supabase.from("journal_entries").insert({
           user_id,
           content: dreamText,
           mood: "dreaming",
-          model_used: dreamModel,
           trigger_type: "periodic",
         });
+        if (dreamInsErr) console.error("[anima-dream] journal_entries insert failed:", dreamInsErr);
 
         await logActivity(supabase, user_id, {
           type: "dream",

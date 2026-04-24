@@ -198,16 +198,16 @@ ${beliefsText}`;
 
     // Insert into thought_stream with source="reflection"
     if (reflections.length > 0) {
-      await supabase.from("thought_stream").insert(
+      const { error: insErr } = await supabase.from("thought_stream").insert(
         reflections.map((r) => ({
           user_id,
           content: r.content,
           source: "reflection",
           salience: r.salience,
-          tags: r.tags,
-          model_used: reflectModel,
+          type: "reflection",
         }))
       );
+      if (insErr) console.error("[anima-reflect] thought_stream insert failed:", insErr);
     }
 
     // Encode reflections into Mnemos engrams

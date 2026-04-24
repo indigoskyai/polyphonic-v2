@@ -294,9 +294,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         user_id,
         content,
         mood,
-        model_used: journalModel,
         trigger_type,
-        source_conversation_id: validConversationId,
       })
       .select("id, created_at")
       .single();

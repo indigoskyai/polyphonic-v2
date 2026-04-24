@@ -135,7 +135,7 @@ async function processUser(
       .limit(3),
     supabase
       .from("thought_stream")
-      .select("id, content, salience, thought_type")
+      .select("id, content, salience, type")
       .eq("user_id", userId)
       .order("salience", { ascending: false })
       .limit(3),
@@ -147,7 +147,7 @@ async function processUser(
       .limit(3),
     supabase
       .from("emotional_state")
-      .select("curiosity, excitement")
+      .select("curiosity, creative_flow")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
       .limit(1)
