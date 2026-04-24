@@ -931,10 +931,13 @@ export type Database = {
       messages: {
         Row: {
           agent: string | null
+          attachments: Json | null
           bookmarked: boolean
           content: string
           created_at: string
           id: string
+          kind: string | null
+          metadata: Json | null
           model: string | null
           role: string
           thinking_content: string | null
@@ -944,10 +947,13 @@ export type Database = {
         }
         Insert: {
           agent?: string | null
+          attachments?: Json | null
           bookmarked?: boolean
           content: string
           created_at?: string
           id?: string
+          kind?: string | null
+          metadata?: Json | null
           model?: string | null
           role: string
           thinking_content?: string | null
@@ -957,10 +963,13 @@ export type Database = {
         }
         Update: {
           agent?: string | null
+          attachments?: Json | null
           bookmarked?: boolean
           content?: string
           created_at?: string
           id?: string
+          kind?: string | null
+          metadata?: Json | null
           model?: string | null
           role?: string
           thinking_content?: string | null
