@@ -19,6 +19,10 @@ import CheckpointsView from "./pages/CheckpointsView";
 import AgentsList from "./pages/settings/AgentsList";
 import AgentDetail from "./pages/settings/AgentDetail";
 import SettingsPlaceholder from "./pages/settings/SettingsPlaceholder";
+import GeneralSettings from "./pages/settings/GeneralSettings";
+import ModelsSettings from "./pages/settings/ModelsSettings";
+import AppearanceSettings from "./pages/settings/AppearanceSettings";
+import AccountSettings from "./pages/settings/AccountSettings";
 import Onboarding from "./pages/Onboarding";
 import MobilePreview from "./pages/MobilePreview";
 import { isFirstRun } from "./lib/firstRun";
@@ -201,11 +205,14 @@ const App = () => (
             <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
             <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
             <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/general" element={<ProtectedRoute><AppShell><GeneralSettings /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/models" element={<ProtectedRoute><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
             <Route path="/settings/skills" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / SKILLS" title="Skills" description="Manage which skills each agent can invoke. Scope access per-agent and per-surface." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/routines" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ROUTINES" title="Routines" description="Scheduled and event-driven routines your agents run without prompting." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/portability" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / DATA PORTABILITY" title="Import & export" description="Bring threads, memory, and profile data in or out of Polyphonic." /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/account" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ACCOUNT" title="Account & preferences" description="Sign-in identity, billing, clock bar, appearance, and app-wide preferences." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/_mobile" element={<MobilePreview />} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />

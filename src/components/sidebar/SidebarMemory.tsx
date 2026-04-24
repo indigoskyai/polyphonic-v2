@@ -21,7 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_ORDER = ['fact', 'preference', 'principle', 'commitment', 'goal', 'context', 'decision', 'insight', 'moment', 'relationship', 'skill'];
 
-const SUBVIEWS: MemoryTab[] = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports'];
+const SUBVIEWS: MemoryTab[] = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports', 'Settings'];
 
 export default function SidebarMemory() {
   const user = useAuthStore((s) => s.user);

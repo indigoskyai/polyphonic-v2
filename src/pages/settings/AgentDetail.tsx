@@ -11,6 +11,7 @@ import SubAgentList from '@/components/settings/SubAgentList';
 import VoiceCardGrid from '@/components/settings/VoiceCardGrid';
 import Keychain from '@/components/settings/Keychain';
 import StickySaveFooter from '@/components/settings/StickySaveFooter';
+import AgentPersonality from '@/components/settings/AgentPersonality';
 
 const MODELS = [
   { value: 'opus-4-6', label: 'opus-4-6' },
@@ -96,6 +97,13 @@ export default function AgentDetail() {
         </div>
         <div className="field-control">
           <PromptEditor value={agent.prompt} onChange={(v) => patch({ prompt: v })} />
+        </div>
+
+        <div className="field-label">Personality
+          <div className="field-hint">Voice description, inner-life signals, and thought verbosity for this agent.</div>
+        </div>
+        <div className="field-control">
+          <AgentPersonality agentId={agent.id} />
         </div>
 
         <div className="field-label">Tools
