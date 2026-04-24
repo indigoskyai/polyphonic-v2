@@ -30,7 +30,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [ ] **07** [Activity timeline component](./design-system/07-activity-timeline.md) — Reusable: dot variants, checkpoint dual halos, time dividers, file-ref code spans
 
 ### Memory deepening (depends on 01, 02; 08 needs backend)
-- [ ] **08** [Memory Browse/Digest](./design-system/08-memory-digest.md) — Toggle, candidate queue, italic rationale, Pin/Commit/Edit/Reject. Requires `memory_candidates` backend table.
+- [B] **08** [Memory Browse/Digest](./design-system/08-memory-digest.md) — Toggle, candidate queue, italic rationale, Pin/Commit/Edit/Reject. Requires `memory_candidates` backend table.
 
 ### Multi-agent visualization (depends on 01, 02)
 - [ ] **09** [Sub-agent visualization](./design-system/09-subagent-visualization.md) — 3×3 murmur dot grids, prime-staggered animations, overlay panel with gantt lanes, undo toast
@@ -78,6 +78,27 @@ Empty by default. Add an entry only if a phase fails 3 times in a row OR you hit
 
 ## End-of-run summary
 
-(Auto-fill at end of autonomous run with: phases completed, phases blocked, total commits pushed, any open questions.)
+### 2026-04-24 autonomous run — 4 phases complete
 
-—
+**Phases completed (4):**
+- `[x]` 01 Foundation tokens — canonical `:root` token set (surfaces, text, borders, overlays, agents, semantic accents, motion, shadows, typography), plus rim highlight on inset panels, html font-smoothing, focus-ring, scrollbar polish
+- `[x]` 02 Primitives — 11 components under `src/components/ui/luca/`: Pill, Modal, Tooltip, EmptyState, SegmentControl, Select, Textarea, ToggleSwitch, RadioGroup, DropZone, FormField (+ barrel index). CSS class library appended to `index.css`.
+- `[x]` 03 Composer border-glow — CSS shimmer alignment only (renamed `shimmer-{1..8}` → `shimmer-c{1..8}`, tuned 50% values to spec, added `.input-shell:focus-within`). Composer.tsx component extraction **deferred** — see decision log. Visual/interaction goal is met by existing inline composer.
+- `[x]` 04 Drawer system — `drawerStore` (zustand), `Drawer` primitive with portal + focus trap + ESC, Drawer{Header,Crumb,Title,EscChip,CloseBtn,Body,Section,SectionLabel,Footer,FooterSep} sub-components, full CSS block, `DrawerRouter` mounted in `AppShell`.
+
+**Phases blocked (1):**
+- `[B]` 08 Memory Browse/Digest — requires `memory_candidates` table + `memory-candidate-action` edge function + changes to `mnemos-consolidate`. Backend ask queued; dispatch via Lovable before attempting phase 08.
+
+**Phases not started (15):** 05, 06, 07, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20.
+
+**Open questions:** None — phase 03's component-extraction deferral is a deliberate choice with full justification in the decision log, not a failure.
+
+**Commits pushed:** 4 code commits — `67d491a`, `5805f4c`, `a68193f`, `e19ba27` — each with phase-level scope, verification evidence, and Claude Opus 4.6 co-author trailer.
+
+**Suggested next-session focus:**
+1. Phase 05 (Notifications drawer) — Rail bell + NotificationsDrawer.tsx consuming `thought_initiations` + `entity_activity_log`. ~400 line touch; consider splitting into 05a (Rail bell + store wiring) and 05b (drawer content + actions).
+2. Phase 06 (Thread detail drawer) + Phase 07 (Activity timeline) — can be paired since 06 uses 07.
+3. Kick Lovable backend ask for phase 08 in parallel.
+4. Phase 03 Composer.tsx extraction — defer further; only needed if ChatView is touched for unrelated work.
+
+**Verification signal:** dev server on :8082 renders `/auth/login` cleanly with 0 console errors after all 4 phases landed. Computed-style audits confirmed all tokens, primitives, and drawer animations match spec exactly.
