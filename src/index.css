@@ -3841,3 +3841,205 @@ html {
   display: flex;
   gap: 8px;
 }
+
+/* ======================================================================
+   PHASE 15 — RICH CONTENT RENDERING
+   ====================================================================== */
+
+.rich-body h1,
+.rich-body h2,
+.rich-body h3,
+.rich-body h4 { margin-top: 0; }
+.rich-body h1 {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 24px 0 12px;
+  letter-spacing: var(--track-display);
+}
+.rich-body h1:first-child { margin-top: 0; }
+.rich-body h2 {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 24px 0 10px;
+}
+.rich-body h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 20px 0 8px;
+  letter-spacing: var(--track-ui);
+}
+.rich-body h4 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: 16px 0 8px;
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+}
+
+.rich-body ul,
+.rich-body ol {
+  padding-left: 24px;
+  margin: 0 0 16px;
+}
+.rich-body li {
+  margin-bottom: 6px;
+  line-height: 1.65;
+}
+.rich-body ul li::marker { color: var(--text-ghost); }
+.rich-body ol li::marker {
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.rich-body blockquote {
+  border-left: 2px solid var(--border-strong);
+  padding: 2px 0 2px 16px;
+  margin: 16px 0;
+  color: var(--text-body);
+  font-style: italic;
+}
+
+.rich-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.rich-body th {
+  text-align: left;
+  font-weight: 500;
+  padding: 8px 12px;
+  font-size: 10px;
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  border-bottom: 1px solid var(--border);
+}
+.rich-body td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-body);
+}
+.rich-body td:first-child { color: var(--text-primary); }
+.rich-body tr:last-child td { border-bottom: none; }
+
+.rich-body hr {
+  border: none;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 24px 0;
+}
+.rich-body a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-strong);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.rich-body a:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-focus);
+}
+
+.rich-body img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin: 12px 0;
+  display: block;
+}
+.rich-body figure { margin: 16px 0; }
+.rich-body figcaption {
+  font-size: 11px;
+  color: var(--text-ghost);
+  margin-top: 8px;
+  text-align: center;
+}
+
+.rich-body code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface-1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.rich-body pre {
+  background: var(--floor);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin: 16px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  box-shadow: var(--shadow-inset-highlight);
+}
+.rich-body pre code {
+  background: none;
+  padding: 0;
+}
+.rich-body .code-with-header {
+  margin: 16px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.rich-body .code-lang-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+  text-transform: uppercase;
+  letter-spacing: var(--track-mono);
+  background: var(--surface-1);
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.rich-body .code-with-header pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.rich-body .syntax-keyword  { color: var(--vektor-full); }
+.rich-body .syntax-string   { color: var(--anima-full); }
+.rich-body .syntax-comment  { color: var(--text-ghost); font-style: italic; }
+.rich-body .syntax-function { color: var(--luca-full); }
+.rich-body .syntax-number   { color: var(--v3); }
+
+.chat-image {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  background: linear-gradient(135deg, rgba(201, 168, 124, 0.08), rgba(124, 168, 201, 0.08), rgba(201, 124, 168, 0.08));
+  aspect-ratio: 16 / 9;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-ghost);
+}
+
+.rich-body kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1;
+  vertical-align: middle;
+}

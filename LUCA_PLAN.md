@@ -45,7 +45,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **14** [Permissions + states](./design-system/14-permissions-states.md) — Inline + modal permission, connection banner, agent offline, agent errored
 
 ### Content + features (depends on 01, 02)
-- [ ] **15** [Rich content rendering](./design-system/15-rich-content.md) — Full markdown spec inside messages
+- [x] **15** [Rich content rendering](./design-system/15-rich-content.md) — Full markdown spec inside messages
 - [ ] **16** [Checkpoints + diff viewer](./design-system/16-checkpoints.md) — Timeline, diff with red/green gutters, restore, compare
 - [ ] **17** [Settings depth](./design-system/17-settings-depth.md) — Per-agent editor, env switcher, prompt textarea, tool grid, MCP list, voice cards, keychain, sticky save footer
 - [ ] **18** [Command palette ⌘K](./design-system/18-command-palette.md) — Scope tabs, recent chips, quick actions, match highlighting
