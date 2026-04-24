@@ -494,7 +494,7 @@ html {
   letter-spacing: 0.03em;
   color: var(--text-ghost);
   background: transparent;
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-sm);
   outline: none;
   cursor: pointer;
@@ -507,11 +507,9 @@ html {
   transition: border-color 150ms ease, color 150ms ease;
 }
 .effort-select:hover {
-  border-color: var(--border);
   color: var(--text-tertiary);
 }
 .effort-select:focus {
-  border-color: var(--border);
   color: var(--text-secondary);
 }
 .effort-select option {
@@ -628,7 +626,7 @@ html {
 }
 
 .input-shell::before {
-  content: '';
+  content: none;
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -666,7 +664,7 @@ html {
 .input-shell:hover::before,
 .input-shell:focus-within::before { opacity: 0.8; }
 .input-shell.focused::before,
-.input-shell:focus-within::before { opacity: 1; }
+.input-shell:focus-within::before { opacity: 0; }
 
 /* Focus-within intensification (keeps class-based .focused as belt-and-suspenders) */
 .input-shell:focus-within {
@@ -791,8 +789,24 @@ html {
   justify-content: space-between;
   padding: 6px 12px 8px 18px;
   border-top: none;
+  box-shadow: none;
+  background-image: none;
   opacity: 1;
   max-height: 40px;
+}
+
+.input-row,
+.input-footer,
+.input-textarea {
+  background-image: none;
+}
+
+.input-shell .input-textarea:focus-visible,
+.input-shell .agent-pill:focus-visible,
+.input-shell .ensemble-pill:focus-visible,
+.input-shell .effort-select:focus-visible,
+.input-shell .send-btn:focus-visible {
+  box-shadow: none;
 }
 
 .agent-pills { display: flex; gap: 2px; align-items: center; }
