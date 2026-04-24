@@ -6,73 +6,143 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import ReactMarkdown from 'react-markdown';
 import EchoField from '@/components/EchoField';
 
-/* ─── Typewriter hook: reveals text character by character ─── */
-function useTypewriter(text: string, speed = 12, active = true) {
-  const [displayed, setDisplayed] = useState('');
-  const indexRef = useRef(0);
-  const prevTextRef = useRef('');
+/* ─── Smooth, rate-limited typewriter hook ───
+ * Decouples reveal speed from network chunk delivery. Maintains a steady
+ * cadence (~60 chars/sec) that ramps up gracefully if the buffer falls behind.
+ */
+function useSmoothTypewriter(target: string, active = true) {
+  const [displayed, setDisplayed] = useState(active ? '' : target);
+  const displayedRef = useRef(displayed);
+  const targetRef = useRef(target);
+  const lastTickRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
+  const prevTargetRef = useRef('');
+
+  // keep refs current
+  useEffect(() => {
+    targetRef.current = target;
+  }, [target]);
 
   useEffect(() => {
     if (!active) {
-      setDisplayed(text);
+      displayedRef.current = target;
+      setDisplayed(target);
       return;
     }
 
-    // If text grew (streaming), only animate the new chars
-    if (text.startsWith(prevTextRef.current)) {
-      // keep what we already displayed
-    } else {
-      indexRef.current = 0;
-      setDisplayed('');
-    }
-
-    const animate = () => {
-      if (indexRef.current < text.length) {
-        // Reveal in small bursts for smoothness
-        const burst = Math.min(speed, text.length - indexRef.current);
-        indexRef.current += burst;
-        setDisplayed(text.slice(0, indexRef.current));
-        rafRef.current = requestAnimationFrame(animate);
+    // If target is a fresh stream (not a continuation), reset
+    if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
+      if (!target.startsWith(prevTargetRef.current)) {
+        displayedRef.current = '';
+        setDisplayed('');
       }
+    }
+    prevTargetRef.current = target;
+
+    const tick = (now: number) => {
+      if (!lastTickRef.current) lastTickRef.current = now;
+      const elapsed = now - lastTickRef.current;
+      lastTickRef.current = now;
+
+      const tgt = targetRef.current;
+      const curLen = displayedRef.current.length;
+      const gap = tgt.length - curLen;
+
+      if (gap > 0) {
+        // Base 60 chars/sec; ramp toward 250 chars/sec when buffer grows
+        let charsPerMs = 0.06;
+        if (gap > 200) charsPerMs = 0.12;
+        if (gap > 400) charsPerMs = 0.25;
+        if (gap > 1200) charsPerMs = 0.6;
+
+        const advance = Math.max(1, Math.round(elapsed * charsPerMs));
+        const nextLen = Math.min(tgt.length, curLen + advance);
+        const next = tgt.slice(0, nextLen);
+        displayedRef.current = next;
+        setDisplayed(next);
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
     };
 
-    let rafRef = { current: 0 as number };
-    rafRef.current = requestAnimationFrame(animate);
-    prevTextRef.current = text;
-
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [text, active, speed]);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      lastTickRef.current = 0;
+    };
+  }, [active, target]);
 
   return displayed;
 }
 
-/* ─── Smooth streaming text component ─── */
-function StreamingText({ content, className, style }: { content: string; className?: string; style?: React.CSSProperties }) {
-  const displayed = useTypewriter(content, 3, true);
+/* ─── Markdown components (shared between streaming & static) ─── */
+const markdownComponents = {
+  p: ({ children }: any) => <p style={{ marginBottom: 16 }}>{children}</p>,
+  strong: ({ children }: any) => <strong style={{ fontWeight: 550 }}>{children}</strong>,
+  em: ({ children }: any) => <em style={{ color: 'var(--text-secondary)' }}>{children}</em>,
+  code: ({ children, className: cn }: any) => {
+    if (cn) {
+      return (
+        <pre style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px 20px', margin: '16px 0', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
+          <code>{children}</code>
+        </pre>
+      );
+    }
+    return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, background: 'var(--bg-surface)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-primary)' }}>{children}</code>;
+  },
+  a: ({ href, children }: any) => <a href={href} style={{ color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2 }}>{children}</a>,
+};
+
+/* ─── Smooth streaming text component ───
+ * Holds the cursor through the typewriter catch-up phase, then fades it out
+ * and signals onSettled so the parent can swap to the persisted message
+ * without any visible flash.
+ */
+function StreamingText({
+  content,
+  isStreaming,
+  className,
+  style,
+  onSettled,
+}: {
+  content: string;
+  isStreaming: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+  onSettled?: () => void;
+}) {
+  const displayed = useSmoothTypewriter(content, true);
+  const settled = !isStreaming && displayed.length === content.length && content.length > 0;
+  const [cursorFading, setCursorFading] = useState(false);
+  const settledFiredRef = useRef(false);
+
+  // When settled, fade cursor then notify parent
+  useEffect(() => {
+    if (!settled) {
+      setCursorFading(false);
+      settledFiredRef.current = false;
+      return;
+    }
+    setCursorFading(true);
+    const t = setTimeout(() => {
+      if (!settledFiredRef.current) {
+        settledFiredRef.current = true;
+        onSettled?.();
+      }
+    }, 240);
+    return () => clearTimeout(t);
+  }, [settled, onSettled]);
+
+  // Memoize the parsed markdown tree so it doesn't reparse on every keystroke unnecessarily
+  const tree = useMemo(
+    () => <ReactMarkdown components={markdownComponents}>{displayed}</ReactMarkdown>,
+    [displayed]
+  );
 
   return (
     <div className={className} style={style}>
-      <ReactMarkdown
-        components={{
-          p: ({ children }) => <p style={{ marginBottom: 16 }}>{children}</p>,
-          strong: ({ children }) => <strong style={{ fontWeight: 550 }}>{children}</strong>,
-          em: ({ children }) => <em style={{ color: 'var(--text-secondary)' }}>{children}</em>,
-          code: ({ children, className: cn }) => {
-            if (cn) {
-              return (
-                <pre style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px 20px', margin: '16px 0', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
-                  <code>{children}</code>
-                </pre>
-              );
-            }
-            return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, background: 'var(--bg-surface)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-primary)' }}>{children}</code>;
-          },
-          a: ({ href, children }) => <a href={href} style={{ color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2 }}>{children}</a>,
-        }}
-      >
-        {displayed}
-      </ReactMarkdown>
-      <span className="streaming-cursor-inline" />
+      {tree}
+      <span className={`streaming-cursor-inline${cursorFading ? ' fading' : ''}`} />
     </div>
   );
 }
