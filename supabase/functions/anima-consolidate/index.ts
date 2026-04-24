@@ -220,7 +220,7 @@ serve(async (req) => {
     }
 
     // Log
-    await supabase.from("daily_logs").insert({
+    const { error: dlErr } = await supabase.from("daily_logs").insert({
       user_id,
       log_type: "nightly_consolidation",
       content: {
@@ -230,6 +230,7 @@ serve(async (req) => {
         model: consolidateModel,
       },
     });
+    if (dlErr) console.error("[anima-consolidate] daily_logs insert failed:", dlErr);
 
     return new Response(JSON.stringify({
       memories_consolidated: newMemories.length,

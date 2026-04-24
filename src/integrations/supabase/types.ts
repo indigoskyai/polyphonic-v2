@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_config: {
         Row: {
           agent_name: string
@@ -287,6 +311,33 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_logs: {
+        Row: {
+          content: Json | null
+          created_at: string
+          id: string
+          log_date: string | null
+          log_type: string
+          user_id: string
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string
+          id?: string
+          log_date?: string | null
+          log_type: string
+          user_id: string
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string
+          id?: string
+          log_date?: string | null
+          log_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dashboard_widgets: {
         Row: {
           archived: boolean
@@ -325,6 +376,27 @@ export type Database = {
           prompt?: string
           spec?: Json
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emotional_history: {
+        Row: {
+          id: string
+          state: Json
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          state?: Json
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          state?: Json
+          timestamp?: string
           user_id?: string
         }
         Relationships: []
@@ -464,6 +536,42 @@ export type Database = {
         }
         Relationships: []
       }
+      entity_activity_log: {
+        Row: {
+          activity_type: string
+          content: Json | null
+          created_at: string
+          emotional_context: Json | null
+          id: string
+          source: string | null
+          summary: string | null
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          content?: Json | null
+          created_at?: string
+          emotional_context?: Json | null
+          id?: string
+          source?: string | null
+          summary?: string | null
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          content?: Json | null
+          created_at?: string
+          emotional_context?: Json | null
+          id?: string
+          source?: string | null
+          summary?: string | null
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       journal_entries: {
         Row: {
           content: string
@@ -497,17 +605,20 @@ export type Database = {
           confidence_source: string | null
           content: string
           created_at: string
+          decay_factor: number
           detail_level: string | null
           emotional_intensity: number | null
           emotional_valence: number | null
           estimated_date: string | null
           id: string
           is_deleted: boolean | null
+          is_watchlist: boolean
           memory_type: string
           narrative_thread: string | null
           needs_confirmation: boolean | null
           provenance: Json | null
           relevance_score: number
+          sharpness: number
           staleness_risk: string | null
           summary: string | null
           tags: string[] | null
@@ -519,17 +630,20 @@ export type Database = {
           confidence_source?: string | null
           content: string
           created_at?: string
+          decay_factor?: number
           detail_level?: string | null
           emotional_intensity?: number | null
           emotional_valence?: number | null
           estimated_date?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_watchlist?: boolean
           memory_type?: string
           narrative_thread?: string | null
           needs_confirmation?: boolean | null
           provenance?: Json | null
           relevance_score?: number
+          sharpness?: number
           staleness_risk?: string | null
           summary?: string | null
           tags?: string[] | null
@@ -541,17 +655,20 @@ export type Database = {
           confidence_source?: string | null
           content?: string
           created_at?: string
+          decay_factor?: number
           detail_level?: string | null
           emotional_intensity?: number | null
           emotional_valence?: number | null
           estimated_date?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_watchlist?: boolean
           memory_type?: string
           narrative_thread?: string | null
           needs_confirmation?: boolean | null
           provenance?: Json | null
           relevance_score?: number
+          sharpness?: number
           staleness_risk?: string | null
           summary?: string | null
           tags?: string[] | null
@@ -632,6 +749,13 @@ export type Database = {
             foreignKeyName: "messages_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
             referencedRelation: "threads"
             referencedColumns: ["id"]
           },
@@ -670,6 +794,33 @@ export type Database = {
           temporal?: number | null
           user_id?: string
           valence?: number | null
+        }
+        Relationships: []
+      }
+      observer_logs: {
+        Row: {
+          created_at: string
+          id: string
+          model: string | null
+          observations: Json | null
+          synthesis: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model?: string | null
+          observations?: Json | null
+          synthesis?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model?: string | null
+          observations?: Json | null
+          synthesis?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -990,11 +1141,13 @@ export type Database = {
           clockbar_visible: boolean
           created_at: string
           default_model: string
+          dreamer_model: string | null
           ensemble_models: Json | null
           font_size: number
           id: string
           interface_density: string
           multi_model_enabled: boolean | null
+          observer_models: string[] | null
           reasoning_effort: string | null
           show_agent_colors: boolean
           show_thinking: boolean
@@ -1004,17 +1157,20 @@ export type Database = {
           synthesis_style: string
           updated_at: string
           user_id: string
+          voice_model: string | null
         }
         Insert: {
           auto_title?: boolean
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          dreamer_model?: string | null
           ensemble_models?: Json | null
           font_size?: number
           id?: string
           interface_density?: string
           multi_model_enabled?: boolean | null
+          observer_models?: string[] | null
           reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
@@ -1024,17 +1180,20 @@ export type Database = {
           synthesis_style?: string
           updated_at?: string
           user_id: string
+          voice_model?: string | null
         }
         Update: {
           auto_title?: boolean
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          dreamer_model?: string | null
           ensemble_models?: Json | null
           font_size?: number
           id?: string
           interface_density?: string
           multi_model_enabled?: boolean | null
+          observer_models?: string[] | null
           reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
@@ -1044,12 +1203,36 @@ export type Database = {
           synthesis_style?: string
           updated_at?: string
           user_id?: string
+          voice_model?: string | null
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      conversations: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       decrypt_user_api_key: { Args: { p_user_id: string }; Returns: string }

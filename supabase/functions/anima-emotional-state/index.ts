@@ -208,15 +208,22 @@ serve(async (req) => {
     };
 
     if (prevState) {
-      await supabase
+      const { error: updErr } = await supabase
         .from("emotional_state")
         .update(stateRow)
         .eq("user_id", user_id);
+      if (updErr) console.error("[anima-emotional-state] emotional_state update failed:", updErr);
     } else {
-      await supabase.from("emotional_state").insert(stateRow);
+      const { error: insErr } = await supabase.from("emotional_state").insert(stateRow);
+      if (insErr) console.error("[anima-emotional-state] emotional_state insert failed:", insErr);
     }
 
-    // emotional_history table does not exist in current schema — skip history append/trim.
+    // Append snapshot to emotional_history (for trend graphs)
+    const { error: histErr } = await supabase.from("emotional_history").insert({
+      user_id,
+      state: { ...smoothed, mood_summary: moodSummary },
+    });
+    if (histErr) console.error("[anima-emotional-state] emotional_history insert failed:", histErr);
 
     // Log mood shift only if significant
     if (prevState) {

@@ -90,7 +90,6 @@ serve(async (req) => {
       .select("id, content, tags, memory_type")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
-      .is("superseded_by", null)
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -102,13 +101,13 @@ serve(async (req) => {
 
     // Get existing connections to avoid duplicates
     const { data: existingConnections } = await supabase
-      .from("memory_connections")
-      .select("source_memory_id, target_memory_id")
+      .from("connections")
+      .select("source_id, target_id")
       .eq("user_id", user_id);
 
     const existingPairs = new Set(
       (existingConnections || []).map((c: any) =>
-        [c.source_memory_id, c.target_memory_id].sort().join(":")
+        [c.source_id, c.target_id].sort().join(":")
       )
     );
 
@@ -174,13 +173,14 @@ serve(async (req) => {
 
         if (strength < 0.3) continue; // Skip weak connections
 
-        await supabase.from("memory_connections").insert({
-          source_memory_id: memA.id,
-          target_memory_id: memB.id,
-          relation_type: relationType,
-          strength,
+        const { error: connErr } = await supabase.from("connections").insert({
+          source_id: memA.id,
+          target_id: memB.id,
+          connection_type: relationType,
+          weight: strength,
           user_id,
         });
+        if (connErr) console.error("[anima-connect] connections insert failed:", connErr);
 
         // Also create a thought about the connection
         const { error: insErr } = await supabase.from("thought_stream").insert({

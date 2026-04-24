@@ -67,7 +67,6 @@ serve(async (req) => {
       .select("id, content, tags, memory_type, emotional_intensity")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
-      .is("superseded_by", null)
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -97,13 +96,20 @@ serve(async (req) => {
       }
     } else {
       let attempts = 0;
-      while (pairs.length < pairsPerDream && attempts < 20) {
+      while (pairs.length < pairsPerDream && attempts < 60) {
         const [d1, d2] = [domains[Math.floor(Math.random() * domains.length)], domains[Math.floor(Math.random() * domains.length)]];
         if (d1 === d2) { attempts++; continue; }
         const a = domainMap[d1][Math.floor(Math.random() * domainMap[d1].length)];
         const b = domainMap[d2][Math.floor(Math.random() * domainMap[d2].length)];
         if (a.id !== b.id) pairs.push([a, b]);
         attempts++;
+      }
+      // Fallback: if domain pairing yielded nothing, just shuffle
+      if (pairs.length === 0) {
+        const shuffled = [...memories].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < Math.min(pairsPerDream * 2, shuffled.length - 1); i += 2) {
+          pairs.push([shuffled[i], shuffled[i + 1]]);
+        }
       }
     }
 
@@ -127,21 +133,14 @@ serve(async (req) => {
     // Priority: user setting > admin config > alternating default
     let dreamModel = userSettings?.dreamer_model || modelConfig?.model_id;
     if (!dreamModel) {
-      const { data: lastDream } = await supabase
-        .from("journal_entries")
-        .select("model_used")
-        .eq("user_id", user_id)
-        .eq("mood", "dreaming")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
       const DREAM_MODELS = ["google/gemini-3-pro-preview", "moonshotai/kimi-k2.5"];
-      if (lastDream?.model_used === DREAM_MODELS[0]) {
-        dreamModel = DREAM_MODELS[1]; // Last was Gemini → use Kimi
-      } else {
-        dreamModel = DREAM_MODELS[0]; // Default or last was Kimi → use Gemini
-      }
+      // Alternate via journal entry count parity (lightweight, no missing column)
+      const { count } = await supabase
+        .from("journal_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user_id)
+        .eq("mood", "dreaming");
+      dreamModel = (count ?? 0) % 2 === 0 ? DREAM_MODELS[0] : DREAM_MODELS[1];
     }
 
     let dreamsKept = 0;

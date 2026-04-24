@@ -318,11 +318,12 @@ export async function logProcessRan(
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
   try {
-    await supabase.from("activity_events").insert({
+    const { error } = await supabase.from("activity_events").insert({
       user_id: userId,
       event_type: "process_ran",
       metadata: { process: processName, ...metadata },
     });
+    if (error) console.error(`[activity-gate] logProcessRan(${processName}) failed:`, error);
   } catch (err) {
     console.error(`Failed to log activity event for ${processName}:`, err);
   }
@@ -338,11 +339,12 @@ export async function logActivityEvent(
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
   try {
-    await supabase.from("activity_events").insert({
+    const { error } = await supabase.from("activity_events").insert({
       user_id: userId,
       event_type: eventType,
       metadata,
     });
+    if (error) console.error(`[activity-gate] logActivityEvent(${eventType}) failed:`, error);
   } catch (err) {
     console.error(`Failed to log activity event ${eventType}:`, err);
   }
