@@ -17,7 +17,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 ## Phases
 
 ### Foundation (no dependencies)
-- [ ] **01** [Foundation tokens](./design-system/01-foundation.md) — Canonical text/surface/border/agent/accent/motion tokens + universal inset panel rim highlight
+- [x] **01** [Foundation tokens](./design-system/01-foundation.md) — Canonical text/surface/border/agent/accent/motion tokens + universal inset panel rim highlight
 - [ ] **02** [Primitives](./design-system/02-primitives.md) — Pill, Modal, Tooltip, Empty, Segment, form primitives (Select, Textarea, ToggleSwitch, RadioGroup, DropZone, FormField)
 
 ### Composer + Drawer system (depends on 01, 02)

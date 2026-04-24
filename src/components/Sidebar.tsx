@@ -28,7 +28,7 @@ export default function Sidebar() {
         background: 'var(--canvas)',
         border: visible ? '1px solid var(--border-faint)' : '1px solid transparent',
         borderRadius: 'var(--radius-inset)',
-        boxShadow: visible ? 'var(--shadow-panel)' : 'none',
+        boxShadow: visible ? 'var(--shadow-panel), var(--shadow-inset-highlight)' : 'none',
         transition: visible
           ? 'width 560ms var(--ease-premium), min-width 560ms var(--ease-premium), margin-right 560ms var(--ease-premium), opacity 320ms var(--ease-out) 200ms, border-color 320ms var(--ease-out) 200ms, box-shadow 320ms var(--ease-out) 200ms'
           : 'width 560ms var(--ease-premium), min-width 560ms var(--ease-premium), margin-right 560ms var(--ease-premium), opacity 240ms var(--ease-out), border-color 240ms var(--ease-out), box-shadow 240ms var(--ease-out)',
