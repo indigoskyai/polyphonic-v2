@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { useSettingsModalStore } from "@/stores/settingsModalStore";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ChatView from "./pages/ChatView";
@@ -19,11 +18,11 @@ import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
 import AgentsList from "./pages/settings/AgentsList";
 import AgentDetail from "./pages/settings/AgentDetail";
+import SettingsPlaceholder from "./pages/settings/SettingsPlaceholder";
 import Onboarding from "./pages/Onboarding";
 import MobilePreview from "./pages/MobilePreview";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
-import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Sidebar from "./components/Sidebar";
 import Clockbar from "./components/Clockbar";
@@ -89,7 +88,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
-  const { open: settingsOpen, closeSettings } = useSettingsModalStore();
   const loadNotifications = useNotificationStore((s) => s.load);
   const subscribeNotifications = useNotificationStore((s) => s.subscribe);
 
@@ -129,7 +127,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
         {children}
         {clockbarVisible && <Clockbar />}
       </div>
-      <SettingsModal open={settingsOpen} onClose={closeSettings} />
       <CommandPalette />
       <DrawerRouter />
       <SubAgentOverlay />
@@ -201,8 +198,14 @@ const App = () => (
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
+            <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
             <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
             <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/skills" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / SKILLS" title="Skills" description="Manage which skills each agent can invoke. Scope access per-agent and per-surface." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/routines" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ROUTINES" title="Routines" description="Scheduled and event-driven routines your agents run without prompting." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/portability" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / DATA PORTABILITY" title="Import & export" description="Bring threads, memory, and profile data in or out of Polyphonic." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/account" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ACCOUNT" title="Account & preferences" description="Sign-in identity, billing, clock bar, appearance, and app-wide preferences." /></AppShell></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/_mobile" element={<MobilePreview />} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />

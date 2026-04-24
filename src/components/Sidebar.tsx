@@ -5,6 +5,7 @@ import SidebarMemory from './sidebar/SidebarMemory';
 import SidebarMind from './sidebar/SidebarMind';
 import SidebarProfile from './sidebar/SidebarProfile';
 import SidebarImport from './sidebar/SidebarImport';
+import SidebarSettings from './sidebar/SidebarSettings';
 
 export default function Sidebar() {
   const visible = useSidebarStore((s) => s.visible);
@@ -15,6 +16,7 @@ export default function Sidebar() {
     : path.startsWith('/mind') ? SidebarMind
     : path.startsWith('/profile') ? SidebarProfile
     : path.startsWith('/import') ? SidebarImport
+    : path.startsWith('/settings') ? SidebarSettings
     : SidebarChat;
 
   return (

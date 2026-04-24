@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { usePaletteStore, type PaletteResult, type Scope } from '@/stores/paletteStore';
 import { buildResults, buildQuickActions, getScopeCounts } from '@/lib/paletteSearch';
 import { useDrawerStore } from '@/stores/drawerStore';
-import { useSettingsModalStore } from '@/stores/settingsModalStore';
 import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
 import PaletteResults from './PaletteResults';
@@ -34,20 +33,19 @@ export default function CommandPaletteV2() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const openDrawer = useDrawerStore((s) => s.open);
-  const openSettingsModal = useSettingsModalStore((s) => s.openSettings);
   const createThread = useThreadStore((s) => s.createThread);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handlers = useMemo(() => ({
     navigate,
-    openSettings: openSettingsModal,
+    openSettings: () => navigate('/settings/agents'),
     openDrawer,
     createThread: async () => {
       if (!user) return;
       const id = await createThread(user.id);
       navigate(`/chat/${id}`);
     },
-  }), [navigate, openSettingsModal, openDrawer, createThread, user]);
+  }), [navigate, openDrawer, createThread, user]);
 
   // Global ⌘K listener + scope hotkeys + ESC
   useEffect(() => {

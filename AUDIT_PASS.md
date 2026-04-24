@@ -130,21 +130,21 @@ Operate per `CLAUDE.md`. Same autonomous-loop rules apply: commit per sub-sectio
 **Symptom:** Settings currently renders as a modal/floating card (pre-existing from before blueprint). Phase 17 (Settings depth) shipped the per-agent editor but layered on top of the existing Modal pattern. Per the mockup (`luca-terminal-settings-extensions.html`), Settings should be a full-page surface with left-nav + main content, not a popup.
 
 **Tasks:**
-- [ ] **A.4.a** Current state audit: open `/settings` (or however it's accessed currently). Is it a modal? What file handles it? Likely: `src/components/SettingsModal.tsx` + `src/stores/settingsModalStore.ts`.
-- [ ] **A.4.b** Check if Phase 17 created a route at `/settings/agents` (and `/settings/agents/:id`). If yes, it's in `src/pages/settings/AgentsList.tsx` / `AgentDetail.tsx` per Phase 17 commit body.
-- [ ] **A.4.c** Refactor plan:
+- [x] **A.4.a** Current state audit: open `/settings` (or however it's accessed currently). Is it a modal? What file handles it? Likely: `src/components/SettingsModal.tsx` + `src/stores/settingsModalStore.ts`.
+- [x] **A.4.b** Check if Phase 17 created a route at `/settings/agents` (and `/settings/agents/:id`). If yes, it's in `src/pages/settings/AgentsList.tsx` / `AgentDetail.tsx` per Phase 17 commit body.
+- [x] **A.4.c** Refactor plan:
   1. Add `/settings` base route as the full-page Settings layout (left nav + content)
   2. Left nav: use `<SidebarRow>` pattern with groups (AGENTS, SYSTEM) matching mockup — entries: Agents, Skills, Routines, Voice & security, Import & export, Account & preferences
   3. Main content routes under `/settings/<category>` — reuse existing Phase 17 `AgentsList` + `AgentDetail` for `/settings/agents`, stub or port existing sub-pages for the rest
   4. Remove the Modal-based settings trigger entirely. Rail settings cog now navigates to `/settings` instead of opening a modal.
   5. Delete `SettingsModal.tsx` + `settingsModalStore.ts` if no longer used
-- [ ] **A.4.d** Apply mockup styling from `luca-terminal-settings-extensions.html`:
+- [x] **A.4.d** Apply mockup styling from `luca-terminal-settings-extensions.html`:
   - Toolbar with breadcrumb: `§ 05 / DATA PORTABILITY` etc
   - Page header: eyebrow + large title (32px weight 400) + description
   - Section labels (mono 9px uppercase whisper)
   - Field grid for form rows
-- [ ] **A.4.e** Apply sticky save footer (per Phase 17 spec — `StickySaveFooter` component already exists in `src/components/settings/`) when fields dirty
-- [ ] **A.4.f** Delete the old SettingsModal references if found (`grep -r SettingsModal src/`).
+- [x] **A.4.e** Apply sticky save footer (per Phase 17 spec — `StickySaveFooter` component already exists in `src/components/settings/`) when fields dirty
+- [x] **A.4.f** Delete the old SettingsModal references if found (`grep -r SettingsModal src/`).
 
 **Verification:** Click settings cog in Rail → navigates to `/settings/agents`. Settings is a full page, matches mockup structure. No modal overlay behavior. Breadcrumb + page header + section styling consistent with mockup.
 
@@ -275,6 +275,7 @@ If drift is systemic → stop and write new phase doc.
 - 2026-04-24 13:55 · A.1 · typography inventory complete · no systemic drift; mockup uses half-pixel sizes intentionally as secondary ladder; 99-at-16px on /chat was wrapper divs, text-filtered histogram is clean
 - 2026-04-24 13:58 · A.2 · widened rail 40→48px and sidebar 220→280px · matches mockup (phase-2 thread-detail scene) exactly; drawer itself was spec-correct at 420px; updated `01-foundation.md` alongside CSS
 - 2026-04-24 14:00 · A.3 · composer rest-state: removed box-shadow, lightened border to --border-faint, lowered shimmer ::before opacity 0.55→0.38 · real culprit was the rest-state drop shadow giving "raised card" feel; spec says shadow only on :focus-within; focus-within rule (index.css:668) unchanged so focus still brings composer forward
+- 2026-04-24 14:05 · A.4 · converted Settings from modal to full-page surface · added SidebarSettings (AGENTS + SYSTEM groups with SidebarRow pattern), SettingsPlaceholder component for non-ported categories, route `/settings` → redirect to `/settings/agents`, 5 new routes for Skills/Routines/Voice & security/Import & export/Account & preferences using the placeholder; Rail cog + CommandPalette openSettings now navigate() instead of opening modal; deleted SettingsModal.tsx and settingsModalStore.ts; Sidebar.tsx branches to SidebarSettings when path starts with `/settings`
 
 # End-of-run summary
 

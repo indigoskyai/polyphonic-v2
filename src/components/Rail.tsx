@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
-import { useSettingsModalStore } from '@/stores/settingsModalStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -45,8 +44,7 @@ export default function Rail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { createThread } = useThreadStore();
-  const openSettings = useSettingsModalStore((s) => s.openSettings);
-  const settingsOpen = useSettingsModalStore((s) => s.open);
+  const settingsOpen = location.pathname.startsWith('/settings');
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
@@ -147,7 +145,7 @@ export default function Rail() {
       </div>
 
       {/* Settings */}
-      <NavIcon icon="settings" active={settingsOpen} onClick={openSettings} />
+      <NavIcon icon="settings" active={settingsOpen} onClick={() => navigate('/settings/agents')} />
 
       {/* Observability widget — autonomous loop status */}
       <ObservabilityWidget />
