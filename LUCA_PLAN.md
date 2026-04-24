@@ -34,7 +34,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Multi-agent visualization (depends on 01, 02)
 - [x] **09** [Sub-agent visualization](./design-system/09-subagent-visualization.md) — 3×3 murmur dot grids, prime-staggered animations, overlay panel with gantt lanes, undo toast
-- [ ] **10** [Group session voice room](./design-system/10-group-session.md) — Agent stage with halos + waveforms, queue indicator, transcript with partial-text cursor, listening bar
+- [x] **10** [Group session voice room](./design-system/10-group-session.md) — Agent stage with halos + waveforms, queue indicator, transcript with partial-text cursor, listening bar
 - [ ] **11** [Multi-agent comms](./design-system/11-multi-agent-comms.md) — Sidehead grid messages, @mention autocomplete, handoff cards, multi-response broadcast, streaming + thinking indicators
 
 ### Ambient + onboarding (depends on 01, 02)
