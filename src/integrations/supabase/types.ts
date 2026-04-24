@@ -206,6 +206,80 @@ export type Database = {
         }
         Relationships: []
       }
+      checkpoint_files: {
+        Row: {
+          added: number
+          checkpoint_id: string
+          diff_blob: string | null
+          id: string
+          path: string
+          removed: number
+        }
+        Insert: {
+          added?: number
+          checkpoint_id: string
+          diff_blob?: string | null
+          id?: string
+          path: string
+          removed?: number
+        }
+        Update: {
+          added?: number
+          checkpoint_id?: string
+          diff_blob?: string | null
+          id?: string
+          path?: string
+          removed?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_files_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "checkpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checkpoints: {
+        Row: {
+          agent: string
+          annotation: string | null
+          created_at: string
+          files_added: number
+          files_removed: number
+          id: string
+          milestone: boolean
+          snapshot_ref: string | null
+          summary: string
+          user_id: string
+        }
+        Insert: {
+          agent: string
+          annotation?: string | null
+          created_at?: string
+          files_added?: number
+          files_removed?: number
+          id?: string
+          milestone?: boolean
+          snapshot_ref?: string | null
+          summary?: string
+          user_id: string
+        }
+        Update: {
+          agent?: string
+          annotation?: string | null
+          created_at?: string
+          files_added?: number
+          files_removed?: number
+          id?: string
+          milestone?: boolean
+          snapshot_ref?: string | null
+          summary?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cognitive_state: {
         Row: {
           beliefs: Json
