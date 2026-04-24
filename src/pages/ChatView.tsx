@@ -383,17 +383,40 @@ export default function ChatView() {
   const abortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
 
-  // Smooth auto-scroll
+  // Lingering streaming snapshot — keeps the streaming bubble mounted
+  // after isStreaming flips to false, until the typewriter has caught up.
+  const [lingeringStream, setLingeringStream] = useState<string | null>(null);
+  useEffect(() => {
+    if (isStreaming && streamingContent) {
+      setLingeringStream(streamingContent);
+    } else if (!isStreaming && streamingContent) {
+      // capture final content the moment stream ends
+      setLingeringStream(streamingContent);
+    }
+  }, [isStreaming, streamingContent]);
+
+  // Throttled, calmer auto-scroll. Uses instant scrollTop during streams to
+  // avoid fighting smooth-scroll easing curves; smooth-scrolls only for
+  // discrete message changes.
+  const lastScrollAtRef = useRef(0);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Only auto-scroll if user is near the bottom
-    const threshold = 120;
+    const threshold = 140;
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (isNearBottom) {
+    if (!isNearBottom) return;
+    const now = performance.now();
+    if (isStreaming || streamingContent) {
+      // throttle to ~10fps
+      if (now - lastScrollAtRef.current < 100) return;
+      lastScrollAtRef.current = now;
+      el.scrollTop = el.scrollHeight;
+    } else {
+      lastScrollAtRef.current = now;
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages, streamingContent, streamingThinking]);
+  }, [messages, streamingContent, streamingThinking, isStreaming]);
+
 
   // Load guardian messages when alcove opens or thread changes
   useEffect(() => {
