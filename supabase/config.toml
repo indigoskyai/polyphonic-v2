@@ -99,3 +99,6 @@ verify_jwt = false
 [functions.checkpoint-diff]
 verify_jwt = false
 
+[functions.agent-config-save]
+verify_jwt = false
+
