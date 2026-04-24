@@ -801,6 +801,14 @@ html {
   background-image: none;
 }
 
+.input-shell .input-textarea:focus-visible,
+.input-shell .agent-pill:focus-visible,
+.input-shell .ensemble-pill:focus-visible,
+.input-shell .effort-select:focus-visible,
+.input-shell .send-btn:focus-visible {
+  box-shadow: none;
+}
+
 .agent-pills { display: flex; gap: 2px; align-items: center; }
 .agent-pill {
   padding: 3px 8px;
