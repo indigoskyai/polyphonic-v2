@@ -565,14 +565,15 @@ html {
 @property --pc7 { syntax: '<number>'; initial-value: 0.12; inherits: false; }
 @property --pc8 { syntax: '<number>'; initial-value: 0.06; inherits: false; }
 
-@keyframes shimmer-1 { 0%,100% { --pc1: 0.05; } 50% { --pc1: 0.38; } }
-@keyframes shimmer-2 { 0%,100% { --pc2: 0.32; } 50% { --pc2: 0.04; } }
-@keyframes shimmer-3 { 0%,100% { --pc3: 0.06; } 50% { --pc3: 0.35; } }
-@keyframes shimmer-4 { 0%,100% { --pc4: 0.30; } 50% { --pc4: 0.05; } }
-@keyframes shimmer-5 { 0%,100% { --pc5: 0.04; } 50% { --pc5: 0.34; } }
-@keyframes shimmer-6 { 0%,100% { --pc6: 0.28; } 50% { --pc6: 0.04; } }
-@keyframes shimmer-7 { 0%,100% { --pc7: 0.05; } 50% { --pc7: 0.30; } }
-@keyframes shimmer-8 { 0%,100% { --pc8: 0.26; } 50% { --pc8: 0.03; } }
+/* Prime-staggered border-shimmer — 8 pools, durations 3/5/7/11/13/17/19/23s */
+@keyframes shimmer-c1 { 0%,100% { --pc1: 0.05; } 50% { --pc1: 0.38; } }
+@keyframes shimmer-c2 { 0%,100% { --pc2: 0.32; } 50% { --pc2: 0.04; } }
+@keyframes shimmer-c3 { 0%,100% { --pc3: 0.06; } 50% { --pc3: 0.35; } }
+@keyframes shimmer-c4 { 0%,100% { --pc4: 0.30; } 50% { --pc4: 0.03; } }
+@keyframes shimmer-c5 { 0%,100% { --pc5: 0.04; } 50% { --pc5: 0.36; } }
+@keyframes shimmer-c6 { 0%,100% { --pc6: 0.28; } 50% { --pc6: 0.08; } }
+@keyframes shimmer-c7 { 0%,100% { --pc7: 0.06; } 50% { --pc7: 0.32; } }
+@keyframes shimmer-c8 { 0%,100% { --pc8: 0.26; } 50% { --pc8: 0.04; } }
 
 /* ======================================================================
    SCROLLBAR STYLING
@@ -649,17 +650,26 @@ html {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   animation:
-    shimmer-1 3s  ease-in-out infinite,
-    shimmer-2 5s  ease-in-out infinite,
-    shimmer-3 7s  ease-in-out infinite,
-    shimmer-4 11s ease-in-out infinite,
-    shimmer-5 13s ease-in-out infinite,
-    shimmer-6 17s ease-in-out infinite,
-    shimmer-7 19s ease-in-out infinite,
-    shimmer-8 23s ease-in-out infinite;
+    shimmer-c1 3s  ease-in-out infinite,
+    shimmer-c2 5s  ease-in-out infinite,
+    shimmer-c3 7s  ease-in-out infinite,
+    shimmer-c4 11s ease-in-out infinite,
+    shimmer-c5 13s ease-in-out infinite,
+    shimmer-c6 17s ease-in-out infinite,
+    shimmer-c7 19s ease-in-out infinite,
+    shimmer-c8 23s ease-in-out infinite;
 }
-.input-shell:hover::before { opacity: 0.8; }
-.input-shell.focused::before { opacity: 1; }
+.input-shell:hover::before,
+.input-shell:focus-within::before { opacity: 0.8; }
+.input-shell.focused::before,
+.input-shell:focus-within::before { opacity: 1; }
+
+/* Focus-within intensification (keeps class-based .focused as belt-and-suspenders) */
+.input-shell:focus-within {
+  border-color: rgba(220, 219, 216, 0.09);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20), 0 8px 24px rgba(0, 0, 0, 0.12);
+  transition: border-color 220ms var(--ease-premium), box-shadow 220ms var(--ease-premium);
+}
 
 /* Alcove panel */
 .alcove-panel {

@@ -21,7 +21,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **02** [Primitives](./design-system/02-primitives.md) — Pill, Modal, Tooltip, Empty, Segment, form primitives (Select, Textarea, ToggleSwitch, RadioGroup, DropZone, FormField)
 
 ### Composer + Drawer system (depends on 01, 02)
-- [ ] **03** [Composer Border-Glow Option C](./design-system/03-composer.md) — 8-pool prime-shimmer with @property animations, agent pills row, effort selector, send button
+- [x] **03** [Composer Border-Glow Option C](./design-system/03-composer.md) — 8-pool prime-shimmer with @property animations, agent pills row, effort selector, send button
 - [ ] **04** [Drawer system](./design-system/04-drawer-system.md) — Right-side overlay with backdrop blur, slide animation, ESC handling, focus trap, sub-components
 
 ### Drawer-powered surfaces (depends on 04)
@@ -59,6 +59,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 (Append entries here when you make a non-obvious choice during execution. Format: `YYYY-MM-DD HH:MM · phase NN · what · why`.)
 
 - 2026-04-24 08:54 · phase 02 · placed all 11 primitives under `src/components/ui/luca/` (not `src/components/ui/` per spec) · macOS APFS is case-insensitive — `Tooltip.tsx`/`Select.tsx`/`Textarea.tsx` collide with shadcn lowercase `tooltip.tsx`/`select.tsx`/`textarea.tsx`. Subfolder keeps Luca primitives grouped + avoids collisions. Barrel at `ui/luca/index.ts`.
+- 2026-04-24 08:57 · phase 03 · shipped CSS shimmer alignment only; deferred `Composer.tsx` extraction · existing inline composer in `ChatView.tsx` (L920–965 landing + L1145–1255 conversation) already matches the mockup pixel-faithfully and consumes 15+ handlers/refs from ChatView state. Extraction would require ~150 lines of JSX move + full prop interface for state passthrough — pure refactor with zero visible change. The phase's visual goal (locked shimmer-c1..c8 keyframes @ prime durations + `.input-shell:focus-within` intensification) is achieved. Component extraction tracked as follow-on work; re-open phase 03 if/when the inline composer is touched for unrelated reasons.
 
 
 ## Backend asks queue
