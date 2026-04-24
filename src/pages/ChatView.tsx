@@ -696,11 +696,19 @@ export default function ChatView() {
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, ensembleArmed]);
 
-  // Sync default ensemble preference → arm flag when user turns the setting on
+  // Sync default ensemble preference → lock flag (persistent, not auto-disarming).
+  // When user flips the setting off in Settings, also clear the lock so ensemble
+  // truly stops firing on every message.
+  const didInitEnsembleDefault = useRef(false);
   useEffect(() => {
-    if (defaultEnsembleOn && !ensembleLocked && !ensembleArmed) {
-      setEnsembleArmed(true);
+    if (!didInitEnsembleDefault.current) {
+      didInitEnsembleDefault.current = true;
+      setEnsembleLocked(!!defaultEnsembleOn);
+      return;
     }
+    // Setting changed after initial mount — mirror it into lock state
+    setEnsembleLocked(!!defaultEnsembleOn);
+    if (!defaultEnsembleOn) setEnsembleArmed(false);
   }, [defaultEnsembleOn]);
 
   // ⌘E / Ctrl+E toggles ensemble arm
