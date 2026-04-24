@@ -74,6 +74,75 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_configs: {
+        Row: {
+          created_at: string
+          env: string
+          id: string
+          model: string | null
+          prompt: string | null
+          subagents: Json
+          tools: Json
+          updated_at: string
+          user_id: string
+          voices: Json
+        }
+        Insert: {
+          created_at?: string
+          env?: string
+          id: string
+          model?: string | null
+          prompt?: string | null
+          subagents?: Json
+          tools?: Json
+          updated_at?: string
+          user_id: string
+          voices?: Json
+        }
+        Update: {
+          created_at?: string
+          env?: string
+          id?: string
+          model?: string | null
+          prompt?: string | null
+          subagents?: Json
+          tools?: Json
+          updated_at?: string
+          user_id?: string
+          voices?: Json
+        }
+        Relationships: []
+      }
+      agent_secrets: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          last_four: string | null
+          name: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          last_four?: string | null
+          name: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          last_four?: string | null
+          name?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           created_at: string
@@ -669,6 +738,42 @@ export type Database = {
           id?: string
           mood?: string | null
           trigger_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_servers: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          meta: string | null
+          name: string
+          status: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          meta?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          meta?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          url?: string
           user_id?: string
         }
         Relationships: []
