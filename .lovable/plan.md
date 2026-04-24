@@ -1,72 +1,63 @@
 
 
-# Ensemble as a Per-Message Skill
+# Polish the response streaming animation
 
-Turn the always-on/always-off ensemble into something the user activates per message — like a skill they can toggle for the next send. When active, Luca consults multiple models in parallel and synthesizes a single voice; the user can expand to see each model's raw response.
+Goal: make Luca's responses flow in like a smooth, premium typewriter — no word-bursts, no end-of-message flash, no cursor pop.
 
----
+## What's wrong today
 
-## What changes for the user
+1. **Bursty reveal**: `useTypewriter` reveals text in fixed 3-character bumps per `requestAnimationFrame`. When the network delivers a 200-char chunk, the typewriter sprints to catch up at full frame rate; when nothing arrives, it sits idle. Result: visible bursts of words.
+2. **End-of-message flash**: when streaming finishes, the UI swaps from `<StreamingText displayed=...>` (still mid-typewriter) to the persisted `<MessageContent content=...>` (full markdown, no animation), and re-mounts the wrapper. Markdown re-parses, the cursor vanishes, layout shifts a hair → reads as a flash.
+3. **Cursor pop**: `.streaming-cursor-inline` is a hard 1.5px bar that hard-cuts off when streaming ends.
+4. **Auto-scroll fights the user**: `scrollTo({behavior:'smooth'})` is fired on every `streamingContent` change — that's many calls per second, which the browser coalesces unevenly and contributes to the "jumpy" sensation.
 
-- A new **"Ensemble"** toggle pill sits next to the agent pills in the composer footer, right beside the thinking-effort selector.
-- Clicking it arms ensemble mode for the **next send only** (it auto-disarms after the message is sent — preventing accidental ensemble spam).
-- Optional: shift+click (or long-press) **locks it on** until clicked again, for users who want a streak of ensemble messages.
-- When armed, the input shell gets a subtle accent shimmer + the placeholder shifts to "Message Luca (ensemble)…" so it's obvious what will happen.
-- After Luca replies, the existing **"N model responses"** disclosure already shows each variant's content + thinking — that stays exactly as it is.
-- Messages sent without ensemble armed go through a normal single-model path (faster, cheaper).
+## Fix plan
 
----
+### 1. Smooth, rate-limited typewriter (`src/pages/ChatView.tsx`)
 
-## Architecture
+Rewrite `useTypewriter` so reveal speed is decoupled from network chunk size:
 
-### Frontend (`ChatView.tsx`)
+- Track `targetText` (what the network has delivered) and `displayedText` (what's painted).
+- On each `rAF`, advance `displayedText` toward `targetText` by `chars = round(elapsedMs * charsPerMs)` where `charsPerMs ≈ 0.06` (~60 chars/sec, gentle reading pace) — but accelerate gracefully if the buffer gap grows beyond ~200 chars so we don't fall behind on long replies (`charsPerMs` ramps up to ~0.25 when `gap > 400`).
+- Stop the rAF loop only when `displayed === target` AND streaming has ended; otherwise idle-loop at low cost.
+- This eliminates the bursty "20 words at once" behavior and gives the consistent, premium typing cadence.
 
-- New local state: `const [ensembleArmed, setEnsembleArmed] = useState(false)` and `const [ensembleLocked, setEnsembleLocked] = useState(false)`.
-- New compact pill component rendered in both the empty-state and conversation-state input footers:
-  - Idle: faint outline, label "ensemble"
-  - Armed: accent border + soft glow, label "ensemble · armed"
-  - Locked: filled accent, label "ensemble · on"
-- `sendMessage()` reads `ensembleArmed || ensembleLocked` and passes a new `ensemble: true` field in the request body. After send, `setEnsembleArmed(false)` (locked stays).
-- Tiny tooltip on hover: "Consult multiple models for this message. Click to lock."
+### 2. Eliminate the end-of-stream flash
 
-### Backend (`supabase/functions/chat-multi/index.ts`)
+Two changes work together:
 
-- Accept new field `ensemble?: boolean` in the request body.
-- **Resolution rule**: if `ensemble` is explicitly `true` → run ensemble path. If explicitly `false` → run single-model path. If omitted → fall back to the user's `multi_model_enabled` setting (preserves current behavior for any older clients).
-- The existing fan-out + synthesis logic stays as-is; we're just changing the gate that selects between `singleModelStream()` and the multi-model flow.
-- Stream events (`variant`, `synthesizing`, `content`, `thinking`, `done`) remain unchanged — the frontend's `VariantsPanel` continues to render per-model responses with no work needed.
+- **Keep rendering `<StreamingText>` until the typewriter has fully caught up**, even after `isStreaming` flips to false. Track a local `isFlushing` state inside `StreamingText` that stays true until `displayed.length === content.length`, and have ChatView keep the streaming bubble mounted until the typewriter signals "done" via an `onSettled` callback. Only then does the persisted `MessageContent` take over — by which point both render identical text, so the swap is invisible.
+- **Memoize markdown** in `StreamingText` so React doesn't re-parse the entire tree on every keystroke (use `useMemo` keyed on `displayed`). Reduces layout jitter mid-stream.
 
-### Settings (`settingsStore.ts` + `SettingsModal`)
+### 3. Fade the cursor in/out instead of hard-cutting
 
-- The global `multi_model_enabled` toggle is **kept** but relabeled to **"Default ensemble to on"** (controls the default state of the per-message arm, for users who want every message ensembled).
-- No DB migration needed — the existing column does the job, just with a different semantic meaning surfaced in the UI.
+- Change `.streaming-cursor-inline` from a hard blink to a soft pulse (`opacity: 0.55 → 0.15 → 0.55` over 1.1s, ease-in-out).
+- Add a `.streaming-cursor-inline.fading` modifier with `opacity: 0; transition: opacity 240ms ease-out`. When the typewriter catches up to final text, apply `.fading` for 240ms before unmounting.
 
----
+### 4. Soft message settle-in
 
-## Visual / interaction details
+- Add a new keyframe `msgSettle` (opacity 0.85→1, no Y-translate) that runs for 320ms when the streaming bubble transitions to its persisted form. Prevents any perceived "snap."
+- Keep the existing `msgEnter` for fresh messages.
 
-- Pill placement (left → right in footer): `luca | guardian` · `ensemble` · `effort` · `send`
-- Keyboard shortcut: **⌘E** toggles `ensembleArmed` while the composer is focused — for power users.
-- When ensemble is armed, the send button gets the same faint accent halo as the pill, so the connection is visually obvious.
-- The "synthesizing" + "N/3 models responded" indicators that already render during streaming stay — they're now the natural reward for arming ensemble.
+### 5. Calmer auto-scroll
 
----
+- Throttle the streaming-content auto-scroll to ~10fps using a ref-based timestamp guard (only call `scrollTo` if >100ms since last scroll, or if the gap from bottom grew past threshold).
+- For streaming updates, prefer `el.scrollTop = el.scrollHeight` (instant, no easing fight) instead of `scrollTo({behavior:'smooth'})` — smooth-scroll is appropriate for new messages, instant is better for continuous streams.
+- Keep the "near-bottom only" guard.
 
-## Why this is the right shape
+### 6. Subtle text fade-in for newly revealed characters (optional polish)
 
-- **No new agent abstraction** — ensemble is a *modifier* on Luca, not a separate agent. This matches the user's mental model: "Luca, but think harder this time."
-- **Reuses every existing piece**: `chat-multi`, `VariantsPanel`, the variant streaming events, the synthesis prompt — all unchanged.
-- **Per-message default = off** keeps cost predictable; **per-message arm + lock toggle** makes intentional ensemble use a one-click action.
-- **No schema changes**, so this ships as a pure code change.
+Wrap each newly added run of characters in a span with a 180ms opacity fade. Implementation: keep a ref to `prevDisplayed` and on each render, if the new tail is short enough (< 40 chars), wrap the tail in `<span class="char-fade-in">`. CSS animation: `opacity 0 → 1, blur(0.4px) → blur(0)` over 180ms. Falls back gracefully (no fade) for big catch-up bursts.
 
----
+## Files to change
 
-## Files touched
+- `src/pages/ChatView.tsx` — rewrite `useTypewriter`, refactor `StreamingText` (memoized markdown, settle callback, fading cursor, optional char-fade tail), update streaming-bubble JSX to keep mounted until settled, throttle scroll effect.
+- `src/index.css` — soften `.streaming-cursor-inline` animation, add `.streaming-cursor-inline.fading`, add `.char-fade-in` keyframe, add `msgSettle` keyframe.
 
-1. `src/pages/ChatView.tsx` — add `ensembleArmed` / `ensembleLocked` state, pill UI in both empty-state and conversation-state footers, ⌘E shortcut, pass `ensemble` flag in `sendMessage`.
-2. `src/index.css` — add `.ensemble-pill`, `.ensemble-pill.armed`, `.ensemble-pill.locked` styles (matching existing `.agent-pill` aesthetic).
-3. `supabase/functions/chat-multi/index.ts` — read `ensemble` from request body, override the `multiModelEnabled` gate when present.
-4. `src/components/SettingsModal.tsx` — relabel the existing multi-model toggle to "Default ensemble to on" with an updated description.
+## What the user will experience after
 
-No DB migration. No new edge function. No new table.
+- Text flows in at a steady, readable cadence regardless of how the network delivers it.
+- When Luca finishes, the cursor gently fades and the message settles in place — no flash, no jump.
+- Long replies still appear quickly (the typewriter accelerates when it falls behind) but never in chunky bursts.
+- Scrolling stays composed even during fast streams.
 
