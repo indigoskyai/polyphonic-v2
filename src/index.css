@@ -790,14 +790,9 @@ html {
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px 8px 18px;
-  border-top: 1px solid transparent;
+  border-top: none;
   opacity: 1;
   max-height: 40px;
-  transition: border-color var(--dur-normal) var(--ease-out);
-}
-.input-shell.focused .input-footer,
-.input-shell.alcove-active .input-footer {
-  border-top-color: var(--border-subtle);
 }
 
 .agent-pills { display: flex; gap: 2px; align-items: center; }
