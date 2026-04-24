@@ -211,19 +211,26 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     // NOTE: schema only has (user_id, content, source, salience, type, trigger).
     // tags/model are preserved on the Mnemos engram below — don't add them here.
     if (thoughts.length > 0) {
-      const { error: insErr } = await supabase.from("thought_stream").insert(
-        thoughts.map((t) => ({
-          user_id,
-          content: t.content,
-          source: "background",
-          salience: t.salience,
-          type: "reflection",
-        }))
-      );
+      console.log(`[anima-think v2] inserting ${thoughts.length} thoughts for user ${user_id}`);
+      const { data: insData, error: insErr } = await supabase
+        .from("thought_stream")
+        .insert(
+          thoughts.map((t) => ({
+            user_id,
+            content: t.content,
+            source: "background",
+            salience: t.salience,
+            type: "reflection",
+          }))
+        )
+        .select("id");
       if (insErr) {
-        console.error("[anima-think] thought_stream insert failed:", insErr);
-        throw new Error(`thought_stream insert: ${insErr.message}`);
+        console.error("[anima-think v2] thought_stream insert failed:", JSON.stringify(insErr));
+        return new Response(JSON.stringify({ error: "thought_stream insert failed", details: insErr }), {
+          status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
       }
+      console.log(`[anima-think v2] inserted ${insData?.length ?? 0} rows`);
     }
 
     // Encode thoughts into Mnemos engrams
