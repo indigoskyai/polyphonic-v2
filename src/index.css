@@ -494,7 +494,7 @@ html {
   letter-spacing: 0.03em;
   color: var(--text-ghost);
   background: transparent;
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-sm);
   outline: none;
   cursor: pointer;
@@ -507,11 +507,9 @@ html {
   transition: border-color 150ms ease, color 150ms ease;
 }
 .effort-select:hover {
-  border-color: var(--border);
   color: var(--text-tertiary);
 }
 .effort-select:focus {
-  border-color: var(--border);
   color: var(--text-secondary);
 }
 .effort-select option {
