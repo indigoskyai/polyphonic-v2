@@ -1,22 +1,22 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useMemoryStore, type Engram, type Connection } from '@/stores/memoryStore';
 
+// Monochrome palette — sharp + technical. Type conveyed via subtle tint only.
 const TYPE_COLORS: Record<string, string> = {
-  episodic: '#5b8aad',
-  semantic: '#c9a87c',
-  procedural: '#8ca89c',
-  belief: '#a88cc9',
+  episodic:   'rgba(190, 200, 215, 1)',   // cool cream-blue
+  semantic:   'rgba(215, 205, 185, 1)',   // warm cream
+  procedural: 'rgba(195, 205, 200, 1)',   // neutral cream-green
+  belief:     'rgba(205, 195, 215, 1)',   // soft cream-violet
 };
 
-const CONN_COLORS: Record<string, string> = {
-  supports: '#8ca89c40',
-  contradicts: '#ad5b5b40',
-  causes: '#c9a87c40',
-  extends: '#5b8aad40',
-  parallels: '#a88cc940',
-  synthesizes: '#c9a87c40',
-  grounds: '#8ca89c40',
-};
+// All edges render as hairline cream — type conveyed via panel, not color.
+const EDGE_BASE         = 'rgba(220, 219, 216, 0.10)';
+const EDGE_HIGHLIGHT    = 'rgba(220, 219, 216, 0.55)';
+const NODE_FILL_DIM     = 'rgba(220, 219, 216, 0.10)';
+const NODE_STROKE       = 'rgba(220, 219, 216, 0.55)';
+const NODE_STROKE_HOVER = 'rgba(244, 243, 240, 0.90)';
+const SELECT_RING       = 'rgba(140, 175, 210, 0.95)';  // cool blue selection ring
+const SELECT_HALO       = 'rgba(140, 175, 210, 0.22)';
 
 interface GraphNode {
   id: string;
