@@ -22,7 +22,7 @@ export async function logActivity(
   entry: ActivityEntry,
 ): Promise<void> {
   try {
-    await supabase.from("entity_activity_log").insert({
+    const { error } = await supabase.from("entity_activity_log").insert({
       user_id: userId,
       activity_type: entry.type,
       title: entry.title || null,
@@ -31,6 +31,7 @@ export async function logActivity(
       emotional_context: entry.emotionalContext || null,
       source: entry.source || "autonomous",
     });
+    if (error) console.error(`[activity-log] insert failed (type=${entry.type}):`, error);
   } catch (err) {
     // Graceful: log failures don't crash the caller
     console.error("Failed to log activity:", err);
