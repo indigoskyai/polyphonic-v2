@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type MemoryTab = 'Memories' | 'Engrams' | 'Beliefs' | 'Graph' | 'Imports';
+export type MemoryTab = 'Memories' | 'Engrams' | 'Beliefs' | 'Graph' | 'Imports' | 'Settings';
 export type MindTab = 'Overview' | 'Journal' | 'Thoughts' | 'Dreams' | 'Wanderings' | 'Insights' | 'Reflections';
 export type ProfileTab =
   | 'Portrait'
