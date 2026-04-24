@@ -192,19 +192,20 @@ serve(async (req) => {
 
     // Insert memories
     if (newMemories.length > 0) {
-      await supabase.from("memories").insert(newMemories);
+      const { error: memErr } = await supabase.from("memories").insert(newMemories);
+      if (memErr) console.error("[anima-consolidate] memories insert failed:", memErr);
 
       // Also add consolidation thoughts
-      await supabase.from("thought_stream").insert(
+      const { error: thoughtErr } = await supabase.from("thought_stream").insert(
         newMemories.map((m) => ({
           user_id,
           content: `consolidated memory: ${m.content.slice(0, 150)}`,
           source: "consolidation",
           salience: m.confidence,
-          tags: ["consolidation"],
-          model_used: consolidateModel,
+          type: "reflection",
         }))
       );
+      if (thoughtErr) console.error("[anima-consolidate] thought_stream insert failed:", thoughtErr);
     }
 
     // Log each consolidated memory to activity log

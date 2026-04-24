@@ -180,19 +180,19 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
 
     // Insert into thought_stream with source="question"
     if (questions.length > 0) {
-      await supabase.from("thought_stream").insert(
+      const { error: thoughtErr } = await supabase.from("thought_stream").insert(
         questions.map((q) => ({
           user_id,
           content: q.question,
           source: "question",
           salience: q.salience,
-          tags: ["question"],
-          model_used: questionModel,
+          type: "question",
         }))
       );
+      if (thoughtErr) console.error("[anima-question] thought_stream insert failed:", thoughtErr);
 
       // Also insert into curiosity_questions table
-      await supabase.from("curiosity_questions").insert(
+      const { error: cqErr } = await supabase.from("curiosity_questions").insert(
         questions.map((q) => ({
           user_id,
           question: q.question,
@@ -201,6 +201,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
           status: "pending",
         }))
       );
+      if (cqErr) console.error("[anima-question] curiosity_questions insert failed:", cqErr);
     }
 
     // Log each question to activity log

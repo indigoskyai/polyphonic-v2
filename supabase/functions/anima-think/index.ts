@@ -208,17 +208,22 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     }
 
     // Insert thoughts into thought_stream
+    // NOTE: schema only has (user_id, content, source, salience, type, trigger).
+    // tags/model are preserved on the Mnemos engram below — don't add them here.
     if (thoughts.length > 0) {
-      await supabase.from("thought_stream").insert(
+      const { error: insErr } = await supabase.from("thought_stream").insert(
         thoughts.map((t) => ({
           user_id,
           content: t.content,
           source: "background",
           salience: t.salience,
-          tags: t.tags,
-          model_used: thinkModel,
+          type: "reflection",
         }))
       );
+      if (insErr) {
+        console.error("[anima-think] thought_stream insert failed:", insErr);
+        throw new Error(`thought_stream insert: ${insErr.message}`);
+      }
     }
 
     // Encode thoughts into Mnemos engrams
