@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
-import ObservabilityWidget from '@/components/observability/ObservabilityWidget';
+
 import { supabase } from '@/integrations/supabase/client';
 
 interface EmotionalIndicator {
@@ -147,8 +147,8 @@ export default function Rail() {
       {/* Settings */}
       <NavIcon icon="settings" active={settingsOpen} onClick={() => navigate('/settings/agents')} />
 
-      {/* Observability widget — autonomous loop status */}
-      <ObservabilityWidget />
+
+
     </div>
   );
 }
