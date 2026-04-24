@@ -17,6 +17,8 @@ import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
+import AgentsList from "./pages/settings/AgentsList";
+import AgentDetail from "./pages/settings/AgentDetail";
 import Onboarding from "./pages/Onboarding";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -198,6 +200,8 @@ const App = () => (
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
