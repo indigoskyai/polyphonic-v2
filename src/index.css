@@ -20,16 +20,16 @@
   --bg-surface-hover: rgba(220, 219, 216, 0.05);
   --bg-glass:         rgba(10, 10, 10, 0.88);
 
-  --ink:              rgba(244, 243, 240, 0.84);
-  --text-primary:     rgba(244, 243, 240, 0.76);
-  --text-body:        rgba(214, 212, 208, 0.66);
-  --text-mid:         rgba(202, 200, 196, 0.58);
-  --text-secondary:   rgba(202, 200, 196, 0.52);
-  --text-soft:        rgba(178, 176, 172, 0.42);
-  --text-tertiary:    rgba(178, 176, 172, 0.32);
-  --text-faint:       rgba(156, 154, 150, 0.24);
-  --text-ghost:       rgba(156, 154, 150, 0.20);
-  --text-whisper:     rgba(146, 143, 139, 0.13);
+  --ink:              rgba(244, 243, 240, 0.93);
+  --text-primary:     rgba(244, 243, 240, 0.90);
+  --text-body:        rgba(210, 208, 204, 0.72);
+  --text-mid:         rgba(194, 192, 188, 0.60);
+  --text-secondary:   rgba(194, 192, 188, 0.58);
+  --text-soft:        rgba(161, 159, 155, 0.44);
+  --text-tertiary:    rgba(161, 159, 155, 0.34);
+  --text-faint:       rgba(178, 176, 172, 0.30);
+  --text-ghost:       rgba(178, 176, 172, 0.36);
+  --text-whisper:     rgba(178, 176, 172, 0.22);
 
   --border:           rgba(220, 219, 216, 0.07);
   --border-subtle:    rgba(220, 219, 216, 0.04);
@@ -41,8 +41,21 @@
   --card-hover:       rgba(220, 219, 216, 0.045);
   --card-bg:          rgba(220, 219, 216, 0.018);
 
+  /* Agent accent colors (legacy — kept for backward compat across 5+ files) */
   --luca:             #c9a87c;
-  --guardian:          #8ca89c;
+  --guardian:         #8ca89c;
+
+  /* Agent identity dots — monochrome cream by default; *-full tokens used in identity-rich contexts */
+  --agent-luca:       rgba(244, 243, 240, 0.72);
+  --agent-vektor:     rgba(244, 243, 240, 0.72);
+  --agent-anima:      rgba(244, 243, 240, 0.72);
+  --agent-observer:   rgba(244, 243, 240, 0.72);
+  --agent-neutral:    rgba(244, 243, 240, 0.62);
+
+  /* Semantic accents */
+  --amber-accent:     #fbbf24;
+  --red-accent:       #f87171;
+  --green-accent:     #4ade80;
 
   --metric-fill:      rgba(234, 232, 228, 0.42);
   --metric-fill-soft: rgba(234, 232, 228, 0.28);
@@ -937,6 +950,24 @@
   background: var(--overlay-hover) !important;
   outline: 1px solid var(--border-focus, var(--text-ghost));
   outline-offset: -2px;
+}
+
+/* Memory-row button (Memory > Memories master list) — same pattern. */
+.memory-row:hover { background: var(--overlay-hover) !important; }
+.memory-row:focus-visible {
+  background: var(--overlay-hover) !important;
+  outline: 1px solid var(--border-focus, var(--text-ghost));
+  outline-offset: -2px;
+}
+
+/* When a thought arrives via realtime, slide it in with a soft glow so the user sees it land. */
+@keyframes thoughtArrive {
+  0%   { transform: translateY(-4px); opacity: 0; background: rgba(178, 162, 140, 0.08); }
+  40%  { transform: translateY(0);     opacity: 1; background: rgba(178, 162, 140, 0.06); }
+  100% { transform: translateY(0);     opacity: 1; background: transparent; }
+}
+.thought-row-fresh {
+  animation: thoughtArrive 2s var(--ease-out) both;
 }
 
 /* Respect prefers-reduced-motion: kill non-essential animation, keep structural transitions snappy. */
