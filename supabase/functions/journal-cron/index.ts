@@ -11,10 +11,10 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Find users who have had conversations in the last 24 hours
+    // Find users who have had conversations (threads) in the last 24 hours
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: activeConvos } = await supabase
-      .from("conversations")
+      .from("threads")
       .select("user_id")
       .gte("updated_at", since);
 

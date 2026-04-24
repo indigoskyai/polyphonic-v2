@@ -133,27 +133,27 @@ serve(async (req) => {
       const { data: msgs } = await supabase
         .from("messages")
         .select("role, content, created_at")
-        .eq("conversation_id", conversation_id)
+        .eq("thread_id", conversation_id)
         .order("created_at", { ascending: true })
         .limit(50);
       recentMessages = msgs || [];
     } else {
-      // Periodic: get messages from last 24 hours across all conversations
+      // Periodic: get messages from last 24 hours across all threads
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: recentConvos } = await supabase
-        .from("conversations")
+      const { data: recentThreads } = await supabase
+        .from("threads")
         .select("id")
         .eq("user_id", user_id)
         .gte("updated_at", since)
         .order("updated_at", { ascending: false })
         .limit(5);
 
-      if (recentConvos && recentConvos.length > 0) {
-        const convIds = recentConvos.map((c: any) => c.id);
+      if (recentThreads && recentThreads.length > 0) {
+        const threadIds = recentThreads.map((c: any) => c.id);
         const { data: msgs } = await supabase
           .from("messages")
-          .select("role, content, created_at, conversation_id")
-          .in("conversation_id", convIds)
+          .select("role, content, created_at, thread_id")
+          .in("thread_id", threadIds)
           .order("created_at", { ascending: true })
           .limit(100);
         recentMessages = msgs || [];
@@ -276,11 +276,11 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
       content = lines.slice(0, -1).join("\n").trim();
     }
 
-    // Validate conversation_id exists before using it as FK
+    // Validate conversation_id (thread_id) exists before using it
     let validConversationId: string | null = null;
     if (conversation_id) {
       const { data: convCheck } = await supabase
-        .from("conversations")
+        .from("threads")
         .select("id")
         .eq("id", conversation_id)
         .maybeSingle();
