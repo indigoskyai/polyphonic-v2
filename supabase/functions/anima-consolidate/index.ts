@@ -234,7 +234,7 @@ serve(async (req) => {
       user_id,
       log_type: "nightly_consolidation",
       content: {
-        memories_consolidated: newMemories.length,
+        candidates_surfaced: newCandidates.length,
         journals_reviewed: (journals || []).length,
         thoughts_reviewed: (thoughts || []).length,
         model: consolidateModel,
@@ -243,7 +243,7 @@ serve(async (req) => {
     if (dlErr) console.error("[anima-consolidate] daily_logs insert failed:", dlErr);
 
     return new Response(JSON.stringify({
-      memories_consolidated: newMemories.length,
+      candidates_surfaced: newCandidates.length,
       journals_reviewed: (journals || []).length,
       thoughts_reviewed: (thoughts || []).length,
     }), {
