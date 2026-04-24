@@ -26,7 +26,7 @@ import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Sidebar from "./components/Sidebar";
 import Clockbar from "./components/Clockbar";
-import CommandPalette from "./components/CommandPalette";
+import CommandPalette from "./components/palette/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
