@@ -102,13 +102,13 @@ serve(async (req) => {
 
     // Get existing connections to avoid duplicates
     const { data: existingConnections } = await supabase
-      .from("memory_connections")
-      .select("source_memory_id, target_memory_id")
+      .from("connections")
+      .select("source_id, target_id")
       .eq("user_id", user_id);
 
     const existingPairs = new Set(
       (existingConnections || []).map((c: any) =>
-        [c.source_memory_id, c.target_memory_id].sort().join(":")
+        [c.source_id, c.target_id].sort().join(":")
       )
     );
 
