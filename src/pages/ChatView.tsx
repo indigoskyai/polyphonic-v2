@@ -6,6 +6,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import ReactMarkdown from 'react-markdown';
 import EchoField from '@/components/EchoField';
+import RichBody from '@/components/rich/RichBody';
+import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -860,11 +862,45 @@ export default function ChatView() {
     return useThreadStore.getState().threads.find(t => t.id === currentThreadId)?.title;
   }, [currentThreadId, messages]);
 
+  // B.6 — drag-and-drop overlay. Overlay is visible while user drags a file
+  // over the ChatView. Actual upload handler is a TODO — attachments schema
+  // not yet on the Message model (see AUDIT_PASS.md Open questions).
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0);
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  }, []);
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    e.preventDefault();
+  }, []);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  }, []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDragging(false);
+    // TODO: wire file upload + attachments pipeline once Message model
+    // has an `attachments` field (B.7 blocker).
+  }, []);
+
   const isEmpty = messages.length === 0 && !isStreaming;
 
   return isEmpty ? (
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
+      <div
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <div className="flex-1 flex flex-col items-center justify-center" style={{ padding: '0 32px' }}>
           {/* Title + Echo particle field */}
           <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
@@ -968,10 +1004,18 @@ export default function ChatView() {
             </div>
           </div>
         </div>
+        <AttachmentDropOverlay visible={isDragging} />
       </div>
     ) : (
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
+    <div
+      className="flex flex-col flex-1 min-h-0 overflow-hidden"
+      style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Header — participant dot + title + subtle meta */}
       <div className="flex items-center flex-shrink-0" style={{
         height: 48,
@@ -1049,8 +1093,10 @@ export default function ChatView() {
                   <ThinkingBlock content={msg.thinking_content} state="complete" />
                 )}
 
-                {/* Message content */}
-                <MessageContent content={msg.content} />
+                {/* Message content — RichBody for agents (tables, code blocks with syntax highlight, kbd pills), plain markdown for user */}
+                {msg.role === 'user'
+                  ? <MessageContent content={msg.content} />
+                  : <RichBody source={msg.content} />}
 
                 {/* Model variants (expandable) — from variants field or legacy JSON thinking_content */}
                 {(msg as any).variants && (
@@ -1262,6 +1308,7 @@ export default function ChatView() {
           </div>
         </div>
       </div>
+      <AttachmentDropOverlay visible={isDragging} />
     </div>
   );
 }

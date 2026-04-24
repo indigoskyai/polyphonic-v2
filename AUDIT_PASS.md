@@ -168,23 +168,31 @@ The primitives from phases 11/14/15/19 are built but not plugged into ChatView /
 ### B.1 — Composer extraction (defer decision revisited)
 
 Phase 03's commit deferred this. Re-evaluate now that other ChatView-touching phases have landed:
-- [ ] If ChatView is being touched anyway for B.2-B.8, extract `<Composer />` now — all the state passthroughs are happening regardless.
-- [ ] If not, skip and log in Decision log.
+- [x] If ChatView is being touched anyway for B.2-B.8, extract `<Composer />` now — all the state passthroughs are happening regardless.
+- [x] If not, skip and log in Decision log.
+
+**Outcome:** Deferred again. ChatView touches from this sweep are surgical (RichBody swap + drag handlers); extracting Composer would be a mechanical rewrite unrelated to the audit intent. Log B.1 as deferred.
 
 ### B.2 — MessageList branching for permission_request
 
 - [ ] In the message render function, check message shape: if `message.kind === 'permission_request'` (or `metadata.type === 'permission_request'`), render `<PermissionCard>` from Phase 14 instead of `<MessageBubble>`.
 - [ ] Wire Approve / Always / Deny handlers to call the appropriate edge function (likely `permission-action` if it exists, or direct table update otherwise).
 
+**BLOCKED on schema.** `Message` type in `src/stores/threadStore.ts` has no `kind` or `metadata` field. Primitive `PermissionInline` is built and styled; backend needs to introduce a message kind/metadata convention (or a separate permission_requests table feeding a render-time merge). See Open questions.
+
 ### B.3 — MessageList branching for agent_error
 
 - [ ] Same pattern. `kind === 'agent_error'` → `<AgentErroredCard>` with divider line above.
 - [ ] Retry handler re-invokes the originating edge function with the same payload.
 
+**BLOCKED on schema.** Same root cause as B.2 — no `kind` field on `Message`. Primitive `AgentErroredCard` is built. See Open questions.
+
 ### B.4 — MessageBubble → RichBody
 
-- [ ] Inside `MessageBubble.tsx`, replace the content render with `<RichBody content={message.content} />` from Phase 15.
-- [ ] Keep user-messages as plain text; only agent messages go through RichBody (check `message.role`).
+- [x] Inside `MessageBubble.tsx`, replace the content render with `<RichBody content={message.content} />` from Phase 15.
+- [x] Keep user-messages as plain text; only agent messages go through RichBody (check `message.role`).
+
+**Outcome:** Swapped at ChatView line ~1053. `msg.role === 'user'` → legacy `MessageContent` (plain markdown); otherwise `<RichBody source={msg.content} />` for remark-gfm tables + syntax-highlighted code blocks.
 
 ### B.5 — Composer @-mention autocomplete
 
@@ -193,24 +201,32 @@ Phase 03's commit deferred this. Re-evaluate now that other ChatView-touching ph
 - [ ] Filter dropdown by text after `@`.
 - [ ] On selection: insert mention pill into the textarea value, add agent ID to `targetedAgents` state.
 
+**DEFERRED.** Not wired in this sweep — @-mention integration is ~80-120 lines of glue (keystroke listener with caret tracking, live filter, pill insertion into textarea value, `targetedAgents` state plumbing through sendMessage). Out of scope for a single consumer-wiring sweep; deserves its own focused phase.
+
 ### B.6 — ChatView drop overlay
 
-- [ ] On ChatView root: `onDragEnter` sets `isDragging: true`. `onDragLeave` (on body) sets false. `onDrop` uploads the file.
-- [ ] Render `<DragOverlay>` from Phase 19 when `isDragging` is true — blurred backdrop + center "drop to attach" text.
+- [x] On ChatView root: `onDragEnter` sets `isDragging: true`. `onDragLeave` (on body) sets false. `onDrop` uploads the file.
+- [x] Render `<DragOverlay>` from Phase 19 when `isDragging` is true — blurred backdrop + center "drop to attach" text.
+
+**Outcome:** Drag-enter/over/leave/drop handlers added to both ChatView branches (landing + conversation) with `dragDepthRef` counter for correct enter/leave pairing across nested children. `<AttachmentDropOverlay visible={isDragging} />` mounts in both branches. `onDrop` is a TODO stub — upload pipeline blocked on B.7 (attachments schema).
 
 ### B.7 — MessageBubble → MessageAttachment
 
 - [ ] When `message.attachments` exists and has items, render each via `<MessageAttachment>` from Phase 19 below the body.
 - [ ] Image attachments use the gradient-placeholder variant; files use the chip variant; code uses the preview-with-fade variant.
 
+**BLOCKED on schema.** `Message` type has no `attachments` field. Primitive `MessageAttachment` and variants are built. See Open questions.
+
 ### B.8 — 8th wiring (TBD — survey during audit)
 
-- [ ] During B.1-B.7 work, survey for any additional primitives built but not consumed. Candidates:
-  - ObservabilityWidget (Phase 12) mounted in Rail footer?
-  - Notifications bell unread indicator (Phase 05) pulling from `thought_initiations` count?
-  - Thread detail drawer ⌘I trigger (Phase 06) wired in ChatView?
-  - Onboarding (Phase 13) gated by first-run check?
-- [ ] Fix whichever is discovered unwired. Log in Decision log which one was the 8th.
+- [x] During B.1-B.7 work, survey for any additional primitives built but not consumed. Candidates:
+  - ObservabilityWidget (Phase 12) mounted in Rail footer? → **YES**, `Rail.tsx:151`
+  - Notifications bell unread indicator (Phase 05) pulling from `thought_initiations` count? → **YES**, `Rail.tsx` via `selectPendingInitiationsCount`
+  - Thread detail drawer ⌘I trigger (Phase 06) wired in ChatView? → **YES**, `ChatView.tsx:1046` (`<ThreadInfoButton />`)
+  - Onboarding (Phase 13) gated by first-run check? → **YES**, `App.tsx:188` (`<FirstRunGate>`)
+- [x] Fix whichever is discovered unwired. Log in Decision log which one was the 8th.
+
+**Outcome:** All four survey candidates already wired from their own phase commits. No 8th wiring needed. Logged in Decision log.
 
 **Verification:**
 - `/chat` with a recent permission request → renders as PermissionCard inline, action buttons work
@@ -276,6 +292,29 @@ If drift is systemic → stop and write new phase doc.
 - 2026-04-24 13:58 · A.2 · widened rail 40→48px and sidebar 220→280px · matches mockup (phase-2 thread-detail scene) exactly; drawer itself was spec-correct at 420px; updated `01-foundation.md` alongside CSS
 - 2026-04-24 14:00 · A.3 · composer rest-state: removed box-shadow, lightened border to --border-faint, lowered shimmer ::before opacity 0.55→0.38 · real culprit was the rest-state drop shadow giving "raised card" feel; spec says shadow only on :focus-within; focus-within rule (index.css:668) unchanged so focus still brings composer forward
 - 2026-04-24 14:05 · A.4 · converted Settings from modal to full-page surface · added SidebarSettings (AGENTS + SYSTEM groups with SidebarRow pattern), SettingsPlaceholder component for non-ported categories, route `/settings` → redirect to `/settings/agents`, 5 new routes for Skills/Routines/Voice & security/Import & export/Account & preferences using the placeholder; Rail cog + CommandPalette openSettings now navigate() instead of opening modal; deleted SettingsModal.tsx and settingsModalStore.ts; Sidebar.tsx branches to SidebarSettings when path starts with `/settings`
+- 2026-04-24 14:12 · B · consumer wirings sweep · B.4 (RichBody swap for assistant messages) + B.6 (drop overlay on ChatView) landed; B.1 (Composer extraction) deferred again (touches here too narrow to motivate); B.5 (@-mention) deferred as a focused follow-up; B.8 surveyed — all four candidates already wired (ObservabilityWidget, notifications bell count, ⌘I thread-detail trigger, FirstRunGate); B.2 + B.3 + B.7 BLOCKED on schema — Message type has no kind / metadata / attachments fields (see Open questions)
+
+# Open questions (for Riley / Lovable)
+
+**Schema: Message model needs `kind`, `metadata`, `attachments` fields to unblock B.2 / B.3 / B.7.**
+
+Primitives are built and styled (`PermissionInline`, `AgentErroredCard`, `MessageAttachment` + variants) but can't be rendered inline in the chat stream without a way to identify which messages are which. Recommended Lovable prompt:
+
+> In the `messages` table add optional columns:
+> - `kind text` — e.g. `'permission_request' | 'agent_error' | 'text'` (default null → treat as text)
+> - `metadata jsonb` — structured payload (permission title/body, error message/detail, etc.)
+> - `attachments jsonb` — array of `{ type: 'image' | 'file' | 'code', url, meta }` per Phase 19 attachment variants
+>
+> Update `src/integrations/supabase/types.ts` accordingly. In edge functions that emit permission requests or agent errors, write rows into `messages` with the appropriate `kind` + `metadata`. In ChatView the render branch can then be:
+> ```tsx
+> if (msg.kind === 'permission_request') return <PermissionInline {...msg.metadata} />;
+> if (msg.kind === 'agent_error')        return <AgentErroredCard {...msg.metadata} />;
+> // ... else regular message + RichBody + attachments
+> ```
+
+Once merged, B.2 / B.3 / B.7 unblock as ~30-line ChatView patches each.
+
+**B.5 (@-mention autocomplete):** Deferred; worth its own small phase to do right (caret tracking, keyboard nav, pill serialization into message text).
 
 # End-of-run summary
 
