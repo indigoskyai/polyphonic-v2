@@ -123,7 +123,6 @@ serve(async (req) => {
       .select("content, memory_type, confidence, emotional_valence, tags, created_at")
       .eq("user_id", user_id)
       .eq("is_deleted", false)
-      .is("superseded_by", null)
       .order("created_at", { ascending: false })
       .limit(40);
 

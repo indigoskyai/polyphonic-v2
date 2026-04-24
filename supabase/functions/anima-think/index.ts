@@ -107,7 +107,7 @@ serve(async (req) => {
       supabase.from("thought_stream").select("content, source, salience")
         .eq("user_id", user_id).order("created_at", { ascending: false }).limit(10),
       supabase.from("memories").select("content, tags, memory_type, emotional_valence")
-        .eq("user_id", user_id).eq("is_deleted", false).is("superseded_by", null)
+        .eq("user_id", user_id).eq("is_deleted", false)
         .order("created_at", { ascending: false }).limit(20),
       supabase.from("beliefs").select("content, confidence, domain")
         .eq("user_id", user_id).eq("active", true).order("confidence", { ascending: false }).limit(8),
