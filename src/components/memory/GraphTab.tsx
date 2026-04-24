@@ -62,7 +62,7 @@ export default function GraphTab() {
         vx: 0,
         vy: 0,
         engram,
-        radius: 4 + engram.strength * 8,
+        radius: 3.5 + engram.strength * 3.5,
       });
     });
 
@@ -297,11 +297,15 @@ export default function GraphTab() {
       )}
 
       {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 12 }}>
+      <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 14 }}>
         {Object.entries(TYPE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
-            <span style={{ fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.04em' }}>{type}</span>
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%',
+              background: 'transparent',
+              border: `1px solid ${color}`,
+            }} />
+            <span style={{ fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>{type}</span>
           </div>
         ))}
       </div>
