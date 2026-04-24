@@ -39,7 +39,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Ambient + onboarding (depends on 01, 02)
 - [x] **12** [Observability widget](./design-system/12-observability.md) — Collapsed/expanded states, sparkline, per-agent live metrics
-- [ ] **13** [Onboarding](./design-system/13-onboarding.md) — Three-name staggered reveal, checklist with pulse-active
+- [x] **13** [Onboarding](./design-system/13-onboarding.md) — Three-name staggered reveal, checklist with pulse-active
 
 ### Edge states (depends on 01, 02, 04)
 - [ ] **14** [Permissions + states](./design-system/14-permissions-states.md) — Inline + modal permission, connection banner, agent offline, agent errored

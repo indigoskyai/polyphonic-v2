@@ -3364,3 +3364,155 @@ html {
   color: var(--text-tertiary);
   text-align: right;
 }
+
+/* ======================================================================
+   PHASE 13 — ONBOARDING
+   ====================================================================== */
+
+.onb-shell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--floor);
+  position: relative;
+  overflow: hidden;
+}
+.onb-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 50% at center, rgba(20, 20, 22, 0.6) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.onb-content {
+  max-width: 520px;
+  padding: 48px;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.onb-names {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 48px;
+}
+.onb-name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: onb-name-in 0.6s var(--ease-premium) forwards;
+  font-family: var(--font-mono);
+}
+.onb-name.luca   { color: var(--luca-full);   animation-delay: 0.2s; }
+.onb-name.vektor { color: var(--vektor-full); animation-delay: 0.6s; }
+.onb-name.anima  { color: var(--anima-full);  animation-delay: 1.0s; }
+
+@keyframes onb-name-in {
+  from { opacity: 0; transform: translateY(8px); letter-spacing: 0.04em; }
+  to { opacity: 1; transform: translateY(0); letter-spacing: 0.12em; }
+}
+
+.onb-greeting {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  letter-spacing: var(--track-display);
+  opacity: 0;
+  animation: onb-fade-in 0.5s ease-out 1.4s forwards;
+}
+.onb-subtitle {
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+  margin-bottom: 48px;
+  line-height: 1.5;
+  opacity: 0;
+  animation: onb-fade-in 0.5s ease-out 1.8s forwards;
+}
+@keyframes onb-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.onb-checklist {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  text-align: left;
+  opacity: 0;
+  animation: onb-fade-in 0.5s ease-out 2s forwards;
+  box-shadow: var(--shadow-inset-highlight);
+}
+.onb-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text-body);
+}
+.onb-step + .onb-step {
+  border-top: 1px solid var(--border-faint);
+}
+.onb-step-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  position: relative;
+}
+.onb-step.done .onb-step-icon {
+  border-color: var(--green-accent);
+  background: var(--green-bg);
+  color: var(--green-accent);
+}
+.onb-step.active .onb-step-icon {
+  border-color: var(--text-primary);
+}
+.onb-step.active .onb-step-icon::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  animation: onb-pulse 1.4s ease-in-out infinite;
+}
+@keyframes onb-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.onb-step-label { flex: 1; }
+.onb-step-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: var(--track-folio);
+}
+
+.onb-actions {
+  margin-top: 32px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  opacity: 0;
+  animation: onb-fade-in 0.5s ease-out 2.4s forwards;
+}

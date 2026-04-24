@@ -16,6 +16,9 @@ import MindView from "./pages/MindView";
 import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import GroupSession from "./pages/GroupSession";
+import Onboarding from "./pages/Onboarding";
+import { isFirstRun } from "./lib/firstRun";
+import { useLocation, useNavigate } from "react-router-dom";
 import SettingsModal from "./components/SettingsModal";
 import Rail from "./components/Rail";
 import Sidebar from "./components/Sidebar";
@@ -38,6 +41,34 @@ function AuthInit({ children }: { children: React.ReactNode }) {
     const unsub = initialize();
     return unsub;
   }, [initialize]);
+  return <>{children}</>;
+}
+
+function FirstRunGate({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!user) { setChecked(true); return; }
+    if (location.pathname === '/onboarding') { setChecked(true); return; }
+    // Force re-entry via ?onboarding=1 (for QA)
+    if (location.search.includes('onboarding=1')) {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+    let cancelled = false;
+    isFirstRun(user.id).then((first) => {
+      if (cancelled) return;
+      if (first) {
+        navigate('/onboarding', { replace: true });
+      }
+      setChecked(true);
+    }).catch(() => setChecked(true));
+    return () => { cancelled = true; };
+  }, [user?.id, location.pathname, location.search, navigate]);
+
   return <>{children}</>;
 }
 
@@ -149,6 +180,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthInit>
+          <FirstRunGate>
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/auth/login" element={<LoginPage />} />
@@ -160,9 +192,11 @@ const App = () => (
             <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
+            <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </FirstRunGate>
         </AuthInit>
       </BrowserRouter>
     </TooltipProvider>
