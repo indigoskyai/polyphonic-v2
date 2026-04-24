@@ -147,16 +147,24 @@ export default function GraphTab() {
 
       ctx.setTransform(cam.zoom * dpr, 0, 0, cam.zoom * dpr, w / 2 + cam.x * dpr, h / 2 + cam.y * dpr);
 
-      // Draw edges
+      const selectedId = selectedIdRef.current;
+
+      // Draw edges (highlight edges connected to selected node)
       for (const edge of edgesRef.current) {
         const a = nodesRef.current.get(edge.source);
         const b = nodesRef.current.get(edge.target);
         if (!a || !b) continue;
+        const isConnectedToSelected = selectedId && (edge.source === selectedId || edge.target === selectedId);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = CONN_COLORS[edge.connection.connection_type] || 'rgba(220,219,216,0.06)';
-        ctx.lineWidth = Math.max(0.5, edge.connection.weight * 2) / cam.zoom;
+        if (isConnectedToSelected) {
+          ctx.strokeStyle = 'rgba(220,219,216,0.45)';
+          ctx.lineWidth = Math.max(0.8, edge.connection.weight * 2.5) / cam.zoom;
+        } else {
+          ctx.strokeStyle = CONN_COLORS[edge.connection.connection_type] || 'rgba(220,219,216,0.06)';
+          ctx.lineWidth = Math.max(0.5, edge.connection.weight * 2) / cam.zoom;
+        }
         ctx.stroke();
       }
 
@@ -168,10 +176,24 @@ export default function GraphTab() {
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         const color = TYPE_COLORS[node.engram.engram_type] || '#dcdbd8';
         const isHovered = hoveredNode === node.id;
-        ctx.fillStyle = isHovered ? color : `${color}80`;
+        const isSelected = selectedId === node.id;
+        ctx.fillStyle = isHovered || isSelected ? color : `${color}80`;
         ctx.fill();
 
-        if (isHovered) {
+        if (isSelected) {
+          // Bright outer ring + halo
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(244, 243, 240, 0.95)';
+          ctx.lineWidth = 1.5 / cam.zoom;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(244, 243, 240, 0.18)';
+          ctx.lineWidth = 1 / cam.zoom;
+          ctx.stroke();
+        } else if (isHovered) {
           ctx.strokeStyle = color;
           ctx.lineWidth = 1 / cam.zoom;
           ctx.stroke();
