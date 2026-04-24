@@ -615,10 +615,10 @@ html {
 .input-shell {
   position: relative;
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-faint);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 8px 28px rgba(0, 0, 0, 0.12);
+  /* No shadow at rest — pool blends softly into canvas. Shadow appears on :focus-within. */
   transition: border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out);
 }
 .input-shell:hover { border-color: rgba(220,219,216,0.10); }
@@ -633,7 +633,7 @@ html {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  opacity: 0.55;
+  opacity: 0.38;
   transition: opacity 0.8s var(--ease-out);
   pointer-events: none;
   z-index: 3;

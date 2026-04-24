@@ -98,8 +98,8 @@ Operate per `CLAUDE.md`. Same autonomous-loop rules apply: commit per sub-sectio
 **Symptom:** The composer text input has a visible line at rest (not focused). Likely the border-glow Option C shimmer is peaking too bright on some pools, making the "border" look solid instead of a subtle shimmer.
 
 **Tasks:**
-- [ ] **A.3.a** Open `/chat` on localhost:8082. Visually compare composer border to mockup `localhost:9000/mockups/artifacts/border-glow-options.html` (Option C section). Is the app version noticeably brighter?
-- [ ] **A.3.b** Inspect animated values:
+- [x] **A.3.a** Open `/chat` on localhost:8082. Visually compare composer border to mockup `localhost:9000/mockups/artifacts/border-glow-options.html` (Option C section). Is the app version noticeably brighter?
+- [x] **A.3.b** Inspect animated values:
   ```js
   () => {
     const el = document.querySelector('.input-shell');
@@ -113,13 +113,13 @@ Operate per `CLAUDE.md`. Same autonomous-loop rules apply: commit per sub-sectio
   }
   ```
   Check if `background` resolves to higher-opacity values than expected. Per spec, `shimmer-c1..c8` cycle between ~0.04 and ~0.38 opacity peak per pool.
-- [ ] **A.3.c** Also check if `.input-shell` itself has a visible `border` property at rest. It should be `1px solid var(--border)` (rgba(220,219,216,0.08)) — barely visible. If it's using a brighter border, fix.
-- [ ] **A.3.d** Check for `box-shadow` at rest. Per spec, input-shell has NO shadow at rest; shadow only appears on `:focus-within`.
-- [ ] **A.3.e** Fix options (pick one or combine):
+- [x] **A.3.c** Also check if `.input-shell` itself has a visible `border` property at rest. It should be `1px solid var(--border)` (rgba(220,219,216,0.08)) — barely visible. If it's using a brighter border, fix.
+- [x] **A.3.d** Check for `box-shadow` at rest. Per spec, input-shell has NO shadow at rest; shadow only appears on `:focus-within`.
+- [x] **A.3.e** Fix options (pick one or combine):
   - Reduce peak shimmer opacity from 0.38 → 0.28 across the 8 keyframes
   - Lighten the solid `--border` on `.input-shell` (override to `--border-faint` for the input shell specifically)
   - Verify `@property` registrations are actually in effect (not all browsers support `@property`; fallback behavior matters)
-- [ ] **A.3.f** Post-fix: the border at rest should read as "almost invisible with a subtle breathing" rather than "clear hairline border." On focus, intensify per spec.
+- [x] **A.3.f** Post-fix: the border at rest should read as "almost invisible with a subtle breathing" rather than "clear hairline border." On focus, intensify per spec.
 
 **Verification:** Stand back from screen at arm's length. At rest the composer edges should blend softly into the canvas. Focus should bring them forward visibly.
 
@@ -274,6 +274,7 @@ If drift is systemic → stop and write new phase doc.
 
 - 2026-04-24 13:55 · A.1 · typography inventory complete · no systemic drift; mockup uses half-pixel sizes intentionally as secondary ladder; 99-at-16px on /chat was wrapper divs, text-filtered histogram is clean
 - 2026-04-24 13:58 · A.2 · widened rail 40→48px and sidebar 220→280px · matches mockup (phase-2 thread-detail scene) exactly; drawer itself was spec-correct at 420px; updated `01-foundation.md` alongside CSS
+- 2026-04-24 14:00 · A.3 · composer rest-state: removed box-shadow, lightened border to --border-faint, lowered shimmer ::before opacity 0.55→0.38 · real culprit was the rest-state drop shadow giving "raised card" feel; spec says shadow only on :focus-within; focus-within rule (index.css:668) unchanged so focus still brings composer forward
 
 # End-of-run summary
 
