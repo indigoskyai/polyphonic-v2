@@ -9,6 +9,16 @@ import BeliefsTab from '@/components/memory/BeliefsTab';
 import ImportDetailPanel from '@/components/ImportDetailPanel';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import AgentDot from '@/components/entry/AgentDot';
+import AgentName from '@/components/entry/AgentName';
+import TypeBadge from '@/components/entry/TypeBadge';
+import PinFlag from '@/components/entry/PinFlag';
+import ScoreChip from '@/components/entry/ScoreChip';
+import TimeAgoChip from '@/components/entry/TimeAgoChip';
+import MetaKV from '@/components/entry/MetaKV';
+import SectionLabel from '@/components/entry/SectionLabel';
+import Telemetry from '@/components/entry/Telemetry';
+import { formatDetailTime } from '@/lib/time';
 
 const TABS = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports'] as const;
 type Tab = typeof TABS[number];
@@ -29,8 +39,15 @@ type Memory = {
   estimated_date: string | null;
   needs_confirmation: boolean | null;
   is_deleted: boolean | null;
+  is_watchlist?: boolean | null;
+  decay_factor?: number | null;
+  sharpness?: number | null;
+  relevance_score?: number | null;
+  provenance?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  /** Legacy: code referenced is_pinned but the column is is_watchlist. Treat as watchlist. */
+  is_pinned?: boolean | null;
 };
 
 type ImportRecord = {
@@ -337,7 +354,7 @@ function MemoriesTab() {
         </div>
 
         {/* Memory list */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: '8px 16px', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
           {filtered.map((m) => (
             <MemoryRow
               key={m.id}
@@ -388,70 +405,75 @@ function MemoryRow({ memory, selected, bulkChecked, onClick, onToggleBulk }: {
   memory: Memory; selected: boolean; bulkChecked: boolean;
   onClick: () => void; onToggleBulk: () => void;
 }) {
+  // Provenance source can be either confidence_source or provenance.agent
+  const prov = memory.provenance as Record<string, unknown> | null;
+  const agent = (prov?.agent as string) || memory.confidence_source || 'luca';
+  const isPinned = !!(memory.is_watchlist || memory.is_pinned);
   return (
-    <div
-      className="flex items-start gap-2 mb-1 rounded cursor-pointer group"
-      style={{
-        padding: '10px 12px',
-        background: selected ? 'var(--bg-surface)' : undefined,
-        border: `1px solid ${selected ? 'var(--border)' : 'transparent'}`,
-        transition: 'all 100ms ease',
-      }}
+    <button
+      type="button"
       onClick={onClick}
+      aria-current={selected ? 'true' : undefined}
+      className="memory-row"
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: selected ? '14px 18px 14px 18px' : '14px 20px',
+        borderBottom: '1px solid var(--border-subtle)',
+        borderLeft: selected ? '2px solid var(--text-primary)' : '2px solid transparent',
+        background: selected ? 'var(--bg-surface)' : 'transparent',
+        transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
+        cursor: 'pointer',
+        appearance: 'none',
+        outline: 'none',
+        position: 'relative',
+      }}
     >
-      {/* Bulk checkbox */}
-      <div
-        className="shrink-0 mt-0.5"
-        onClick={(e) => { e.stopPropagation(); onToggleBulk(); }}
-        style={{
-          width: 14, height: 14, borderRadius: 3,
-          border: `1px solid ${bulkChecked ? 'var(--border-focus)' : 'var(--border-dim)'}`,
-          background: bulkChecked ? 'var(--bg-surface)' : 'transparent',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer',
-        }}
-      >
-        {bulkChecked && <span style={{ fontSize: 9, color: 'var(--text-primary)' }}>✓</span>}
-      </div>
-
-      {/* Type badge */}
-      <span
-        className="shrink-0 text-[9px] font-medium uppercase mt-0.5"
-        style={{
-          padding: '1px 5px', borderRadius: 3,
-          background: `${TYPE_COLORS[memory.memory_type] || '#777'}15`,
-          color: TYPE_COLORS[memory.memory_type] || 'var(--text-ghost)',
-          letterSpacing: '0.04em',
-        }}
-      >
-        {memory.memory_type}
-      </span>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-soft)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {memory.content}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          {memory.narrative_thread && (
-            <span className="text-[9px]" style={{ color: 'var(--text-whisper)' }}>◊ {memory.narrative_thread}</span>
-          )}
-          {memory.needs_confirmation && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(248,180,80,0.1)', color: '#f8b450' }}>needs review</span>
-          )}
-        </div>
-      </div>
-
-      {/* Confidence */}
-      <div className="shrink-0 flex flex-col items-end gap-1">
-        <span className="text-[10px]" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-whisper)' }}>
-          {((memory.confidence ?? 0) * 100).toFixed(0)}%
+      <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
+        <span
+          onClick={(e) => { e.stopPropagation(); onToggleBulk(); }}
+          role="checkbox"
+          aria-checked={bulkChecked}
+          style={{
+            width: 12, height: 12, borderRadius: 3, flexShrink: 0,
+            border: `1px solid ${bulkChecked ? 'var(--border-focus)' : 'var(--border-dim)'}`,
+            background: bulkChecked ? 'var(--bg-surface)' : 'transparent',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 8,
+            color: 'var(--text-primary)',
+          }}
+        >
+          {bulkChecked ? '✓' : ''}
         </span>
-        <div style={{ width: 32, height: 2, background: 'var(--bg-deep)', borderRadius: 1, overflow: 'hidden' }}>
-          <div style={{ width: `${(memory.confidence ?? 0) * 100}%`, height: '100%', background: 'var(--luca)', opacity: 0.5, borderRadius: 1 }} />
-        </div>
+        <AgentDot agent={agent} />
+        <AgentName agent={agent} />
+        <TypeBadge type={memory.memory_type} />
+        <PinFlag pinned={isPinned} />
+        {memory.needs_confirmation && (
+          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(248,180,80,0.08)', color: '#d3a25b', letterSpacing: '0.04em', fontFamily: 'var(--font-mono)' }}>
+            REVIEW
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <ScoreChip value={memory.confidence} />
+          <TimeAgoChip date={memory.created_at} />
+        </span>
       </div>
-    </div>
+      <div style={{
+        fontSize: 13,
+        color: 'var(--text-primary)',
+        lineHeight: 1.55,
+        fontWeight: 370,
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      }}>
+        {memory.content}
+      </div>
+    </button>
   );
 }
 
@@ -460,100 +482,217 @@ function MemoryDetailPanel({ memory, editingContent, setEditingContent, onSave, 
   onSave: (content: string) => void; onDelete: () => void; onClose: () => void;
 }) {
   const isEdited = editingContent !== memory.content;
+  const [editing, setEditing] = useState(false);
+  const prov = memory.provenance as Record<string, unknown> | null;
+  const agent = (prov?.agent as string) || memory.confidence_source || 'luca';
+  const sourceThread = (prov?.source_thread as string) || (prov?.thread_title as string) || null;
+  const evidenceQuote = (prov?.quote as string) || (prov?.evidence as string) || null;
+  const evidenceMeta = (prov?.source as string) || (prov?.from as string) || null;
+  const stalenessAccent = memory.staleness_risk === 'high' ? 'red' : memory.staleness_risk === 'medium' ? 'amber' : undefined;
 
   return (
-    <div className="shrink-0 flex flex-col overflow-y-auto" style={{ width: 360, background: 'var(--bg-elevated)', padding: '20px 16px', animation: 'viewFadeIn 0.15s var(--ease-out) both' }}>
+    <div className="shrink-0 flex flex-col overflow-y-auto" style={{
+      width: 380,
+      background: 'var(--bg-deep)',
+      animation: 'viewFadeIn 0.18s var(--ease-out) both',
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[9px] font-semibold uppercase" style={{
-          letterSpacing: '0.08em',
-          color: TYPE_COLORS[memory.memory_type] || 'var(--text-ghost)',
-        }}>
-          {memory.memory_type}
-        </span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-ghost)', cursor: 'pointer', fontSize: 14 }}>×</button>
+      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+          <AgentDot agent={agent} />
+          <AgentName agent={agent} />
+          <TypeBadge type={memory.memory_type} />
+          <PinFlag pinned={!!(memory.is_watchlist || memory.is_pinned)} />
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
+            #mem_{memory.id.slice(0, 6)}
+          </span>
+          <button
+            onClick={onClose}
+            aria-label="close"
+            style={{ background: 'none', border: 'none', color: 'var(--text-ghost)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+        {editing ? (
+          <>
+            <textarea
+              value={editingContent}
+              onChange={(e) => setEditingContent(e.target.value)}
+              rows={6}
+              style={{
+                width: '100%',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '10px 12px',
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-sans)',
+                outline: 'none',
+                resize: 'vertical',
+                lineHeight: 1.65,
+              }}
+            />
+            <div className="flex gap-2" style={{ marginTop: 8 }}>
+              <button
+                onClick={() => { onSave(editingContent); setEditing(false); }}
+                disabled={!isEdited}
+                className="btn-primary"
+                style={{
+                  fontSize: 11, padding: '4px 12px', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', cursor: isEdited ? 'pointer' : 'default',
+                  opacity: isEdited ? 1 : 0.5,
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                Save
+              </button>
+              <button
+                onClick={() => { setEditingContent(memory.content); setEditing(false); }}
+                style={{
+                  fontSize: 11, padding: '4px 12px', borderRadius: 'var(--radius-sm)',
+                  background: 'transparent', border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-ghost)', cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', fontWeight: 370 }}>
+            {memory.content}
+          </div>
+        )}
       </div>
 
-      {/* Editable content */}
-      <textarea
-        value={editingContent}
-        onChange={(e) => setEditingContent(e.target.value)}
-        rows={6}
-        style={{
-          width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
-          padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', outline: 'none',
-          resize: 'vertical', lineHeight: 1.6,
-        }}
-      />
+      {/* PROVENANCE */}
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <SectionLabel>PROVENANCE</SectionLabel>
+        {sourceThread && <MetaKV k="source thread" v={sourceThread} />}
+        <MetaKV k="created" v={formatDetailTime(memory.created_at)} />
+        <MetaKV k="agent" v={agent} />
+        <MetaKV k="confidence" v={memory.confidence?.toFixed(2) ?? '—'} />
+        {memory.confidence_source && <MetaKV k="conf source" v={memory.confidence_source} />}
+        {memory.detail_level && <MetaKV k="detail" v={memory.detail_level} />}
+        {memory.staleness_risk && <MetaKV k="staleness" v={memory.staleness_risk} accent={stalenessAccent} />}
+      </div>
 
-      {isEdited && (
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => onSave(editingContent)}
-            className="text-[11px] px-3 py-1.5 rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-focus)', color: 'var(--text-primary)', cursor: 'pointer' }}
-          >
-            Save Changes
-          </button>
-          <button
-            onClick={() => setEditingContent(memory.content)}
-            className="text-[11px] px-3 py-1.5 rounded"
-            style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-ghost)', cursor: 'pointer' }}
-          >
-            Cancel
-          </button>
+      {/* TELEMETRY (decay metrics) */}
+      {(memory.decay_factor != null || memory.sharpness != null || memory.relevance_score != null) && (
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>DECAY METRICS</SectionLabel>
+          {memory.relevance_score != null && <MetaKV k="relevance" v={memory.relevance_score.toFixed(3)} />}
+          {memory.sharpness != null && <MetaKV k="sharpness" v={memory.sharpness.toFixed(3)} />}
+          {memory.decay_factor != null && <MetaKV k="decay factor" v={memory.decay_factor.toFixed(3)} />}
+          {memory.estimated_date && <MetaKV k="estimated date" v={memory.estimated_date} />}
         </div>
       )}
 
-      {/* Metadata */}
-      <div className="flex flex-col gap-2 mt-4" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
-        <MetaRow label="Confidence" value={`${((memory.confidence ?? 0) * 100).toFixed(0)}%`} />
-        <MetaRow label="Source" value={memory.confidence_source || 'unknown'} />
-        <MetaRow label="Detail" value={memory.detail_level || 'standard'} />
-        <MetaRow label="Staleness" value={memory.staleness_risk || 'low'} />
-        {memory.emotional_valence != null && <MetaRow label="Valence" value={memory.emotional_valence.toFixed(2)} />}
-        {memory.emotional_intensity != null && <MetaRow label="Intensity" value={memory.emotional_intensity.toFixed(2)} />}
-        {memory.estimated_date && <MetaRow label="Est. Date" value={memory.estimated_date} />}
-        <MetaRow label="Created" value={new Date(memory.created_at).toLocaleString()} />
-        <MetaRow label="Updated" value={new Date(memory.updated_at).toLocaleString()} />
-      </div>
+      {/* EMOTIONAL CONTEXT */}
+      {(memory.emotional_valence != null || memory.emotional_intensity != null) && (
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>EMOTIONAL CONTEXT</SectionLabel>
+          {memory.emotional_valence != null && <MetaKV k="valence" v={memory.emotional_valence.toFixed(2)} />}
+          {memory.emotional_intensity != null && <MetaKV k="intensity" v={memory.emotional_intensity.toFixed(2)} />}
+        </div>
+      )}
 
-      {/* Narrative thread */}
+      {/* EVIDENCE */}
+      {evidenceQuote && (
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>EVIDENCE</SectionLabel>
+          <div style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 12px',
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: 'var(--text-soft)',
+            fontStyle: 'italic',
+          }}>
+            "{evidenceQuote}"
+          </div>
+          {evidenceMeta && (
+            <div style={{ fontSize: 10, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', marginTop: 6 }}>
+              from {evidenceMeta}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* NARRATIVE THREAD */}
       {memory.narrative_thread && (
-        <div className="mt-3" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
-          <div className="text-[9px] uppercase font-medium mb-1" style={{ color: 'var(--text-ghost)', letterSpacing: '0.06em' }}>Narrative Thread</div>
-          <div className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{memory.narrative_thread}</div>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>NARRATIVE THREAD</SectionLabel>
+          <div style={{ fontSize: 12, color: 'var(--text-body)', lineHeight: 1.55 }}>
+            ◊ {memory.narrative_thread}
+          </div>
         </div>
       )}
 
-      {/* Summary */}
+      {/* SUMMARY */}
       {memory.summary && (
-        <div className="mt-3" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
-          <div className="text-[9px] uppercase font-medium mb-1" style={{ color: 'var(--text-ghost)', letterSpacing: '0.06em' }}>Summary</div>
-          <div className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{memory.summary}</div>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>SUMMARY</SectionLabel>
+          <div style={{ fontSize: 12, color: 'var(--text-body)', lineHeight: 1.55 }}>{memory.summary}</div>
         </div>
       )}
 
-      {/* Tags */}
+      {/* TAGS */}
       {memory.tags && memory.tags.length > 0 && (
-        <div className="mt-3" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
-          <div className="text-[9px] uppercase font-medium mb-2" style={{ color: 'var(--text-ghost)', letterSpacing: '0.06em' }}>Tags</div>
-          <div className="flex flex-wrap gap-1">
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SectionLabel>TAGS</SectionLabel>
+          <div className="flex flex-wrap" style={{ gap: 4 }}>
             {memory.tags.map((tag) => (
-              <span key={tag} className="text-[9px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-deep)', color: 'var(--text-ghost)' }}>{tag}</span>
+              <span key={tag} style={{
+                fontSize: 9,
+                padding: '2px 6px',
+                borderRadius: 100,
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-ghost)',
+                letterSpacing: '0.03em',
+                fontFamily: 'var(--font-mono)',
+              }}>{tag}</span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Delete */}
-      <div className="mt-auto pt-4">
+      {/* ACTIONS */}
+      <div style={{ padding: '12px 24px', display: 'flex', gap: 6, marginTop: 'auto' }}>
+        <button
+          onClick={() => setEditing(!editing)}
+          style={{
+            fontSize: 11, padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+            background: editing ? 'var(--bg-surface)' : 'transparent',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          {editing ? 'Done' : 'Edit'}
+        </button>
         <button
           onClick={onDelete}
-          className="text-[11px] px-3 py-1.5 rounded w-full"
-          style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', color: '#f87171', cursor: 'pointer' }}
+          style={{
+            fontSize: 11, padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+            background: 'transparent',
+            border: '1px solid transparent',
+            color: 'var(--red-accent)',
+            cursor: 'pointer',
+            marginLeft: 'auto',
+            fontFamily: 'var(--font-sans)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248, 113, 113, 0.06)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(248, 113, 113, 0.2)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'; }}
         >
-          Delete Memory
+          Delete
         </button>
       </div>
     </div>
