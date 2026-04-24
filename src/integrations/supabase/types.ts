@@ -616,6 +616,7 @@ export type Database = {
           memory_type: string
           narrative_thread: string | null
           needs_confirmation: boolean | null
+          pinned: boolean
           provenance: Json | null
           relevance_score: number
           sharpness: number
@@ -641,6 +642,7 @@ export type Database = {
           memory_type?: string
           narrative_thread?: string | null
           needs_confirmation?: boolean | null
+          pinned?: boolean
           provenance?: Json | null
           relevance_score?: number
           sharpness?: number
@@ -666,6 +668,7 @@ export type Database = {
           memory_type?: string
           narrative_thread?: string | null
           needs_confirmation?: boolean | null
+          pinned?: boolean
           provenance?: Json | null
           relevance_score?: number
           sharpness?: number
@@ -673,6 +676,48 @@ export type Database = {
           summary?: string | null
           tags?: string[] | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      memory_candidates: {
+        Row: {
+          candidate_type: string
+          confidence: number
+          content: string
+          created_at: string
+          id: string
+          memory_type: string
+          rationale: string
+          reviewed_at: string | null
+          source: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          candidate_type: string
+          confidence: number
+          content: string
+          created_at?: string
+          id?: string
+          memory_type: string
+          rationale: string
+          reviewed_at?: string | null
+          source?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          candidate_type?: string
+          confidence?: number
+          content?: string
+          created_at?: string
+          id?: string
+          memory_type?: string
+          rationale?: string
+          reviewed_at?: string | null
+          source?: Json | null
+          status?: string
           user_id?: string
         }
         Relationships: []
@@ -1235,6 +1280,7 @@ export type Database = {
       }
     }
     Functions: {
+      auto_commit_stale_memory_candidates: { Args: never; Returns: number }
       decrypt_user_api_key: { Args: { p_user_id: string }; Returns: string }
       delete_user_api_key: { Args: never; Returns: undefined }
       get_app_config: { Args: { config_key: string }; Returns: string }
