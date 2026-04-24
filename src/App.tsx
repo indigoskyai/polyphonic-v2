@@ -20,6 +20,7 @@ import CheckpointsView from "./pages/CheckpointsView";
 import AgentsList from "./pages/settings/AgentsList";
 import AgentDetail from "./pages/settings/AgentDetail";
 import Onboarding from "./pages/Onboarding";
+import MobilePreview from "./pages/MobilePreview";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
 import SettingsModal from "./components/SettingsModal";
@@ -203,6 +204,7 @@ const App = () => (
             <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
             <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+            <Route path="/_mobile" element={<MobilePreview />} />
             <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -5473,3 +5473,343 @@ html {
   .bc-status-dot.live,
   .bc-cursor::before { animation: none !important; }
 }
+
+/* ======================================================================
+   PHASE 20 — MOBILE SHELL
+   ====================================================================== */
+
+.phone-frame {
+  width: 390px;
+  height: 772px;
+  background: var(--canvas);
+  border-radius: 40px;
+  border: 8px solid #1a1a1c;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.phone-notch {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background: var(--floor);
+  border-radius: 16px;
+  z-index: 10;
+}
+
+.m-status-bar {
+  height: 44px;
+  padding: 8px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.m-status-icons {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.m-status-icons svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-primary);
+}
+
+.m-header {
+  height: 44px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.m-menu-btn {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.m-menu-btn:hover {
+  color: var(--text-primary);
+  background: var(--overlay-hover);
+}
+.m-menu-btn svg { width: 15px; height: 15px; }
+.m-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.m-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+.m-msg { margin-bottom: 20px; }
+.m-msg-role {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: var(--text-soft);
+}
+.m-msg-role[data-agent="luca"]   { color: var(--luca-full); }
+.m-msg-role[data-agent="vektor"] { color: var(--vektor-full); }
+.m-msg-role[data-agent="anima"]  { color: var(--anima-full); }
+.m-msg-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-weight: 400;
+}
+
+.m-subagent-strip {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.m-subagent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.m-murmur {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  grid-template-rows: repeat(3, 4px);
+  gap: 1px;
+}
+.m-murmur-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.m-murmur-dot.active {
+  background: var(--vektor-full);
+  animation: m-murmur 1.6s ease-in-out infinite;
+}
+@keyframes m-murmur {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+.m-subagent-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-ghost);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.m-composer-wrap {
+  padding: 8px 12px 12px;
+  flex-shrink: 0;
+}
+.m-composer {
+  position: relative;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.m-composer:focus-within { border-color: var(--border-strong); }
+.m-composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.m-composer-input::placeholder { color: var(--text-ghost); }
+.m-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.m-send:hover { background: var(--surface-3); }
+.m-send svg { width: 11px; height: 11px; }
+
+.m-bottom-nav {
+  height: 56px;
+  padding: 6px 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-around;
+  flex-shrink: 0;
+  background: var(--canvas);
+}
+.m-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.m-nav-item[data-active="true"] { color: var(--text-primary); }
+.m-nav-item svg { width: 18px; height: 18px; }
+.m-nav-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.m-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms var(--ease-out);
+  z-index: 20;
+}
+.m-drawer-backdrop[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.m-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
+  background: var(--floor);
+  border-right: 1px solid var(--border-subtle);
+  z-index: 21;
+  transform: translateX(-100%);
+  transition: transform 300ms var(--ease-out);
+  display: flex;
+  flex-direction: column;
+}
+.m-drawer[data-open="true"] { transform: translateX(0); }
+.m-drawer-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.m-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.m-thread-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.m-thread-item:hover {
+  background: var(--overlay-hover);
+  color: var(--text-primary);
+}
+.m-thread-item[data-active="true"] {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.m-group-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.m-agent-card {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.m-agent-name {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.m-agent-card[data-agent="luca"]   .m-agent-name { color: var(--luca-full); }
+.m-agent-card[data-agent="vektor"] .m-agent-name { color: var(--vektor-full); }
+.m-agent-card[data-agent="anima"]  .m-agent-name { color: var(--anima-full); }
+.m-agent-card[data-speaking="true"]::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid var(--luca-full);
+  animation: m-halo 2s ease-out infinite;
+}
+.m-agent-card[data-speaking="true"][data-agent="vektor"]::before { border-color: var(--vektor-full); }
+.m-agent-card[data-speaking="true"][data-agent="anima"]::before  { border-color: var(--anima-full); }
+@keyframes m-halo {
+  0%   { transform: scale(1);   opacity: 0.5; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-drawer,
+  .m-drawer-backdrop,
+  .m-murmur-dot.active,
+  .m-agent-card[data-speaking="true"]::before { animation: none !important; transition: none !important; }
+}
