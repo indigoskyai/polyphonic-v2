@@ -46,8 +46,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Content + features (depends on 01, 02)
 - [x] **15** [Rich content rendering](./design-system/15-rich-content.md) — Full markdown spec inside messages
-- [B] **16** [Checkpoints + diff viewer](./design-system/16-checkpoints.md) — Timeline, diff with red/green gutters, restore, compare
-- [B] **17** [Settings depth](./design-system/17-settings-depth.md) — Per-agent editor, env switcher, prompt textarea, tool grid, MCP list, voice cards, keychain, sticky save footer
+- [x] **16** [Checkpoints + diff viewer](./design-system/16-checkpoints.md) — Timeline, diff with red/green gutters, restore, compare
+- [ ] **17** [Settings depth](./design-system/17-settings-depth.md) — Per-agent editor, env switcher, prompt textarea, tool grid, MCP list, voice cards, keychain, sticky save footer
 - [ ] **18** [Command palette ⌘K](./design-system/18-command-palette.md) — Scope tabs, recent chips, quick actions, match highlighting
 
 ### Future-facing (depends on 04 for computeruse, 02 for mobile)
@@ -69,8 +69,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 Each phase that needs Lovable work surfaces its prompt below. When you reach a `[B]` phase, copy the relevant prompt into Lovable, mark the phase `[B]` here, and continue with the next unblocked phase.
 
 - [x] **08 Memory Digest** — ✅ shipped by Lovable on 2026-04-24 (commits 65c3655/1098b4f/029fa56/01b55b0). Table + RLS + realtime + edge function live; `anima-consolidate` updated. Frontend consumption landed same day under phase 08.
-- [ ] **16 Checkpoints** — see [phase doc backend ask](./design-system/16-checkpoints.md#backend-asks). Creates `checkpoints` + `checkpoint_files` tables with RLS + adds `checkpoint-restore` + `checkpoint-diff` edge functions. Without these, `/checkpoints` can only render empty state. Frontend primitives will ship in a 16-frontend-only follow-up once the table lands.
-- [ ] **17 Settings depth** — see [phase doc backend ask](./design-system/17-settings-depth.md#backend-asks). Creates `agent_configs` + `mcp_servers` + `agent_secrets` tables with per-workspace RLS + `agent-config-save` edge function. Without these, the per-agent editor has nothing to load or persist.
+- [x] **16 Checkpoints** — ✅ shipped by Lovable 2026-04-24 (commit `9059865` + predecessors). `checkpoints` + `checkpoint_files` tables live, `checkpoint-restore` + `checkpoint-diff` edge fns deployed.
+- [x] **17 Settings depth** — ✅ shipped by Lovable 2026-04-24 (commit `9059865`). `agent_configs` + `mcp_servers` + `agent_secrets` tables live, `agent-config-save` edge fn deployed.
 
 (Add more here as phases discover additional backend needs.)
 
