@@ -22,7 +22,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Composer + Drawer system (depends on 01, 02)
 - [x] **03** [Composer Border-Glow Option C](./design-system/03-composer.md) — 8-pool prime-shimmer with @property animations, agent pills row, effort selector, send button
-- [ ] **04** [Drawer system](./design-system/04-drawer-system.md) — Right-side overlay with backdrop blur, slide animation, ESC handling, focus trap, sub-components
+- [x] **04** [Drawer system](./design-system/04-drawer-system.md) — Right-side overlay with backdrop blur, slide animation, ESC handling, focus trap, sub-components
 
 ### Drawer-powered surfaces (depends on 04)
 - [ ] **05** [Notifications drawer](./design-system/05-notifications.md) — Filter chips, sectioned activity feed, per-type cards, Rail bell with amber dot

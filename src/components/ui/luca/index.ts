@@ -9,3 +9,16 @@ export { default as ToggleSwitch } from './ToggleSwitch';
 export { default as RadioGroup, type RadioOption } from './RadioGroup';
 export { default as DropZone } from './DropZone';
 export { default as FormField } from './FormField';
+export {
+  default as Drawer,
+  DrawerHeader,
+  DrawerCrumb,
+  DrawerTitle,
+  DrawerEscChip,
+  DrawerCloseBtn,
+  DrawerBody,
+  DrawerSection,
+  DrawerSectionLabel,
+  DrawerFooter,
+  DrawerFooterSep,
+} from './Drawer';

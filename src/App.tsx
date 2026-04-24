@@ -21,6 +21,8 @@ import Sidebar from "./components/Sidebar";
 import Clockbar from "./components/Clockbar";
 import CommandPalette from "./components/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
+import { useDrawerStore } from "./stores/drawerStore";
+import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 
 const queryClient = new QueryClient();
 
@@ -76,7 +78,41 @@ function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <SettingsModal open={settingsOpen} onClose={closeSettings} />
       <CommandPalette />
+      <DrawerRouter />
     </div>
+  );
+}
+
+function DrawerRouter() {
+  const active = useDrawerStore((s) => s.active);
+  const close = useDrawerStore((s) => s.close);
+  const open = active !== null;
+
+  // Drawer content surfaces land in phases 05/06/08/etc. Until then,
+  // render a lightweight placeholder so the primitive itself is
+  // exercisable (and verification can drive open/close via store).
+  const label =
+    active === 'notifications' ? 'Notifications'
+    : active === 'thread-detail' ? 'Thread detail'
+    : active === 'memory-detail' ? 'Memory detail'
+    : active === 'agent-inspector' ? 'Agent inspector'
+    : '';
+
+  return (
+    <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
+      <DrawerHeader>
+        <DrawerTitle>{label}</DrawerTitle>
+        <DrawerEscChip />
+        <DrawerCloseBtn onClick={close} />
+      </DrawerHeader>
+      <DrawerBody>
+        <DrawerSection>
+          <p style={{ color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.6 }}>
+            Content arrives in a later phase.
+          </p>
+        </DrawerSection>
+      </DrawerBody>
+    </Drawer>
   );
 }
 
