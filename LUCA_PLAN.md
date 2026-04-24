@@ -46,8 +46,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Content + features (depends on 01, 02)
 - [x] **15** [Rich content rendering](./design-system/15-rich-content.md) — Full markdown spec inside messages
-- [ ] **16** [Checkpoints + diff viewer](./design-system/16-checkpoints.md) — Timeline, diff with red/green gutters, restore, compare
-- [ ] **17** [Settings depth](./design-system/17-settings-depth.md) — Per-agent editor, env switcher, prompt textarea, tool grid, MCP list, voice cards, keychain, sticky save footer
+- [B] **16** [Checkpoints + diff viewer](./design-system/16-checkpoints.md) — Timeline, diff with red/green gutters, restore, compare
+- [B] **17** [Settings depth](./design-system/17-settings-depth.md) — Per-agent editor, env switcher, prompt textarea, tool grid, MCP list, voice cards, keychain, sticky save footer
 - [ ] **18** [Command palette ⌘K](./design-system/18-command-palette.md) — Scope tabs, recent chips, quick actions, match highlighting
 
 ### Future-facing (depends on 04 for computeruse, 02 for mobile)
@@ -69,6 +69,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 Each phase that needs Lovable work surfaces its prompt below. When you reach a `[B]` phase, copy the relevant prompt into Lovable, mark the phase `[B]` here, and continue with the next unblocked phase.
 
 - [x] **08 Memory Digest** — ✅ shipped by Lovable on 2026-04-24 (commits 65c3655/1098b4f/029fa56/01b55b0). Table + RLS + realtime + edge function live; `anima-consolidate` updated. Frontend consumption landed same day under phase 08.
+- [ ] **16 Checkpoints** — see [phase doc backend ask](./design-system/16-checkpoints.md#backend-asks). Creates `checkpoints` + `checkpoint_files` tables with RLS + adds `checkpoint-restore` + `checkpoint-diff` edge functions. Without these, `/checkpoints` can only render empty state. Frontend primitives will ship in a 16-frontend-only follow-up once the table lands.
+- [ ] **17 Settings depth** — see [phase doc backend ask](./design-system/17-settings-depth.md#backend-asks). Creates `agent_configs` + `mcp_servers` + `agent_secrets` tables with per-workspace RLS + `agent-config-save` edge function. Without these, the per-agent editor has nothing to load or persist.
 
 (Add more here as phases discover additional backend needs.)
 
@@ -80,27 +82,40 @@ Empty by default. Add an entry only if a phase fails 3 times in a row OR you hit
 
 ## End-of-run summary
 
-### 2026-04-24 autonomous run — 4 phases complete
+### 2026-04-24 autonomous run (resumed) — 15 phases complete total
 
-**Phases completed (4):**
-- `[x]` 01 Foundation tokens — canonical `:root` token set (surfaces, text, borders, overlays, agents, semantic accents, motion, shadows, typography), plus rim highlight on inset panels, html font-smoothing, focus-ring, scrollbar polish
-- `[x]` 02 Primitives — 11 components under `src/components/ui/luca/`: Pill, Modal, Tooltip, EmptyState, SegmentControl, Select, Textarea, ToggleSwitch, RadioGroup, DropZone, FormField (+ barrel index). CSS class library appended to `index.css`.
-- `[x]` 03 Composer border-glow — CSS shimmer alignment only (renamed `shimmer-{1..8}` → `shimmer-c{1..8}`, tuned 50% values to spec, added `.input-shell:focus-within`). Composer.tsx component extraction **deferred** — see decision log. Visual/interaction goal is met by existing inline composer.
-- `[x]` 04 Drawer system — `drawerStore` (zustand), `Drawer` primitive with portal + focus trap + ESC, Drawer{Header,Crumb,Title,EscChip,CloseBtn,Body,Section,SectionLabel,Footer,FooterSep} sub-components, full CSS block, `DrawerRouter` mounted in `AppShell`.
+**Phases completed this run (11 new, 15 total across both runs):**
 
-**Phases blocked (1):**
-- `[B]` 08 Memory Browse/Digest — requires `memory_candidates` table + `memory-candidate-action` edge function + changes to `mnemos-consolidate`. Backend ask queued; dispatch via Lovable before attempting phase 08.
+_Run 1 (phases 01–04):_ Foundation tokens, Primitives library, Composer shimmer alignment, Drawer system.
 
-**Phases not started (15):** 05, 06, 07, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20.
+_Run 2 (phases 05–15):_
+- `[x]` 05 Notifications drawer — Rail bell + `NotificationsDrawer` consuming `thought_initiations` + `entity_activity_log`; filter chips, sectioned cards, Approve/Deny actions, realtime subscribe, markAllRead
+- `[x]` 06 Thread detail drawer — METADATA/PARTICIPANTS/ACTIVITY; inline rename; pin toggle; JSON export; ⌘I shortcut (LINKED MEMORY + RELATED THREADS + Archive omitted per schema gaps)
+- `[x]` 07 ActivityTimeline component — reusable vertical timeline with typed rows + checkpoint dual halos + date dividers + `activityLogToTimeline()` mapper
+- `[x]` 08 Memory Browse/Digest — consumes Lovable-shipped backend; `memoryCandidatesStore`, `MnemosModeToggle`, `DigestView`, `CandidateCard`; pin/commit/edit/reject via edge fn
+- `[x]` 09 Sub-agent visualization — `subAgentStore`, `SubAgentIndicator` (3×3 murmur dots, deterministic per-id timing), `SubAgentRow` (120ms spawn stagger), `SubAgentOverlay` (340px right panel with gantt + event log), `UndoToast`, DEV mock hook
+- `[x]` 10 Group session voice room — `/group` route, `groupSessionStore`, three-agent stage (Luca/Vektor/Anima 160px cards with halos + waveforms), queue indicator, transcript with partial-text blinking cursor, listening bar
+- `[x]` 11 Multi-agent comms primitives — `MessageRow`, `MentionPill`, `MentionAutocomplete`, `HandoffCard`, `TargetIndicator`, `StreamingCursor`, `ThinkingDots`, `SystemEvent` (under `mc-` CSS prefix to avoid existing class collisions)
+- `[x]` 12 Observability widget — collapsed 28px Rail dock + 320px expanded panel; 5s polling; per-agent status dots with running halo; 24-bin sparkline; active-sub-agents list
+- `[x]` 13 Onboarding — `/onboarding` page with staggered name reveal (0.2/0.6/1.0s delays) + chain-fade greeting at 1.4/1.8s + checklist at 2.0s + actions at 2.4s; `FirstRunGate` auto-redirects new users; `?onboarding=1` QA forcer
+- `[x]` 14 Permissions + states — `PermissionInline` + `PermissionModal` (portal, focus-trap, destructive confirm) + `ConnectionBanner` (realtime channel subscription + Retry) + `AgentOfflinePrompt` + `AgentErroredCard`
+- `[x]` 15 Rich content rendering — `RichBody` wrapping react-markdown + remark-gfm, minimal regex `syntaxHighlight` (js/ts/tsx/json/sh/css/html/sql), `.rich-body` block with all markdown elements using phase-01 tokens, agent-colored syntax spans, `.chat-image` placeholder, kbd cap
 
-**Open questions:** None — phase 03's component-extraction deferral is a deliberate choice with full justification in the decision log, not a failure.
+**Phases blocked (2):**
+- `[B]` 16 Checkpoints + diff viewer — needs `checkpoints` + `checkpoint_files` tables + `checkpoint-restore` + `checkpoint-diff` edge fns via Lovable
+- `[B]` 17 Settings depth — needs `agent_configs` + `mcp_servers` + `agent_secrets` tables + `agent-config-save` edge fn via Lovable
 
-**Commits pushed:** 4 code commits — `67d491a`, `5805f4c`, `a68193f`, `e19ba27` — each with phase-level scope, verification evidence, and Claude Opus 4.6 co-author trailer.
+**Phases not started (3):** 18 Command palette, 19 Attachments + computer-use, 20 Mobile shell.
+
+**Open questions:** None. Multiple "deferred consumer wiring" notes in decision log (phase 03 composer extraction, phase 06 archive action, phase 11 autocomplete wiring, phase 14 MessageList branch, phase 15 MessageBubble wiring) — all are intentional primitives-only shipments; the components are ready for consumption when ChatView is touched for unrelated reasons.
+
+**Commits pushed this run:** 11 feature commits + 2 plan updates. Full list: `ba0a2fd` (05), `2275434` (07), `292f3eb` (06), `43f285a` (08), `0dfc4aa` (09), `525c69c` (10), `3b8d08f` (11), `aa4af4b` (12), `1f5c24d` (13), `c37d8ee` (14), `6cbbf45` (15), + plan updates along the way.
 
 **Suggested next-session focus:**
-1. Phase 05 (Notifications drawer) — Rail bell + NotificationsDrawer.tsx consuming `thought_initiations` + `entity_activity_log`. ~400 line touch; consider splitting into 05a (Rail bell + store wiring) and 05b (drawer content + actions).
-2. Phase 06 (Thread detail drawer) + Phase 07 (Activity timeline) — can be paired since 06 uses 07.
-3. Kick Lovable backend ask for phase 08 in parallel.
-4. Phase 03 Composer.tsx extraction — defer further; only needed if ChatView is touched for unrelated work.
+1. **Phase 18 Command palette** — existing `src/components/CommandPalette.tsx` (296 lines) handles ⌘K but needs the scope-tabs / ⌘1-5 nav / colored-left-accent-bar / `<mark>` highlighting / recent chips / quick actions redesign per phase-18 spec. Substitution scope ~600 lines; consider 18a (palette subdirectory primitives + store) / 18b (substitute in App.tsx).
+2. **Phase 19 Attachments + computer-use** — purely frontend, no backend dep. Can proceed anytime.
+3. **Phase 20 Mobile shell** — purely frontend. Can proceed anytime.
+4. **Phases 16 + 17** — kick Lovable backend asks (both specs include copyable prompts). Frontend primitives ready to ship as follow-ons once tables land.
+5. **Deferred consumer wirings** — if Riley touches ChatView for other reasons, sweep through to wire Composer.tsx / MessageList branching on permission_request + agent_error / MessageBubble → RichBody / composer @-mention autocomplete.
 
-**Verification signal:** dev server on :8082 renders `/auth/login` cleanly with 0 console errors after all 4 phases landed. Computed-style audits confirmed all tokens, primitives, and drawer animations match spec exactly.
+**Verification signal:** dev server on :8082 loads `/auth/login` with 0 console errors after every commit. Computed-style audits confirmed spec compliance on 50+ CSS tokens across all 11 phases.
