@@ -1819,3 +1819,126 @@ html {
   gap: 6px;
   margin-top: 4px;
 }
+
+/* ======================================================================
+   PHASE 07 — ACTIVITY TIMELINE
+   ====================================================================== */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent 0%, var(--border-faint) 4%, var(--border-faint) 96%, transparent 100%);
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: 12px 52px 1fr auto;
+  gap: 12px;
+  padding: 7px 0;
+  align-items: start;
+  position: relative;
+}
+
+.timeline-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 2px solid var(--canvas);
+  margin-top: 6px;
+  margin-left: 3px;
+  transform: translateX(-2px);
+  z-index: 1;
+  background: var(--text-ghost);
+  flex-shrink: 0;
+}
+.timeline-dot.checkpoint {
+  background: var(--amber-accent);
+  box-shadow: var(--amber-halo-1), var(--amber-halo-2);
+}
+.timeline-dot.handoff { background: var(--text-body); }
+.timeline-dot.tool,
+.timeline-dot.file { background: var(--text-tertiary); }
+.timeline-dot.error { background: var(--red-accent); }
+
+.timeline-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-folio);
+  padding-top: 3px;
+}
+
+.timeline-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-body);
+  line-height: 1.55;
+  min-width: 0;
+  word-break: break-word;
+}
+.timeline-text .agent { color: var(--text-body); }
+.timeline-text .emphasis {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.timeline-text .file-ref {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  padding: 1px 5px;
+  font-size: 10.5px;
+  border-radius: 3px;
+}
+.timeline-text .checkpoint-label {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-weight: 500;
+  display: block;
+}
+.timeline-text .checkpoint-desc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-soft);
+  display: block;
+  margin-top: 3px;
+}
+
+.timeline-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-mono);
+  padding-top: 3px;
+}
+
+.timeline-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0 10px;
+}
+.timeline-divider-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-soft);
+  border: 1px solid var(--border-faint);
+  background: var(--surface-1);
+  padding: 1px 8px;
+  border-radius: 999px;
+  letter-spacing: var(--track-mono);
+}
+.timeline-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-faint), transparent);
+}

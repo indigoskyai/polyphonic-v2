@@ -27,7 +27,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 ### Drawer-powered surfaces (depends on 04)
 - [x] **05** [Notifications drawer](./design-system/05-notifications.md) — Filter chips, sectioned activity feed, per-type cards, Rail bell with amber dot
 - [ ] **06** [Thread detail drawer](./design-system/06-thread-detail.md) — Metadata, participants, activity timeline, linked memory, rename inline, archive state
-- [ ] **07** [Activity timeline component](./design-system/07-activity-timeline.md) — Reusable: dot variants, checkpoint dual halos, time dividers, file-ref code spans
+- [x] **07** [Activity timeline component](./design-system/07-activity-timeline.md) — Reusable: dot variants, checkpoint dual halos, time dividers, file-ref code spans
 
 ### Memory deepening (depends on 01, 02; 08 needs backend)
 - [B] **08** [Memory Browse/Digest](./design-system/08-memory-digest.md) — Toggle, candidate queue, italic rationale, Pin/Commit/Edit/Reject. Requires `memory_candidates` backend table.
