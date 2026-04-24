@@ -1012,8 +1012,16 @@ export default function ChatView() {
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
 
-          {/* Message list */}
-          {messages.map((msg, i) => (
+          {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
+              assistant message that mirrors it, to avoid a duplicate flash. */}
+          {messages.map((msg, i) => {
+            const isLastAssistant =
+              lingeringStream != null &&
+              i === messages.length - 1 &&
+              msg.role === 'assistant' &&
+              msg.content === lingeringStream;
+            if (isLastAssistant) return null;
+            return (
             <div
               key={msg.id}
               className="msg-row"
@@ -1051,7 +1059,9 @@ export default function ChatView() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
+
 
           {/* Streaming message — stays mounted until typewriter settles, even after isStreaming flips */}
           {(isStreaming || lingeringStream) && (
