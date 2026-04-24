@@ -93,3 +93,9 @@ verify_jwt = false
 [functions.profile-chat]
 verify_jwt = false
 
+[functions.checkpoint-restore]
+verify_jwt = false
+
+[functions.checkpoint-diff]
+verify_jwt = false
+
