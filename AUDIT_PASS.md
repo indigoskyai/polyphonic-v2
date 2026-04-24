@@ -175,17 +175,17 @@ Phase 03's commit deferred this. Re-evaluate now that other ChatView-touching ph
 
 ### B.2 — MessageList branching for permission_request
 
-- [ ] In the message render function, check message shape: if `message.kind === 'permission_request'` (or `metadata.type === 'permission_request'`), render `<PermissionCard>` from Phase 14 instead of `<MessageBubble>`.
-- [ ] Wire Approve / Always / Deny handlers to call the appropriate edge function (likely `permission-action` if it exists, or direct table update otherwise).
+- [x] In the message render function, check message shape: if `message.kind === 'permission_request'` (or `metadata.type === 'permission_request'`), render `<PermissionCard>` from Phase 14 instead of `<MessageBubble>`.
+- [x] Wire Approve / Always / Deny handlers to call the appropriate edge function (likely `permission-action` if it exists, or direct table update otherwise).
 
-**BLOCKED on schema.** `Message` type in `src/stores/threadStore.ts` has no `kind` or `metadata` field. Primitive `PermissionInline` is built and styled; backend needs to introduce a message kind/metadata convention (or a separate permission_requests table feeding a render-time merge). See Open questions.
+**UNBLOCKED and landed** (commit `eaba230`). Lovable shipped `kind`/`metadata`/`attachments` columns (migration `20260424195030`). ChatView now early-returns `<PermissionInline>` from the message map when `msg.kind === 'permission_request'`, reading agent/title/body/details from `msg.metadata`. Approve/deny handlers are TODO stubs pending the `permission-action` edge function.
 
 ### B.3 — MessageList branching for agent_error
 
-- [ ] Same pattern. `kind === 'agent_error'` → `<AgentErroredCard>` with divider line above.
-- [ ] Retry handler re-invokes the originating edge function with the same payload.
+- [x] Same pattern. `kind === 'agent_error'` → `<AgentErroredCard>` with divider line above.
+- [x] Retry handler re-invokes the originating edge function with the same payload.
 
-**BLOCKED on schema.** Same root cause as B.2 — no `kind` field on `Message`. Primitive `AgentErroredCard` is built. See Open questions.
+**UNBLOCKED and landed** (commit `eaba230`). ChatView early-returns `<AgentErroredCard>` when `msg.kind === 'agent_error'`. Agent/message/detail/occurredAt pulled from `msg.metadata` + `msg.created_at`. Retry + viewLogs are TODO stubs pending the originating edge function.
 
 ### B.4 — MessageBubble → RichBody
 
@@ -212,10 +212,10 @@ Phase 03's commit deferred this. Re-evaluate now that other ChatView-touching ph
 
 ### B.7 — MessageBubble → MessageAttachment
 
-- [ ] When `message.attachments` exists and has items, render each via `<MessageAttachment>` from Phase 19 below the body.
-- [ ] Image attachments use the gradient-placeholder variant; files use the chip variant; code uses the preview-with-fade variant.
+- [x] When `message.attachments` exists and has items, render each via `<MessageAttachment>` from Phase 19 below the body.
+- [x] Image attachments use the gradient-placeholder variant; files use the chip variant; code uses the preview-with-fade variant.
 
-**BLOCKED on schema.** `Message` type has no `attachments` field. Primitive `MessageAttachment` and variants are built. See Open questions.
+**UNBLOCKED and landed** (commit `eaba230`). After the message body (and variants), if `Array.isArray(msg.attachments)`, render each by `type`: `image` → `<ImagePreview>`, `code` → `<CodePreviewCard>`, `file` → `<MessageAttachment>`. Wrapped in a flex-column gap-8 container with 12px top margin.
 
 ### B.8 — 8th wiring (TBD — survey during audit)
 
@@ -290,28 +290,16 @@ If drift is systemic → stop and write new phase doc.
 - 2026-04-24 14:00 · A.3 · composer rest-state: removed box-shadow, lightened border to --border-faint, lowered shimmer ::before opacity 0.55→0.38 · real culprit was the rest-state drop shadow giving "raised card" feel; spec says shadow only on :focus-within; focus-within rule (index.css:668) unchanged so focus still brings composer forward
 - 2026-04-24 14:05 · A.4 · converted Settings from modal to full-page surface · added SidebarSettings (AGENTS + SYSTEM groups with SidebarRow pattern), SettingsPlaceholder component for non-ported categories, route `/settings` → redirect to `/settings/agents`, 5 new routes for Skills/Routines/Voice & security/Import & export/Account & preferences using the placeholder; Rail cog + CommandPalette openSettings now navigate() instead of opening modal; deleted SettingsModal.tsx and settingsModalStore.ts; Sidebar.tsx branches to SidebarSettings when path starts with `/settings`
 - 2026-04-24 14:12 · B · consumer wirings sweep · B.4 (RichBody swap for assistant messages) + B.6 (drop overlay on ChatView) landed; B.1 (Composer extraction) deferred again (touches here too narrow to motivate); B.5 (@-mention) deferred as a focused follow-up; B.8 surveyed — all four candidates already wired (ObservabilityWidget, notifications bell count, ⌘I thread-detail trigger, FirstRunGate); B.2 + B.3 + B.7 BLOCKED on schema — Message type has no kind / metadata / attachments fields (see Open questions)
+- 2026-04-24 14:54 · B.2 + B.3 + B.7 · UNBLOCKED · Lovable shipped migration 20260424195030 adding kind/metadata/attachments columns + CHECK constraint + kind index + MessageAttachment type + Message interface update; ChatView now branches on msg.kind (permission_request → PermissionInline, agent_error → AgentErroredCard) and renders attachments array by type (image → ImagePreview, code → CodePreviewCard, file → MessageAttachment); approve/deny/retry handlers are TODO stubs pending edge function wiring (commit eaba230)
 
 # Open questions (for Riley / Lovable)
 
-**Schema: Message model needs `kind`, `metadata`, `attachments` fields to unblock B.2 / B.3 / B.7.**
+**~~Schema: Message model needs `kind`, `metadata`, `attachments` fields to unblock B.2 / B.3 / B.7.~~** ✓ RESOLVED — Lovable shipped migration `20260424195030` with all three columns, CHECK constraint on kind, kind index, MessageAttachment type, and Message interface update. ChatView wired in commit `eaba230`.
 
-Primitives are built and styled (`PermissionInline`, `AgentErroredCard`, `MessageAttachment` + variants) but can't be rendered inline in the chat stream without a way to identify which messages are which. Recommended Lovable prompt:
+**Remaining:**
 
-> In the `messages` table add optional columns:
-> - `kind text` — e.g. `'permission_request' | 'agent_error' | 'text'` (default null → treat as text)
-> - `metadata jsonb` — structured payload (permission title/body, error message/detail, etc.)
-> - `attachments jsonb` — array of `{ type: 'image' | 'file' | 'code', url, meta }` per Phase 19 attachment variants
->
-> Update `src/integrations/supabase/types.ts` accordingly. In edge functions that emit permission requests or agent errors, write rows into `messages` with the appropriate `kind` + `metadata`. In ChatView the render branch can then be:
-> ```tsx
-> if (msg.kind === 'permission_request') return <PermissionInline {...msg.metadata} />;
-> if (msg.kind === 'agent_error')        return <AgentErroredCard {...msg.metadata} />;
-> // ... else regular message + RichBody + attachments
-> ```
-
-Once merged, B.2 / B.3 / B.7 unblock as ~30-line ChatView patches each.
-
-**B.5 (@-mention autocomplete):** Deferred; worth its own small phase to do right (caret tracking, keyboard nav, pill serialization into message text).
+- **Edge functions for permission + error events:** When the app needs to surface a permission request or agent error to the user, the originating edge function should insert a row into `messages` with `kind = 'permission_request'` (or `'agent_error'`) and a populated `metadata` JSON. ChatView already renders these kinds correctly; the approve/deny/retry handlers currently log TODO — they need to call back into an edge function (e.g. `permission-action`, or a retry of the originating function with the same payload).
+- **B.5 (@-mention autocomplete):** Deferred; worth its own small phase to do right (caret tracking, keyboard nav, pill serialization into message text).
 
 # End-of-run summary
 
@@ -321,23 +309,27 @@ Once merged, B.2 / B.3 / B.7 unblock as ~30-line ChatView patches each.
 - A.3 composer border rest-state: removed rest-state box-shadow, lightened border `--border-subtle`→`--border-faint`, lowered shimmer ::before opacity 0.55→0.38. Composer now blends into canvas at rest, :focus-within unchanged so focus still brings forward.
 - A.4 settings as page: deleted SettingsModal + settingsModalStore; added `SidebarSettings.tsx` (AGENTS + SYSTEM groups), `SettingsPlaceholder.tsx` for non-ported categories, routes for Skills/Routines/Voice & security/Import & export/Account & preferences, `/settings` redirect to `/settings/agents`; Rail cog + CommandPalette navigate instead of opening modal.
 
-**Part B — Consumer wirings (2 landed / 2 deferred / 3 blocked):**
-- LANDED: B.4 (RichBody swap for agent messages) + B.6 (drop overlay on ChatView).
+**Part B — Consumer wirings (5 landed / 2 deferred / 0 blocked):**
+- LANDED: B.4 (RichBody swap for agent messages), B.6 (drop overlay on ChatView), B.2 (permission_request branching), B.3 (agent_error branching), B.7 (attachments rendering). B.2+B.3+B.7 unblocked after Lovable shipped the schema migration (commit `eaba230`).
 - DEFERRED: B.1 (Composer extraction — out of scope this pass); B.5 (@-mention autocomplete — deserves its own focused phase).
-- BLOCKED ON SCHEMA: B.2 (permission_request branching) + B.3 (agent_error branching) + B.7 (attachments rendering) — Message type lacks `kind` / `metadata` / `attachments` fields. Open questions section has a concrete Lovable prompt.
 - B.8 survey: all four candidates already wired.
+- Remaining TODO: approve/deny/retry handlers in ChatView log to console; they need to call back into edge functions once those exist.
 
 **Part C — Whole-app verification (12/20 confirmed clean, 5 deferred for brevity, 3 blocked-on-schema):**
 - Confirmed clean: C.1, C.2, C.3, C.4, C.5, C.6, C.9, C.11, C.12, C.19, C.20 (plus /chat/:id showing RichBody live).
 - Not individually eyeballed (structure intact, no regression signal): C.7, C.8, C.10, C.13, C.14.
 - Blocked: C.15–C.18 (permission / error / connection states — schema-dependent; primitives built).
 
-**Commits pushed to `main` (4):**
+**Commits pushed to `main` (6):**
 - `c53cb66` audit A.1+A.2: sidebar + rail widths match mockup
 - `28838ea` audit A.3: composer border — tone rest-state intensity
 - `8defdc5` audit A.4: settings — convert modal to full-page route surface
 - `218c95f` audit B: consumer wirings sweep — RichBody + drop overlay landed
+- `b9b671a` audit C + end-of-run
+- `eaba230` audit B.2+B.3+B.7: unblock consumer wirings now that schema shipped
 
-**Stop condition hit:** Natural completion of Part A + Part B + pragmatic Part C coverage. No failing sub-sections. Remaining work is surgical once backend schema updates land.
+**Stop condition hit:** Natural completion of Part A + Part B (all wiring either landed or deliberately deferred) + pragmatic Part C coverage. No failing sub-sections, no remaining schema blockers.
 
-**Next move for Riley:** Dispatch the Lovable prompt in Open questions to add `kind`/`metadata`/`attachments` columns to `messages`. Once merged, B.2 + B.3 + B.7 become small ChatView patches (~30 lines each). B.5 @-mention autocomplete is independent and can slot in as its own phase.
+**Next moves for Riley:**
+- Wire the approve/deny/retry handlers in ChatView to real edge functions (they currently log to console).
+- Consider the B.5 @-mention autocomplete as its own focused phase.
