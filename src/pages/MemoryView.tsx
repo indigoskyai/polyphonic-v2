@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import GraphTab from '@/components/memory/GraphTab';
 import EngramsTab from '@/components/memory/EngramsTab';
 import BeliefsTab from '@/components/memory/BeliefsTab';
+import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
 import ImportDetailPanel from '@/components/ImportDetailPanel';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -89,6 +90,7 @@ export default function MemoryView() {
           {activeTab === 'Beliefs' && <BeliefsTab />}
           {activeTab === 'Graph' && <GraphTab />}
           {activeTab === 'Imports' && <ImportsTab />}
+          {activeTab === 'Settings' && <MemorySettingsPanel />}
         </div>
 
         {/* Detail panel (when engram selected) */}
