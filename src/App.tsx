@@ -26,6 +26,8 @@ import { useNotificationStore } from "./stores/notificationStore";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
+import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
+import UndoToast from "./components/subagents/UndoToast";
 
 const queryClient = new QueryClient();
 
@@ -91,6 +93,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <SettingsModal open={settingsOpen} onClose={closeSettings} />
       <CommandPalette />
       <DrawerRouter />
+      <SubAgentOverlay />
+      <UndoToast />
     </div>
   );
 }
