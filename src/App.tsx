@@ -32,6 +32,8 @@ import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
+import ConnectionBanner from "./components/states/ConnectionBanner";
+import PermissionModal from "./components/permissions/PermissionModal";
 
 const queryClient = new QueryClient();
 
@@ -118,6 +120,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           boxShadow: 'var(--shadow-panel), var(--shadow-inset-highlight)',
         }}
       >
+        <ConnectionBanner />
         <ImportProgressBanner />
         {children}
         {clockbarVisible && <Clockbar />}
@@ -127,6 +130,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <DrawerRouter />
       <SubAgentOverlay />
       <UndoToast />
+      <PermissionModal />
     </div>
   );
 }

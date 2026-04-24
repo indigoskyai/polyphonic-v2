@@ -42,7 +42,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **13** [Onboarding](./design-system/13-onboarding.md) — Three-name staggered reveal, checklist with pulse-active
 
 ### Edge states (depends on 01, 02, 04)
-- [ ] **14** [Permissions + states](./design-system/14-permissions-states.md) — Inline + modal permission, connection banner, agent offline, agent errored
+- [x] **14** [Permissions + states](./design-system/14-permissions-states.md) — Inline + modal permission, connection banner, agent offline, agent errored
 
 ### Content + features (depends on 01, 02)
 - [ ] **15** [Rich content rendering](./design-system/15-rich-content.md) — Full markdown spec inside messages
