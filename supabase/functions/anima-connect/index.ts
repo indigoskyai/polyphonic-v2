@@ -174,13 +174,14 @@ serve(async (req) => {
 
         if (strength < 0.3) continue; // Skip weak connections
 
-        await supabase.from("memory_connections").insert({
-          source_memory_id: memA.id,
-          target_memory_id: memB.id,
-          relation_type: relationType,
-          strength,
+        const { error: connErr } = await supabase.from("connections").insert({
+          source_id: memA.id,
+          target_id: memB.id,
+          connection_type: relationType,
+          weight: strength,
           user_id,
         });
+        if (connErr) console.error("[anima-connect] connections insert failed:", connErr);
 
         // Also create a thought about the connection
         const { error: insErr } = await supabase.from("thought_stream").insert({

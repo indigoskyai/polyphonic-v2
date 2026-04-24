@@ -235,11 +235,12 @@ serve(async (req) => {
         totalObs += observations.length;
 
         // Store in observer_logs
-        await supabase.from("observer_logs").insert({
+        const { error: olErr } = await supabase.from("observer_logs").insert({
           user_id,
           model: modelName,
           observations: observations.slice(0, 3),
         });
+        if (olErr) console.error(`[anima-observe] observer_logs insert (${modelName}) failed:`, olErr);
 
         // Encode observations into Mnemos
         try {
@@ -305,12 +306,13 @@ serve(async (req) => {
 
           if (synthesis) {
             // Store synthesis in observer_logs
-            await supabase.from("observer_logs").insert({
+            const { error: synthInsErr } = await supabase.from("observer_logs").insert({
               user_id,
               model: "synthesis",
               observations: [],
               synthesis,
             });
+            if (synthInsErr) console.error("[anima-observe] observer_logs synthesis insert failed:", synthInsErr);
           }
         }
       } catch (e) {
