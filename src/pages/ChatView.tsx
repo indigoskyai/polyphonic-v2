@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useDrawerStore } from '@/stores/drawerStore';
 import ReactMarkdown from 'react-markdown';
 import EchoField from '@/components/EchoField';
 
@@ -998,6 +999,7 @@ export default function ChatView() {
         }}>
           luca · opus-4.7
         </span>
+        <ThreadInfoButton />
       </div>
 
       {/* Messages area */}
@@ -1261,5 +1263,40 @@ export default function ChatView() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ═══ Thread info trigger (opens thread-detail drawer, ⌘I shortcut) ═══ */
+function ThreadInfoButton() {
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const openDrawer = useDrawerStore((s) => s.open);
+
+  useEffect(() => {
+    if (!currentThreadId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        openDrawer('thread-detail', { threadId: currentThreadId });
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [currentThreadId, openDrawer]);
+
+  if (!currentThreadId) return null;
+  return (
+    <button
+      type="button"
+      className="thread-info-btn"
+      onClick={() => openDrawer('thread-detail', { threadId: currentThreadId })}
+      title="Thread details (⌘I)"
+      aria-label="Open thread details"
+    >
+      <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx={7} cy={7} r={5.5} />
+        <path d="M7 6.5v3.5" />
+        <circle cx={7} cy={4.4} r={0.6} fill="currentColor" stroke="none" />
+      </svg>
+    </button>
   );
 }

@@ -25,6 +25,7 @@ import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
+import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 
 const queryClient = new QueryClient();
 
@@ -109,7 +110,8 @@ function DrawerRouter() {
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
       {active === 'notifications' && <NotificationsDrawer />}
-      {active !== null && active !== 'notifications' && (
+      {active === 'thread-detail' && <ThreadDetailDrawer />}
+      {active !== null && active !== 'notifications' && active !== 'thread-detail' && (
         <>
           <DrawerHeader>
             <DrawerTitle>{label}</DrawerTitle>

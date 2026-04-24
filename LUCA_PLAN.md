@@ -26,7 +26,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Drawer-powered surfaces (depends on 04)
 - [x] **05** [Notifications drawer](./design-system/05-notifications.md) — Filter chips, sectioned activity feed, per-type cards, Rail bell with amber dot
-- [ ] **06** [Thread detail drawer](./design-system/06-thread-detail.md) — Metadata, participants, activity timeline, linked memory, rename inline, archive state
+- [x] **06** [Thread detail drawer](./design-system/06-thread-detail.md) — Metadata, participants, activity timeline, linked memory, rename inline, archive state
 - [x] **07** [Activity timeline component](./design-system/07-activity-timeline.md) — Reusable: dot variants, checkpoint dual halos, time dividers, file-ref code spans
 
 ### Memory deepening (depends on 01, 02; 08 needs backend)
@@ -60,6 +60,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 - 2026-04-24 08:54 · phase 02 · placed all 11 primitives under `src/components/ui/luca/` (not `src/components/ui/` per spec) · macOS APFS is case-insensitive — `Tooltip.tsx`/`Select.tsx`/`Textarea.tsx` collide with shadcn lowercase `tooltip.tsx`/`select.tsx`/`textarea.tsx`. Subfolder keeps Luca primitives grouped + avoids collisions. Barrel at `ui/luca/index.ts`.
 - 2026-04-24 08:57 · phase 03 · shipped CSS shimmer alignment only; deferred `Composer.tsx` extraction · existing inline composer in `ChatView.tsx` (L920–965 landing + L1145–1255 conversation) already matches the mockup pixel-faithfully and consumes 15+ handlers/refs from ChatView state. Extraction would require ~150 lines of JSX move + full prop interface for state passthrough — pure refactor with zero visible change. The phase's visual goal (locked shimmer-c1..c8 keyframes @ prime durations + `.input-shell:focus-within` intensification) is achieved. Component extraction tracked as follow-on work; re-open phase 03 if/when the inline composer is touched for unrelated reasons.
+- 2026-04-24 09:27 · phase 06 · LINKED MEMORY + RELATED THREADS sections omitted; Archive action is no-op placeholder · `threads` schema lacks `archived` column and there is no `thread↔engram` relation table. Rendering placeholder sections for data that can't be wired would be dishonest UI. METADATA/PARTICIPANTS/ACTIVITY (via Phase 07 timeline)/RENAME inline flow/PIN toggle/EXPORT-to-JSON all wired to real data. Archive Pill currently just closes drawer until a `threads.archived` column lands.
 
 
 ## Backend asks queue

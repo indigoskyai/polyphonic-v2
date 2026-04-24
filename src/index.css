@@ -1942,3 +1942,130 @@ html {
   height: 1px;
   background: linear-gradient(90deg, var(--border-faint), transparent);
 }
+
+/* ======================================================================
+   PHASE 06 — THREAD DETAIL DRAWER
+   ====================================================================== */
+
+.drawer-title-input {
+  font-size: 24px;
+  font-weight: 450;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-focus);
+  outline: none;
+  padding: 0 0 2px;
+  width: 100%;
+  font-family: var(--font-sans);
+}
+.drawer-rename-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-mono);
+}
+
+/* Metadata key-value rows */
+.meta-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.meta-kv__row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.meta-kv__k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-meta);
+  color: var(--text-ghost);
+}
+.meta-kv__v {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--text-body);
+}
+
+/* Participants */
+.participant-list { display: flex; flex-direction: column; gap: 6px; }
+.participant {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.participant:hover { background: var(--surface-2); }
+.participant__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-style: italic;
+}
+.participant__avatar--luca    { box-shadow: inset 0 0 0 1px rgba(201, 168, 124, 0.18); }
+.participant__avatar--vektor  { box-shadow: inset 0 0 0 1px rgba(124, 168, 201, 0.18); }
+.participant__avatar--anima   { box-shadow: inset 0 0 0 1px rgba(201, 124, 168, 0.18); }
+.participant:hover .participant__avatar--luca   { box-shadow: inset 0 0 0 1px rgba(201, 168, 124, 0.32); }
+.participant:hover .participant__avatar--vektor { box-shadow: inset 0 0 0 1px rgba(124, 168, 201, 0.32); }
+.participant:hover .participant__avatar--anima  { box-shadow: inset 0 0 0 1px rgba(201, 124, 168, 0.32); }
+.participant__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.participant__name {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.participant__role {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  letter-spacing: var(--track-folio);
+}
+.participant__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-soft);
+  letter-spacing: var(--track-mono);
+}
+
+/* Thread info trigger on ChatView header */
+.thread-info-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.thread-info-btn:hover { color: var(--text-primary); background: var(--overlay-hover); }

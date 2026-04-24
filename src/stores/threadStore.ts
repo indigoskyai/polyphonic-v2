@@ -41,6 +41,7 @@ interface ThreadState {
   setStreamingContent: (c: string) => void;
   setStreamingThinking: (t: string) => void;
   updateThreadTitle: (threadId: string, title: string) => Promise<void>;
+  updateThreadPinned: (threadId: string, pinned: boolean) => Promise<void>;
 }
 
 export const useThreadStore = create<ThreadState>((set, get) => ({
@@ -101,6 +102,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await supabase.from('threads').update({ title }).eq('id', threadId);
     set((s) => ({
       threads: s.threads.map((t) => (t.id === threadId ? { ...t, title } : t)),
+    }));
+  },
+
+  updateThreadPinned: async (threadId, pinned) => {
+    await supabase.from('threads').update({ pinned }).eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (t.id === threadId ? { ...t, pinned } : t)),
     }));
   },
 }));
