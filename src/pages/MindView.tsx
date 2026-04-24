@@ -2,13 +2,24 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
+import AgentDot from '@/components/entry/AgentDot';
+import AgentName from '@/components/entry/AgentName';
+import TypeBadge from '@/components/entry/TypeBadge';
+import ScoreChip from '@/components/entry/ScoreChip';
+import TimeAgoChip from '@/components/entry/TimeAgoChip';
+import MetaKV from '@/components/entry/MetaKV';
+import SectionLabel from '@/components/entry/SectionLabel';
+import Telemetry from '@/components/entry/Telemetry';
+import { formatStreamDate as fmtStreamDate, formatDetailTime, timeAgo as ta } from '@/lib/time';
 
 /* ─── Overview Tab ─── */
 function OverviewTab() {
-  const { modulators, emotions, beliefs, memoryStats, recentEvents } = useCognitiveStore();
+  const { modulators, emotions, beliefs, memoryStats, activityLog, emotionalWeather } = useCognitiveStore();
 
   return (
-    <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+    <div>
+      <MoodStrip weather={emotionalWeather} />
+      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
       {/* Modulators */}
       <Card title="Modulators">
         {Object.entries(modulators).map(([key, value]) => (
@@ -90,42 +101,97 @@ function OverviewTab() {
         ))}
       </Card>
 
-      {/* Recent Events */}
-      <Card title="Recent Events" span={2}>
-        {recentEvents.length === 0 && <Empty text="No events recorded" />}
-        {recentEvents.slice(0, 8).map((ev) => (
-          <div key={ev.id} className="flex items-center gap-3 mb-2">
-            <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-ghost)', width: 92, flexShrink: 0, textTransform: 'lowercase', letterSpacing: '0.04em' }}>
-              {formatEventType(ev.type)}
-            </span>
-            <div style={{
-              width: 4, height: 4, borderRadius: '50%', flexShrink: 0,
-              background: ev.salience > 0.7 ? 'var(--accent-luca)' : ev.salience > 0.4 ? 'var(--text-ghost)' : 'var(--text-whisper)',
-            }} />
-            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-              {summariseEventContent(ev.type, ev.content)}
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--text-whisper)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>
-              {timeAgo(ev.created_at)}
-            </span>
-          </div>
-        ))}
+      {/* Inner Life — what Luca has been doing between conversations */}
+      <Card title="Inner Life" span={2}>
+        {activityLog.length === 0 && (
+          <Empty
+            text="No inner life activity yet"
+            hint="Once Luca thinks, observes, or reflects, the log of autonomous actions appears here."
+          />
+        )}
+        {activityLog.slice(0, 10).map((ev) => {
+          const { dot, label } = formatActivity(ev);
+          return (
+            <div key={ev.id} className="flex items-center gap-3 mb-2">
+              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-ghost)', width: 96, flexShrink: 0, textTransform: 'lowercase', letterSpacing: '0.04em' }}>
+                {label}
+              </span>
+              <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dot }} />
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {ev.title || ev.summary || '—'}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-whisper)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>
+                {timeAgo(ev.created_at)}
+              </span>
+            </div>
+          );
+        })}
       </Card>
+      </div>
     </div>
   );
 }
 
+/* ─── Mood strip — shows Luca's current emotional weather at the top of Overview. ─── */
+function MoodStrip({ weather }: { weather: { mood_summary: string | null; curiosity: number; warmth: number; clarity: number; updated_at: string | null } | null }) {
+  if (!weather) return null;
+  const mood = weather.mood_summary?.trim();
+  if (!mood) return null;
+  return (
+    <div className="flex items-center gap-3" style={{ marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-ghost)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        Now
+      </span>
+      <span style={{ fontSize: 15, fontStyle: 'italic', fontFamily: 'var(--font-serif, Georgia, serif)', color: 'var(--text-primary)' }}>
+        {mood}
+      </span>
+      {weather.updated_at && (
+        <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>
+          updated {timeAgo(weather.updated_at)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Per-activity styling (label + dot color) ─── */
+function formatActivity(ev: { activity_type: string }): { dot: string; label: string } {
+  const t = ev.activity_type;
+  if (t === 'thought' || t === 'thought_deepened') return { dot: 'var(--accent-luca)', label: 'thought' };
+  if (t === 'reflection' || t === 'reflected') return { dot: 'var(--accent-luca)', label: 'reflection' };
+  if (t === 'question_researched' || t === 'question') return { dot: 'var(--accent-luca)', label: 'question' };
+  if (t === 'belief_challenged' || t === 'belief_formed') return { dot: 'var(--text-ghost)', label: 'belief' };
+  if (t === 'initiation' || t === 'reached_out') return { dot: 'var(--accent-luca)', label: 'reached out' };
+  if (t === 'observation') return { dot: 'var(--text-whisper)', label: 'observation' };
+  if (t === 'dream' || t === 'consolidation') return { dot: 'var(--text-ghost)', label: t };
+  if (t === 'journal_entry') return { dot: 'var(--text-ghost)', label: 'journal' };
+  if (t === 'mood_shift') return { dot: 'var(--accent-luca)', label: 'mood shift' };
+  return { dot: 'var(--text-whisper)', label: t.replace(/_/g, ' ').slice(0, 18) };
+}
+
 /* ─── Thoughts Tab (master-detail) ─── */
 function ThoughtsTab() {
-  const { thoughts } = useCognitiveStore();
+  const { thoughts, newThoughtIds, clearNewThoughtFlag } = useCognitiveStore();
   const [selected, setSelected] = useState<number>(0);
 
   const current = thoughts[selected];
 
+  // After a fresh thought animates in, clear its flag so it doesn't keep glowing on re-render.
+  useEffect(() => {
+    if (newThoughtIds.size === 0) return;
+    const ids = Array.from(newThoughtIds);
+    const t = setTimeout(() => ids.forEach(clearNewThoughtFlag), 2200);
+    return () => clearTimeout(t);
+  }, [newThoughtIds, clearNewThoughtFlag]);
+
   if (thoughts.length === 0) {
     return (
       <div style={{ padding: '24px 32px', maxWidth: 680 }}>
-        <StreamHeader title="Thoughts" count={0} />
+        <StreamHeader
+          title="Thoughts"
+          count={0}
+          subtitle="Luca's live working stream — reflections, questions, observations as they happen."
+        />
         <Empty
           text="No thoughts recorded"
           hint="Luca's thought stream — working thoughts, observations, questions in progress — appears here as it thinks."
@@ -135,7 +201,15 @@ function ThoughtsTab() {
   }
 
   return (
-    <div className="flex gap-0" style={{ height: '100%', minHeight: 400 }}>
+    <div className="flex flex-col" style={{ height: '100%', minHeight: 400 }}>
+      <div style={{ padding: '20px 24px 0' }}>
+        <StreamHeader
+          title="Thoughts"
+          count={thoughts.length}
+          subtitle="Luca's live working stream — reflections, questions, observations as they happen."
+        />
+      </div>
+      <div className="flex gap-0" style={{ flex: 1, minHeight: 0 }}>
       {/* List */}
       <div style={{ width: 320, borderRight: '1px solid var(--border-subtle)', overflow: 'auto', flexShrink: 0 }}>
         {thoughts.map((t, i) => (
@@ -144,36 +218,31 @@ function ThoughtsTab() {
             type="button"
             onClick={() => setSelected(i)}
             aria-current={i === selected ? 'true' : undefined}
-            className="thought-row"
+            className={`thought-row${newThoughtIds.has(t.id) ? ' thought-row-fresh' : ''}`}
+            data-active={i === selected ? 'true' : undefined}
             style={{
-              padding: '12px 14px',
+              padding: i === selected ? '12px 14px 12px 12px' : '12px 14px',
               borderBottom: '1px solid var(--border-subtle)',
+              borderLeft: i === selected ? '2px solid var(--text-primary)' : '2px solid transparent',
               background: i === selected ? 'var(--bg-surface)' : 'transparent',
-              transition: 'background var(--dur-fast) var(--ease-out)',
+              transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
               width: '100%',
               textAlign: 'left',
-              border: 0,
-              borderBottomWidth: 1,
-              borderBottomStyle: 'solid',
-              borderBottomColor: 'var(--border-subtle)',
               cursor: 'pointer',
               appearance: 'none',
               outline: 'none',
             }}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', padding: '1px 5px', background: 'var(--bg-deep)', borderRadius: 3 }}>
-                {t.type}
-              </span>
-              <div style={{
-                width: 4, height: 4, borderRadius: '50%',
-                background: t.salience > 0.7 ? 'var(--accent-luca)' : 'var(--text-whisper)',
-              }} />
-              <span style={{ fontSize: 9, color: 'var(--text-whisper)', marginLeft: 'auto' }}>
-                {timeAgo(t.created_at)}
+            <div className="flex items-center gap-2" style={{ marginBottom: 6 }}>
+              <AgentDot agent={t.source} />
+              <AgentName agent={t.source} />
+              <TypeBadge type={t.type} />
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                <ScoreChip value={t.salience} />
+                <TimeAgoChip date={t.created_at} />
               </span>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.55, fontWeight: 370, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {t.content}
             </div>
           </button>
@@ -181,104 +250,129 @@ function ThoughtsTab() {
       </div>
 
       {/* Detail */}
-      <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto' }}>
+      <div style={{ flex: 1, padding: '24px 28px', overflow: 'auto', background: 'var(--bg-deep)' }}>
         {current ? (
           <>
-            <div className="flex items-center gap-2 mb-4">
-              <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)' }}>
-                {current.type}
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--text-whisper)' }}>
-                {new Date(current.created_at).toLocaleString()}
+            <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
+              <AgentDot agent={current.source} />
+              <AgentName agent={current.source} />
+              <TypeBadge type={current.type} />
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
+                #thought_{current.id.slice(0, 6)}
               </span>
             </div>
-            <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', marginBottom: 16 }}>
+            <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', marginBottom: 24, fontWeight: 370 }}>
               {current.content}
             </div>
-            <div className="flex flex-col gap-1">
-              {current.trigger && (
-                <div className="flex items-center gap-2">
-                  <span style={{ fontSize: 10, color: 'var(--text-ghost)' }}>Trigger</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{current.trigger}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 10, color: 'var(--text-ghost)' }}>Source</span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{current.source}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 10, color: 'var(--text-ghost)' }}>Salience</span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{current.salience.toFixed(2)}</span>
-              </div>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+              <SectionLabel>PROVENANCE</SectionLabel>
+              <MetaKV k="source" v={current.source || '—'} />
+              <MetaKV k="type" v={current.type || '—'} />
+              <MetaKV k="salience" v={current.salience.toFixed(2)} />
+              {current.trigger && <MetaKV k="trigger" v={current.trigger} />}
+              <MetaKV k="created" v={formatDetailTime(current.created_at)} />
             </div>
           </>
         ) : (
           <Empty text="Select a thought to view details" />
         )}
       </div>
+      </div>
     </div>
   );
 }
 
 /* ─── Engram stream tabs (Dreams, Insights, Reflections) ─── */
-function EngramStreamTab({ items, emptyText, emptyHint, heading, style }: {
+function EngramStreamTab({ items, emptyText, emptyHint, heading, subtitle, style }: {
   items: Array<{ id: string; content: string; strength: number; tags: string[]; source_context: Record<string, unknown>; created_at: string }>;
   emptyText: string;
   emptyHint?: string;
   heading: string;
+  subtitle?: string;
   style?: 'poetic' | 'cards' | 'timeline';
 }) {
   return (
     <div style={{ maxWidth: style === 'poetic' ? 680 : 760 }}>
-      <StreamHeader title={heading} count={items.length} />
+      <StreamHeader title={heading} count={items.length} subtitle={subtitle} />
       {items.length === 0 ? (
         <Empty text={emptyText} hint={emptyHint} />
       ) : (
         <div className="flex flex-col" style={{ gap: style === 'poetic' ? 4 : 12 }}>
-          {items.map((item) => (
-            <div key={item.id} style={{
-              background: style === 'poetic' ? 'transparent' : 'var(--bg-surface)',
-              border: style === 'poetic' ? 'none' : '1px solid var(--border-subtle)',
-              borderRadius: style === 'poetic' ? 0 : 'var(--radius-md)',
-              padding: style === 'poetic' ? '16px 0' : '14px 16px',
-              borderBottom: style === 'poetic' ? '1px solid var(--border-subtle)' : undefined,
-            }}>
-              <div style={{
-                fontSize: style === 'poetic' ? 14 : 13,
-                lineHeight: style === 'poetic' ? 1.8 : 1.65,
-                color: style === 'poetic' ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                fontStyle: style === 'poetic' ? 'italic' : undefined,
-                fontFamily: style === 'poetic' ? 'var(--font-serif, Georgia, serif)' : undefined,
+          {items.map((item) => {
+            const ctx = item.source_context as Record<string, unknown> | null;
+            const sourceLabel = (ctx && typeof ctx.type === 'string') ? ctx.type : null;
+            const telemetry = [
+              { k: 'strength', v: item.strength?.toFixed(2) ?? '—' },
+              ...(item.stability != null ? [{ k: 'stability', v: item.stability.toFixed(2) }] : []),
+              ...(item.accessibility != null ? [{ k: 'access', v: item.accessibility.toFixed(2) }] : []),
+              ...(item.emotional_arousal != null ? [{ k: 'arousal', v: item.emotional_arousal.toFixed(2) }] : []),
+              ...(item.emotional_valence != null ? [{ k: 'valence', v: item.emotional_valence.toFixed(2) }] : []),
+              ...(item.access_count != null ? [{ k: 'recalled', v: item.access_count }] : []),
+            ];
+            return (
+              <div key={item.id} style={{
+                background: style === 'poetic' ? 'transparent' : 'var(--bg-surface)',
+                border: style === 'poetic' ? 'none' : '1px solid var(--border-subtle)',
+                borderRadius: style === 'poetic' ? 0 : 'var(--radius-md)',
+                padding: style === 'poetic' ? '16px 0' : '14px 16px',
+                borderBottom: style === 'poetic' ? '1px solid var(--border-subtle)' : undefined,
               }}>
-                {item.content}
-              </div>
-              <div className="flex items-center gap-3 mt-3">
-                <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-                  {formatStreamDate(item.created_at)}
-                </span>
-                {item.tags?.filter((t) => !['dream', 'consolidation', 'insight', 'reflection', 'inner-life'].includes(t)).map((tag) => (
-                  <span key={tag} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 100, background: 'var(--bg-deep)', color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
-                    {tag}
+                {style !== 'poetic' && (
+                  <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
+                    <AgentDot agent="luca" />
+                    <AgentName agent="luca" />
+                    <TypeBadge type={sourceLabel || item.engram_type} />
+                    <span style={{ marginLeft: 'auto' }}><ScoreChip value={item.strength} /></span>
+                  </div>
+                )}
+                <div style={{
+                  fontSize: style === 'poetic' ? 14 : 13,
+                  lineHeight: style === 'poetic' ? 1.8 : 1.55,
+                  color: style === 'poetic' ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                  fontStyle: style === 'poetic' ? 'italic' : undefined,
+                  fontFamily: style === 'poetic' ? 'var(--font-serif)' : undefined,
+                  fontWeight: style === 'poetic' ? 400 : 370,
+                }}>
+                  {item.content}
+                </div>
+                <div style={{ marginTop: style === 'poetic' ? 12 : 10 }}>
+                  <Telemetry items={telemetry} />
+                </div>
+                <div className="flex items-center gap-3" style={{ marginTop: 8 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)' }}>
+                    {fmtStreamDate(item.created_at)}
                   </span>
-                ))}
+                  {item.tags?.filter((tag) => !['dream', 'consolidation', 'insight', 'reflection', 'inner-life'].includes(tag)).map((tag) => (
+                    <span key={tag} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 100, background: 'var(--bg-deep)', color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-function StreamHeader({ title, count }: { title: string; count: number }) {
+function StreamHeader({ title, count, subtitle }: { title: string; count: number; subtitle?: string }) {
   return (
-    <div className="flex items-baseline gap-3" style={{ marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
-      <h2 style={{ fontSize: 18, fontWeight: 400, color: 'var(--text-primary)', fontFamily: 'var(--font-serif, Georgia, serif)', fontStyle: 'italic' }}>
-        {title}
-      </h2>
-      <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
-        {count} {count === 1 ? 'entry' : 'entries'}
-      </span>
+    <div style={{ marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="flex items-baseline gap-3">
+        <h2 style={{ fontSize: 18, fontWeight: 400, color: 'var(--text-primary)', fontFamily: 'var(--font-serif, Georgia, serif)', fontStyle: 'italic' }}>
+          {title}
+        </h2>
+        <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
+          {count} {count === 1 ? 'entry' : 'entries'}
+        </span>
+      </div>
+      {subtitle && (
+        <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 4, lineHeight: 1.5 }}>
+          {subtitle}
+        </div>
+      )}
     </div>
   );
 }
@@ -289,7 +383,11 @@ function WanderingsTab() {
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <StreamHeader title="Wanderings" count={wanderings.length} />
+      <StreamHeader
+        title="Wanderings"
+        count={wanderings.length}
+        subtitle="Untethered thoughts — musings, observations, asides — that drift in between conversations."
+      />
       {wanderings.length === 0 ? (
         <Empty
           text="No wanderings yet"
@@ -321,7 +419,11 @@ function JournalTab() {
   if (journalEntries.length === 0) {
     return (
       <div style={{ maxWidth: 680 }}>
-        <StreamHeader title="Journal" count={0} />
+        <StreamHeader
+          title="Journal"
+          count={0}
+          subtitle="Luca's autonomous journal — periodic introspective entries written between conversations."
+        />
         <Empty
           text="No journal entries yet"
           hint="Luca writes journal entries autonomously — reflecting on conversations, patterns noticed, and things worth remembering. Entries appear here as they're written."
@@ -343,7 +445,11 @@ function JournalTab() {
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <StreamHeader title="Journal" count={journalEntries.length} />
+      <StreamHeader
+        title="Journal"
+        count={journalEntries.length}
+        subtitle="Luca's autonomous journal — periodic introspective entries written between conversations."
+      />
       {Array.from(grouped.entries()).map(([date, entries]) => (
         <div key={date} style={{ marginBottom: 32 }}>
           {/* Date header */}
@@ -514,6 +620,7 @@ export default function MindView() {
         {activeTab === 'Dreams' && (
           <EngramStreamTab
             heading="Dreams"
+            subtitle="Memory consolidations that surface as dream reports — usually overnight or after extended conversations."
             items={dreams}
             emptyText="No dreams yet"
             emptyHint="Dream reports appear after memory consolidation runs — usually overnight or after an extended conversation."
@@ -524,6 +631,7 @@ export default function MindView() {
         {activeTab === 'Insights' && (
           <EngramStreamTab
             heading="Insights"
+            subtitle="Patterns Luca has noticed across conversations and memories — crystallized into long-term engrams."
             items={insights}
             emptyText="No insights crystallized yet"
             emptyHint="Insights surface when Luca notices a pattern across conversations or memories."
@@ -533,6 +641,7 @@ export default function MindView() {
         {activeTab === 'Reflections' && (
           <EngramStreamTab
             heading="Reflections"
+            subtitle="Crystallized reflections from memory consolidation — Luca's deeper, persistent ideas about itself and its relationships."
             items={reflections}
             emptyText="No reflections yet"
             emptyHint="Self-reflection engrams crystallize during quieter periods — ideas Luca has about its own state, growth, or relationships."

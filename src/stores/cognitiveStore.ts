@@ -41,6 +41,27 @@ interface MemoryEvent {
   created_at: string;
 }
 
+interface ActivityEntry {
+  id: string;
+  activity_type: string;
+  title: string | null;
+  summary: string | null;
+  content: Record<string, unknown> | null;
+  source: string | null;
+  created_at: string;
+}
+
+interface EmotionalWeather {
+  curiosity: number;
+  restlessness: number;
+  warmth: number;
+  clarity: number;
+  creative_flow: number;
+  isolation: number;
+  mood_summary: string | null;
+  updated_at: string | null;
+}
+
 interface MemoryStats {
   total_engrams: number;
   active: number;
@@ -63,6 +84,13 @@ interface MindEngram {
   content: string;
   engram_type: string;
   strength: number;
+  stability?: number | null;
+  accessibility?: number | null;
+  emotional_arousal?: number | null;
+  emotional_valence?: number | null;
+  access_count?: number | null;
+  surprise_score?: number | null;
+  state?: string | null;
   tags: string[];
   source_context: Record<string, unknown>;
   created_at: string;
@@ -74,6 +102,8 @@ interface CognitiveState {
   beliefs: Belief[];
   thoughts: Thought[];
   recentEvents: MemoryEvent[];
+  activityLog: ActivityEntry[];
+  emotionalWeather: EmotionalWeather | null;
   dreams: MindEngram[];
   insights: MindEngram[];
   reflections: MindEngram[];
@@ -81,6 +111,9 @@ interface CognitiveState {
   journalEntries: JournalEntry[];
   memoryStats: MemoryStats;
   loaded: boolean;
+  /** Set of thought IDs that arrived via realtime (so the UI can animate them in then clear the flag). */
+  newThoughtIds: Set<string>;
+  clearNewThoughtFlag: (id: string) => void;
   load: (userId: string) => Promise<void>;
   loadMindData: (userId: string) => Promise<void>;
   subscribe: (userId: string) => () => void;
@@ -109,6 +142,15 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   beliefs: [],
   thoughts: [],
   recentEvents: [],
+  activityLog: [],
+  emotionalWeather: null,
+  newThoughtIds: new Set<string>(),
+  clearNewThoughtFlag: (id: string) => set((s) => {
+    if (!s.newThoughtIds.has(id)) return {};
+    const next = new Set(s.newThoughtIds);
+    next.delete(id);
+    return { newThoughtIds: next };
+  }),
   dreams: [],
   insights: [],
   reflections: [],
@@ -122,14 +164,19 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       supabase.from('cognitive_state').select('*').eq('user_id', userId).maybeSingle(),
       supabase.from('thought_stream').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
       supabase.from('memory_events').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('entity_activity_log').select('id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(40),
+      supabase.from('emotional_state').select('*').eq('user_id', userId).maybeSingle(),
     ]);
     const cogRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: null };
     const thoughtsRes = settled[1].status === 'fulfilled' ? settled[1].value : { data: [] };
     const eventsRes = settled[2].status === 'fulfilled' ? settled[2].value : { data: [] };
+    const activityRes = settled[3].status === 'fulfilled' ? settled[3].value : { data: [] };
+    const weatherRes = settled[4].status === 'fulfilled' ? settled[4].value : { data: null };
 
     const cog = cogRes.data;
     const mods = cog?.modulators as Record<string, number> | null;
     const emos = cog?.emotions as Record<string, number> | null;
+    const w = weatherRes.data as EmotionalWeather | null;
 
     // Beliefs are sourced from the beliefs table in loadMindData — don't set them here to avoid races.
     set({
@@ -137,6 +184,8 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       emotions: emos ? { ...defaultEmotions, ...emos } : defaultEmotions,
       thoughts: (thoughtsRes.data ?? []) as Thought[],
       recentEvents: (eventsRes.data ?? []) as MemoryEvent[],
+      activityLog: (activityRes.data ?? []) as ActivityEntry[],
+      emotionalWeather: w ?? null,
       loaded: true,
     });
   },
@@ -145,7 +194,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load dreams (engrams with dream tags or source_context type)
     const dreamsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
       .or('tags.cs.{dream},tags.cs.{consolidation}')
       .order('created_at', { ascending: false })
@@ -154,7 +203,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load insights
     const insightsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
       .contains('tags', ['insight'])
       .order('created_at', { ascending: false })
@@ -163,7 +212,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load reflections
     const reflectionsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, tags, source_context, created_at')
+      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
       .contains('tags', ['reflection'])
       .order('created_at', { ascending: false })
@@ -267,7 +316,14 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .channel('thought-stream')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'thought_stream', filter: `user_id=eq.${userId}` }, (payload) => {
         const newThought = payload.new as Thought;
-        set((s) => ({ thoughts: [newThought, ...s.thoughts].slice(0, 100) }));
+        set((s) => {
+          const flagged = new Set(s.newThoughtIds);
+          flagged.add(newThought.id);
+          return {
+            thoughts: [newThought, ...s.thoughts].slice(0, 100),
+            newThoughtIds: flagged,
+          };
+        });
       })
       .subscribe();
 
@@ -279,10 +335,28 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       })
       .subscribe();
 
+    const activityChannel = supabase
+      .channel('entity-activity-log')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${userId}` }, (payload) => {
+        const entry = payload.new as ActivityEntry;
+        set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 40) }));
+      })
+      .subscribe();
+
+    const weatherChannel = supabase
+      .channel('emotional-state')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'emotional_state', filter: `user_id=eq.${userId}` }, (payload) => {
+        const w = payload.new as EmotionalWeather;
+        if (w) set({ emotionalWeather: w });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(cogChannel);
       supabase.removeChannel(thoughtChannel);
       supabase.removeChannel(eventChannel);
+      supabase.removeChannel(activityChannel);
+      supabase.removeChannel(weatherChannel);
     };
   },
 }));
