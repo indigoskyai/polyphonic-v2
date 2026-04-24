@@ -284,7 +284,7 @@ function ThoughtsTab() {
 
 /* ─── Engram stream tabs (Dreams, Insights, Reflections) ─── */
 function EngramStreamTab({ items, emptyText, emptyHint, heading, subtitle, style }: {
-  items: Array<{ id: string; content: string; strength: number; tags: string[]; source_context: Record<string, unknown>; created_at: string }>;
+  items: Array<{ id: string; content: string; strength: number; tags: string[]; source_context: Record<string, unknown>; created_at: string; stability?: number; accessibility?: number; emotional_arousal?: number; emotional_valence?: number; access_count?: number; engram_type?: string }>;
   emptyText: string;
   emptyHint?: string;
   heading: string;
