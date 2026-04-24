@@ -158,8 +158,8 @@ serve(async (req) => {
     const data = await response.json();
     const raw = data.choices?.[0]?.message?.content || "";
 
-    // Parse memories
-    const newMemories: any[] = [];
+    // Parse memories into review-queue candidates (instead of writing direct to `memories`)
+    const newCandidates: any[] = [];
     const blocks = raw.split(/(?=MEMORY:)/);
     for (const block of blocks) {
       if (!block.trim().startsWith("MEMORY:")) continue;
@@ -177,29 +177,39 @@ serve(async (req) => {
       const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.5;
       const tags = tagsMatch ? tagsMatch[1].split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean) : [];
 
-      newMemories.push({
+      // Cross-agent significance heuristic: high salience → pin, otherwise standard
+      const candidateType: "pin" | "standard" = salience >= 0.75 ? "pin" : "standard";
+      const rationale = emotionalContext
+        ? `Surfaced during nightly consolidation — ${emotionalContext.slice(0, 200)}`
+        : `Surfaced during nightly consolidation; salience ${salience.toFixed(2)}.`;
+
+      newCandidates.push({
         user_id,
         content,
         memory_type: memoryType,
         confidence: salience,
-        emotional_valence: emotionalContext ? 0.5 : 0.0, // Neutral default
-        tags: [...tags, "consolidated"],
-        sharpness: 1.0,
-        decay_factor: 1.0,
-        is_deleted: false,
+        candidate_type: candidateType,
+        rationale,
+        source: {
+          origin: "anima-consolidate",
+          model: consolidateModel,
+          tags,
+          emotional_context: emotionalContext || null,
+        },
+        status: "pending",
       });
     }
 
-    // Insert memories
-    if (newMemories.length > 0) {
-      const { error: memErr } = await supabase.from("memories").insert(newMemories);
-      if (memErr) console.error("[anima-consolidate] memories insert failed:", memErr);
+    // Insert candidates instead of writing direct memories
+    if (newCandidates.length > 0) {
+      const { error: candErr } = await supabase.from("memory_candidates").insert(newCandidates);
+      if (candErr) console.error("[anima-consolidate] memory_candidates insert failed:", candErr);
 
-      // Also add consolidation thoughts
+      // Also add consolidation thoughts so the loop is observable
       const { error: thoughtErr } = await supabase.from("thought_stream").insert(
-        newMemories.map((m) => ({
+        newCandidates.map((m) => ({
           user_id,
-          content: `consolidated memory: ${m.content.slice(0, 150)}`,
+          content: `surfaced memory candidate: ${m.content.slice(0, 150)}`,
           source: "consolidation",
           salience: m.confidence,
           type: "reflection",
@@ -208,13 +218,13 @@ serve(async (req) => {
       if (thoughtErr) console.error("[anima-consolidate] thought_stream insert failed:", thoughtErr);
     }
 
-    // Log each consolidated memory to activity log
-    for (const m of newMemories) {
+    // Log each surfaced candidate to activity log
+    for (const m of newCandidates) {
       await logActivity(supabase, user_id, {
         type: "consolidation",
-        title: "Memory consolidated",
+        title: "Memory candidate surfaced",
         summary: m.content.slice(0, 150),
-        content: { memory_type: m.memory_type, salience: m.confidence },
+        content: { memory_type: m.memory_type, salience: m.confidence, candidate_type: m.candidate_type },
         source: "autonomous",
       });
     }
