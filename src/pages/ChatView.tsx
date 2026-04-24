@@ -8,6 +8,11 @@ import ReactMarkdown from 'react-markdown';
 import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
+import PermissionInline from '@/components/permissions/PermissionInline';
+import AgentErroredCard from '@/components/states/AgentErroredCard';
+import MessageAttachment from '@/components/attachments/MessageAttachment';
+import ImagePreview from '@/components/attachments/ImagePreview';
+import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -1067,6 +1072,53 @@ export default function ChatView() {
               msg.role === 'assistant' &&
               msg.content === lingeringStream;
             if (isLastAssistant) return null;
+
+            // B.2 — permission_request branch: render inline card instead of msg-row
+            if (msg.kind === 'permission_request') {
+              const md = (msg.metadata as any) || {};
+              const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
+              return (
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                  <PermissionInline
+                    agent={agent}
+                    title={md.title || 'Permission needed'}
+                    body={md.body || msg.content}
+                    details={md.details}
+                    onApprove={(remember) => {
+                      // TODO: wire to edge function once permission-action exists
+                      console.log('permission approved', { messageId: msg.id, remember });
+                    }}
+                    onDeny={() => {
+                      console.log('permission denied', { messageId: msg.id });
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            // B.3 — agent_error branch: render errored card with divider above
+            if (msg.kind === 'agent_error') {
+              const md = (msg.metadata as any) || {};
+              const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
+              return (
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                  <AgentErroredCard
+                    agent={agent}
+                    message={md.message || msg.content}
+                    detail={md.detail}
+                    occurredAt={msg.created_at}
+                    onRetry={() => {
+                      // TODO: re-invoke originating edge function with same payload
+                      console.log('agent error retry', { messageId: msg.id });
+                    }}
+                    onViewLogs={() => {
+                      console.log('view logs', { messageId: msg.id });
+                    }}
+                  />
+                </div>
+              );
+            }
+
             return (
             <div
               key={msg.id}
@@ -1104,6 +1156,22 @@ export default function ChatView() {
                 )}
                 {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
                   <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
+                )}
+
+                {/* B.7 — attachments rendered below message body; dispatch on type */}
+                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                  <div className="msg-attachments" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {msg.attachments.map((att, idx) => {
+                      const meta = (att.meta || {}) as any;
+                      if (att.type === 'image') {
+                        return <ImagePreview key={idx} src={att.url} alt={meta.alt} agent={meta.agent} />;
+                      }
+                      if (att.type === 'code') {
+                        return <CodePreviewCard key={idx} code={meta.code || ''} lang={meta.lang} label={meta.label} />;
+                      }
+                      return <MessageAttachment key={idx} name={meta.name || 'file'} size={meta.size} mime={meta.mime} url={att.url} />;
+                    })}
+                  </div>
                 )}
               </div>
             </div>
