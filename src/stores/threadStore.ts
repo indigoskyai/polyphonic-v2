@@ -11,6 +11,12 @@ export interface Thread {
   updated_at: string;
 }
 
+export interface MessageAttachment {
+  type: 'image' | 'file' | 'code';
+  url: string;
+  meta?: Record<string, unknown>;
+}
+
 export interface Message {
   id: string;
   thread_id: string;
@@ -23,6 +29,9 @@ export interface Message {
   tokens_used: number | null;
   bookmarked: boolean;
   created_at: string;
+  kind?: 'permission_request' | 'agent_error' | 'text' | null;
+  metadata?: Record<string, unknown> | null;
+  attachments?: MessageAttachment[] | null;
 }
 
 interface ThreadState {

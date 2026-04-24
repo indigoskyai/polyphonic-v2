@@ -48,7 +48,7 @@ export default function CompareBar() {
           <SegmentControl
             options={[{ value: 'unified', label: 'Unified' }, { value: 'split', label: 'Split' }]}
             value={mode}
-            onChange={setMode}
+            onChange={(v) => setMode(v as 'split' | 'unified')}
           />
         </div>
         <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
