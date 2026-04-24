@@ -37,13 +37,15 @@ interface GraphEdge {
 export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { engrams, connections, setSelectedEngram } = useMemoryStore();
+  const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<GraphEdge[]>([]);
   const animRef = useRef<number>(0);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const dragRef = useRef<{ dragging: boolean; lastX: number; lastY: number }>({ dragging: false, lastX: 0, lastY: 0 });
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedEngram?.id ?? null;
 
   // Initialize nodes and edges from data
   useEffect(() => {
