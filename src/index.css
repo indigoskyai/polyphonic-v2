@@ -626,7 +626,7 @@ html {
 }
 
 .input-shell::before {
-  content: '';
+  content: none;
   position: absolute;
   inset: 0;
   border-radius: inherit;
