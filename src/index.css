@@ -637,19 +637,19 @@ html {
   transition: opacity 0.8s var(--ease-out);
   pointer-events: none;
   z-index: 3;
-  /* Gradient vertical extent reduced from 180% → 90% so top-row and
-     bottom-row pools don't overlap through the center — eliminates the
-     faint horizontal seam where mask-composite sub-pixel rounding was
-     showing the intersection of the two ring halves. */
+  /* Gradient vertical extent kept tight (60%) so top-row and bottom-row
+     pools fade well before the vertical center — guarantees no horizontal
+     seam is ever visible inside the input shell, even at full focus
+     opacity. */
   background:
-    radial-gradient(ellipse 45% 90% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 62%),
-    radial-gradient(ellipse 40% 90% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 62%),
-    radial-gradient(ellipse 45% 90% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 62%),
-    radial-gradient(ellipse 40% 90% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 62%),
-    radial-gradient(ellipse 45% 90% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 62%),
-    radial-gradient(ellipse 40% 90% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 62%),
-    radial-gradient(ellipse 45% 90% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 62%),
-    radial-gradient(ellipse 40% 90% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 62%);
+    radial-gradient(ellipse 45% 60% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 60% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 60% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 60% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 70%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
