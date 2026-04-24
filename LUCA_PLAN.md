@@ -82,7 +82,42 @@ Empty by default. Add an entry only if a phase fails 3 times in a row OR you hit
 
 ## End-of-run summary
 
-### 2026-04-24 autonomous run (resumed) — 15 phases complete total
+### 2026-04-24 autonomous run (resumed, part 3) — ALL 20 phases complete 🎯
+
+**This run (16, 17, 18, 19, 20):**
+- `[x]` 16 Checkpoints + diff viewer — consumes Lovable-shipped `checkpoints` + `checkpoint_files` tables + `checkpoint-restore`/`checkpoint-diff` edge fns; `checkpointStore` with lazy file + diff loading, FIFO compare-selection; `CheckpointTimeline` with milestone amber dual-halo dots and ghost incremental; `CheckpointCard` (collapsed/expanded); inline `DiffViewer` with red/green gutters; `RestoreConfirmModal` via destructive Pill; `CompareBar` with unified/split toggle in Modal; `/checkpoints` route live.
+- `[x]` 17 Settings depth — consumes Lovable-shipped `agent_configs` + `mcp_servers` + `agent_secrets` + `agent-config-save` edge fn; `agentSettingsStore` with draft/dirty/save/discard; `/settings/agents` index + `/settings/agents/:id` editor; 8 sub-components (EnvSwitcher, PromptEditor, ToolGrid, McpList, SubAgentList, VoiceCardGrid, Keychain masked, StickySaveFooter with amber dirty color + beforeunload guard).
+- `[x]` 18 Command palette ⌘K — substituted legacy 296-line `CommandPalette.tsx` with new `components/palette/*`. `paletteStore` (localStorage-backed recent), `paletteSearch` (token-overlap + recency scoring, match-range computation for `<mark>` wraps), `CommandPalette` (portal, ⌘K toggle, ⌘1-5 scope hotkeys, body scroll lock), `PaletteResults` (grouped + agent-tinted left-accent bar). Old file deleted.
+- `[x]` 19 Attachments + computer-use — 11 files total. `attachmentStore` + `browserSessionStore`; `AttachmentChip` / `AttachmentDropOverlay` / `MessageAttachment` / `ImagePreview` (per-agent gradient variants) / `CodePreviewCard` (reuses Phase 15 syntax highlighter + 220px fade mask + Expand toggle); `BrowserCard` shell with live-pulsing status dot + URL bar + 40px grid viewport; `BrowserCursor` (300ms smooth-tracking, vektor-colored 1.5s cursor-ring keyframe); `BrowserActionLog` with status-tinted rows.
+- `[x]` 20 Mobile shell — `/_mobile` dev-only preview route mounting two `<PhoneFrame>`s (390×772 with notch, 40px radius, 8px bezel) side-by-side; full stack of `MobileStatusBar` (live time + signal/wifi/battery glyphs), `MobileHeader` (hamburger → drawer), `MobileMessages` with per-agent role color, `MobileSubAgentStrip` (4px murmur dots with m-murmur 1.6s pulse), pill `MobileComposer`, 4-tab `MobileBottomNav`, `MobileDrawer` (300px left slide + backdrop), `MobileGroupStage` (84×84 circles with per-agent m-halo 2s speaking ring). Preview hidden in production builds via `import.meta.env.MODE !== 'development'` gate.
+
+---
+
+### FINAL STATUS — all 20 phases complete
+
+**Phases completed (20/20):** 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20.
+
+**Phases blocked:** None — both previously-blocked phases (16, 17) unblocked and shipped after Lovable delivered the backend in commits `65c3655`–`9059865`.
+
+**Backend asks queue:** All closed. Memory candidates + checkpoints + agent configs all live.
+
+**Open questions:** None.
+
+**Commits pushed across all three runs:** 22 feature commits + 3 plan updates.
+- Run 1 (01–04): `67d491a`, `5805f4c`, `a68193f`, `e19ba27`
+- Run 2 (05–15): `ba0a2fd`, `2275434`, `292f3eb`, `43f285a`, `0dfc4aa`, `525c69c`, `3b8d08f`, `aa4af4b`, `1f5c24d`, `c37d8ee`, `6cbbf45`
+- Run 3 (16–20): `f744247`, `433d938`, `daf1d14`, `61d7ade`, `e695b25`
+- Plan summaries: `2f590da`, `02e2119`, + this one.
+
+**Deferred consumer wirings (opportunistic):** phases 03, 06, 11, 14, 15, 19 all shipped primitives without refactoring ChatView/MessageList/MessageBubble. These are *ready-for-consumption* components; sweep in when ChatView is touched for unrelated reasons. Total ~8 spots where a future `<Composer />` / `<MessageRow />` / `<RichBody />` / `<PermissionInline />` / `<AgentErroredCard />` / `<MessageAttachment />` / `<AttachmentDropOverlay />` swap would land.
+
+**Verification signal:** Every commit verified via `browser_evaluate` computed-style audit against spec values. Dev server on :8082 renders cleanly with 0 console errors throughout. `/_mobile` preview route renders both mobile phone frames at spec dimensions (390×772, 40px radius, 22px composer).
+
+---
+
+### Earlier summaries (preserved)
+
+#### 2026-04-24 autonomous run (resumed, part 2) — 15 phases complete total
 
 **Phases completed this run (11 new, 15 total across both runs):**
 
