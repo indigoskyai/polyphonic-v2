@@ -1,22 +1,22 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useMemoryStore, type Engram, type Connection } from '@/stores/memoryStore';
 
+// Monochrome palette — sharp + technical. Type conveyed via subtle tint only.
 const TYPE_COLORS: Record<string, string> = {
-  episodic: '#5b8aad',
-  semantic: '#c9a87c',
-  procedural: '#8ca89c',
-  belief: '#a88cc9',
+  episodic:   'rgba(190, 200, 215, 1)',   // cool cream-blue
+  semantic:   'rgba(215, 205, 185, 1)',   // warm cream
+  procedural: 'rgba(195, 205, 200, 1)',   // neutral cream-green
+  belief:     'rgba(205, 195, 215, 1)',   // soft cream-violet
 };
 
-const CONN_COLORS: Record<string, string> = {
-  supports: '#8ca89c40',
-  contradicts: '#ad5b5b40',
-  causes: '#c9a87c40',
-  extends: '#5b8aad40',
-  parallels: '#a88cc940',
-  synthesizes: '#c9a87c40',
-  grounds: '#8ca89c40',
-};
+// All edges render as hairline cream — type conveyed via panel, not color.
+const EDGE_BASE         = 'rgba(220, 219, 216, 0.10)';
+const EDGE_HIGHLIGHT    = 'rgba(220, 219, 216, 0.55)';
+const NODE_FILL_DIM     = 'rgba(220, 219, 216, 0.10)';
+const NODE_STROKE       = 'rgba(220, 219, 216, 0.55)';
+const NODE_STROKE_HOVER = 'rgba(244, 243, 240, 0.90)';
+const SELECT_RING       = 'rgba(140, 175, 210, 0.95)';  // cool blue selection ring
+const SELECT_HALO       = 'rgba(140, 175, 210, 0.22)';
 
 interface GraphNode {
   id: string;
@@ -62,7 +62,7 @@ export default function GraphTab() {
         vx: 0,
         vy: 0,
         engram,
-        radius: 4 + engram.strength * 8,
+        radius: 3.5 + engram.strength * 3.5,
       });
     });
 
@@ -149,7 +149,11 @@ export default function GraphTab() {
 
       const selectedId = selectedIdRef.current;
 
-      // Draw edges (highlight edges connected to selected node)
+      // Sharper rendering — no anti-alias smudging on hairlines
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+
+      // Edges — hairline cream; highlighted when touching selected node
       for (const edge of edgesRef.current) {
         const a = nodesRef.current.get(edge.source);
         const b = nodesRef.current.get(edge.target);
@@ -159,42 +163,54 @@ export default function GraphTab() {
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         if (isConnectedToSelected) {
-          ctx.strokeStyle = 'rgba(220,219,216,0.45)';
-          ctx.lineWidth = Math.max(0.8, edge.connection.weight * 2.5) / cam.zoom;
+          ctx.strokeStyle = EDGE_HIGHLIGHT;
+          ctx.lineWidth = 0.8 / cam.zoom;
         } else {
-          ctx.strokeStyle = CONN_COLORS[edge.connection.connection_type] || 'rgba(220,219,216,0.06)';
-          ctx.lineWidth = Math.max(0.5, edge.connection.weight * 2) / cam.zoom;
+          // Mild weight modulation but always hairline
+          const baseAlpha = 0.06 + Math.min(0.12, edge.connection.weight * 0.10);
+          ctx.strokeStyle = `rgba(220, 219, 216, ${baseAlpha.toFixed(3)})`;
+          ctx.lineWidth = 0.5 / cam.zoom;
         }
         ctx.stroke();
       }
 
-      // Draw nodes
+      // Nodes — small filled disc + 1px ring, like technical graph plots
       const nodes = Array.from(nodesRef.current.values());
       for (const node of nodes) {
-        ctx.beginPath();
         const r = node.radius / cam.zoom;
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        const color = TYPE_COLORS[node.engram.engram_type] || '#dcdbd8';
+        const tint = TYPE_COLORS[node.engram.engram_type] || 'rgba(220,219,216,1)';
         const isHovered = hoveredNode === node.id;
         const isSelected = selectedId === node.id;
-        ctx.fillStyle = isHovered || isSelected ? color : `${color}80`;
+
+        // Filled disc — very faint, tint only barely visible
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        if (isSelected || isHovered) {
+          // Slightly stronger tint when active
+          ctx.fillStyle = tint.replace(/, 1\)$/, ', 0.35)');
+        } else {
+          ctx.fillStyle = NODE_FILL_DIM;
+        }
         ctx.fill();
 
+        // Crisp 1px ring — base
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = isHovered ? NODE_STROKE_HOVER : NODE_STROKE;
+        ctx.lineWidth = 1 / cam.zoom;
+        ctx.stroke();
+
         if (isSelected) {
-          // Bright outer ring + halo
+          // Cool blue selection ring + soft halo
           ctx.beginPath();
-          ctx.arc(node.x, node.y, r + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(244, 243, 240, 0.95)';
-          ctx.lineWidth = 1.5 / cam.zoom;
+          ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = SELECT_RING;
+          ctx.lineWidth = 1.2 / cam.zoom;
           ctx.stroke();
 
           ctx.beginPath();
-          ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(244, 243, 240, 0.18)';
-          ctx.lineWidth = 1 / cam.zoom;
-          ctx.stroke();
-        } else if (isHovered) {
-          ctx.strokeStyle = color;
+          ctx.arc(node.x, node.y, r + 7, 0, Math.PI * 2);
+          ctx.strokeStyle = SELECT_HALO;
           ctx.lineWidth = 1 / cam.zoom;
           ctx.stroke();
         }
@@ -281,11 +297,15 @@ export default function GraphTab() {
       )}
 
       {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 12 }}>
+      <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 14 }}>
         {Object.entries(TYPE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
-            <span style={{ fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.04em' }}>{type}</span>
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%',
+              background: 'transparent',
+              border: `1px solid ${color}`,
+            }} />
+            <span style={{ fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>{type}</span>
           </div>
         ))}
       </div>
