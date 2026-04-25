@@ -224,6 +224,7 @@ serve(async (req) => {
         message,
         corsHeaders,
         agentId,
+        authHeader,
       );
     }
 
