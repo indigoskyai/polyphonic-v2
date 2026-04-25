@@ -50,12 +50,24 @@ How to handle the three perspectives:
 }
 
 const DEFAULT_ENSEMBLE = [
-  "anthropic/claude-sonnet-4-20250514",
+  "anthropic/claude-sonnet-4",
   "openai/gpt-5.4",
   "google/gemini-3.1-pro-preview",
 ];
 
-const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4-20250514";
+const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4";
+
+function normalizeModelId(model: string | null | undefined): string | null {
+  if (!model) return null;
+
+  const normalized = model.trim();
+  const aliases: Record<string, string> = {
+    "anthropic/claude-sonnet-4-20250514": "anthropic/claude-sonnet-4",
+    "anthropic/claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+  };
+
+  return aliases[normalized] || normalized;
+}
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -116,8 +128,10 @@ serve(async (req) => {
     // - undefined → fall back to saved default
     const defaultMultiModel = settings?.multi_model_enabled !== false;
     const multiModelEnabled = typeof ensembleOverride === "boolean" ? ensembleOverride : defaultMultiModel;
-    const ensembleModels: string[] = settings?.ensemble_models || DEFAULT_ENSEMBLE;
-    const synthesisModel = settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL;
+    const ensembleModels: string[] = ((settings?.ensemble_models as string[] | null) || DEFAULT_ENSEMBLE)
+      .map((model) => normalizeModelId(model))
+      .filter((model): model is string => !!model);
+    const synthesisModel = normalizeModelId(settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL) || DEFAULT_SYNTHESIS_MODEL;
     const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
 
     // Get user's OpenRouter API key (required — no platform fallback)
@@ -151,7 +165,7 @@ serve(async (req) => {
     // agent has no prompt set, or if the row is missing.
     const agentName = (agentConfig?.name as string | undefined) || "Luca";
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
-    const agentModel = (agentConfig?.model as string | undefined) || null;
+    const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
 
     // Load conversation history
@@ -239,7 +253,7 @@ serve(async (req) => {
     const useEnsemble = multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-      const singleModel = agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0];
+      const singleModel = normalizeModelId(agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
         singleModel,
@@ -666,7 +680,17 @@ async function singleModelStream(
         });
 
         if (!orResponse.ok) {
-          send({ type: "error", text: `Model error (${orResponse.status})` });
+          const errText = await orResponse.text().catch(() => "");
+          console.error("Single-model provider error:", orResponse.status, errText);
+          let message = `Model error (${orResponse.status})`;
+          try {
+            const parsed = JSON.parse(errText);
+            const providerMessage = parsed?.error?.message || parsed?.message;
+            if (providerMessage) message = providerMessage;
+          } catch {
+            if (errText) message = errText.slice(0, 240);
+          }
+          send({ type: "error", text: message });
           controller.close();
           clearInterval(heartbeat);
           return;

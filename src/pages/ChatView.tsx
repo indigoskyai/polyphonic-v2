@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
+import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -184,6 +185,14 @@ function MessageContent({ content }: { content: string }) {
   );
 }
 
+function getAgentDisplayName(agentId: string | null | undefined, names: Map<string, string>) {
+  if (!agentId) return 'Luca';
+  const fromStore = names.get(agentId);
+  if (fromStore) return fromStore;
+  if (agentId === 'guardian' || agentId === 'observer') return 'Observer';
+  return agentId.charAt(0).toUpperCase() + agentId.slice(1);
+}
+
 /* ─── Thinking Block (4-state: waiting → streaming → settling → complete) ─── */
 type ThinkingState = 'waiting' | 'streaming' | 'settling' | 'complete';
 
@@ -364,6 +373,7 @@ export default function ChatView() {
     loadMessages, setCurrentThread, createThread, addMessage,
     setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
+  const agents = useAgentSettingsStore((s) => s.agents);
   const currentThread = threads.find((t) => t.id === currentThreadId);
   // Pending agent id: used when there's no thread yet (empty state). Once a
   // thread exists, it always wins so the picker reflects the persisted value.
@@ -400,6 +410,11 @@ export default function ChatView() {
   // Lingering streaming snapshot — keeps the streaming bubble mounted
   // after isStreaming flips to false, until the typewriter has caught up.
   const [lingeringStream, setLingeringStream] = useState<string | null>(null);
+  const agentNameById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent.name])),
+    [agents]
+  );
+  const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
   useEffect(() => {
     if (isStreaming && streamingContent) {
       setLingeringStream(streamingContent);
@@ -723,7 +738,7 @@ export default function ChatView() {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
           content: resp.status === 401 ? 'Session expired — please refresh.' : 'Something went wrong. Please try again.',
-          model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         });
         return;
       }
@@ -757,7 +772,7 @@ export default function ChatView() {
               } else if (data.type === 'done') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: fullContent, model: data.model || null, agent: 'luca',
+                  content: fullContent, model: data.model || null, agent: activeAgentId,
                   thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
@@ -768,7 +783,7 @@ export default function ChatView() {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: data.text || 'Something went wrong.',
-                  model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+                  model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
                 });
               }
             } catch {}
@@ -780,7 +795,7 @@ export default function ChatView() {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
           content: 'Something went wrong. Please try again.',
-          model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         });
       }
     } finally {
@@ -792,7 +807,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive]);
+  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1151,7 +1166,11 @@ export default function ChatView() {
                   </div>
                 )}
                 <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-                  {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Observer' : 'Luca'}
+                  {msg.role === 'user'
+                    ? 'You'
+                    : msg.agent === 'guardian'
+                      ? 'Observer'
+                      : getAgentDisplayName(msg.agent, agentNameById)}
                 </div>
               </div>
 
@@ -1202,7 +1221,7 @@ export default function ChatView() {
                 <div className="msg-time">
                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </div>
-                <div className="msg-author">Luca</div>
+                <div className="msg-author">{currentAgentLabel}</div>
               </div>
 
               <div className="msg-body">

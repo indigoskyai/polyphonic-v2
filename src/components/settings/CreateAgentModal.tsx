@@ -13,9 +13,9 @@ interface Props {
 }
 
 const MODELS = [
-  { value: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
-  { value: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4' },
-  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4' },
+  { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
   { value: 'openai/gpt-5', label: 'GPT-5' },
   { value: 'openai/gpt-5-mini', label: 'GPT-5 mini' },
   { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },

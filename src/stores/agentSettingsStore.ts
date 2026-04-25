@@ -104,7 +104,7 @@ function rowToConfig(
     is_system: !!row.is_system,
     created_by: ((row.created_by as CreatedBy) || 'user'),
     pending: !!row.pending,
-    model: (row.model as string | null) ?? 'anthropic/claude-sonnet-4-20250514',
+    model: normalizeAgentModel((row.model as string | null) ?? 'anthropic/claude-sonnet-4'),
     status: 'on',
     uptimeMs: 0,
     env: ((row.env as Env | null) ?? 'prod'),
@@ -147,6 +147,19 @@ function slugify(name: string): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .slice(0, 32);
+}
+
+function normalizeAgentModel(model: string | null | undefined): string {
+  switch (model) {
+    case 'anthropic/claude-sonnet-4-20250514':
+      return 'anthropic/claude-sonnet-4';
+    case 'anthropic/claude-opus-4-20250514':
+      return 'anthropic/claude-opus-4';
+    case 'anthropic/claude-haiku-4-5':
+      return 'anthropic/claude-haiku-4.5';
+    default:
+      return model ?? 'anthropic/claude-sonnet-4';
+  }
 }
 
 export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
