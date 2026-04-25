@@ -567,6 +567,7 @@ async function saveAssistantMessage(
   model: string,
   variants: Array<{ model: string; content: string }>,
   thinkingContent: string | null = null,
+  agentId: string = "luca",
 ) {
   await supabase.from("messages").insert({
     thread_id: threadId,
@@ -574,7 +575,7 @@ async function saveAssistantMessage(
     role: "assistant",
     content,
     model,
-    agent: "luca",
+    agent: agentId,
     // Store raw thinking text (for ThinkingBlock display)
     thinking_content: thinkingContent || null,
     // Store variant metadata separately (for VariantsPanel)
