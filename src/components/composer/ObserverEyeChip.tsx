@@ -9,10 +9,10 @@ interface ObserverEyeChipProps {
 export function ObserverEyeChip({ threadId }: ObserverEyeChipProps) {
   const { active, open, close } = useDrawerStore();
   const notes = useObserverStore((s) =>
-    threadId ? s.notesByThread[threadId] || [] : []
+    threadId ? s.notesByThread[threadId] : undefined
   );
   const isOpen = active === 'observer';
-  const count = notes.length;
+  const count = notes?.length ?? 0;
 
   if (!threadId) return null;
 
