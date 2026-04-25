@@ -75,7 +75,8 @@ export default function ObserverDrawer() {
         <DrawerCloseBtn onClick={close} />
       </DrawerHeader>
       <DrawerBody>
-        <DrawerSection title="Notes">
+        <DrawerSection>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 8 }}>Notes</div>
           {notes.length === 0 ? (
             <p style={{ color: 'var(--text-ghost)', fontSize: 12, lineHeight: 1.6 }}>
               No observations yet. The Observer is watching this conversation. Notes will appear here as patterns and signals emerge.
@@ -117,7 +118,8 @@ export default function ObserverDrawer() {
           )}
         </DrawerSection>
 
-        <DrawerSection title="Ask Observer">
+        <DrawerSection>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 8 }}>Ask Observer</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto', marginBottom: 8 }}>
             {chat.length === 0 && (
               <p style={{ color: 'var(--text-ghost)', fontSize: 12 }}>
