@@ -1002,11 +1002,13 @@ export default function ChatView() {
                     onChange={(id) => {
                       setPendingAgentId(id);
                       if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                      if (alcoveOpen && id !== 'observer') setAlcoveOpen(false);
-                      if (id === 'observer') setAlcoveOpen(true);
                     }}
                   />
-                  <ObserverEyeChip threadId={currentThreadId} />
+                  <ObserverEyeChip
+                    threadId={currentThreadId}
+                    open={alcoveOpen}
+                    onToggle={() => setAlcoveOpen((v) => !v)}
+                  />
                   {activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
@@ -1369,11 +1371,13 @@ export default function ChatView() {
                 onChange={(id) => {
                   setPendingAgentId(id);
                   if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                  if (alcoveOpen && id !== 'observer') setAlcoveOpen(false);
-                  if (id === 'observer') setAlcoveOpen(true);
                 }}
               />
-              <ObserverEyeChip threadId={currentThreadId} />
+              <ObserverEyeChip
+                threadId={currentThreadId}
+                open={alcoveOpen}
+                onToggle={() => setAlcoveOpen((v) => !v)}
+              />
               {!alcoveOpen && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />

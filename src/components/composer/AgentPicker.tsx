@@ -16,8 +16,12 @@ interface AgentPickerProps {
  */
 export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
   const user = useAuthStore((s) => s.user);
-  const agents = useAgentSettingsStore((s) => s.agents);
+  const allAgents = useAgentSettingsStore((s) => s.agents);
   const load = useAgentSettingsStore((s) => s.load);
+
+  // Observer is not a selectable agent — it's a resident watcher reachable
+  // via its dedicated chip in the composer.
+  const agents = allAgents.filter((a) => a.id !== 'observer');
 
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -25,8 +29,8 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
   const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user && agents.length === 0) load(user.id);
-  }, [user, agents.length, load]);
+    if (user && allAgents.length === 0) load(user.id);
+  }, [user, allAgents.length, load]);
 
   // Position popover under the trigger. Recompute on scroll/resize.
   useLayoutEffect(() => {
@@ -64,7 +68,7 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
     };
   }, [open]);
 
-  const active = agents.find((a) => a.id === activeAgentId);
+  const active = agents.find((a) => a.id === activeAgentId) || allAgents.find((a) => a.id === activeAgentId);
   const activeName = active?.name?.toLowerCase() || activeAgentId || 'luca';
   const activeColor = resolveAgentColor(active?.avatar_color);
 

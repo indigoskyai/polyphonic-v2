@@ -1,30 +1,50 @@
 import { Eye } from 'lucide-react';
-import { useDrawerStore } from '@/stores/drawerStore';
 import { useObserverStore } from '@/stores/observerStore';
 
 interface ObserverEyeChipProps {
   threadId: string | null;
+  open: boolean;
+  onToggle: () => void;
 }
 
-export function ObserverEyeChip({ threadId }: ObserverEyeChipProps) {
-  const { active, open, close } = useDrawerStore();
+/**
+ * Composer chip that toggles the Observer alcove (slides up from the
+ * composer). The Observer is NOT a selectable agent — it lives behind
+ * this dedicated button and watches the conversation in the background.
+ */
+export function ObserverEyeChip({ threadId, open, onToggle }: ObserverEyeChipProps) {
   const notes = useObserverStore((s) =>
     threadId ? s.notesByThread[threadId] : undefined
   );
-  const isOpen = active === 'observer';
   const count = notes?.length ?? 0;
-
-  if (!threadId) return null;
 
   return (
     <button
       type="button"
-      className={`pill pill-icon ${isOpen ? 'pill-active' : ''}`}
-      title="Observer notes (⌘J)"
-      onClick={() => (isOpen ? close() : open('observer', { threadId }))}
+      className={`agent-pill${open ? ' targeted' : ''}`}
+      title="Observer (⌘J) — open to ask about this conversation"
+      onClick={onToggle}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        color: open ? 'var(--text-body)' : 'var(--text-soft)',
+      }}
     >
-      <Eye size={14} />
-      {count > 0 && <span className="pill-count">{count}</span>}
+      <Eye size={12} />
+      <span>observer</span>
+      {count > 0 && (
+        <span
+          style={{
+            fontSize: 9,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-whisper)',
+            letterSpacing: 'var(--track-meta)',
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
