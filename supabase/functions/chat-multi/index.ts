@@ -212,11 +212,16 @@ serve(async (req) => {
     }
 
     // Build the enriched system prompt
-    const enrichedSystemPrompt = SYSTEM_PROMPT
-      + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
-      + beliefsBlock
-      + memoryContext
-      + continuityNote;
+    // For the system Luca, layer in emotional state, beliefs, memories, continuity.
+    // For all other agents (system Vektor/Anima/Observer or user-created), use
+    // their own prompt verbatim — the user expects the agent to behave per their config.
+    const enrichedSystemPrompt = agentIsSystemLuca
+      ? SYSTEM_PROMPT
+        + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
+        + beliefsBlock
+        + memoryContext
+        + continuityNote
+      : agentPrompt + continuityNote;
 
     // Build base messages array
     const baseMessages: Array<{ role: string; content: string }> = [
@@ -229,17 +234,22 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: message });
 
-    // If multi-model is disabled, fall back to single-model streaming
-    if (!multiModelEnabled) {
+    // Custom / non-Luca agents always use single-model with their configured model.
+    // Only the system Luca uses the multi-model ensemble path.
+    const useEnsemble = multiModelEnabled && agentIsSystemLuca;
+
+    if (!useEnsemble) {
+      const singleModel = agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
-        settings?.default_model || DEFAULT_ENSEMBLE[0],
+        singleModel,
         apiKey,
         supabase,
         thread_id,
         userId,
         message,
-        corsHeaders
+        corsHeaders,
+        agentId,
       );
     }
 
