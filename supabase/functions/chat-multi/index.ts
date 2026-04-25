@@ -194,11 +194,7 @@ serve(async (req) => {
     // For all other agents (system Vektor/Anima/Observer or user-created), use
     // their own prompt verbatim — the user expects the agent to behave per their config.
     const enrichedSystemPrompt = agentIsSystemLuca
-      ? SYSTEM_PROMPT
-        + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
-        + beliefsBlock
-        + memoryContext
-        + continuityNote
+      ? buildLucaSystemPrompt({ emotionalBlock, beliefsBlock, memoryContext, continuityNote })
       : agentPrompt + continuityNote;
 
     // Build base messages array
