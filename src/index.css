@@ -120,7 +120,7 @@
   --radius-pill:  999px;
   --radius-inset: 16px;
 
-  --rail-width:        40px;
+  --rail-width:        36px;
   --sidebar-width:     280px;
   --drawer-width:      420px;
   --message-max-width: 720px;
@@ -1689,8 +1689,8 @@ html {
 
 .rail-bell {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
