@@ -638,6 +638,7 @@ async function singleModelStream(
   userId: string,
   userMessage: string,
   corsHeaders: Record<string, string>,
+  agentId: string = "luca",
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -710,7 +711,7 @@ async function singleModelStream(
 
         await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
-          content: fullContent || "(empty)", model: usedModel, agent: "luca",
+          content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
         });
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
