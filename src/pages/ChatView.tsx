@@ -448,47 +448,34 @@ export default function ChatView() {
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
 
-  // Load guardian messages when alcove opens or thread changes
+  // Load guardian messages when alcove opens or thread changes.
+  // Skip while streaming so we don't clobber an in-flight reply with stale DB state.
   useEffect(() => {
-    if (alcoveOpen && currentThreadId) {
-      (async () => {
-        const { supabase } = await import('@/integrations/supabase/client');
-        const { data } = await supabase
-          .from('messages')
-          .select('role, content, agent, created_at')
-          .eq('thread_id', currentThreadId)
-          .eq('agent', 'guardian')
-          .order('created_at', { ascending: true });
-        if (data) {
-          // Also include user messages that were sent to guardian (messages right before guardian responses)
-          const { data: allMsgs } = await supabase
-            .from('messages')
-            .select('role, content, agent, created_at')
-            .eq('thread_id', currentThreadId)
-            .or('agent.eq.guardian,agent.is.null')
-            .order('created_at', { ascending: true });
-          // Filter to only guardian conversation: user messages followed by guardian responses
-          const guardianConvo: Array<{ role: string; content: string; created_at?: string }> = [];
-          let inGuardianExchange = false;
-          for (const msg of (allMsgs || [])) {
-            if (msg.agent === 'guardian') {
-              inGuardianExchange = false;
-              guardianConvo.push(msg);
-            } else if (msg.role === 'user' && !msg.agent) {
-              // Check if next message is guardian
-              const idx = (allMsgs || []).indexOf(msg);
-              const next = (allMsgs || [])[idx + 1];
-              if (next?.agent === 'guardian') {
-                guardianConvo.push(msg);
-                inGuardianExchange = true;
-              }
-            }
-          }
-          setGuardianMessages(guardianConvo);
+    if (!alcoveOpen || !currentThreadId || guardianStreaming) return;
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: allMsgs } = await supabase
+        .from('messages')
+        .select('role, content, agent, created_at')
+        .eq('thread_id', currentThreadId)
+        .or('agent.eq.guardian,agent.is.null')
+        .order('created_at', { ascending: true });
+      if (cancelled || !allMsgs) return;
+      const guardianConvo: Array<{ role: string; content: string; created_at?: string }> = [];
+      for (let i = 0; i < allMsgs.length; i++) {
+        const msg = allMsgs[i];
+        if (msg.agent === 'guardian') {
+          guardianConvo.push(msg);
+        } else if (msg.role === 'user' && !msg.agent) {
+          const next = allMsgs[i + 1];
+          if (next?.agent === 'guardian') guardianConvo.push(msg);
         }
-      })();
-    }
-  }, [alcoveOpen, currentThreadId]);
+      }
+      setGuardianMessages(guardianConvo);
+    })();
+    return () => { cancelled = true; };
+  }, [alcoveOpen, currentThreadId, guardianStreaming]);
 
   // Auto-scroll guardian messages
   useEffect(() => {
