@@ -678,7 +678,7 @@ export default function ChatView() {
 
     let tid = currentThreadId;
     if (!tid) {
-      tid = await createThread(user.id);
+      tid = await createThread(user.id, pendingAgentId);
       navigate(`/chat/${tid}`, { replace: true });
     }
 
