@@ -82,6 +82,7 @@ export type Database = {
           env: string
           id: string
           is_system: boolean
+          locked: boolean
           model: string | null
           name: string
           pending: boolean
@@ -101,6 +102,7 @@ export type Database = {
           env?: string
           id: string
           is_system?: boolean
+          locked?: boolean
           model?: string | null
           name: string
           pending?: boolean
@@ -120,6 +122,7 @@ export type Database = {
           env?: string
           id?: string
           is_system?: boolean
+          locked?: boolean
           model?: string | null
           name?: string
           pending?: boolean
@@ -1051,6 +1054,33 @@ export type Database = {
         }
         Relationships: []
       }
+      observer_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       observer_logs: {
         Row: {
           created_at: string
@@ -1074,6 +1104,42 @@ export type Database = {
           model?: string | null
           observations?: Json | null
           synthesis?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      observer_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          pinned: boolean
+          salience: number
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          pinned?: boolean
+          salience?: number
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          pinned?: boolean
+          salience?: number
+          thread_id?: string
           user_id?: string
         }
         Relationships: []
