@@ -131,6 +131,29 @@ serve(async (req) => {
       });
     }
 
+    // Load the thread's bound agent
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("agent_id")
+      .eq("id", thread_id)
+      .maybeSingle();
+
+    const agentId = (thread?.agent_id as string | undefined) || "luca";
+
+    const { data: agentConfig } = await supabase
+      .from("agent_configs")
+      .select("id, name, prompt, model, personality, is_system")
+      .eq("user_id", userId)
+      .eq("id", agentId)
+      .maybeSingle();
+
+    // Resolve the agent's identity. Fall back to default Luca prompt if a custom
+    // agent has no prompt set, or if the row is missing.
+    const agentName = (agentConfig?.name as string | undefined) || "Luca";
+    const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
+    const agentModel = (agentConfig?.model as string | undefined) || null;
+    const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
+
     // Load conversation history
     const { data: history } = await supabase
       .from("messages")
