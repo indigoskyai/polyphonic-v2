@@ -622,7 +622,6 @@ html {
 .input-shell:hover { border-color: rgba(220,219,216,0.10); }
 .input-shell.focused {
   border-color: rgba(220,219,216,0.09);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.12);
 }
 
 .input-shell::before {
@@ -661,15 +660,15 @@ html {
     shimmer-c7 19s ease-in-out infinite,
     shimmer-c8 23s ease-in-out infinite;
 }
-.input-shell:hover::before,
+.input-shell:hover::before { opacity: 0.7; }
 .input-shell.focused::before,
-.input-shell:focus-within::before { opacity: 0.8; }
+.input-shell:focus-within::before { opacity: 0.95; }
 
-/* Focus-within intensification (keeps class-based .focused as belt-and-suspenders) */
+/* Focus-within intensification — hairline only, no bloom shadow.
+   The shimmer escalation IS the focus light. */
 .input-shell:focus-within {
   border-color: rgba(220, 219, 216, 0.09);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20), 0 8px 24px rgba(0, 0, 0, 0.12);
-  transition: border-color 220ms var(--ease-premium), box-shadow 220ms var(--ease-premium);
+  transition: border-color 220ms var(--ease-premium);
 }
 
 /* Alcove panel — slides up from inside the composer */
