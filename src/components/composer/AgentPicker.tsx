@@ -73,16 +73,16 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
       {open && (
         <div
           style={{
-            position: 'absolute',
-            bottom: 'calc(100% + 6px)',
-            left: 0,
-            minWidth: 200,
+            position: 'fixed',
+            top: (wrapRef.current?.getBoundingClientRect().bottom ?? 0) + 6,
+            left: wrapRef.current?.getBoundingClientRect().left ?? 0,
+            minWidth: 220,
             padding: 4,
             background: 'var(--bg-elevated, #15161a)',
             border: '1px solid var(--border-subtle, rgba(255,255,255,0.06))',
             borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-            zIndex: 50,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+            zIndex: 9999,
             animation: 'viewFadeIn 0.12s var(--ease-out)',
           }}
         >
