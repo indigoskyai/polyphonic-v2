@@ -1346,6 +1346,7 @@ export default function ChatView() {
               <AgentPicker
                 activeAgentId={activeAgentId}
                 onChange={(id) => {
+                  setPendingAgentId(id);
                   if (currentThreadId) updateThreadAgent(currentThreadId, id);
                   if (alcoveOpen && id !== 'observer') setAlcoveOpen(false);
                   if (id === 'observer') setAlcoveOpen(true);
