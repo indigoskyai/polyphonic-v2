@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
+import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -364,6 +365,7 @@ export default function ChatView() {
     loadMessages, setCurrentThread, createThread, addMessage,
     setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
+  const agents = useAgentSettingsStore((s) => s.agents);
   const currentThread = threads.find((t) => t.id === currentThreadId);
   // Pending agent id: used when there's no thread yet (empty state). Once a
   // thread exists, it always wins so the picker reflects the persisted value.
@@ -400,11 +402,11 @@ export default function ChatView() {
   // Lingering streaming snapshot — keeps the streaming bubble mounted
   // after isStreaming flips to false, until the typewriter has caught up.
   const [lingeringStream, setLingeringStream] = useState<string | null>(null);
-  const agentNameById = useMemo(() => {
-    const entries = useSettingsStore.getState;
-    void entries;
-    return new Map<string, string>();
-  }, []);
+  const agentNameById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent.name])),
+    [agents]
+  );
+  const currentAgentLabel = agentNameById.get(activeAgentId) || (activeAgentId === 'observer' ? 'Observer' : 'Luca');
   useEffect(() => {
     if (isStreaming && streamingContent) {
       setLingeringStream(streamingContent);
@@ -1156,7 +1158,11 @@ export default function ChatView() {
                   </div>
                 )}
                 <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-                  {msg.role === 'user' ? 'You' : msg.agent === 'guardian' ? 'Observer' : 'Luca'}
+                  {msg.role === 'user'
+                    ? 'You'
+                    : msg.agent === 'guardian'
+                      ? 'Observer'
+                      : agentNameById.get(msg.agent || '') || 'Luca'}
                 </div>
               </div>
 
@@ -1207,7 +1213,7 @@ export default function ChatView() {
                 <div className="msg-time">
                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </div>
-                <div className="msg-author">Luca</div>
+                <div className="msg-author">{currentAgentLabel}</div>
               </div>
 
               <div className="msg-body">
