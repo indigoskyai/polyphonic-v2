@@ -978,15 +978,24 @@ export default function ChatView() {
               </div>
               <div className="input-footer">
                 <div className="agent-pills">
-                  <button className="agent-pill targeted luca">luca</button>
-                  <div className="pill-sep" />
-                  <button className="agent-pill" onClick={() => setAlcoveOpen(true)}>observer</button>
-                  <div className="pill-sep" />
-                  <button
-                    className={ensemblePillClass}
-                    onClick={toggleEnsemble}
-                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
-                  ><EnsembleIcon />ensemble</button>
+                  <AgentPicker
+                    activeAgentId={activeAgentId}
+                    onChange={(id) => {
+                      if (currentThreadId) updateThreadAgent(currentThreadId, id);
+                      if (alcoveOpen && id !== 'observer') setAlcoveOpen(false);
+                      if (id === 'observer') setAlcoveOpen(true);
+                    }}
+                  />
+                  {activeAgentId === 'luca' && (
+                    <>
+                      <div className="pill-sep" />
+                      <button
+                        className={ensemblePillClass}
+                        onClick={toggleEnsemble}
+                        title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
+                      ><EnsembleIcon />ensemble</button>
+                    </>
+                  )}
                 </div>
                 <select
                   value={thinkingEffort}
