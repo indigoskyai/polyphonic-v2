@@ -27,27 +27,33 @@ interface Props {
   trace: CouncilTrace;
 }
 
-/* Compact rank glyph — small mono superscript inside a soft cream halo. */
-function RankBadge({ rank }: { rank: number | null }) {
+/* Rank glyph — mono digit inside a graduated cream halo. Rank 1 reads as
+ * the council favorite (warmer fill + subtle inset highlight); 2 and 3 step
+ * down progressively. */
+function RankBadge({ rank, size = 'sm' }: { rank: number | null; size?: 'sm' | 'md' }) {
+  const dim = size === 'md' ? 18 : 16;
   if (rank === null) {
     return (
       <span
         aria-hidden="true"
         style={{
           display: 'inline-flex',
-          width: 14,
-          height: 14,
+          width: dim,
+          height: dim,
           borderRadius: 999,
-          background: 'rgba(220,219,216,0.04)',
+          background: 'rgba(220,219,216,0.03)',
           border: '1px solid var(--border-faint)',
-          marginRight: 6,
+          marginRight: 7,
+          flexShrink: 0,
         }}
       />
     );
   }
-  // Tone alpha by rank position — first place is brightest
-  const alpha = rank === 1 ? 0.16 : rank === 2 ? 0.10 : 0.06;
-  const ink = rank === 1 ? 'var(--text-secondary)' : 'var(--text-ghost)';
+  // Rank 1 = brightest cream + inset highlight; 2 = dim cream; 3 = ghost.
+  const fillAlpha = rank === 1 ? 0.14 : rank === 2 ? 0.08 : 0.04;
+  const borderAlpha = rank === 1 ? 0.18 : rank === 2 ? 0.10 : 0.06;
+  const ink = rank === 1 ? 'var(--text-primary)' : rank === 2 ? 'var(--text-secondary)' : 'var(--text-ghost)';
+  const insetHighlight = rank === 1 ? 'inset 0 0.5px 0 rgba(255,255,255,0.06)' : 'none';
   return (
     <span
       aria-label={`rank ${rank}`}
@@ -55,16 +61,20 @@ function RankBadge({ rank }: { rank: number | null }) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 14,
-        height: 14,
+        width: dim,
+        height: dim,
         borderRadius: 999,
-        background: `rgba(220,219,216,${alpha})`,
-        border: '1px solid var(--border-faint)',
+        background: `rgba(232,230,224,${fillAlpha})`,
+        border: `1px solid rgba(232,230,224,${borderAlpha})`,
+        boxShadow: insetHighlight,
         fontFamily: 'var(--font-mono)',
-        fontSize: 8,
+        fontSize: 9.5,
+        fontWeight: 500,
         color: ink,
         letterSpacing: 0,
-        marginRight: 6,
+        lineHeight: 1,
+        marginRight: 7,
+        flexShrink: 0,
       }}
     >
       {rank}
@@ -72,7 +82,8 @@ function RankBadge({ rank }: { rank: number | null }) {
   );
 }
 
-/* Pill toggle for view mode. */
+/* Pill toggle for view mode — segmented control with inset-highlight on the
+ * active segment so it reads as elevated, matching the input-shell pattern. */
 function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
   return (
     <div
@@ -80,11 +91,11 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
       aria-label="Council view mode"
       style={{
         display: 'inline-flex',
-        background: 'var(--bg-surface)',
+        background: 'rgba(220,219,216,0.025)',
         border: '1px solid var(--border-faint)',
         borderRadius: 999,
-        padding: 2,
-        gap: 2,
+        padding: 3,
+        gap: 1,
       }}
     >
       {(['tabs', 'compare'] as ViewMode[]).map((m) => (
@@ -94,17 +105,21 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
           aria-selected={mode === m}
           onClick={() => onChange(m)}
           style={{
-            background: mode === m ? 'var(--overlay-active)' : 'transparent',
-            color: mode === m ? 'var(--text-secondary)' : 'var(--text-ghost)',
+            background: mode === m ? 'rgba(232,230,224,0.08)' : 'transparent',
+            color: mode === m ? 'var(--text-primary)' : 'var(--text-ghost)',
             border: 'none',
             borderRadius: 999,
-            padding: '3px 10px',
+            padding: '4px 12px',
             fontFamily: 'var(--font-mono)',
             fontSize: 9,
-            letterSpacing: '0.08em',
+            fontWeight: mode === m ? 500 : 400,
+            letterSpacing: '0.1em',
             textTransform: 'uppercase',
             cursor: 'pointer',
-            transition: 'background var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out)',
+            boxShadow: mode === m
+              ? 'inset 0 0.5px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.18)'
+              : 'none',
+            transition: 'background var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out), font-weight var(--dur-normal) var(--ease-out)',
           }}
         >
           {m}
@@ -114,7 +129,9 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
   );
 }
 
-/* Variant card — model eyebrow with rank badge + RichBody content. */
+/* Variant card — model eyebrow with rank badge + RichBody content.
+ * Rank 1 (council favorite) gets a slightly brighter inset highlight and a
+ * subtle "FAVORED" mark to mark it without shouting. */
 function VariantCard({
   model,
   rank,
@@ -128,24 +145,31 @@ function VariantCard({
   thinking?: string | null;
   compact?: boolean;
 }) {
+  const isFavorite = rank === 1;
   return (
     <div
       style={{
-        background: 'var(--bg-deep)',
-        border: '1px solid var(--border-subtle)',
+        position: 'relative',
+        background: isFavorite
+          ? 'linear-gradient(180deg, rgba(232,230,224,0.025) 0%, rgba(232,230,224,0.008) 40%)'
+          : 'rgba(220,219,216,0.015)',
+        border: `1px solid ${isFavorite ? 'rgba(232,230,224,0.10)' : 'var(--border-subtle)'}`,
         borderRadius: 'var(--radius-md)',
-        padding: compact ? '10px 12px' : '12px 16px',
+        padding: compact ? '12px 14px 14px' : '14px 18px 16px',
         height: compact ? '100%' : 'auto',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
+        boxShadow: isFavorite
+          ? 'inset 0 0.5px 0 rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.18)'
+          : 'inset 0 0.5px 0 rgba(255,255,255,0.025)',
       }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          marginBottom: 8,
+          marginBottom: 10,
           flexShrink: 0,
         }}
       >
@@ -154,25 +178,43 @@ function VariantCard({
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 9,
-            letterSpacing: '0.08em',
-            color: 'var(--text-ghost)',
+            letterSpacing: '0.1em',
+            color: isFavorite ? 'var(--text-secondary)' : 'var(--text-ghost)',
             textTransform: 'uppercase',
+            fontWeight: isFavorite ? 500 : 400,
           }}
         >
           {model}
         </span>
+        {isFavorite && (
+          <span
+            aria-hidden="true"
+            style={{
+              marginLeft: 'auto',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              letterSpacing: '0.18em',
+              color: 'var(--text-ghost)',
+              textTransform: 'uppercase',
+              opacity: 0.7,
+            }}
+          >
+            · favored
+          </span>
+        )}
       </div>
       {thinking && (
-        <details style={{ marginBottom: 8 }}>
+        <details style={{ marginBottom: 10 }}>
           <summary
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 9,
-              letterSpacing: '0.06em',
+              letterSpacing: '0.08em',
               color: 'var(--text-ghost)',
               textTransform: 'uppercase',
               cursor: 'pointer',
               listStyle: 'none',
+              padding: '2px 0',
             }}
           >
             thinking
@@ -182,8 +224,9 @@ function VariantCard({
               fontSize: 11,
               lineHeight: 1.55,
               color: 'var(--text-tertiary)',
-              padding: '6px 0 8px',
+              padding: '6px 0 10px',
               fontStyle: 'italic',
+              opacity: 0.85,
             }}
           >
             {thinking}
@@ -193,11 +236,20 @@ function VariantCard({
       <div
         style={{
           fontSize: 13,
-          lineHeight: 1.55,
+          lineHeight: 1.6,
           color: 'var(--text-tertiary)',
           minHeight: 0,
           flex: 1,
           overflow: compact ? 'auto' : 'visible',
+          // Soften the bottom of overflowing compare-mode content with a
+          // mask gradient. Card border stays sharp all the way around since
+          // the mask is on the inner scroll region only.
+          WebkitMaskImage: compact
+            ? 'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)'
+            : 'none',
+          maskImage: compact
+            ? 'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)'
+            : 'none',
         }}
       >
         <RichBody source={content} />
@@ -234,36 +286,72 @@ export default function CouncilPanel({ trace }: Props) {
   if (variants.length === 0) return null;
 
   const hasRankings = rankings.length > 0;
-  const subtitle = aggregate.length > 0
-    ? `${variants.length} voices · council ranked`
-    : `${variants.length} model responses`;
+  const isCouncil = aggregate.length > 0;
+  const subtitle = isCouncil
+    ? `${variants.length} voices · ranked`
+    : `${variants.length} responses`;
 
   return (
-    <div style={{ marginTop: 8 }}>
-      {/* Disclosure header */}
+    <div style={{ marginTop: 10 }}>
+      {/* Disclosure header — distinctive COUNCIL eyebrow + meta in one row */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-[10px]"
         style={{
-          color: 'var(--text-ghost)',
-          letterSpacing: '0.04em',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
           background: 'none',
           border: 'none',
           cursor: 'pointer',
           padding: '4px 0',
+          color: 'var(--text-ghost)',
+          transition: 'color var(--dur-normal) var(--ease-out)',
         }}
         aria-expanded={expanded}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-ghost)'; }}
       >
         <span
           style={{
             transform: expanded ? 'rotate(90deg)' : 'none',
             transition: 'transform var(--dur-normal) var(--ease-premium)',
             display: 'inline-block',
+            fontSize: 12,
+            lineHeight: 1,
+            color: 'var(--text-tertiary)',
           }}
         >
           ›
         </span>
-        {subtitle}
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          {isCouncil ? 'Council' : 'Voices'}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 1,
+            height: 8,
+            background: 'var(--border-faint)',
+          }}
+        />
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '0.06em',
+            color: 'var(--text-ghost)',
+          }}
+        >
+          {subtitle}
+        </span>
       </button>
 
       {/* Expandable body */}
@@ -275,16 +363,18 @@ export default function CouncilPanel({ trace }: Props) {
         }}
       >
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div style={{ paddingTop: 8 }}>
+          <div style={{ paddingTop: 12 }}>
             {/* Toolbar: view toggle + show-ranking sub-toggle */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 10,
+                marginBottom: 14,
                 gap: 12,
                 flexWrap: 'wrap',
+                paddingBottom: 12,
+                borderBottom: '1px solid var(--border-faint)',
               }}
             >
               <ViewToggle mode={mode} onChange={setMode} />
@@ -297,14 +387,16 @@ export default function CouncilPanel({ trace }: Props) {
                     color: showRanking ? 'var(--text-secondary)' : 'var(--text-ghost)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 9,
-                    letterSpacing: '0.08em',
+                    letterSpacing: '0.12em',
                     textTransform: 'uppercase',
                     cursor: 'pointer',
-                    padding: '3px 6px',
+                    padding: '4px 0',
                     transition: 'color var(--dur-normal) var(--ease-out)',
                   }}
+                  onMouseEnter={(e) => { if (!showRanking) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                  onMouseLeave={(e) => { if (!showRanking) e.currentTarget.style.color = 'var(--text-ghost)'; }}
                 >
-                  {showRanking ? '· ranking shown' : '· show ranking'}
+                  {showRanking ? 'ranking ·' : 'show ranking'}
                 </button>
               )}
             </div>
@@ -313,38 +405,57 @@ export default function CouncilPanel({ trace }: Props) {
             {hasRankings && showRanking && (
               <div
                 style={{
-                  marginBottom: 12,
-                  padding: '10px 14px',
-                  background: 'var(--bg-deep)',
+                  marginBottom: 14,
+                  padding: '12px 16px 14px',
+                  background: 'rgba(220,219,216,0.015)',
                   border: '1px solid var(--border-faint)',
                   borderRadius: 'var(--radius-md)',
+                  boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.025)',
                 }}
               >
                 {rankings.map((r, i) => (
-                  <div key={i} style={{ marginBottom: i === rankings.length - 1 ? 0 : 8 }}>
+                  <div key={i} style={{ marginBottom: i === rankings.length - 1 ? 0 : 10 }}>
                     <div
                       style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        letterSpacing: '0.08em',
-                        color: 'var(--text-ghost)',
-                        textTransform: 'uppercase',
-                        marginBottom: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 6,
                       }}
                     >
-                      judge · {r.judge_model.split('/').pop()}
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '0.18em',
+                          color: 'var(--text-tertiary)',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Judge
+                      </span>
+                      <span aria-hidden="true" style={{ width: 1, height: 8, background: 'var(--border-faint)' }} />
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          letterSpacing: '0.06em',
+                          color: 'var(--text-ghost)',
+                        }}
+                      >
+                        {r.judge_model.split('/').pop()}
+                      </span>
                     </div>
                     <div
                       style={{
-                        fontSize: 11.5,
-                        lineHeight: 1.55,
+                        fontSize: 12,
+                        lineHeight: 1.6,
                         color: 'var(--text-tertiary)',
                         whiteSpace: 'pre-wrap',
-                        // Truncate to roughly 12 lines visible; full text in title
-                        maxHeight: 220,
+                        maxHeight: 240,
                         overflow: 'auto',
+                        paddingRight: 4,
                       }}
-                      title={r.raw_text}
                     >
                       {r.raw_text}
                     </div>
@@ -363,12 +474,13 @@ export default function CouncilPanel({ trace }: Props) {
                     display: 'flex',
                     flexWrap: 'wrap',
                     gap: 6,
-                    marginBottom: 10,
+                    marginBottom: 14,
                   }}
                 >
                   {ordered.map((v, i) => {
                     const rank = rankByModel.get(v.model) ?? null;
                     const isActive = i === activeTab;
+                    const isFavorite = rank === 1;
                     return (
                       <button
                         key={`${v.model}-${i}`}
@@ -378,17 +490,45 @@ export default function CouncilPanel({ trace }: Props) {
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          background: isActive ? 'var(--overlay-active)' : 'var(--bg-surface)',
-                          border: `1px solid ${isActive ? 'var(--border-strong)' : 'var(--border-faint)'}`,
+                          background: isActive
+                            ? 'rgba(232,230,224,0.07)'
+                            : 'rgba(220,219,216,0.02)',
+                          border: `1px solid ${
+                            isActive
+                              ? 'rgba(232,230,224,0.16)'
+                              : 'var(--border-faint)'
+                          }`,
                           borderRadius: 999,
-                          padding: '4px 12px 4px 6px',
-                          color: isActive ? 'var(--text-secondary)' : 'var(--text-ghost)',
+                          padding: '5px 13px 5px 5px',
+                          color: isActive
+                            ? 'var(--text-primary)'
+                            : isFavorite
+                              ? 'var(--text-secondary)'
+                              : 'var(--text-ghost)',
                           fontFamily: 'var(--font-mono)',
                           fontSize: 9,
-                          letterSpacing: '0.08em',
+                          fontWeight: isActive ? 500 : 400,
+                          letterSpacing: '0.1em',
                           textTransform: 'uppercase',
                           cursor: 'pointer',
-                          transition: 'background var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out)',
+                          boxShadow: isActive
+                            ? 'inset 0 0.5px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.18)'
+                            : 'none',
+                          transition: 'background var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = 'rgba(232,230,224,0.04)';
+                            e.currentTarget.style.color = 'var(--text-secondary)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = 'rgba(220,219,216,0.02)';
+                            e.currentTarget.style.color = isFavorite
+                              ? 'var(--text-secondary)'
+                              : 'var(--text-ghost)';
+                          }
                         }}
                       >
                         <RankBadge rank={rank} />
@@ -408,15 +548,15 @@ export default function CouncilPanel({ trace }: Props) {
               </>
             )}
 
-            {/* Compare view */}
+            {/* Compare view — equal columns, capped height so each scrolls
+                independently. Cards' fade mask softens the bottom cutoff. */}
             {mode === 'compare' && (
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${Math.min(ordered.length, 3)}, minmax(0, 1fr))`,
-                  gap: 10,
-                  // Cap the column height so each scrolls independently
-                  maxHeight: 480,
+                  gap: 12,
+                  maxHeight: 520,
                 }}
               >
                 {ordered.slice(0, 3).map((v, i) => (
