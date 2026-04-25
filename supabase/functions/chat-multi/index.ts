@@ -63,9 +63,7 @@ function normalizeModelId(model: string | null | undefined): string | null {
   const normalized = model.trim();
   const aliases: Record<string, string> = {
     "anthropic/claude-sonnet-4-20250514": "anthropic/claude-sonnet-4",
-    "anthropic/claude-sonnet-4.6": "anthropic/claude-sonnet-4.6",
     "anthropic/claude-haiku-4-5": "anthropic/claude-haiku-4.5",
-    "anthropic/claude-opus-4.7": "anthropic/claude-sonnet-4.6",
   };
 
   return aliases[normalized] || normalized;
