@@ -50,12 +50,12 @@ How to handle the three perspectives:
 }
 
 const DEFAULT_ENSEMBLE = [
-  "anthropic/claude-sonnet-4-20250514",
+  "anthropic/claude-sonnet-4",
   "openai/gpt-5.4",
   "google/gemini-3.1-pro-preview",
 ];
 
-const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4-20250514";
+const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4";
 
 function normalizeModelId(model: string | null | undefined): string | null {
   if (!model) return null;
@@ -130,8 +130,10 @@ serve(async (req) => {
     // - undefined → fall back to saved default
     const defaultMultiModel = settings?.multi_model_enabled !== false;
     const multiModelEnabled = typeof ensembleOverride === "boolean" ? ensembleOverride : defaultMultiModel;
-    const ensembleModels: string[] = settings?.ensemble_models || DEFAULT_ENSEMBLE;
-    const synthesisModel = settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL;
+    const ensembleModels: string[] = ((settings?.ensemble_models as string[] | null) || DEFAULT_ENSEMBLE)
+      .map((model) => normalizeModelId(model))
+      .filter((model): model is string => !!model);
+    const synthesisModel = normalizeModelId(settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL) || DEFAULT_SYNTHESIS_MODEL;
     const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
 
     // Get user's OpenRouter API key (required — no platform fallback)
@@ -253,7 +255,7 @@ serve(async (req) => {
     const useEnsemble = multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-      const singleModel = agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0];
+      const singleModel = normalizeModelId(agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
         singleModel,
