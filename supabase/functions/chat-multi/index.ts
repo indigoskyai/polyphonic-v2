@@ -304,7 +304,7 @@ serve(async (req) => {
               send({ type: "thinking", text: variants[0].thinking });
             }
             send({ type: "content", text: variants[0].content });
-            await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking);
+            await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking, agentId);
             await autoTitleThread(supabase, thread_id, message, variants[0].content, apiKey!);
             send({ type: "done", model: "synthesis", tokens_used: null });
             controller.close();
@@ -369,7 +369,7 @@ serve(async (req) => {
               const retryContent = retryData?.choices?.[0]?.message?.content || "";
               if (retryContent) {
                 send({ type: "content", text: retryContent });
-                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null);
+                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId);
                 send({ type: "done", model: "synthesis", tokens_used: null });
                 controller.close();
                 clearInterval(heartbeat);
@@ -380,7 +380,7 @@ serve(async (req) => {
             // Final fallback: use first variant but notify the user
             const best = variants[0];
             send({ type: "content", text: best.content });
-            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants);
+            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId);
             send({ type: "done", model: "fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -439,7 +439,7 @@ serve(async (req) => {
           }
 
           // Save the synthesized message (thinking separate from variants)
-          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null);
+          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId);
 
           // Update thread timestamp
           await supabase
