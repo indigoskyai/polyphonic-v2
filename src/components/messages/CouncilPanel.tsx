@@ -156,7 +156,9 @@ function VariantCard({
         border: `1px solid ${isFavorite ? 'rgba(232,230,224,0.10)' : 'var(--border-subtle)'}`,
         borderRadius: 'var(--radius-md)',
         padding: compact ? '12px 14px 14px' : '14px 18px 16px',
-        height: compact ? '100%' : 'auto',
+        // Compact mode (compare view): each card caps its own height and
+        // scrolls internally. Tabs view: card sizes to content.
+        maxHeight: compact ? 540 : undefined,
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
@@ -548,22 +550,29 @@ export default function CouncilPanel({ trace }: Props) {
               </>
             )}
 
-            {/* Compare view — equal columns, capped height so each scrolls
-                independently. Cards' fade mask softens the bottom cutoff.
-                Breaks out of the 720px message column with clamped negative
-                margins so columns are wide enough to read; clamps to 0 on
-                narrow viewports to avoid horizontal overflow. */}
-            {mode === 'compare' && (
+            {/* Compare view — auto-fit columns at min 280px so they always
+                read comfortably. On wide viewports, extends out of the 720px
+                message column with clamped negative margins. The grid sits
+                inside msg-body which is offset ~48px right of parent center
+                (sidehead width / 2), so we shift it left by 48 with
+                asymmetric margins to recover symmetric breathing room. On
+                narrow viewports, columns reflow to 2 (or 1) rows
+                automatically and the shift clamps to 0. */}
+            {mode === 'compare' && (() => {
+              // Available extension formula:
+              //   100vw  - rail - sidebar - msgBody (560) - sidehead+gap (96) - inset gaps (24) = available
+              //   available / 2 = max extension per side
+              // Capped at 320 so on ultra-wide displays columns stay sane.
+              const ext = 'min(320px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - 680px) / 2))';
+              const shift = `min(48px, ${ext})`;
+              return (
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: `repeat(${Math.min(ordered.length, 3)}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(auto-fit, minmax(280px, 1fr))`,
                   gap: 12,
-                  maxHeight: 540,
-                  marginLeft:
-                    'calc(-1 * min(200px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - var(--message-max-width) - 120px) / 2)))',
-                  marginRight:
-                    'calc(-1 * min(200px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - var(--message-max-width) - 120px) / 2)))',
+                  marginLeft: `calc(-1 * (${ext} + ${shift}))`,
+                  marginRight: `calc(-1 * (${ext} - ${shift}))`,
                 }}
               >
                 {ordered.slice(0, 3).map((v, i) => (
@@ -577,7 +586,8 @@ export default function CouncilPanel({ trace }: Props) {
                   />
                 ))}
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
