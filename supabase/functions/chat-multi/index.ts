@@ -432,6 +432,9 @@ serve(async (req) => {
             (e) => console.warn("Mnemos encode failed (non-fatal):", e)
           );
 
+          // Fire observer-watch (best-effort)
+          fireObserverWatch(thread_id, agentId, authHeader);
+
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
           console.error("Multi-model stream error:", err);
