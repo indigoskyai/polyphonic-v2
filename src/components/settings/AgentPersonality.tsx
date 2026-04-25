@@ -1,89 +1,38 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuthStore } from '@/stores/authStore';
+import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { TextArea, Toggle } from '@/components/settings/FormControls';
 
 interface Props {
   agentId: string;
 }
 
-interface Personality {
-  inner_life: boolean;
-  thought_verbosity: number;
-}
-
 /**
- * Personality fields for an agent — voice description, inner-life toggle,
- * thought verbosity. Persisted to the legacy `agent_config` table keyed by
- * (user_id, agent_name) since `agent_configs` (the Phase-17 table) does not
- * carry these JSONB-style personality fields.
- *
- * Saves immediately on change; intentionally NOT wired into the AgentDetail
- * dirty-state footer so the simple text-and-toggle controls feel persistent.
+ * Personality controls — voice description, inner-life toggle, thought verbosity.
+ * Now reads/writes to `agent_configs.personality` (unified) via the agent
+ * settings store's draft system, so changes flow through the same Save/Discard
+ * footer as everything else on the agent detail page.
  */
 export default function AgentPersonality({ agentId }: Props) {
-  const user = useAuthStore((s) => s.user);
-  const [voice, setVoice] = useState('');
-  const [personality, setPersonality] = useState<Personality>({
-    inner_life: true,
-    thought_verbosity: 1,
-  });
-  const [loaded, setLoaded] = useState(false);
+  const resolved = useAgentSettingsStore((s) => s.getResolved(agentId));
+  const setDraft = useAgentSettingsStore((s) => s.setDraft);
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    supabase
-      .from('agent_config')
-      .select('voice, personality')
-      .eq('user_id', user.id)
-      .eq('agent_name', agentId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        if (data) {
-          setVoice(data.voice ?? '');
-          const p = (data.personality as Partial<Personality> | null) ?? {};
-          setPersonality({
-            inner_life: p.inner_life !== false,
-            thought_verbosity: typeof p.thought_verbosity === 'number' ? p.thought_verbosity : 1,
-          });
-        }
-        setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, agentId]);
-
-  const persist = async (patch: { voice?: string; personality?: Personality }) => {
-    if (!user) return;
-    await supabase.from('agent_config').upsert(
-      {
-        user_id: user.id,
-        agent_name: agentId,
-        ...(patch.voice !== undefined ? { voice: patch.voice } : {}),
-        ...(patch.personality !== undefined ? { personality: patch.personality } : {}),
-      },
-      { onConflict: 'user_id,agent_name' }
-    );
-  };
-
-  if (!loaded) {
+  if (!resolved) {
     return (
       <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>Loading personality…</div>
     );
   }
 
+  const personality = resolved.personality;
+
+  const patch = (next: typeof personality) => {
+    setDraft(agentId, { personality: next });
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div>
         <TextArea
-          value={voice}
-          onChange={(v) => {
-            setVoice(v);
-            persist({ voice: v });
-          }}
+          value={personality.voice_description}
+          onChange={(v) => patch({ ...personality, voice_description: v })}
           placeholder="Describe how this agent should communicate — tone, cadence, vocabulary…"
           rows={4}
         />
@@ -110,11 +59,7 @@ export default function AgentPersonality({ agentId }: Props) {
         </div>
         <Toggle
           on={personality.inner_life}
-          onChange={() => {
-            const next = { ...personality, inner_life: !personality.inner_life };
-            setPersonality(next);
-            persist({ personality: next });
-          }}
+          onChange={() => patch({ ...personality, inner_life: !personality.inner_life })}
         />
       </div>
 
@@ -145,14 +90,9 @@ export default function AgentPersonality({ agentId }: Props) {
             max={2}
             step={1}
             value={personality.thought_verbosity}
-            onChange={(e) => {
-              const next = {
-                ...personality,
-                thought_verbosity: parseInt(e.target.value, 10),
-              };
-              setPersonality(next);
-              persist({ personality: next });
-            }}
+            onChange={(e) =>
+              patch({ ...personality, thought_verbosity: parseInt(e.target.value, 10) })
+            }
             style={{
               width: 120,
               height: 3,
