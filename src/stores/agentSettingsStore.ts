@@ -185,11 +185,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       rowToConfig(row, mcp as Array<Record<string, unknown>>, secrets as Array<Record<string, unknown>>),
     );
 
-    // Sort: system agents first, then by creation order
-    agents.sort((a, b) => {
-      if (a.is_system !== b.is_system) return a.is_system ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Sort: Luca → Observer → user-created agents (alphabetical)
+    agents.sort(sortAgents);
 
     set({ agents, loading: false });
   },
@@ -222,6 +219,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   save: async (id, userId) => {
     const resolved = get().getResolved(id);
     if (!resolved) return { ok: false, error: 'Agent not found' };
+    if (resolved.locked) return { ok: false, error: 'This agent is platform-controlled and cannot be edited.' };
 
     // Direct upsert via the table — RLS scopes to the auth'd user. We persist
     // every editable field including the new name/role/personality columns.
@@ -298,10 +296,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
 
     const newAgent = rowToConfig(data as Record<string, unknown>, [], []);
     set((s) => ({
-      agents: [...s.agents, newAgent].sort((a, b) => {
-        if (a.is_system !== b.is_system) return a.is_system ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      }),
+      agents: [...s.agents, newAgent].sort(sortAgents),
     }));
     return { ok: true, id };
   },
@@ -309,6 +304,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   deleteAgent: async (id) => {
     const target = get().agents.find((a) => a.id === id);
     if (!target) return { ok: false, error: 'Agent not found' };
+    if (target.locked) return { ok: false, error: 'Resident agents cannot be deleted.' };
     if (target.is_system) return { ok: false, error: 'System agents cannot be deleted' };
 
     const { error } = await supabase.from('agent_configs').delete().eq('id', id);
