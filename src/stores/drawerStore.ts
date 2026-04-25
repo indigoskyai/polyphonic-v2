@@ -5,6 +5,7 @@ export type DrawerKey =
   | 'thread-detail'
   | 'memory-detail'
   | 'agent-inspector'
+  | 'observer'
   | null;
 
 interface DrawerState {
