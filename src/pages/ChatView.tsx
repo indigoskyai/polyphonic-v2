@@ -448,47 +448,34 @@ export default function ChatView() {
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
 
-  // Load guardian messages when alcove opens or thread changes
+  // Load guardian messages when alcove opens or thread changes.
+  // Skip while streaming so we don't clobber an in-flight reply with stale DB state.
   useEffect(() => {
-    if (alcoveOpen && currentThreadId) {
-      (async () => {
-        const { supabase } = await import('@/integrations/supabase/client');
-        const { data } = await supabase
-          .from('messages')
-          .select('role, content, agent, created_at')
-          .eq('thread_id', currentThreadId)
-          .eq('agent', 'guardian')
-          .order('created_at', { ascending: true });
-        if (data) {
-          // Also include user messages that were sent to guardian (messages right before guardian responses)
-          const { data: allMsgs } = await supabase
-            .from('messages')
-            .select('role, content, agent, created_at')
-            .eq('thread_id', currentThreadId)
-            .or('agent.eq.guardian,agent.is.null')
-            .order('created_at', { ascending: true });
-          // Filter to only guardian conversation: user messages followed by guardian responses
-          const guardianConvo: Array<{ role: string; content: string; created_at?: string }> = [];
-          let inGuardianExchange = false;
-          for (const msg of (allMsgs || [])) {
-            if (msg.agent === 'guardian') {
-              inGuardianExchange = false;
-              guardianConvo.push(msg);
-            } else if (msg.role === 'user' && !msg.agent) {
-              // Check if next message is guardian
-              const idx = (allMsgs || []).indexOf(msg);
-              const next = (allMsgs || [])[idx + 1];
-              if (next?.agent === 'guardian') {
-                guardianConvo.push(msg);
-                inGuardianExchange = true;
-              }
-            }
-          }
-          setGuardianMessages(guardianConvo);
+    if (!alcoveOpen || !currentThreadId || guardianStreaming) return;
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: allMsgs } = await supabase
+        .from('messages')
+        .select('role, content, agent, created_at')
+        .eq('thread_id', currentThreadId)
+        .or('agent.eq.guardian,agent.is.null')
+        .order('created_at', { ascending: true });
+      if (cancelled || !allMsgs) return;
+      const guardianConvo: Array<{ role: string; content: string; created_at?: string }> = [];
+      for (let i = 0; i < allMsgs.length; i++) {
+        const msg = allMsgs[i];
+        if (msg.agent === 'guardian') {
+          guardianConvo.push(msg);
+        } else if (msg.role === 'user' && !msg.agent) {
+          const next = allMsgs[i + 1];
+          if (next?.agent === 'guardian') guardianConvo.push(msg);
         }
-      })();
-    }
-  }, [alcoveOpen, currentThreadId]);
+      }
+      setGuardianMessages(guardianConvo);
+    })();
+    return () => { cancelled = true; };
+  }, [alcoveOpen, currentThreadId, guardianStreaming]);
 
   // Auto-scroll guardian messages
   useEffect(() => {
@@ -638,6 +625,18 @@ export default function ChatView() {
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let committed = false;
+
+      const commitFinal = (content: string) => {
+        if (committed || !content) return;
+        committed = true;
+        // Atomically swap streaming buffer → committed message to avoid
+        // a frame where both the streaming bubble and the final message
+        // are visible (which looked like a duplicate).
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content }]);
+        setGuardianStreamingContent('');
+        setGuardianStreaming(false);
+      };
 
       if (reader) {
         while (true) {
@@ -655,12 +654,12 @@ export default function ChatView() {
                 setGuardianStreamingContent(fullContent);
               } else if (data.type === 'error') {
                 console.error('Guardian stream error:', data.text);
+                committed = true;
                 setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Observer encountered an error.' }]);
-                fullContent = ''; // Don't add empty message on done
+                setGuardianStreamingContent('');
+                fullContent = '';
               } else if (data.type === 'done') {
-                if (fullContent) {
-                  setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
-                }
+                commitFinal(fullContent);
               }
             } catch (e) {
               // Skip non-JSON lines (heartbeats, etc)
@@ -669,10 +668,8 @@ export default function ChatView() {
         }
       }
 
-      // If stream ended without a done event but we have content
-      if (fullContent && !guardianMessages.some(m => m.content === fullContent)) {
-        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
-      }
+      // Fallback: stream ended without a `done` event
+      commitFinal(fullContent);
     } catch (e) {
       console.error('Guardian connection error:', e);
       setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);

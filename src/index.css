@@ -672,23 +672,31 @@ html {
   transition: border-color 220ms var(--ease-premium), box-shadow 220ms var(--ease-premium);
 }
 
-/* Alcove panel */
+/* Alcove panel — slides up from inside the composer */
 .alcove-panel {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 400ms var(--ease-premium);
+  transition: grid-template-rows 320ms var(--ease-premium);
   border-bottom: 1px solid transparent;
+  will-change: grid-template-rows;
 }
-.alcove-panel.open { grid-template-rows: 1fr; border-bottom-color: var(--border-subtle); }
+.alcove-panel.open {
+  grid-template-rows: 1fr;
+  border-bottom-color: var(--border-subtle);
+}
 .alcove-inner { overflow: hidden; min-height: 0; }
 .alcove-content {
   display: flex;
   flex-direction: column;
   max-height: 340px;
   opacity: 0;
-  transition: opacity 250ms var(--ease-out) 80ms;
+  transform: translateY(-4px);
+  transition: opacity 220ms var(--ease-out) 60ms, transform 260ms var(--ease-premium) 60ms;
 }
-.alcove-panel.open .alcove-content { opacity: 1; }
+.alcove-panel.open .alcove-content {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 .alcove-header {
   height: 36px;
@@ -744,9 +752,19 @@ html {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  scroll-behavior: smooth;
 }
 
-.a-msg { display: flex; flex-direction: column; gap: 3px; }
+.a-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  animation: alcove-msg-in 240ms var(--ease-out) both;
+}
+@keyframes alcove-msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .a-msg-role { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-ghost); }
 .a-msg-body { font-size: 13px; line-height: 1.6; color: var(--text-secondary); font-weight: 400; }
 .a-msg.guardian .a-msg-body { padding-left: 12px; border-left: 2px solid rgba(140, 168, 156, 0.12); }
