@@ -72,10 +72,12 @@ export default function AgentsList() {
             <span className="agent-model">{a.model.split('/').pop() ?? a.model}</span>
             <span className="agent-status">
               <span className={`agent-status-dot agent-status-dot--${a.status}`} aria-hidden="true" />
-              <span className="agent-status-label">{a.is_system ? 'system' : a.created_by === 'luca' ? 'by luca' : 'custom'}</span>
+              <span className="agent-status-label">
+                {a.locked ? 'resident' : a.is_system ? 'system' : a.created_by === 'luca' ? 'by luca' : 'custom'}
+              </span>
             </span>
             <span className="agent-uptime">{a.env.toUpperCase()}</span>
-            {a.is_system ? (
+            {a.locked || a.is_system ? (
               <span className="agent-chev" aria-hidden="true">›</span>
             ) : (
               <button
