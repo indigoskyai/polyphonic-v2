@@ -725,6 +725,9 @@ async function singleModelStream(
         // Encode into Mnemos
         encodeMnemosMemory(supabase, userId, userMessage, fullContent).catch(() => {});
 
+        // Fire observer-watch (best-effort)
+        if (authHeader) fireObserverWatch(threadId, agentId, authHeader);
+
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {
         console.error("Single-model stream error:", err);
