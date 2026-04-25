@@ -400,6 +400,11 @@ export default function ChatView() {
   // Lingering streaming snapshot — keeps the streaming bubble mounted
   // after isStreaming flips to false, until the typewriter has caught up.
   const [lingeringStream, setLingeringStream] = useState<string | null>(null);
+  const agentNameById = useMemo(() => {
+    const entries = useSettingsStore.getState;
+    void entries;
+    return new Map<string, string>();
+  }, []);
   useEffect(() => {
     if (isStreaming && streamingContent) {
       setLingeringStream(streamingContent);
