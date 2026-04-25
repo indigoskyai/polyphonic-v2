@@ -365,7 +365,10 @@ export default function ChatView() {
     setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
   const currentThread = threads.find((t) => t.id === currentThreadId);
-  const activeAgentId = currentThread?.agent_id || 'luca';
+  // Pending agent id: used when there's no thread yet (empty state). Once a
+  // thread exists, it always wins so the picker reflects the persisted value.
+  const [pendingAgentId, setPendingAgentId] = useState<string>('luca');
+  const activeAgentId = currentThread?.agent_id || pendingAgentId;
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
