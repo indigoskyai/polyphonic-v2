@@ -23,6 +23,7 @@ export interface AgentConfig {
   role: string;
   avatar_color: AvatarColor;
   is_system: boolean;
+  locked: boolean;
   created_by: CreatedBy;
   pending: boolean;
   model: string;
@@ -102,6 +103,7 @@ function rowToConfig(
     role: (row.role as string) || 'custom',
     avatar_color: ((row.avatar_color as AvatarColor) || 'cream'),
     is_system: !!row.is_system,
+    locked: !!row.locked,
     created_by: ((row.created_by as CreatedBy) || 'user'),
     pending: !!row.pending,
     model: normalizeAgentModel((row.model as string | null) ?? 'anthropic/claude-sonnet-4'),
