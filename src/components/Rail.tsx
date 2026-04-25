@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Archive } from 'lucide-react';
 import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
@@ -165,8 +166,8 @@ function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onC
       onClick={onClick}
     >
       {icon === 'chat' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 3h10v7H5L2 12V3z"/></svg>}
-      {icon === 'memory' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={7} r={2}/><circle cx={3} cy={4} r={1.2}/><circle cx={11} cy={4} r={1.2}/><circle cx={4} cy={11} r={1.2}/><circle cx={10} cy={10} r={1.2}/><path d="M5 6.2L3.8 4.8M9 6.2l1.2-1.4M5.5 8.5l-1 1.8M8.5 8.5l1 1"/></svg>}
-      {icon === 'mind' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><ellipse cx={7} cy={7} rx={5} ry={4}/><path d="M7 3c1.5 0 3 .8 3 2s-1.5 2-3 2-3-.8-3-2 1.5-2 3-2z"/><circle cx={7} cy={7} r={0.8} fill="currentColor"/></svg>}
+      {icon === 'memory' && <Archive size={14} strokeWidth={1.6} />}
+      {icon === 'mind' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M5 2.5c-1.7 0-3 1.3-3 3 0 .9.4 1.7 1 2.3-.6.5-1 1.3-1 2.2 0 .8.7 1.5 1.5 1.5h7c.8 0 1.5-.7 1.5-1.5 0-.9-.4-1.7-1-2.2.6-.6 1-1.4 1-2.3 0-1.7-1.3-3-3-3-.7 0-1.4.2-2 .7-.6-.5-1.3-.7-2-.7z"/><path d="M7 3.2v8.3"/></svg>}
       {icon === 'import' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M7 1v8M4 6l3 3 3-3"/><path d="M2 10v2h10v-2"/></svg>}
       {icon === 'profile' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={4} r={2.5}/><path d="M2.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/></svg>}
       {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>}
