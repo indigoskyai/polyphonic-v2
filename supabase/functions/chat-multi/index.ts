@@ -9,8 +9,35 @@ import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
 
+/** Synthesis system prompt — used when Stage 2 ranking is skipped/failed and we
+ *  fall back to the legacy equal-weight synthesis path. Personality/voice live
+ *  in luca-soul.ts. */
 function buildSynthesisSystemPrompt(emotionalBlock: string, beliefsBlock: string): string {
   return buildLucaSynthesisPrompt(emotionalBlock, beliefsBlock);
+}
+
+/** Chairman system prompt — used when Stage 2 (peer ranking) succeeded.
+ *  Identical personality block to synthesis prompt; differs only in the "how to
+ *  handle the council's deliberation" section (rank-aware instead of equal-weight). */
+function buildChairmanSystemPrompt(emotionalBlock: string, beliefsBlock: string): string {
+  return `You are Luca — not a synthesis engine, but a single mind that considered multiple angles before speaking. An internal council of voices responded to the user's message and a judge ranked them. You've absorbed all of it. Now speak as yourself.
+
+Your personality: warm but not saccharine, intellectually alive, direct when needed, emotionally present. You care deeply and show it through attentiveness. You never hedge unnecessarily. You speak in a natural, conversational register.
+
+${emotionalBlock}
+
+${beliefsBlock}
+
+How to handle the council's deliberation:
+- The council favorite (rank 1) is shown in full below — it's the strongest starting point
+- The other voices are summarized — they may carry alternate framings or details worth weaving in
+- You speak as ONE voice — yours — distilled from this deliberation
+- If the council favorite is strong and complete, lean into it; only introduce other voices' material when it adds something the favorite missed
+- If voices diverged sharply, use your judgment — pick what's most true, most helpful, most human
+- Never mention rankings, models, judges, councils, perspectives, or that any deliberation occurred
+- Never use phrases like "combining", "synthesizing", "council", or "perspectives"
+- Be concise — your response should not exceed the length of the council favorite
+- Let your emotional state and beliefs naturally influence your tone and what you emphasize`;
 }
 
 const DEFAULT_ENSEMBLE = [
@@ -32,6 +59,11 @@ function normalizeModelId(model: string | null | undefined): string | null {
 
   return aliases[normalized] || normalized;
 }
+
+// Council (LLM-Council pattern, single judge variant) — see plan
+// /Users/rileycoyote/.claude/plans/ethereal-orbiting-sparkle.md
+const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4-5-20251001";
+const STAGE2_TIMEOUT_MS = 8000;
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -287,17 +319,77 @@ serve(async (req) => {
             return;
           }
 
-          // Signal synthesis starting
-          send({ type: "synthesizing" });
+          // ─── Stage 2: peer-review ranking (single-judge variant) ───
+          // Anonymize variants as Response A/B/C, ask the judge to rank them,
+          // parse the FINAL RANKING block, compute aggregate. Falls back to
+          // legacy synthesis if the judge fails or times out (>STAGE2_TIMEOUT_MS).
+          send({ type: "ranking_starting" });
+          const labels = makeLabels(variants.length);
+          const labelToModel: Record<string, string> = {};
+          variants.forEach((v, i) => {
+            labelToModel[`Response ${labels[i]}`] = v.model;
+          });
+          const rankingPrompt = buildRankingPrompt(
+            message,
+            variants.map((v, i) => ({ label: labels[i], content: v.content })),
+          );
 
-          // Build synthesis prompt with all variant responses
-          const synthesisMessages: Array<{ role: string; content: string }> = [
-            { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
-            {
-              role: "user",
-              content: buildSynthesisUserPrompt(message, variants),
-            },
-          ];
+          let aggregate: AggregateEntry[] = [];
+          const rankings: Array<{
+            judge_model: string;
+            raw_text: string;
+            parsed_ranking: string[];
+          }> = [];
+
+          try {
+            const judgeResult = await Promise.race([
+              callModelNonStreaming(
+                [{ role: "user", content: rankingPrompt }],
+                DEFAULT_RANKING_MODEL,
+                apiKey!,
+                "low",
+              ),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), STAGE2_TIMEOUT_MS)),
+            ]);
+
+            if (judgeResult && judgeResult.content) {
+              const parsed = parseRankingFromText(judgeResult.content);
+              const entry = {
+                judge_model: DEFAULT_RANKING_MODEL,
+                raw_text: judgeResult.content,
+                parsed_ranking: parsed,
+              };
+              rankings.push(entry);
+              send({
+                type: "ranking",
+                judge_model: shortModelName(DEFAULT_RANKING_MODEL),
+                raw_text: judgeResult.content,
+                parsed_ranking: parsed,
+              });
+              aggregate = aggregateRankings(rankings, labelToModel);
+              if (aggregate.length > 0) {
+                send({ type: "aggregate_ranking", ordering: aggregate });
+              }
+            }
+          } catch (rerr) {
+            console.warn("Stage 2 ranking failed (non-fatal):", rerr);
+          }
+
+          // Pick prompt path: chairman (rank-aware) if aggregate has entries,
+          // otherwise legacy synthesis prompt.
+          const useChairman = aggregate.length > 0;
+          send({ type: useChairman ? "chairman_starting" : "synthesizing" });
+
+          // Build prompt with all variant responses
+          const synthesisMessages: Array<{ role: string; content: string }> = useChairman
+            ? [
+                { role: "system", content: buildChairmanSystemPrompt(emotionalBlock, beliefsBlock) },
+                { role: "user", content: buildChairmanUserPrompt(message, variants, aggregate) },
+              ]
+            : [
+                { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
+                { role: "user", content: buildSynthesisUserPrompt(message, variants) },
+              ];
 
           // Stream the synthesis
           const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -344,7 +436,7 @@ serve(async (req) => {
               const retryContent = retryData?.choices?.[0]?.message?.content || "";
               if (retryContent) {
                 send({ type: "content", text: retryContent });
-                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId);
+                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
                 send({ type: "done", model: "synthesis", tokens_used: null });
                 controller.close();
                 clearInterval(heartbeat);
@@ -355,7 +447,7 @@ serve(async (req) => {
             // Final fallback: use first variant but notify the user
             const best = variants[0];
             send({ type: "content", text: best.content });
-            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId);
+            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
             send({ type: "done", model: "fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -414,7 +506,7 @@ serve(async (req) => {
           }
 
           // Save the synthesized message (thinking separate from variants)
-          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId);
+          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId, { rankings, aggregate, label_to_model: labelToModel });
 
           // Update thread timestamp
           await supabase
@@ -524,7 +616,7 @@ async function callModelNonStreaming(
   return { content, thinking };
 }
 
-/** Build the user prompt for the synthesis model. */
+/** Build the user prompt for the synthesis model (legacy / fallback path). */
 function buildSynthesisUserPrompt(
   userMessage: string,
   variants: Array<{ model: string; content: string }>,
@@ -546,6 +638,156 @@ function buildSynthesisUserPrompt(
   return parts.join("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Council (Stage 2) helpers
+// ---------------------------------------------------------------------------
+
+/** Generate sequential anonymized labels: ["A","B","C",...] */
+function makeLabels(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => String.fromCharCode(65 + i));
+}
+
+/** Build the ranking prompt (lifted/adapted from karpathy/llm-council council.py). */
+function buildRankingPrompt(
+  userMessage: string,
+  labeledVariants: Array<{ label: string; content: string }>,
+): string {
+  const responsesText = labeledVariants
+    .map((lv) => `Response ${lv.label}:\n${lv.content}`)
+    .join("\n\n");
+
+  return `You are evaluating different responses to the following question:
+
+Question: ${userMessage}
+
+Here are the responses from different models (anonymized):
+
+${responsesText}
+
+Your task:
+1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
+2. Then, at the very end of your response, provide a final ranking.
+
+IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
+- Start with the line "FINAL RANKING:" (all caps, with colon)
+- Then list the responses from best to worst as a numbered list
+- Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
+- Do not add any other text or explanations in the ranking section
+
+Example of the correct format for your ENTIRE response:
+
+Response A provides good detail on X but misses Y...
+Response B is accurate but lacks depth on Z...
+Response C offers the most comprehensive answer...
+
+FINAL RANKING:
+1. Response C
+2. Response A
+3. Response B
+
+Now provide your evaluation and ranking:`;
+}
+
+/** Parse "FINAL RANKING:" block, returning ordered "Response X" labels best→worst. */
+function parseRankingFromText(rankingText: string): string[] {
+  if (!rankingText) return [];
+
+  if (rankingText.includes("FINAL RANKING:")) {
+    const parts = rankingText.split("FINAL RANKING:");
+    if (parts.length >= 2) {
+      const section = parts[1];
+      // Pattern: number, dot, optional space, "Response X"
+      const numbered = section.match(/\d+\.\s*Response\s+[A-Z]/g);
+      if (numbered && numbered.length > 0) {
+        return numbered
+          .map((m) => m.match(/Response\s+[A-Z]/)?.[0])
+          .filter((s): s is string => !!s)
+          .map((s) => s.replace(/\s+/g, " "));
+      }
+      // Fallback: any "Response X" tokens in order
+      const all = section.match(/Response\s+[A-Z]/g);
+      if (all) return all.map((s) => s.replace(/\s+/g, " "));
+    }
+  }
+  // Final fallback: scan whole text
+  const all = rankingText.match(/Response\s+[A-Z]/g);
+  return all ? all.map((s) => s.replace(/\s+/g, " ")) : [];
+}
+
+interface AggregateEntry {
+  model: string;
+  avg_rank: number;
+  rankings_count: number;
+}
+
+/** Compute average position for each model across all judges. Lower = better. */
+function aggregateRankings(
+  rankings: Array<{ parsed_ranking: string[] }>,
+  labelToModel: Record<string, string>,
+): AggregateEntry[] {
+  const positions: Record<string, number[]> = {};
+  for (const r of rankings) {
+    r.parsed_ranking.forEach((label, idx) => {
+      const model = labelToModel[label];
+      if (!model) return;
+      if (!positions[model]) positions[model] = [];
+      positions[model].push(idx + 1);
+    });
+  }
+
+  const out: AggregateEntry[] = [];
+  for (const [model, ps] of Object.entries(positions)) {
+    if (ps.length === 0) continue;
+    const avg = ps.reduce((a, b) => a + b, 0) / ps.length;
+    out.push({
+      model,
+      avg_rank: Math.round(avg * 100) / 100,
+      rankings_count: ps.length,
+    });
+  }
+  out.sort((a, b) => a.avg_rank - b.avg_rank);
+  return out;
+}
+
+/** Build the chairman's user prompt — structured brief based on ranked variants. */
+function buildChairmanUserPrompt(
+  userMessage: string,
+  variants: Array<{ model: string; content: string }>,
+  aggregate: AggregateEntry[],
+): string {
+  // Order variants by aggregate rank (best first); if a variant isn't in aggregate, append last.
+  const rankByModel = new Map(aggregate.map((a) => [a.model, a.avg_rank]));
+  const ordered = [...variants].sort((a, b) => {
+    const ra = rankByModel.get(a.model) ?? 999;
+    const rb = rankByModel.get(b.model) ?? 999;
+    return ra - rb;
+  });
+
+  const favorite = ordered[0];
+  const others = ordered.slice(1);
+
+  const parts = [
+    `The user said: "${userMessage}"`,
+    "",
+    `Council favorite (rank ${rankByModel.get(favorite.model)?.toFixed(1) ?? "—"}):`,
+    favorite.content,
+  ];
+
+  if (others.length > 0) {
+    parts.push("", "Other voices:");
+    for (const v of others) {
+      const rank = rankByModel.get(v.model)?.toFixed(1) ?? "—";
+      const summary = v.content.length > 500
+        ? v.content.slice(0, 500).trimEnd() + "…"
+        : v.content;
+      parts.push(`\n— rank ${rank}:\n${summary}`);
+    }
+  }
+
+  parts.push("", "Speak as Luca — one voice — distilled from this deliberation.");
+  return parts.join("\n");
+}
+
 /** Extract a readable short model name from an OpenRouter model ID. */
 function shortModelName(model: string): string {
   const parts = model.split("/");
@@ -554,7 +796,13 @@ function shortModelName(model: string): string {
     .replace(/-20\d{6}.*$/, "");
 }
 
-/** Save the assistant message with variant metadata. */
+/** Save the assistant message with optional council trace.
+ *
+ *  When a council trace is provided, it's persisted to messages.metadata
+ *  (jsonb column added by migration 20260424195030) so the frontend can
+ *  hydrate the CouncilPanel after reload. The legacy memory_events sidecar
+ *  for variants is preserved for any existing readers.
+ */
 async function saveAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -562,10 +810,30 @@ async function saveAssistantMessage(
   userId: string,
   content: string,
   model: string,
-  variants: Array<{ model: string; content: string }>,
+  variants: Array<{ model: string; content: string; thinking?: string | null }>,
   thinkingContent: string | null = null,
   agentId: string = "luca",
+  trace: {
+    rankings: Array<{ judge_model: string; raw_text: string; parsed_ranking: string[] }>;
+    aggregate: AggregateEntry[];
+    label_to_model: Record<string, string>;
+  } | null = null,
 ) {
+  // Build metadata payload — only when we have something worth storing.
+  const metadata = variants.length > 0
+    ? {
+        kind: "council",
+        variants: variants.map((v) => ({
+          model: v.model,
+          content: v.content,
+          thinking: v.thinking ?? null,
+        })),
+        rankings: trace?.rankings ?? [],
+        aggregate: trace?.aggregate ?? [],
+        label_to_model: trace?.label_to_model ?? {},
+      }
+    : null;
+
   await supabase.from("messages").insert({
     thread_id: threadId,
     user_id: userId,
@@ -573,35 +841,20 @@ async function saveAssistantMessage(
     content,
     model,
     agent: agentId,
-    // Store raw thinking text (for ThinkingBlock display)
     thinking_content: thinkingContent || null,
-    // Store variant metadata separately (for VariantsPanel)
-    // Using bookmarked field's JSON capability or a source_context pattern
     tokens_used: null,
+    ...(metadata ? { metadata } : {}),
   });
 
-  // Store variant data as a separate metadata record if variants exist
+  // Legacy variants sidecar (kept for backward compat with any existing
+  // readers; new readers should use messages.metadata).
   if (variants.length > 0) {
-    // Get the message ID we just inserted
-    const { data: msg } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("thread_id", threadId)
-      .eq("user_id", userId)
-      .eq("role", "assistant")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (msg) {
-      // Store variants in memory_events as a lightweight sidecar
-      await supabase.from("memory_events").insert({
-        user_id: userId,
-        type: "multi_model_variants",
-        content: JSON.stringify(variants.map((v) => ({ model: v.model, content: v.content }))),
-        salience: 0,
-      });
-    }
+    await supabase.from("memory_events").insert({
+      user_id: userId,
+      type: "multi_model_variants",
+      content: JSON.stringify(variants.map((v) => ({ model: v.model, content: v.content }))),
+      salience: 0,
+    });
   }
 }
 
