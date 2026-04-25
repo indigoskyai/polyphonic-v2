@@ -549,14 +549,21 @@ export default function CouncilPanel({ trace }: Props) {
             )}
 
             {/* Compare view — equal columns, capped height so each scrolls
-                independently. Cards' fade mask softens the bottom cutoff. */}
+                independently. Cards' fade mask softens the bottom cutoff.
+                Breaks out of the 720px message column with clamped negative
+                margins so columns are wide enough to read; clamps to 0 on
+                narrow viewports to avoid horizontal overflow. */}
             {mode === 'compare' && (
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${Math.min(ordered.length, 3)}, minmax(0, 1fr))`,
                   gap: 12,
-                  maxHeight: 520,
+                  maxHeight: 540,
+                  marginLeft:
+                    'calc(-1 * min(200px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - var(--message-max-width) - 120px) / 2)))',
+                  marginRight:
+                    'calc(-1 * min(200px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - var(--message-max-width) - 120px) / 2)))',
                 }}
               >
                 {ordered.slice(0, 3).map((v, i) => (
