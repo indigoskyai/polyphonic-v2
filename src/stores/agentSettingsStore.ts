@@ -164,6 +164,15 @@ function normalizeAgentModel(model: string | null | undefined): string {
   }
 }
 
+// Sort: Luca first, then Observer, then everyone else alphabetically.
+function sortAgents(a: AgentConfig, b: AgentConfig): number {
+  const rank = (id: string) => (id === 'luca' ? 0 : id === 'observer' ? 1 : 2);
+  const ra = rank(a.id);
+  const rb = rank(b.id);
+  if (ra !== rb) return ra - rb;
+  return a.name.localeCompare(b.name);
+}
+
 export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   agents: [],
   loading: false,
