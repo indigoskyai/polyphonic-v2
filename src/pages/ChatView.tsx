@@ -638,6 +638,18 @@ export default function ChatView() {
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let committed = false;
+
+      const commitFinal = (content: string) => {
+        if (committed || !content) return;
+        committed = true;
+        // Atomically swap streaming buffer → committed message to avoid
+        // a frame where both the streaming bubble and the final message
+        // are visible (which looked like a duplicate).
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content }]);
+        setGuardianStreamingContent('');
+        setGuardianStreaming(false);
+      };
 
       if (reader) {
         while (true) {
@@ -655,12 +667,12 @@ export default function ChatView() {
                 setGuardianStreamingContent(fullContent);
               } else if (data.type === 'error') {
                 console.error('Guardian stream error:', data.text);
+                committed = true;
                 setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Observer encountered an error.' }]);
-                fullContent = ''; // Don't add empty message on done
+                setGuardianStreamingContent('');
+                fullContent = '';
               } else if (data.type === 'done') {
-                if (fullContent) {
-                  setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
-                }
+                commitFinal(fullContent);
               }
             } catch (e) {
               // Skip non-JSON lines (heartbeats, etc)
@@ -669,10 +681,8 @@ export default function ChatView() {
         }
       }
 
-      // If stream ended without a done event but we have content
-      if (fullContent && !guardianMessages.some(m => m.content === fullContent)) {
-        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
-      }
+      // Fallback: stream ended without a `done` event
+      commitFinal(fullContent);
     } catch (e) {
       console.error('Guardian connection error:', e);
       setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
