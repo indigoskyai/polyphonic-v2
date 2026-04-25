@@ -364,7 +364,7 @@ export default function CouncilPanel({ trace }: Props) {
           transition: 'grid-template-rows 0.4s var(--ease-premium)',
         }}
       >
-        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ overflowX: 'visible', overflowY: 'clip', minHeight: 0 }}>
           <div style={{ paddingTop: 12 }}>
             {/* Toolbar: view toggle + show-ranking sub-toggle */}
             <div
