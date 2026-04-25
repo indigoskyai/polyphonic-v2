@@ -463,6 +463,25 @@ serve(async (req) => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Fire observer-watch in the background. Best-effort. Skips for the Observer's own threads. */
+function fireObserverWatch(threadId: string, agentId: string, authHeader: string) {
+  if (agentId === "observer") return; // don't observe the observer
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/observer-watch`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
+    }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("observer-watch dispatch error:", e);
+  }
+}
+
+
 /** Call a single model non-streaming, returning content and thinking. */
 async function callModelNonStreaming(
   messages: Array<{ role: string; content: string }>,
