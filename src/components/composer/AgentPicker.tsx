@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { resolveAgentColor } from '@/lib/agentColors';
 import { useAuthStore } from '@/stores/authStore';
@@ -9,9 +10,9 @@ interface AgentPickerProps {
 }
 
 /**
- * Composer agent picker. Shows the active agent as a pill; clicking opens a
- * popover with every agent the user has (system + custom). Selecting one
- * binds the current thread to that agent.
+ * Composer agent picker. Renders the popover via a portal with fixed
+ * positioning so it always sits on the top layer (never occluded by the
+ * composer or surrounding chrome). Drops down BELOW the trigger.
  */
 export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
   const user = useAuthStore((s) => s.user);
@@ -19,16 +20,38 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
   const load = useAgentSettingsStore((s) => s.load);
 
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user && agents.length === 0) load(user.id);
   }, [user, agents.length, load]);
 
+  // Position popover under the trigger. Recompute on scroll/resize.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: r.left });
+    };
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open]);
+
+  // Outside click + ESC
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (popRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -70,18 +93,19 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
         {activeName}
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <div
+          ref={popRef}
           style={{
             position: 'fixed',
-            top: (wrapRef.current?.getBoundingClientRect().bottom ?? 0) + 6,
-            left: wrapRef.current?.getBoundingClientRect().left ?? 0,
+            top: pos.top,
+            left: pos.left,
             minWidth: 220,
             padding: 4,
             background: 'var(--bg-elevated, #15161a)',
-            border: '1px solid var(--border-subtle, rgba(255,255,255,0.06))',
+            border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
             borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.55)',
             zIndex: 9999,
             animation: 'viewFadeIn 0.12s var(--ease-out)',
           }}
@@ -146,7 +170,8 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
