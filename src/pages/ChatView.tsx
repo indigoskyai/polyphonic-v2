@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
+import { AgentPicker } from '@/components/composer/AgentPicker';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -359,10 +360,12 @@ export default function ChatView() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const {
-    messages, currentThreadId, isStreaming, streamingContent, streamingThinking,
+    messages, currentThreadId, isStreaming, streamingContent, streamingThinking, threads,
     loadMessages, setCurrentThread, createThread, addMessage,
-    setStreaming, setStreamingContent, setStreamingThinking, loadThreads,
+    setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
+  const currentThread = threads.find((t) => t.id === currentThreadId);
+  const activeAgentId = currentThread?.agent_id || 'luca';
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
@@ -1327,16 +1330,15 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer">
             <div className="agent-pills">
-              <button
-                className={`agent-pill${!alcoveOpen ? ' targeted luca' : ''}`}
-                onClick={() => { if (alcoveOpen) setAlcoveOpen(false); }}
-              >luca</button>
-              <div className="pill-sep" />
-              <button
-                className={`agent-pill${alcoveOpen ? ' targeted guardian' : ''}`}
-                onClick={() => setAlcoveOpen(!alcoveOpen)}
-              >observer</button>
-              {!alcoveOpen && (
+              <AgentPicker
+                activeAgentId={activeAgentId}
+                onChange={(id) => {
+                  if (currentThreadId) updateThreadAgent(currentThreadId, id);
+                  if (alcoveOpen && id !== 'observer') setAlcoveOpen(false);
+                  if (id === 'observer') setAlcoveOpen(true);
+                }}
+              />
+              {!alcoveOpen && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
                   <button

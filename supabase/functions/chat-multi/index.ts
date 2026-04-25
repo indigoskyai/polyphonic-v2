@@ -131,6 +131,29 @@ serve(async (req) => {
       });
     }
 
+    // Load the thread's bound agent
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("agent_id")
+      .eq("id", thread_id)
+      .maybeSingle();
+
+    const agentId = (thread?.agent_id as string | undefined) || "luca";
+
+    const { data: agentConfig } = await supabase
+      .from("agent_configs")
+      .select("id, name, prompt, model, personality, is_system")
+      .eq("user_id", userId)
+      .eq("id", agentId)
+      .maybeSingle();
+
+    // Resolve the agent's identity. Fall back to default Luca prompt if a custom
+    // agent has no prompt set, or if the row is missing.
+    const agentName = (agentConfig?.name as string | undefined) || "Luca";
+    const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
+    const agentModel = (agentConfig?.model as string | undefined) || null;
+    const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
+
     // Load conversation history
     const { data: history } = await supabase
       .from("messages")
@@ -189,11 +212,16 @@ serve(async (req) => {
     }
 
     // Build the enriched system prompt
-    const enrichedSystemPrompt = SYSTEM_PROMPT
-      + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
-      + beliefsBlock
-      + memoryContext
-      + continuityNote;
+    // For the system Luca, layer in emotional state, beliefs, memories, continuity.
+    // For all other agents (system Vektor/Anima/Observer or user-created), use
+    // their own prompt verbatim — the user expects the agent to behave per their config.
+    const enrichedSystemPrompt = agentIsSystemLuca
+      ? SYSTEM_PROMPT
+        + (emotionalBlock ? `\n\n${emotionalBlock}` : "")
+        + beliefsBlock
+        + memoryContext
+        + continuityNote
+      : agentPrompt + continuityNote;
 
     // Build base messages array
     const baseMessages: Array<{ role: string; content: string }> = [
@@ -206,17 +234,22 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: message });
 
-    // If multi-model is disabled, fall back to single-model streaming
-    if (!multiModelEnabled) {
+    // Custom / non-Luca agents always use single-model with their configured model.
+    // Only the system Luca uses the multi-model ensemble path.
+    const useEnsemble = multiModelEnabled && agentIsSystemLuca;
+
+    if (!useEnsemble) {
+      const singleModel = agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
-        settings?.default_model || DEFAULT_ENSEMBLE[0],
+        singleModel,
         apiKey,
         supabase,
         thread_id,
         userId,
         message,
-        corsHeaders
+        corsHeaders,
+        agentId,
       );
     }
 
@@ -271,7 +304,7 @@ serve(async (req) => {
               send({ type: "thinking", text: variants[0].thinking });
             }
             send({ type: "content", text: variants[0].content });
-            await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking);
+            await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking, agentId);
             await autoTitleThread(supabase, thread_id, message, variants[0].content, apiKey!);
             send({ type: "done", model: "synthesis", tokens_used: null });
             controller.close();
@@ -336,7 +369,7 @@ serve(async (req) => {
               const retryContent = retryData?.choices?.[0]?.message?.content || "";
               if (retryContent) {
                 send({ type: "content", text: retryContent });
-                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null);
+                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId);
                 send({ type: "done", model: "synthesis", tokens_used: null });
                 controller.close();
                 clearInterval(heartbeat);
@@ -347,7 +380,7 @@ serve(async (req) => {
             // Final fallback: use first variant but notify the user
             const best = variants[0];
             send({ type: "content", text: best.content });
-            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants);
+            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId);
             send({ type: "done", model: "fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -406,7 +439,7 @@ serve(async (req) => {
           }
 
           // Save the synthesized message (thinking separate from variants)
-          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null);
+          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId);
 
           // Update thread timestamp
           await supabase
@@ -534,6 +567,7 @@ async function saveAssistantMessage(
   model: string,
   variants: Array<{ model: string; content: string }>,
   thinkingContent: string | null = null,
+  agentId: string = "luca",
 ) {
   await supabase.from("messages").insert({
     thread_id: threadId,
@@ -541,7 +575,7 @@ async function saveAssistantMessage(
     role: "assistant",
     content,
     model,
-    agent: "luca",
+    agent: agentId,
     // Store raw thinking text (for ThinkingBlock display)
     thinking_content: thinkingContent || null,
     // Store variant metadata separately (for VariantsPanel)
@@ -604,6 +638,7 @@ async function singleModelStream(
   userId: string,
   userMessage: string,
   corsHeaders: Record<string, string>,
+  agentId: string = "luca",
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -676,7 +711,7 @@ async function singleModelStream(
 
         await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
-          content: fullContent || "(empty)", model: usedModel, agent: "luca",
+          content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
         });
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);

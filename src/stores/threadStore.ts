@@ -7,6 +7,7 @@ export interface Thread {
   title: string | null;
   pinned: boolean;
   heat: string;
+  agent_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -44,13 +45,14 @@ interface ThreadState {
   loadThreads: () => Promise<void>;
   setCurrentThread: (id: string | null) => void;
   loadMessages: (threadId: string) => Promise<void>;
-  createThread: (userId: string) => Promise<string>;
+  createThread: (userId: string, agentId?: string) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'>) => void;
   setStreaming: (s: boolean) => void;
   setStreamingContent: (c: string) => void;
   setStreamingThinking: (t: string) => void;
   updateThreadTitle: (threadId: string, title: string) => Promise<void>;
   updateThreadPinned: (threadId: string, pinned: boolean) => Promise<void>;
+  updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
 }
 
 export const useThreadStore = create<ThreadState>((set, get) => ({
@@ -80,10 +82,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (data) set({ messages: data as Message[] });
   },
 
-  createThread: async (userId) => {
+  createThread: async (userId, agentId = 'luca') => {
     const { data } = await supabase
       .from('threads')
-      .insert({ user_id: userId })
+      .insert({ user_id: userId, agent_id: agentId })
       .select()
       .single();
     if (data) {
@@ -118,6 +120,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await supabase.from('threads').update({ pinned }).eq('id', threadId);
     set((s) => ({
       threads: s.threads.map((t) => (t.id === threadId ? { ...t, pinned } : t)),
+    }));
+  },
+
+  updateThreadAgent: async (threadId, agentId) => {
+    await supabase.from('threads').update({ agent_id: agentId }).eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (t.id === threadId ? { ...t, agent_id: agentId } : t)),
     }));
   },
 }));
