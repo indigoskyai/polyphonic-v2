@@ -185,6 +185,14 @@ function MessageContent({ content }: { content: string }) {
   );
 }
 
+function getAgentDisplayName(agentId: string | null | undefined, names: Map<string, string>) {
+  if (!agentId) return 'Luca';
+  const fromStore = names.get(agentId);
+  if (fromStore) return fromStore;
+  if (agentId === 'guardian' || agentId === 'observer') return 'Observer';
+  return agentId.charAt(0).toUpperCase() + agentId.slice(1);
+}
+
 /* ─── Thinking Block (4-state: waiting → streaming → settling → complete) ─── */
 type ThinkingState = 'waiting' | 'streaming' | 'settling' | 'complete';
 
@@ -406,7 +414,7 @@ export default function ChatView() {
     () => new Map(agents.map((agent) => [agent.id, agent.name])),
     [agents]
   );
-  const currentAgentLabel = agentNameById.get(activeAgentId) || (activeAgentId === 'observer' ? 'Observer' : 'Luca');
+  const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
   useEffect(() => {
     if (isStreaming && streamingContent) {
       setLingeringStream(streamingContent);
@@ -1162,7 +1170,7 @@ export default function ChatView() {
                     ? 'You'
                     : msg.agent === 'guardian'
                       ? 'Observer'
-                      : agentNameById.get(msg.agent || '') || 'Luca'}
+                      : getAgentDisplayName(msg.agent, agentNameById)}
                 </div>
               </div>
 
