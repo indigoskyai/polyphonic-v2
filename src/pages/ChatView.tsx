@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
+import CouncilPanel from '@/components/messages/CouncilPanel';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
@@ -291,79 +292,6 @@ function parseMultiModelVariants(thinkingContent: string): Array<{ model: string
   return [];
 }
 
-/* ─── Model Variants Panel (expandable per-message) ─── */
-function VariantsPanel({ variants }: { variants: Array<{ model: string; content: string; thinking?: string | null }> }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!variants || variants.length === 0) return null;
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-[10px]"
-        style={{
-          color: 'var(--text-ghost)',
-          letterSpacing: '0.04em',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '4px 0',
-        }}
-      >
-        <span style={{
-          transform: expanded ? 'rotate(90deg)' : 'none',
-          transition: 'transform var(--dur-normal) var(--ease-premium)',
-          display: 'inline-block',
-        }}>›</span>
-        {variants.length} model responses
-      </button>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateRows: expanded ? '1fr' : '0fr',
-        transition: 'grid-template-rows 0.4s var(--ease-premium)',
-      }}>
-        <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8 }}>
-            {variants.map((v, i) => (
-              <div key={i} style={{
-                background: 'var(--bg-deep)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '10px 14px',
-              }}>
-                <div className="text-[10px] font-medium uppercase mb-1.5" style={{
-                  color: 'var(--text-ghost)',
-                  letterSpacing: '0.06em',
-                }}>
-                  {v.model}
-                </div>
-                {v.thinking && (
-                  <ThinkingBlock content={v.thinking} state="complete" />
-                )}
-                <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-tertiary)' }}>
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => <p style={{ marginBottom: 8 }}>{children}</p>,
-                      code: ({ children, className: cn }) => {
-                        if (cn) return <pre style={{ background: 'var(--bg-void)', padding: '8px 12px', borderRadius: 4, fontSize: 12, overflow: 'auto', margin: '8px 0' }}><code>{children}</code></pre>;
-                        return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--bg-surface)', padding: '1px 4px', borderRadius: 3 }}>{children}</code>;
-                      },
-                    }}
-                  >
-                    {v.content}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main ChatView ─── */
 export default function ChatView() {
   const { threadId } = useParams();
@@ -400,6 +328,15 @@ export default function ChatView() {
   const guardianScrollRef = useRef<HTMLDivElement>(null);
   const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string; thinking?: string | null }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  // Council (LLM-Council pattern) streaming state. Captures peer-rank judge output
+  // and aggregate ordering as Stage 2 events arrive over SSE. Final message hydrates
+  // these into msg.metadata for CouncilPanel.
+  type RankingEntry = { judge_model: string; raw_text: string; parsed_ranking: string[] };
+  type AggregateEntry = { model: string; avg_rank: number; rankings_count: number };
+  const [streamingRankings, setStreamingRankings] = useState<RankingEntry[]>([]);
+  const [streamingAggregate, setStreamingAggregate] = useState<AggregateEntry[]>([]);
+  type CouncilPhase = 'idle' | 'voices' | 'deliberating' | 'speaking';
+  const [councilPhase, setCouncilPhase] = useState<CouncilPhase>('idle');
   // Alive-feeling features
   const [welcomeBack, setWelcomeBack] = useState<{ type: 'journal' | 'thought' | 'initiation'; content: string } | null>(null);
   const [dynamicPlaceholder, setDynamicPlaceholder] = useState('Message Luca...');
@@ -737,6 +674,9 @@ export default function ChatView() {
       let fullContent = '';
       let fullThinking = '';
       const collectedVariants: Array<{ model: string; content: string; thinking?: string | null }> = [];
+      const collectedRankings: RankingEntry[] = [];
+      let collectedAggregate: AggregateEntry[] = [];
+      let collectedLabelToModel: Record<string, string> = {};
 
       if (reader) {
         while (true) {
@@ -750,7 +690,22 @@ export default function ChatView() {
               if (data.type === 'variant') {
                 collectedVariants.push({ model: data.model, content: data.text, thinking: data.thinking || null });
                 setStreamingVariants([...collectedVariants]);
-              } else if (data.type === 'synthesizing') {
+                if (councilPhase === 'idle') setCouncilPhase('voices');
+              } else if (data.type === 'ranking_starting') {
+                setCouncilPhase('deliberating');
+              } else if (data.type === 'ranking') {
+                collectedRankings.push({
+                  judge_model: data.judge_model,
+                  raw_text: data.raw_text,
+                  parsed_ranking: data.parsed_ranking,
+                });
+                setStreamingRankings([...collectedRankings]);
+              } else if (data.type === 'aggregate_ranking') {
+                collectedAggregate = data.ordering as AggregateEntry[];
+                setStreamingAggregate(collectedAggregate);
+                if (data.label_to_model) collectedLabelToModel = data.label_to_model;
+              } else if (data.type === 'chairman_starting' || data.type === 'synthesizing') {
+                setCouncilPhase('speaking');
                 setIsSynthesizing(true);
               } else if (data.type === 'content') {
                 fullContent += data.text;
@@ -759,14 +714,26 @@ export default function ChatView() {
                 fullThinking += data.text;
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {
+                // Hydrate full council trace into the message metadata so
+                // CouncilPanel can render after stream ends without a reload.
+                const councilMetadata = collectedVariants.length > 0
+                  ? {
+                      kind: 'council',
+                      variants: collectedVariants,
+                      rankings: collectedRankings,
+                      aggregate: collectedAggregate,
+                      label_to_model: collectedLabelToModel,
+                    }
+                  : null;
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: activeAgentId,
                   thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
-                  // Store variants as extra metadata on the message object
+                  // Store variants as extra metadata on the message object (legacy convenience)
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
+                  ...(councilMetadata ? { metadata: councilMetadata } : {}),
                 } as any);
               } else if (data.type === 'error') {
                 addMessage({
@@ -792,6 +759,9 @@ export default function ChatView() {
       setStreamingContent('');
       setStreamingThinking('');
       setStreamingVariants([]);
+      setStreamingRankings([]);
+      setStreamingAggregate([]);
+      setCouncilPhase('idle');
       setIsSynthesizing(false);
       abortRef.current = null;
       loadThreads();
@@ -1177,13 +1147,23 @@ export default function ChatView() {
                   ? <MessageContent content={msg.content} />
                   : <RichBody source={msg.content} />}
 
-                {/* Model variants (expandable) — from variants field or legacy JSON thinking_content */}
-                {(msg as any).variants && (
-                  <VariantsPanel variants={(msg as any).variants} />
-                )}
-                {msg.thinking_content && isMultiModelThinking(msg.thinking_content) && (
-                  <VariantsPanel variants={parseMultiModelVariants(msg.thinking_content)} />
-                )}
+                {/* Council deliberation viewer (variants + rankings + aggregate).
+                    Hydrates from msg.metadata.kind === "council" (post-reload) or
+                    msg.variants (live from streaming). Falls back to legacy
+                    multi-model thinking_content payload from older messages. */}
+                {(() => {
+                  const md = (msg as any).metadata;
+                  if (md && md.kind === 'council' && Array.isArray(md.variants) && md.variants.length > 0) {
+                    return <CouncilPanel trace={md} />;
+                  }
+                  if ((msg as any).variants && (msg as any).variants.length > 0) {
+                    return <CouncilPanel trace={{ variants: (msg as any).variants }} />;
+                  }
+                  if (msg.thinking_content && isMultiModelThinking(msg.thinking_content)) {
+                    return <CouncilPanel trace={{ variants: parseMultiModelVariants(msg.thinking_content) }} />;
+                  }
+                  return null;
+                })()}
 
                 {/* B.7 — attachments rendered below message body; dispatch on type */}
                 {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
@@ -1238,30 +1218,52 @@ export default function ChatView() {
                 />
               )}
 
-              {/* Model variant collection indicator (below thinking block) */}
-              {isStreaming && streamingVariants.length > 0 && !streamingContent && !isSynthesizing && (
+              {/* Council phase indicator: 3 dots representing voices →
+                  deliberating → speaking. Shown during ensemble/council runs
+                  before content streaming begins. Each dot brightens as its
+                  phase becomes active and stays lit afterwards. */}
+              {isStreaming && (streamingVariants.length > 0 || councilPhase !== 'idle') && !streamingContent && (
                 <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
                   <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
-                    {streamingVariants.length}/3 models responded
+                    {councilPhase === 'speaking' ? 'speaking'
+                      : councilPhase === 'deliberating' ? 'deliberating'
+                      : `${streamingVariants.length}/3 voices`}
                   </span>
                   <div className="flex items-center gap-1">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} style={{
-                        width: 5, height: 5, borderRadius: '50%',
-                        background: i < streamingVariants.length ? 'var(--accent-luca)' : 'rgba(220,219,216,0.08)',
-                        transition: 'background 0.3s var(--ease-out)',
-                      }} />
-                    ))}
+                    {(['voices', 'deliberating', 'speaking'] as const).map((phase) => {
+                      const phaseOrder = ['voices', 'deliberating', 'speaking'] as const;
+                      const currentIdx = phaseOrder.indexOf(councilPhase as typeof phaseOrder[number]);
+                      const myIdx = phaseOrder.indexOf(phase);
+                      // Dot is "lit" if its phase has been reached or passed.
+                      // For voices, also progressively brighten by variant count.
+                      const lit = councilPhase !== 'idle' && currentIdx >= myIdx;
+                      let opacity = 0.08;
+                      if (lit) {
+                        if (phase === 'voices') {
+                          opacity = Math.min(1, 0.25 + streamingVariants.length * 0.25);
+                        } else if (phase === 'deliberating') {
+                          opacity = streamingAggregate.length > 0 ? 1 : 0.6;
+                        } else {
+                          opacity = 1;
+                        }
+                      }
+                      return (
+                        <div
+                          key={phase}
+                          aria-label={phase}
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: '50%',
+                            background: lit
+                              ? `rgba(220,219,216,${opacity})`
+                              : 'rgba(220,219,216,0.08)',
+                            transition: 'background 0.3s var(--ease-out)',
+                          }}
+                        />
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-
-              {/* Synthesizing indicator */}
-              {isStreaming && isSynthesizing && !streamingContent && (
-                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
-                  <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
-                    synthesizing
-                  </span>
                 </div>
               )}
 
