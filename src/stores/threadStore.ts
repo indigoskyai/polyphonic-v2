@@ -74,10 +74,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   setCurrentThread: (id) => set({ currentThreadId: id }),
 
   loadMessages: async (threadId) => {
+    // Exclude guardian/observer messages — they live in the composer alcove,
+    // not the main thread.
     const { data } = await supabase
       .from('messages')
       .select('*')
       .eq('thread_id', threadId)
+      .or('agent.is.null,and(agent.neq.guardian,agent.neq.observer)')
       .order('created_at', { ascending: true });
     if (data) set({ messages: data as Message[] });
   },

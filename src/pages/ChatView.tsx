@@ -592,9 +592,10 @@ export default function ChatView() {
     // Add user message to guardian conversation
     setGuardianMessages((prev) => [...prev, { role: 'user', content: messageText }]);
 
-    // Save user message to DB
+    // Save user message to DB — tag it as `guardian` so it stays in the
+    // observer alcove and never appears in the main chat thread.
     const { supabase } = await import('@/integrations/supabase/client');
-    await supabase.from('messages').insert({ thread_id: tid, user_id: user.id, role: 'user', content: messageText });
+    await supabase.from('messages').insert({ thread_id: tid, user_id: user.id, role: 'user', content: messageText, agent: 'guardian' });
 
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
