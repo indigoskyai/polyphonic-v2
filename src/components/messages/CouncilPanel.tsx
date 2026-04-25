@@ -131,19 +131,18 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
 
 /* Variant card — model eyebrow with rank badge + RichBody content.
  * Rank 1 (council favorite) gets a slightly brighter inset highlight and a
- * subtle "FAVORED" mark to mark it without shouting. */
+ * subtle "FAVORED" mark to mark it without shouting. Same height cap, scroll,
+ * and bottom fade in both Tabs and Compare views — they're the same card. */
 function VariantCard({
   model,
   rank,
   content,
   thinking,
-  compact = false,
 }: {
   model: string;
   rank: number | null;
   content: string;
   thinking?: string | null;
-  compact?: boolean;
 }) {
   const isFavorite = rank === 1;
   return (
@@ -155,10 +154,8 @@ function VariantCard({
           : 'rgba(220,219,216,0.015)',
         border: `1px solid ${isFavorite ? 'rgba(232,230,224,0.10)' : 'var(--border-subtle)'}`,
         borderRadius: 'var(--radius-md)',
-        padding: compact ? '12px 14px 14px' : '14px 18px 16px',
-        // Compact mode (compare view): each card caps its own height and
-        // scrolls internally. Tabs view: card sizes to content.
-        maxHeight: compact ? 540 : undefined,
+        padding: '14px 18px 16px',
+        maxHeight: 540,
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
@@ -242,16 +239,14 @@ function VariantCard({
           color: 'var(--text-tertiary)',
           minHeight: 0,
           flex: 1,
-          overflow: compact ? 'auto' : 'visible',
-          // Soften the bottom of overflowing compare-mode content with a
-          // mask gradient. Card border stays sharp all the way around since
-          // the mask is on the inner scroll region only.
-          WebkitMaskImage: compact
-            ? 'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)'
-            : 'none',
-          maskImage: compact
-            ? 'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)'
-            : 'none',
+          overflow: 'auto',
+          // Soften the bottom of overflowing content with a mask gradient.
+          // Card border stays sharp all the way around since the mask is on
+          // the inner scroll region only.
+          WebkitMaskImage:
+            'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)',
+          maskImage:
+            'linear-gradient(180deg, #000 0, #000 calc(100% - 28px), transparent 100%)',
         }}
       >
         <RichBody source={content} />
@@ -582,7 +577,6 @@ export default function CouncilPanel({ trace }: Props) {
                     rank={rankByModel.get(v.model) ?? null}
                     content={v.content}
                     thinking={v.thinking}
-                    compact
                   />
                 ))}
               </div>
