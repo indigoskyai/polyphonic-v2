@@ -682,7 +682,17 @@ async function singleModelStream(
         });
 
         if (!orResponse.ok) {
-          send({ type: "error", text: `Model error (${orResponse.status})` });
+          const errText = await orResponse.text().catch(() => "");
+          console.error("Single-model provider error:", orResponse.status, errText);
+          let message = `Model error (${orResponse.status})`;
+          try {
+            const parsed = JSON.parse(errText);
+            const providerMessage = parsed?.error?.message || parsed?.message;
+            if (providerMessage) message = providerMessage;
+          } catch {
+            if (errText) message = errText.slice(0, 240);
+          }
+          send({ type: "error", text: message });
           controller.close();
           clearInterval(heartbeat);
           return;
