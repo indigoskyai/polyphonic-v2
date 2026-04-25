@@ -57,6 +57,20 @@ const DEFAULT_ENSEMBLE = [
 
 const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4-20250514";
 
+function normalizeModelId(model: string | null | undefined): string | null {
+  if (!model) return null;
+
+  const normalized = model.trim();
+  const aliases: Record<string, string> = {
+    "anthropic/claude-sonnet-4-20250514": "anthropic/claude-sonnet-4",
+    "anthropic/claude-sonnet-4.6": "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+    "anthropic/claude-opus-4.7": "anthropic/claude-sonnet-4.6",
+  };
+
+  return aliases[normalized] || normalized;
+}
+
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
@@ -151,7 +165,7 @@ serve(async (req) => {
     // agent has no prompt set, or if the row is missing.
     const agentName = (agentConfig?.name as string | undefined) || "Luca";
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
-    const agentModel = (agentConfig?.model as string | undefined) || null;
+    const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
 
     // Load conversation history
