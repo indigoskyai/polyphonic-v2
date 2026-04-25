@@ -76,11 +76,18 @@ export type Database = {
       }
       agent_configs: {
         Row: {
+          avatar_color: string | null
           created_at: string
+          created_by: string
           env: string
           id: string
+          is_system: boolean
           model: string | null
+          name: string
+          pending: boolean
+          personality: Json
           prompt: string | null
+          role: string
           subagents: Json
           tools: Json
           updated_at: string
@@ -88,11 +95,18 @@ export type Database = {
           voices: Json
         }
         Insert: {
+          avatar_color?: string | null
           created_at?: string
+          created_by?: string
           env?: string
           id: string
+          is_system?: boolean
           model?: string | null
+          name: string
+          pending?: boolean
+          personality?: Json
           prompt?: string | null
+          role: string
           subagents?: Json
           tools?: Json
           updated_at?: string
@@ -100,11 +114,18 @@ export type Database = {
           voices?: Json
         }
         Update: {
+          avatar_color?: string | null
           created_at?: string
+          created_by?: string
           env?: string
           id?: string
+          is_system?: boolean
           model?: string | null
+          name?: string
+          pending?: boolean
+          personality?: Json
           prompt?: string | null
+          role?: string
           subagents?: Json
           tools?: Json
           updated_at?: string

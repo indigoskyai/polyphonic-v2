@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Select } from '@/components/ui/luca';
 import { useAuthStore } from '@/stores/authStore';
@@ -12,20 +12,47 @@ import VoiceCardGrid from '@/components/settings/VoiceCardGrid';
 import Keychain from '@/components/settings/Keychain';
 import StickySaveFooter from '@/components/settings/StickySaveFooter';
 import AgentPersonality from '@/components/settings/AgentPersonality';
+import { resolveAgentColor } from '@/lib/agentColors';
 
 const MODELS = [
-  { value: 'opus-4-6', label: 'opus-4-6' },
-  { value: 'sonnet-4-6', label: 'sonnet-4-6' },
-  { value: 'haiku-4-5', label: 'haiku-4-5' },
+  { value: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  { value: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4' },
+  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  { value: 'openai/gpt-5', label: 'GPT-5' },
+  { value: 'openai/gpt-5-mini', label: 'GPT-5 mini' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ];
 
-function dotColor(id: string): string {
-  switch (id) {
-    case 'luca': return 'var(--luca-full)';
-    case 'vektor': return 'var(--vektor-full)';
-    case 'anima': return 'var(--anima-full)';
-    default: return 'var(--text-tertiary)';
-  }
+function ComingSoonBadge() {
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        marginLeft: 8,
+        padding: '2px 8px',
+        fontSize: 9,
+        fontFamily: 'var(--font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--track-meta)',
+        color: 'var(--text-ghost)',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 999,
+        verticalAlign: 'middle',
+      }}
+    >
+      Coming soon
+    </span>
+  );
+}
+
+function ComingSoonShade({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>
+      {children}
+    </div>
+  );
 }
 
 export default function AgentDetail() {
@@ -77,9 +104,46 @@ export default function AgentDetail() {
         >
           ← Agents
         </button>
-        <span className="agent-detail-dot" style={{ background: dotColor(agent.id) }} aria-hidden="true" />
-        <h1 className="agent-detail-name">{agent.name}</h1>
+        <span className="agent-detail-dot" style={{ background: resolveAgentColor(agent.avatar_color) }} aria-hidden="true" />
+        {agent.is_system ? (
+          <h1 className="agent-detail-name">{agent.name}</h1>
+        ) : (
+          <input
+            type="text"
+            value={agent.name}
+            onChange={(e) => patch({ name: e.target.value })}
+            className="agent-detail-name"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'var(--text-primary)',
+              padding: 0,
+              minWidth: 60,
+              maxWidth: 280,
+            }}
+            placeholder="Agent name"
+          />
+        )}
         <span className="agent-role-pill">{agent.role}</span>
+        {agent.is_system && (
+          <span
+            style={{
+              marginLeft: 8,
+              padding: '2px 8px',
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              textTransform: 'uppercase',
+              letterSpacing: 'var(--track-meta)',
+              color: 'var(--text-ghost)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 999,
+            }}
+          >
+            System
+          </span>
+        )}
         <span className="agent-spacer" />
         <EnvSwitcher value={agent.env} onChange={(env) => patch({ env })} />
       </header>
@@ -106,39 +170,54 @@ export default function AgentDetail() {
           <AgentPersonality agentId={agent.id} />
         </div>
 
-        <div className="field-label">Tools
+        <div className="field-label">
+          Tools<ComingSoonBadge />
           <div className="field-hint">Enable capabilities. Gated tools will ask for confirmation before running.</div>
         </div>
         <div className="field-control">
-          <ToolGrid tools={agent.tools} onChange={(tools) => patch({ tools })} />
+          <ComingSoonShade>
+            <ToolGrid tools={agent.tools} onChange={(tools) => patch({ tools })} />
+          </ComingSoonShade>
         </div>
 
-        <div className="field-label">MCP servers
+        <div className="field-label">
+          MCP servers<ComingSoonBadge />
           <div className="field-hint">External context sources attached to this agent.</div>
         </div>
         <div className="field-control">
-          <McpList servers={agent.mcp} />
+          <ComingSoonShade>
+            <McpList servers={agent.mcp} />
+          </ComingSoonShade>
         </div>
 
-        <div className="field-label">Sub-agents
+        <div className="field-label">
+          Sub-agents<ComingSoonBadge />
           <div className="field-hint">Dedicated helpers spawned under this orchestrator.</div>
         </div>
         <div className="field-control">
-          <SubAgentList subagents={agent.subagents} onChange={(subagents) => patch({ subagents })} />
+          <ComingSoonShade>
+            <SubAgentList subagents={agent.subagents} onChange={(subagents) => patch({ subagents })} />
+          </ComingSoonShade>
         </div>
 
-        <div className="field-label">Voice
+        <div className="field-label">
+          Voice<ComingSoonBadge />
           <div className="field-hint">TTS configuration for spoken responses.</div>
         </div>
         <div className="field-control">
-          <VoiceCardGrid voices={agent.voices} agentId={agent.id} />
+          <ComingSoonShade>
+            <VoiceCardGrid voices={agent.voices} agentId={agent.id} />
+          </ComingSoonShade>
         </div>
 
-        <div className="field-label">Keychain
+        <div className="field-label">
+          Keychain<ComingSoonBadge />
           <div className="field-hint">Provider API keys. Only the last three characters are shown.</div>
         </div>
         <div className="field-control">
-          <Keychain secrets={agent.secrets} />
+          <ComingSoonShade>
+            <Keychain secrets={agent.secrets} />
+          </ComingSoonShade>
         </div>
       </div>
 
