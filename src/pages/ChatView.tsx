@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
+import { ObserverEyeChip } from '@/components/composer/ObserverEyeChip';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
