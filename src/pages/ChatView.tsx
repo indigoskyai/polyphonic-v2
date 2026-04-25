@@ -730,7 +730,7 @@ export default function ChatView() {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
           content: resp.status === 401 ? 'Session expired — please refresh.' : 'Something went wrong. Please try again.',
-          model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         });
         return;
       }
@@ -764,7 +764,7 @@ export default function ChatView() {
               } else if (data.type === 'done') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: fullContent, model: data.model || null, agent: 'luca',
+                  content: fullContent, model: data.model || null, agent: activeAgentId,
                   thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
@@ -775,7 +775,7 @@ export default function ChatView() {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: data.text || 'Something went wrong.',
-                  model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+                  model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
                 });
               }
             } catch {}
@@ -787,7 +787,7 @@ export default function ChatView() {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
           content: 'Something went wrong. Please try again.',
-          model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         });
       }
     } finally {
@@ -799,7 +799,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive]);
+  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
