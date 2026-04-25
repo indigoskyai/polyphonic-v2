@@ -158,6 +158,21 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
                   }}
                 />
                 <span style={{ flex: 1 }}>{a.name.toLowerCase()}</span>
+                {a.locked && (
+                  <span
+                    title="Resident agent"
+                    style={{
+                      fontSize: 9,
+                      color: 'var(--text-whisper)',
+                      fontFamily: 'var(--font-mono)',
+                      letterSpacing: 'var(--track-meta)',
+                      textTransform: 'uppercase',
+                      marginRight: 4,
+                    }}
+                  >
+                    resident
+                  </span>
+                )}
                 <span
                   style={{
                     fontSize: 10,

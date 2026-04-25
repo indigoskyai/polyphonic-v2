@@ -37,6 +37,7 @@ import { useNotificationStore } from "./stores/notificationStore";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
+import ObserverDrawer from "./components/drawers/ObserverDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
 import ConnectionBanner from "./components/states/ConnectionBanner";
@@ -150,13 +151,15 @@ function DrawerRouter() {
     : active === 'thread-detail' ? 'Thread detail'
     : active === 'memory-detail' ? 'Memory detail'
     : active === 'agent-inspector' ? 'Agent inspector'
+    : active === 'observer' ? 'Observer'
     : '';
 
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
       {active === 'notifications' && <NotificationsDrawer />}
       {active === 'thread-detail' && <ThreadDetailDrawer />}
-      {active !== null && active !== 'notifications' && active !== 'thread-detail' && (
+      {active === 'observer' && <ObserverDrawer />}
+      {active !== null && active !== 'notifications' && active !== 'thread-detail' && active !== 'observer' && (
         <>
           <DrawerHeader>
             <DrawerTitle>{label}</DrawerTitle>

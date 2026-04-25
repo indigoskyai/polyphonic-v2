@@ -94,6 +94,57 @@ export default function AgentDetail() {
 
   const patch = (p: Partial<AgentConfig>) => setDraft(agent.id, p);
 
+  // Resident agents (Luca, Observer): read-only platform-controlled view.
+  if (agent.locked) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+        <header className="agent-detail-header">
+          <button
+            type="button"
+            onClick={() => navigate('/settings/agents')}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 11, marginRight: 8 }}
+          >
+            ← Agents
+          </button>
+          <span className="agent-detail-dot" style={{ background: resolveAgentColor(agent.avatar_color) }} aria-hidden="true" />
+          <h1 className="agent-detail-name">{agent.name}</h1>
+          <span className="agent-role-pill">{agent.role}</span>
+          <span
+            style={{
+              marginLeft: 8,
+              padding: '2px 8px',
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              textTransform: 'uppercase',
+              letterSpacing: 'var(--track-meta)',
+              color: 'var(--text-ghost)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 999,
+            }}
+          >
+            Resident · locked
+          </span>
+        </header>
+        <div style={{ padding: '24px 32px 48px', maxWidth: 720 }}>
+          <p style={{ color: 'var(--text-soft)', fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+            {agent.id === 'luca'
+              ? "Luca is a resident agent of this platform — emotionally intuitive, radically honest, transparent. Her identity is owned by the platform and cannot be edited. She is always available in the composer."
+              : "The Observer is a resident agent of this platform. It silently watches every conversation and maintains running notes about patterns, concerns, and welfare signals. Open the Observer drawer from any thread to see what it has noted, or to ask it a direct question."}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', rowGap: 8, columnGap: 16, fontSize: 12, color: 'var(--text-ghost)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)' }}>Model</span>
+            <span style={{ color: 'var(--text-soft)' }}>{agent.model}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)' }}>Role</span>
+            <span style={{ color: 'var(--text-soft)' }}>{agent.role}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)' }}>Status</span>
+            <span style={{ color: 'var(--text-soft)' }}>Platform-controlled · locked</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
       <header className="agent-detail-header">

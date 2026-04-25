@@ -1005,6 +1005,7 @@ export default function ChatView() {
                       if (id === 'observer') setAlcoveOpen(true);
                     }}
                   />
+                  <ObserverEyeChip threadId={currentThreadId} />
                   {activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
@@ -1371,6 +1372,7 @@ export default function ChatView() {
                   if (id === 'observer') setAlcoveOpen(true);
                 }}
               />
+              <ObserverEyeChip threadId={currentThreadId} />
               {!alcoveOpen && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />

@@ -1,0 +1,176 @@
+// observer-watch — fired after each assistant turn. Inspects the recent
+// conversation and inserts 0..N observer_notes if anything is worth recording.
+// Best-effort and non-blocking from the caller's perspective.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
+import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
+
+const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
+
+serve(async (req) => {
+  const preflight = handleCorsPreflightIfNeeded(req);
+  if (preflight) return preflight;
+  const corsHeaders = getCorsHeaders(req);
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnon, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { thread_id, agent_id } = await req.json();
+    if (!thread_id) {
+      return new Response(JSON.stringify({ error: "Missing thread_id" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Pull user's OpenRouter key
+    const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
+    if (!apiKey) {
+      // No key, nothing to do — return silently.
+      return new Response(JSON.stringify({ ok: true, skipped: "no_api_key" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Load recent thread + prior notes + emotional state in parallel
+    const [historyRes, notesRes, emotionalRes] = await Promise.allSettled([
+      supabase.from("messages")
+        .select("role, content, agent, created_at")
+        .eq("thread_id", thread_id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase.from("observer_notes")
+        .select("kind, content, created_at")
+        .eq("thread_id", thread_id)
+        .order("created_at", { ascending: false })
+        .limit(15),
+      loadEmotionalState(supabase, user.id),
+    ]);
+
+    const history = historyRes.status === "fulfilled" ? (historyRes.value.data || []).reverse() : [];
+    const priorNotes = notesRes.status === "fulfilled" ? (notesRes.value.data || []) : [];
+    const emotionalBlock = emotionalRes.status === "fulfilled"
+      ? formatEmotionalPrompt(emotionalRes.value)
+      : "";
+
+    if (history.length === 0) {
+      return new Response(JSON.stringify({ ok: true, skipped: "empty_thread" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const transcript = history
+      .map((m: { role: string; content: string; agent?: string }) => {
+        const speaker = m.role === "user"
+          ? "user"
+          : (m.agent || "assistant");
+        return `${speaker}: ${(m.content || "").slice(0, 1200)}`;
+      })
+      .join("\n\n");
+
+    const priorNotesBlock = priorNotes.length > 0
+      ? `\n\nPrior observations on this thread (do not repeat):\n${priorNotes.map((n: { kind: string; content: string }) => `- [${n.kind}] ${n.content}`).join("\n")}`
+      : "";
+
+    const userPrompt = [
+      `Thread agent: ${agent_id || "luca"}`,
+      emotionalBlock ? `\n${emotionalBlock}` : "",
+      `\nRecent conversation:\n${transcript}`,
+      priorNotesBlock,
+      `\n\n${OBSERVER_WATCH_INSTRUCTIONS}`,
+    ].filter(Boolean).join("\n");
+
+    const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://polyphonic.chat",
+        "X-Title": "Polyphonic Observer",
+      },
+      body: JSON.stringify({
+        model: OBSERVER_MODEL,
+        messages: [
+          { role: "system", content: OBSERVER_SOUL },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 600,
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!orResponse.ok) {
+      const errText = await orResponse.text().catch(() => "");
+      console.error("observer-watch model error:", orResponse.status, errText.slice(0, 300));
+      return new Response(JSON.stringify({ ok: false, error: "model_error" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const data = await orResponse.json();
+    const raw = data?.choices?.[0]?.message?.content || "";
+
+    let parsed: { insertions?: Array<{ kind?: string; content?: string; salience?: number }> } = {};
+    try {
+      // Strip code fences if any
+      const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.warn("observer-watch JSON parse failed:", e, "raw:", raw.slice(0, 200));
+      return new Response(JSON.stringify({ ok: true, inserted: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const validKinds = new Set(["note", "concern", "welfare", "pattern", "summary"]);
+    const insertions = (parsed.insertions || [])
+      .filter((i) => i && typeof i.content === "string" && i.content.trim().length > 0)
+      .slice(0, 3)
+      .map((i) => ({
+        user_id: user.id,
+        thread_id,
+        kind: validKinds.has(i.kind || "") ? i.kind! : "note",
+        content: i.content!.trim().slice(0, 800),
+        salience: typeof i.salience === "number"
+          ? Math.max(0, Math.min(1, i.salience))
+          : 0.5,
+      }));
+
+    if (insertions.length > 0) {
+      await supabase.from("observer_notes").insert(insertions);
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted: insertions.length }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("observer-watch error:", err);
+    return new Response(JSON.stringify({ error: "Internal error" }), {
+      status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+});
