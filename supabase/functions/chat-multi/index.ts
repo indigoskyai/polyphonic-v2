@@ -633,6 +633,7 @@ async function singleModelStream(
   userMessage: string,
   corsHeaders: Record<string, string>,
   agentId: string = "luca",
+  authHeader: string = "",
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
