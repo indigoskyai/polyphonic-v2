@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { resolveAgentColor } from '@/lib/agentColors';
-import { useUserStore } from '@/stores/userStore';
+import { useAuthStore } from '@/stores/authStore';
 
 interface AgentPickerProps {
   activeAgentId: string;
@@ -14,7 +14,7 @@ interface AgentPickerProps {
  * binds the current thread to that agent.
  */
 export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
-  const user = useUserStore((s) => s.user);
+  const user = useAuthStore((s) => s.user);
   const agents = useAgentSettingsStore((s) => s.agents);
   const load = useAgentSettingsStore((s) => s.load);
 
