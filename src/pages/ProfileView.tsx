@@ -10,6 +10,7 @@ import {
   EmptyState,
   SectionEyebrow, SectionDivider, TabColophon,
   SignalStrip, DiurnalRing, WeeklyMicroBars, ConfidencePulse, SignalCoherence,
+  ValenceTrajectory,
 } from '@/components/profile/viz';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -44,10 +45,14 @@ type MemoryStats = {
   // Behavioral rhythm — derived from created_at (in user-local time)
   hourBuckets: number[]; // length 24 — count of memories created at hour h
   dowBuckets: number[]; // length 7 — Sun..Sat
+  // Memory-type × hour-of-day cross-tab (for Cognition rhythm heatmap)
+  byTypeHour: Record<string, number[]>; // { memory_type: number[24] }
   // Claim health
   confidenceTiers: { low: number; mid: number; high: number };
   // Narrative thread distribution
   topThreads: Array<{ thread: string; count: number }>;
+  // Per-memory affective points — for Emotions trajectory plot
+  affectiveTrajectory: Array<{ at: string; valence: number; intensity: number }>;
 };
 
 type EmotionalState = {
@@ -211,8 +216,11 @@ export default function ProfileView() {
       const dowBuckets = new Array<number>(7).fill(0);
       const confTiers = { low: 0, mid: 0, high: 0 };
       const threadCounts: Record<string, number> = {};
+      const byTypeHour: Record<string, number[]> = {};
+      const affectiveTrajectory: Array<{ at: string; valence: number; intensity: number }> = [];
       for (const m of rows) {
-        byType[m.memory_type] = (byType[m.memory_type] || 0) + 1;
+        const type = m.memory_type;
+        byType[type] = (byType[type] || 0) + 1;
         const conf = m.confidence ?? 0;
         totalConf += conf;
         if (typeof m.sharpness === 'number') {
@@ -232,10 +240,23 @@ export default function ProfileView() {
         if (m.created_at) {
           const dt = new Date(m.created_at);
           if (!isNaN(dt.getTime())) {
-            hourBuckets[dt.getHours()] += 1;
+            const h = dt.getHours();
+            hourBuckets[h] += 1;
             dowBuckets[dt.getDay()] += 1;
+            if (type) {
+              if (!byTypeHour[type]) byTypeHour[type] = new Array<number>(24).fill(0);
+              byTypeHour[type][h] += 1;
+            }
           }
           arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, conf || 0.5) });
+          // Affective trajectory — only memories with a real valence reading
+          if (typeof m.emotional_valence === 'number') {
+            affectiveTrajectory.push({
+              at: m.created_at,
+              valence: m.emotional_valence,
+              intensity: typeof m.emotional_intensity === 'number' ? m.emotional_intensity : 0.5,
+            });
+          }
         }
       }
       const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
@@ -252,6 +273,9 @@ export default function ProfileView() {
         .slice(0, 5)
         .map(([thread, count]) => ({ thread, count }));
 
+      // Sort affective points oldest → newest (chronological for trajectory)
+      affectiveTrajectory.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
       setMemoryStats({
         total: rows.length,
         byType,
@@ -263,8 +287,10 @@ export default function ProfileView() {
         byTagNorm,
         hourBuckets,
         dowBuckets,
+        byTypeHour,
         confidenceTiers: confTiers,
         topThreads,
+        affectiveTrajectory,
       });
     }
 
@@ -439,7 +465,7 @@ export default function ProfileView() {
           {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
           {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
           {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
-          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} />}
+          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} memoryStats={memoryStats} />}
           {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} memoryStats={memoryStats} />}
           {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
           {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} memoryStats={memoryStats} engramSummary={engramSummary} />}
@@ -877,7 +903,7 @@ function CommunicationTab({ data }: { data: any }) {
 }
 
 /* ─── Emotions Tab ─── */
-function EmotionsTab({ data, emotionalSeries }: { data: any; emotionalSeries: EmotionalSeries | null }) {
+function EmotionsTab({ data, emotionalSeries, memoryStats }: { data: any; emotionalSeries: EmotionalSeries | null; memoryStats: MemoryStats | null }) {
   // Even with empty data, render emotional series if available
   const hasProseData = data && Object.keys(data).length > 0;
   const hasSeriesData = emotionalSeries && (emotionalSeries.current || emotionalSeries.history.length > 0);
@@ -957,11 +983,26 @@ function EmotionsTab({ data, emotionalSeries }: { data: any; emotionalSeries: Em
         </>
       )}
 
-      {hasProseData && (
+      {memoryStats && memoryStats.affectiveTrajectory.length > 0 && (
         <>
           <SectionDivider />
           <SectionEyebrow
             index="§ II"
+            label="Affective trajectory"
+            lede="Each memory carries its own affective charge. Valence (positive ↔ negative) plotted over arrival time; circle size encodes intensity. The hairline mean traces the underlying mood arc."
+            hint={`n=${memoryStats.affectiveTrajectory.length}`}
+          />
+          <div style={{ paddingTop: 6 }}>
+            <ValenceTrajectory events={memoryStats.affectiveTrajectory} />
+          </div>
+        </>
+      )}
+
+      {hasProseData && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
             label="Landscape"
             lede="Baseline mood, range, and how emotion is regulated and expressed."
           />
@@ -976,7 +1017,7 @@ function EmotionsTab({ data, emotionalSeries }: { data: any; emotionalSeries: Em
         <>
           <SectionDivider />
           <SectionEyebrow
-            index="§ III"
+            index="§ IV"
             label="Triggers + coping"
             lede="What pulls you and what you reach for. Frequency-weighted constellations."
           />
@@ -1176,9 +1217,49 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
         </>
       )}
 
+      {memoryStats && Object.keys(memoryStats.byTypeHour).length > 0 && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Rhythm"
+            lede="When each kind of thinking arrives. Memory categories crossed against hour-of-day. Patterns sharpen over time as the corpus grows — peak-creative hours, principle-thinking hours, reflective hours emerge."
+            hint={`n=${memoryStats.total}`}
+          />
+          <div style={{ paddingTop: 6 }}>
+            {(() => {
+              // Order rows by total count desc so dominant types are at top
+              const ordered = Object.entries(memoryStats.byTypeHour)
+                .map(([type, vals]) => ({ type, vals, total: vals.reduce((a, b) => a + b, 0) }))
+                .sort((a, b) => b.total - a.total);
+              const heatmapRows = ordered.map(o => ({
+                label: o.type,
+                values: o.vals,
+              }));
+              return <TimelineHeatmap rows={heatmapRows} days={24} height={Math.max(150, ordered.length * 22)} normalize="row" />;
+            })()}
+            {/* Hour-axis labels — 0/6/12/18 */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '90px repeat(24, 1fr)',
+              fontSize: 9, color: 'rgba(244, 243, 240, 0.32)',
+              fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
+              marginTop: 4, paddingRight: 12,
+            }}>
+              <span />
+              {Array.from({ length: 24 }, (_, h) => (
+                <span key={h} style={{ textAlign: 'center', visibility: h % 6 === 0 ? 'visible' : 'hidden' }}>
+                  {String(h).padStart(2, '0')}
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       <SectionDivider />
       <SectionEyebrow
-        index="§ II"
+        index="§ III"
         label="Tendencies"
         lede="How thinking proceeds: synthesis style, decision pattern, response under stress."
       />
@@ -1190,7 +1271,7 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
         <>
           <SectionDivider />
           <SectionEyebrow
-            index="§ III"
+            index="§ IV"
             label="Biases + defenses"
             lede="Biases observed in the corpus and the defenses that ride alongside them."
           />

@@ -1318,3 +1318,124 @@ export function SignalStrip({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   ValenceTrajectory — affective arc over time.
+   x = arrival timestamp (oldest → newest)
+   y = emotional_valence in [-1, +1] (zero baseline)
+   r = scaled by emotional_intensity in [0, 1]
+   Draws zero baseline, ±0.5 reference gridlines, scatter of open
+   circles, a smoothed running-mean hairline, date axis labels.
+   ════════════════════════════════════════════════════════════ */
+
+export function ValenceTrajectory({ events, height = 160 }: {
+  events: Array<{ at: string; valence: number; intensity: number }>;
+  height?: number;
+}) {
+  const data = useMemo(() => {
+    if (!events?.length) return null;
+    const stamps = events
+      .map(e => ({
+        t: new Date(e.at).getTime(),
+        v: Math.max(-1, Math.min(1, e.valence)),
+        i: Math.max(0, Math.min(1, e.intensity)),
+      }))
+      .filter(e => Number.isFinite(e.t))
+      .sort((a, b) => a.t - b.t);
+    if (!stamps.length) return null;
+    const tMin = stamps[0].t;
+    const tMax = stamps[stamps.length - 1].t;
+    const span = Math.max(1, tMax - tMin);
+    // Running mean — window of min(11, n/4) so it's never overwhelmed
+    const window = Math.max(3, Math.min(11, Math.floor(stamps.length / 4)));
+    const smoothed = stamps.map((_, i) => {
+      const lo = Math.max(0, i - Math.floor(window / 2));
+      const hi = Math.min(stamps.length, i + Math.ceil(window / 2));
+      const slice = stamps.slice(lo, hi);
+      const m = slice.reduce((acc, s) => acc + s.v, 0) / slice.length;
+      return m;
+    });
+    return { stamps, tMin, tMax, span, smoothed };
+  }, [events]);
+
+  if (!data) {
+    return <EmptyState note="awaiting per-memory affective signal" height={height} />;
+  }
+
+  const W = 1000;
+  const H = height;
+  const padL = 12, padR = 12, padT = 14, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const midY = padT + innerH / 2;
+
+  const xOf = (t: number) => padL + ((t - data.tMin) / data.span) * innerW;
+  // valence -1..+1 → bottom..top
+  const yOf = (v: number) => midY - (v * (innerH / 2));
+
+  const fmtDate = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Smoothed mean path
+  const smoothedPath = data.stamps.map((s, i) => {
+    const x = xOf(s.t);
+    const y = yOf(data.smoothed[i]);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Means for hint
+  const meanV = data.stamps.reduce((a, s) => a + s.v, 0) / data.stamps.length;
+  const positiveCount = data.stamps.filter(s => s.v > 0.05).length;
+  const negativeCount = data.stamps.filter(s => s.v < -0.05).length;
+
+  return (
+    <div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        {/* Reference gridlines at ±0.5 */}
+        <line x1={padL} y1={yOf(0.5)} x2={W - padR} y2={yOf(0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
+        <line x1={padL} y1={yOf(-0.5)} x2={W - padR} y2={yOf(-0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
+        {/* Zero baseline */}
+        <line x1={padL} y1={midY} x2={W - padR} y2={midY} stroke={INK_HAIR} strokeWidth={0.75} />
+        {/* Y-axis tick labels — left margin */}
+        <text x={padL - 2} y={yOf(0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>+.5</text>
+        <text x={padL - 2} y={midY} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>0</text>
+        <text x={padL - 2} y={yOf(-0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>-.5</text>
+        {/* Smoothed mean line — under the points */}
+        {data.stamps.length >= 2 && (
+          <path d={smoothedPath} stroke={INK_SOFT} strokeWidth={1} fill="none" opacity={0.55} />
+        )}
+        {/* Per-memory points — open circles, radius scaled by intensity */}
+        {data.stamps.map((s, i) => {
+          const x = xOf(s.t);
+          const y = yOf(s.v);
+          const r = 1.5 + s.i * 3.5; // 1.5..5px
+          const isNegative = s.v < -0.05;
+          const stroke = isNegative ? 'rgba(194, 192, 188, 0.75)' : INK;
+          return (
+            <circle key={i} cx={x} cy={y} r={r}
+              fill="none" stroke={stroke}
+              strokeWidth={0.85} opacity={0.85} />
+          );
+        })}
+        {/* Date labels — corners + midpoint */}
+        <text x={padL} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>{fmtDate(data.tMin)}</text>
+        <text x={W / 2} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.04em' }}>
+          n={data.stamps.length} · μ={meanV >= 0 ? '+' : ''}{meanV.toFixed(2)}
+        </text>
+        <text x={W - padR} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>{fmtDate(data.tMax)}</text>
+      </svg>
+      {/* Editorial caption beneath: positive vs negative split */}
+      <div style={{
+        marginTop: 8, display: 'flex', justifyContent: 'space-between',
+        fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+      }}>
+        <span>positive · {positiveCount}</span>
+        <span>neutral · {data.stamps.length - positiveCount - negativeCount}</span>
+        <span>negative · {negativeCount}</span>
+      </div>
+    </div>
+  );
+}
