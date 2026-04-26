@@ -3,6 +3,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import {
+  Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
+  PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
+  BurstPlot, JourneyTimeline, RadialChart, TimelineHeatmap, DivergenceBar,
+  EmptyState,
+} from '@/components/profile/viz';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { useViewTabStore } from '@/stores/viewTabStore';
 
 type Profile = {
@@ -15,6 +24,7 @@ type Profile = {
   cognitive_tendencies: any;
   growth_edges: any;
   shadow_patterns: any;
+  raw_analysis?: any;
   updated_at: string;
   version: number;
 };
@@ -24,6 +34,28 @@ type MemoryStats = {
   byType: Record<string, number>;
   avgConfidence: number;
   topTags: string[];
+  topTagsWithCount: Array<{ tag: string; count: number; avgConfidence: number }>;
+  arrivals: Array<{ at: string; magnitude: number }>;
+  // Per-trait normalized scores (0-1) for blind-spot heuristic
+  byTagNorm: Record<string, number>;
+};
+
+type EmotionalState = {
+  valence?: number; arousal?: number; dominance?: number;
+  certainty?: number; social?: number; temporal?: number;
+  recorded_at?: string;
+};
+
+type EmotionalSeries = {
+  current: EmotionalState | null;
+  history: Array<EmotionalState & { recorded_at: string }>;
+};
+
+type EngramSummary = {
+  total: number;
+  avgStrength: number;
+  avgAccessibility: number;
+  byType: Record<string, number>;
 };
 
 const TABS = ['Portrait', 'Personality', 'Communication', 'Emotions', 'Values', 'Relationships', 'Cognition', 'Growth', 'Shadow'] as const;
@@ -33,6 +65,8 @@ export default function ProfileView() {
   const user = useAuthStore((s) => s.user);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
+  const [emotionalSeries, setEmotionalSeries] = useState<EmotionalSeries | null>(null);
+  const [engramSummary, setEngramSummary] = useState<EngramSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -123,7 +157,7 @@ export default function ProfileView() {
     if (!user) return;
     setLoading(true);
 
-    const [profileRes, memoriesRes] = await Promise.all([
+    const [profileRes, memoriesRes, emotionalRes, engramsRes] = await Promise.allSettled([
       supabase
         .from('psychological_profile')
         .select('*')
@@ -131,38 +165,95 @@ export default function ProfileView() {
         .maybeSingle(),
       supabase
         .from('memories')
-        .select('memory_type, confidence, tags')
+        .select('memory_type, confidence, tags, created_at, narrative_thread, emotional_valence, emotional_intensity')
         .eq('user_id', user.id)
         .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
         .limit(1000),
+      supabase
+        .from('mnemos_emotional_state')
+        .select('valence, arousal, dominance, certainty, social, temporal, recorded_at')
+        .eq('user_id', user.id)
+        .order('recorded_at', { ascending: false })
+        .limit(180),
+      supabase
+        .from('engrams')
+        .select('engram_type, strength, accessibility, state')
+        .eq('user_id', user.id)
+        .eq('state', 'active')
+        .limit(500),
     ]);
 
-    if (profileRes.data) {
-      setProfile(profileRes.data as any);
+    if (profileRes.status === 'fulfilled' && profileRes.value.data) {
+      setProfile(profileRes.value.data as any);
     }
 
-    if (memoriesRes.data) {
+    if (memoriesRes.status === 'fulfilled' && memoriesRes.value.data) {
+      const rows = memoriesRes.value.data as any[];
       const byType: Record<string, number> = {};
       let totalConf = 0;
       const tagCounts: Record<string, number> = {};
-      for (const m of memoriesRes.data) {
+      const tagConf: Record<string, number> = {};
+      const arrivals: Array<{ at: string; magnitude: number }> = [];
+      for (const m of rows) {
         byType[m.memory_type] = (byType[m.memory_type] || 0) + 1;
-        totalConf += m.confidence;
+        totalConf += m.confidence ?? 0;
         if (m.tags) for (const t of (m.tags as string[])) {
           tagCounts[t] = (tagCounts[t] || 0) + 1;
+          tagConf[t] = (tagConf[t] || 0) + (m.confidence ?? 0);
+        }
+        if (m.created_at) {
+          arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, m.confidence ?? 0.5) });
         }
       }
-      const topTags = Object.entries(tagCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 12)
-        .map(([t]) => t);
+      const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+      const topTagsWithCount = sortedTags.slice(0, 12).map(([tag, count]) => ({
+        tag, count, avgConfidence: tagConf[tag] / count,
+      }));
+      const topTags = topTagsWithCount.map(t => t.tag);
+      const maxTagCount = sortedTags[0]?.[1] || 1;
+      const byTagNorm: Record<string, number> = Object.fromEntries(
+        sortedTags.map(([t, c]) => [t.toLowerCase(), c / maxTagCount])
+      );
 
       setMemoryStats({
-        total: memoriesRes.data.length,
+        total: rows.length,
         byType,
-        avgConfidence: memoriesRes.data.length ? totalConf / memoriesRes.data.length : 0,
+        avgConfidence: rows.length ? totalConf / rows.length : 0,
         topTags,
+        topTagsWithCount,
+        arrivals,
+        byTagNorm,
       });
+    }
+
+    if (emotionalRes.status === 'fulfilled' && emotionalRes.value.data) {
+      const rows = emotionalRes.value.data as any[];
+      // Most-recent first; keep that order for current, reverse for history (oldest → newest for left-to-right timeline)
+      const current = rows[0] ?? null;
+      const history = [...rows].reverse();
+      setEmotionalSeries({ current, history });
+    } else {
+      setEmotionalSeries({ current: null, history: [] });
+    }
+
+    if (engramsRes.status === 'fulfilled' && engramsRes.value.data) {
+      const rows = engramsRes.value.data as any[];
+      const byType: Record<string, number> = {};
+      let totalStrength = 0, totalAccess = 0;
+      for (const e of rows) {
+        byType[e.engram_type] = (byType[e.engram_type] || 0) + 1;
+        totalStrength += e.strength ?? 0;
+        totalAccess += e.accessibility ?? 0;
+      }
+      setEngramSummary({
+        total: rows.length,
+        avgStrength: rows.length ? totalStrength / rows.length : 0,
+        avgAccessibility: rows.length ? totalAccess / rows.length : 0,
+        byType,
+      });
+    } else {
+      setEngramSummary({ total: 0, avgStrength: 0, avgAccessibility: 0, byType: {} });
     }
 
     setLoading(false);
@@ -237,43 +328,68 @@ export default function ProfileView() {
     <div className="flex-1 flex min-h-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between shrink-0" style={{ padding: '16px 24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div>
+        <div className="shrink-0" style={{ padding: '16px 24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center justify-between">
             <h1 className="text-sm font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>Psychological Profile</h1>
-            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
-              v{profile.version} · updated {new Date(profile.updated_at).toLocaleDateString()} · {memoryStats?.total || 0} memories analyzed
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setChatOpen((v) => !v)}
+                className="text-[10px] px-3 py-1.5 rounded"
+                style={{
+                  background: chatOpen ? 'var(--bg-surface)' : 'rgba(244, 240, 232, 0.04)',
+                  border: `1px solid ${chatOpen ? 'var(--border)' : 'rgba(244, 243, 240, 0.12)'}`,
+                  color: chatOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+                title="Chat with the AI about your profile — it can pull memories that informed each insight"
+              >
+                {chatOpen ? 'Close chat' : 'Ask about profile'}
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Profile actions"
+                    className="text-[10px] px-2 py-1.5 rounded"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-ghost)',
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                      letterSpacing: '0.1em',
+                    }}
+                    title="More profile actions"
+                  >
+                    ⋯
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="text-[11px]">
+                  <DropdownMenuItem
+                    onSelect={() => generateProfile()}
+                    disabled={generating}
+                  >
+                    {generating ? 'Regenerating…' : 'Regenerate analysis'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => loadData()}>
+                    Refresh data
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setChatOpen((v) => !v)}
-              className="text-[10px] px-3 py-1.5 rounded"
-              style={{
-                background: chatOpen ? 'var(--bg-surface)' : 'transparent',
-                border: `1px solid ${chatOpen ? 'var(--border)' : 'var(--border-subtle)'}`,
-                color: chatOpen ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                cursor: 'pointer',
-              }}
-              title="Chat with the AI about your profile — it can pull memories that informed each insight"
-            >
-              {chatOpen ? 'Close chat' : 'Ask about profile'}
-            </button>
-            <button
-              onClick={generateProfile}
-              disabled={generating}
-              className="text-[10px] px-3 py-1.5 rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: generating ? 'var(--text-ghost)' : 'var(--text-tertiary)', cursor: generating ? 'wait' : 'pointer' }}
-              title="Re-run the 5-pass deep analysis on your latest memories"
-            >
-              {generating ? 'Regenerating...' : 'Regenerate'}
-            </button>
-            <button
-              onClick={loadData}
-              className="text-[10px] px-3 py-1.5 rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer' }}
-            >
-              Refresh
-            </button>
+          {/* Status strip — always visible across tabs */}
+          <div style={{ marginTop: 8, marginBottom: 4 }}>
+            <StatusStrip
+              items={[
+                { label: 'version', value: `v${profile.version ?? 1}` },
+                { label: 'updated', value: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—' },
+                { label: 'memories', value: String(memoryStats?.total ?? 0) },
+                { label: 'confidence', value: `${((memoryStats?.avgConfidence ?? 0) * 100).toFixed(0)}%` },
+                { label: 'memory types', value: String(Object.keys(memoryStats?.byType ?? {}).length) },
+                { label: 'themes', value: String(memoryStats?.topTags.length ?? 0) },
+                { label: 'engrams', value: String(engramSummary?.total ?? 0) },
+              ]}
+            />
           </div>
         </div>
 
@@ -282,12 +398,12 @@ export default function ProfileView() {
           {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
           {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
           {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
-          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} />}
-          {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} />}
+          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} />}
+          {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} memoryStats={memoryStats} />}
           {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
-          {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} />}
+          {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} memoryStats={memoryStats} engramSummary={engramSummary} />}
           {activeTab === 'Growth' && <GrowthTab data={profile.growth_edges} />}
-          {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} />}
+          {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} memoryStats={memoryStats} valuesData={profile.values_hierarchy} />}
         </div>
       </div>
 
@@ -298,66 +414,104 @@ export default function ProfileView() {
 
 /* ─── Portrait Tab ─── */
 function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: MemoryStats | null }) {
+  const memoryTypeData = memoryStats
+    ? Object.entries(memoryStats.byType)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, value]) => ({ label, value }))
+    : [];
+
+  // Journey-of-analysis phases — port of the master_insights 7-phase pattern,
+  // mapped to polyphonic's actual analysis pipeline.
+  const [activePhase, setActivePhase] = useState(0);
+  const raw = profile.raw_analysis ?? {};
+  const phases = [
+    { key: 'linguistic', label: 'Linguistic', symbol: '∴',
+      description: typeof raw.linguistic === 'string' ? raw.linguistic.slice(0, 600) :
+        'Analyzes vocabulary, sentence structure, hedging, assertion, and verbal signatures from your messages alone.' },
+    { key: 'psychological', label: 'Psychological', symbol: '∇',
+      description: typeof raw.psychological === 'string' ? raw.psychological.slice(0, 600) :
+        'Scores Big Five traits, attachment style, locus of control, and cognitive style from observed behavior.' },
+    { key: 'relational', label: 'Relational', symbol: '△',
+      description: typeof raw.relational === 'string' ? raw.relational.slice(0, 600) :
+        'Maps key relationships, power dynamics, conflict style, and intimacy comfort.' },
+    { key: 'values', label: 'Values', symbol: 'Φ',
+      description: typeof raw.values === 'string' ? raw.values.slice(0, 600) :
+        'Ranks core values with evidence, distinguishing stated from revealed preferences.' },
+    { key: 'shadow', label: 'Shadow', symbol: 'Ψ',
+      description: typeof raw.shadow === 'string' ? raw.shadow.slice(0, 600) :
+        'Surfaces contradictions, blind spots, avoidance patterns, and questions to sit with.' },
+    { key: 'portrait', label: 'Portrait', symbol: '℧',
+      description: profile.identity_narrative ?? 'The synthesizing pass that produces the Identity Portrait — a flowing paragraph capturing the essence.' },
+    { key: 'integration', label: 'Integration', symbol: '∞',
+      description: 'All passes integrate into the structured profile. Future versions will compare drift across regenerations.' },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Identity Narrative */}
-      {profile.identity_narrative && (
-        <div style={{ padding: '20px 24px', background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
-          <div className="text-[10px] uppercase font-medium mb-3" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>Identity Portrait</div>
-          <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-body)', fontStyle: 'italic', lineHeight: '1.8' }}>
-            "{profile.identity_narrative}"
-          </p>
-        </div>
-      )}
-
-      {/* Quick Stats Grid */}
-      {memoryStats && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-          <StatCard label="Memories" value={memoryStats.total} />
-          <StatCard label="Avg Confidence" value={`${(memoryStats.avgConfidence * 100).toFixed(0)}%`} />
-          <StatCard label="Memory Types" value={Object.keys(memoryStats.byType).length} />
-          <StatCard label="Tags Tracked" value={memoryStats.topTags.length} />
-        </div>
-      )}
-
-      {/* Memory Type Breakdown */}
-      {memoryStats && Object.keys(memoryStats.byType).length > 0 && (
-        <Card title="Memory Distribution">
-          {Object.entries(memoryStats.byType)
-            .sort((a, b) => b[1] - a[1])
-            .map(([type, count]) => (
-              <div key={type} className="flex items-center gap-3 mb-2">
-                <span style={{ fontSize: 11, color: 'var(--text-ghost)', width: 90, textTransform: 'capitalize' }}>{type}</span>
-                <div style={{ flex: 1, height: 3, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${(count / memoryStats.total) * 100}%`, height: '100%', background: 'var(--luca)', opacity: 0.4, borderRadius: 2, transition: 'width 600ms ease' }} />
-                </div>
-                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-whisper)', width: 28, textAlign: 'right' }}>{count}</span>
-              </div>
-            ))}
-        </Card>
-      )}
-
-      {/* Top Tags */}
-      {memoryStats && memoryStats.topTags.length > 0 && (
-        <Card title="Recurring Themes">
-          <div className="flex flex-wrap gap-1.5">
-            {memoryStats.topTags.map((tag) => (
-              <span key={tag} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-soft)', border: '1px solid var(--border-subtle)' }}>
-                {tag}
-              </span>
-            ))}
+    <div>
+      {/* Frontispiece — Sigil paired with Identity Portrait */}
+      {(profile.identity_narrative || profile.personality_dimensions?.big_five) && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(320px, 360px) 1fr',
+          gap: 48,
+          alignItems: 'flex-start',
+          padding: '40px 0 32px',
+          borderBottom: '1px solid rgba(244, 243, 240, 0.06)',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <Sigil
+              bigFive={profile.personality_dimensions?.big_five}
+              byType={memoryStats?.byType}
+              size={320}
+              showLabels={true}
+            />
+            <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.32)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', textAlign: 'center', maxWidth: 280, lineHeight: 1.6 }}>
+              Personality signature<br />
+              <span style={{ opacity: 0.7 }}>Big Five projected on pentagon · outer ticks = memory categories</span>
+            </div>
           </div>
-        </Card>
+          <div>
+            <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 14 }}>
+              Identity Portrait
+            </div>
+            {profile.identity_narrative ? (
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.85, margin: 0, letterSpacing: '0.005em' }}>
+                "{profile.identity_narrative}"
+              </p>
+            ) : (
+              <p style={{ fontSize: 12, color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'italic' }}>
+                Identity portrait pending — generate to render the narrative.
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Big Five Quick View */}
-      {profile.personality_dimensions?.big_five && (
-        <Card title="Big Five — At a Glance">
-          {Object.entries(profile.personality_dimensions.big_five).map(([trait, data]: [string, any]) => (
-            <DimensionBar key={trait} label={trait} value={data?.score ?? 50} max={100} />
-          ))}
-        </Card>
+      {/* Memory Distribution as bar code */}
+      {memoryTypeData.length > 0 && (
+        <PlateSection label="Memory distribution" count={memoryStats?.total}>
+          <MagnitudeBars data={memoryTypeData} height={88} />
+        </PlateSection>
       )}
+
+      {/* Recurring themes — constellation cloud */}
+      {memoryStats && memoryStats.topTags.length > 0 && (
+        <PlateSection label="Recurring themes" count={memoryStats.topTags.length}>
+          <ConstellationCloud items={memoryStats.topTags} />
+        </PlateSection>
+      )}
+
+      {/* Memory arrival velocity — burst plot */}
+      {memoryStats && memoryStats.arrivals.length > 0 && (
+        <PlateSection label="Memory arrivals" count={memoryStats.arrivals.length}>
+          <BurstPlot events={memoryStats.arrivals} height={110} label="Memory arrivals" />
+        </PlateSection>
+      )}
+
+      {/* Analysis journey — 7-phase pipeline timeline */}
+      <PlateSection label="Analysis journey">
+        <JourneyTimeline phases={phases} activeIndex={activePhase} onSelect={setActivePhase} />
+      </PlateSection>
     </div>
   );
 }
@@ -366,120 +520,296 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
 function PersonalityTab({ data }: { data: any }) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="personality dimensions" />;
 
+  // Map attachment style label → phase diagram coords (anxiety × avoidance)
+  const attachmentMap: Record<string, { x: number; y: number }> = {
+    'secure': { x: 25, y: 75 },
+    'anxious-preoccupied': { x: 80, y: 75 },
+    'anxious': { x: 80, y: 75 },
+    'preoccupied': { x: 80, y: 75 },
+    'dismissive-avoidant': { x: 25, y: 25 },
+    'dismissive': { x: 25, y: 25 },
+    'avoidant': { x: 50, y: 25 },
+    'fearful-avoidant': { x: 80, y: 25 },
+    'disorganized': { x: 80, y: 25 },
+  };
+  const attachmentPrimary = (data.attachment_style?.primary ?? '').toLowerCase();
+  const attachmentCoords = Object.entries(attachmentMap).find(([k]) => attachmentPrimary.includes(k))?.[1] ?? null;
+
   return (
-    <div className="space-y-6">
-      {/* Big Five */}
+    <div>
       {data.big_five && (
-        <Card title="Big Five Personality Dimensions">
+        <PlateSection label="Big Five — Personality Dimensions">
           {Object.entries(data.big_five).map(([trait, info]: [string, any]) => (
-            <div key={trait} className="mb-4">
-              <DimensionBar label={trait} value={info?.score ?? 50} max={100} />
-              {info?.evidence && (
-                <div className="text-[11px] mt-1 pl-1" style={{ color: 'var(--text-ghost)', lineHeight: 1.5 }}>
-                  {info.evidence}
-                </div>
+            <TraitTrace key={trait} label={trait} value={info?.score ?? 50} max={100} evidence={info?.evidence} />
+          ))}
+        </PlateSection>
+      )}
+
+      {data.attachment_style && (
+        <PlateSection label="Attachment Style">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+            <PhaseDiagram
+              xLabel="Anxiety"
+              yLabel="Comfort with Closeness"
+              xValue={attachmentCoords?.x ?? 50}
+              yValue={attachmentCoords?.y ?? 50}
+              regions={[
+                { label: 'Secure', x: 0, y: 50, w: 50, h: 50 },
+                { label: 'Preoccupied', x: 50, y: 50, w: 50, h: 50 },
+                { label: 'Dismissive', x: 0, y: 0, w: 50, h: 50 },
+                { label: 'Fearful', x: 50, y: 0, w: 50, h: 50 },
+              ]}
+              size={240}
+            />
+            <div>
+              <div style={{ fontSize: 16, fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 12, textTransform: 'capitalize' }}>
+                {data.attachment_style.primary}
+              </div>
+              {data.attachment_style.evidence && (
+                <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.7, margin: 0 }}>
+                  {data.attachment_style.evidence}
+                </p>
               )}
             </div>
-          ))}
-        </Card>
-      )}
-
-      {/* Attachment Style */}
-      {data.attachment_style && (
-        <Card title="Attachment Style">
-          <div className="text-[13px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-            {data.attachment_style.primary}
           </div>
-          {data.attachment_style.evidence && (
-            <div className="text-[11px]" style={{ color: 'var(--text-ghost)', lineHeight: 1.6 }}>
-              {data.attachment_style.evidence}
-            </div>
-          )}
-        </Card>
+        </PlateSection>
       )}
 
-      {/* Other dimensions */}
-      {data.cognitive_style && <InsightCard label="Cognitive Style" text={data.cognitive_style} />}
-      {data.locus_of_control && <InsightCard label="Locus of Control" text={data.locus_of_control} />}
+      {data.cognitive_style && (
+        <PlateSection label="Cognitive Style">
+          <InsightPlate label="Style" text={data.cognitive_style} prominence="lead" />
+        </PlateSection>
+      )}
+
+      {data.locus_of_control && (
+        <PlateSection label="Locus of Control">
+          <InsightPlate label="Pattern" text={data.locus_of_control} prominence="lead" />
+        </PlateSection>
+      )}
     </div>
   );
 }
 
 /* ─── Communication Tab ─── */
+// Heuristic: parse prose dimension text for keyword markers and infer 0-100 scores.
+// Returns null when no signal can be inferred.
+function inferProseIntensity(text: string | undefined | null): number | null {
+  if (!text || typeof text !== 'string') return null;
+  const t = text.toLowerCase();
+  // Order matters — check stronger signals first
+  if (/\b(extreme|extremely|exceptional|exceptionally|profound|profoundly|extraordinary)\b/.test(t)) return 92;
+  if (/\b(very high|very strong|highly|strongly|prolific|remarkably)\b/.test(t)) return 82;
+  if (/\b(high|strong|rich|sophisticated|complex|elevated)\b/.test(t)) return 70;
+  if (/\b(moderate|moderately|balanced|mixed|some|frequent|regular)\b/.test(t)) return 55;
+  if (/\b(low|reserved|sparing|infrequent|cautious|hedged)\b/.test(t)) return 35;
+  if (/\b(very low|minimal|rare|seldom|absent)\b/.test(t)) return 18;
+  return null;
+}
+
 function CommunicationTab({ data }: { data: any }) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="communication patterns" />;
 
+  const commAxes = [
+    { key: 'vocabulary_richness', label: 'Vocabulary' },
+    { key: 'humor_style', label: 'Humor' },
+    { key: 'assertion_strength', label: 'Assertion' },
+    { key: 'emotional_vocabulary_range', label: 'Emotion Range' },
+    { key: 'hedging_frequency', label: 'Hedging' },
+  ];
+  const inferred: Record<string, number> = {};
+  let any = false;
+  for (const a of commAxes) {
+    const v = inferProseIntensity(data[a.key]);
+    if (v !== null) { inferred[a.key] = v; any = true; }
+    else { inferred[a.key] = 50; }
+  }
+
   return (
-    <div className="space-y-4">
-      {data.vocabulary_richness && <InsightCard label="Vocabulary Richness" text={data.vocabulary_richness} />}
-      {data.humor_style && <InsightCard label="Humor Style" text={data.humor_style} />}
-      {data.hedging_frequency && <InsightCard label="Hedging Frequency" text={data.hedging_frequency} />}
-      {data.assertion_strength && <InsightCard label="Assertion Strength" text={data.assertion_strength} />}
-      {data.emotional_vocabulary_range && <InsightCard label="Emotional Vocabulary Range" text={data.emotional_vocabulary_range} />}
+    <div>
+      {any && (
+        <PlateSection label="Communication signature">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+            <RadialChart
+              axes={commAxes}
+              traces={[{ values: inferred, primary: true }]}
+              size={240}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-body)', lineHeight: 1.7, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
+              5-axis snapshot inferred heuristically from the prose dimensions below — {' '}
+              <span style={{ color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'normal', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>uncalibrated estimate</span>
+            </div>
+          </div>
+        </PlateSection>
+      )}
+      <PlateSection label="Communication Patterns">
+        {data.vocabulary_richness && <InsightPlate label="Vocabulary" text={data.vocabulary_richness} />}
+        {data.humor_style && <InsightPlate label="Humor" text={data.humor_style} />}
+        {data.hedging_frequency && <InsightPlate label="Hedging" text={data.hedging_frequency} />}
+        {data.assertion_strength && <InsightPlate label="Assertion" text={data.assertion_strength} />}
+        {data.emotional_vocabulary_range && <InsightPlate label="Emotional Range" text={data.emotional_vocabulary_range} />}
+      </PlateSection>
       {data.unique_signatures?.length > 0 && (
-        <Card title="Unique Verbal Signatures">
-          <ul className="space-y-1.5">
-            {data.unique_signatures.map((sig: string, i: number) => (
-              <li key={i} className="text-[11px] flex items-start gap-2" style={{ color: 'var(--text-soft)' }}>
-                <span style={{ color: 'var(--luca)', opacity: 0.5, marginTop: 2 }}>·</span>
-                <span style={{ lineHeight: 1.5 }}>{sig}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <PlateSection label="Verbal signatures" count={data.unique_signatures.length}>
+          <RankedList items={data.unique_signatures.map((sig: string, i: number) => ({ label: sig, rank: i + 1 }))} />
+        </PlateSection>
       )}
     </div>
   );
 }
 
 /* ─── Emotions Tab ─── */
-function EmotionsTab({ data }: { data: any }) {
-  if (!data || Object.keys(data).length === 0) return <EmptySection label="emotional landscape" />;
+function EmotionsTab({ data, emotionalSeries }: { data: any; emotionalSeries: EmotionalSeries | null }) {
+  // Even with empty data, render emotional series if available
+  const hasProseData = data && Object.keys(data).length > 0;
+  const hasSeriesData = emotionalSeries && (emotionalSeries.current || emotionalSeries.history.length > 0);
+  if (!hasProseData && !hasSeriesData) return <EmptySection label="emotional landscape" />;
+
+  // Map mnemos_emotional_state range (-1 to +1, or 0-1) to 0-100 for radial chart
+  const normalize01 = (v: number | undefined | null): number => {
+    if (v == null) return 50;
+    if (v >= -1 && v <= 1) return Math.round(((v + 1) / 2) * 100);
+    if (v >= 0 && v <= 1) return Math.round(v * 100);
+    return 50;
+  };
+
+  const emotionAxes = [
+    { key: 'valence', label: 'Valence' },
+    { key: 'arousal', label: 'Arousal' },
+    { key: 'dominance', label: 'Dominance' },
+    { key: 'certainty', label: 'Certainty' },
+    { key: 'social', label: 'Social' },
+    { key: 'temporal', label: 'Temporal' },
+  ];
+
+  const currentValues = emotionalSeries?.current ? Object.fromEntries(
+    emotionAxes.map(a => [a.key, normalize01((emotionalSeries.current as any)[a.key])])
+  ) : null;
+
+  // Build heatmap rows from history (most-recent N entries; oldest → newest left-to-right)
+  const HISTORY_DAYS = 90;
+  const heatmapRows = emotionalSeries?.history.length
+    ? emotionAxes.map(a => ({
+        label: a.label,
+        values: (() => {
+          const recent = emotionalSeries.history.slice(-HISTORY_DAYS);
+          const values: number[] = recent.map(h => {
+            const v = (h as any)[a.key];
+            return typeof v === 'number' ? v : 0;
+          });
+          // Pad left with nulls if we have fewer than HISTORY_DAYS entries
+          while (values.length < HISTORY_DAYS) values.unshift(null as any);
+          return values;
+        })(),
+      }))
+    : [];
 
   return (
-    <div className="space-y-4">
-      {data.baseline_mood && <InsightCard label="Baseline Mood" text={data.baseline_mood} />}
-      {data.emotional_range && <InsightCard label="Emotional Range" text={data.emotional_range} />}
-      {data.regulation_style && <InsightCard label="Regulation Style" text={data.regulation_style} />}
-      {data.granularity && <InsightCard label="Emotional Granularity" text={data.granularity} />}
-      {data.triggers?.length > 0 && (
-        <Card title="Emotional Triggers">
-          <TagList items={data.triggers} />
-        </Card>
+    <div>
+      {/* Snapshot + Timeline pair */}
+      {(currentValues || heatmapRows.length > 0) && (
+        <PlateSection label="Emotional state" count={emotionalSeries?.history.length || 0}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {currentValues ? (
+                <RadialChart
+                  axes={emotionAxes}
+                  traces={[{ values: currentValues, primary: true }]}
+                  size={240}
+                />
+              ) : (
+                <EmptyState note="No current state recorded" height={200} />
+              )}
+              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.32)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', textAlign: 'center' }}>
+                Current state
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12 }}>
+                Last {Math.min(HISTORY_DAYS, emotionalSeries?.history.length ?? 0)} entries
+              </div>
+              <TimelineHeatmap rows={heatmapRows} days={HISTORY_DAYS} height={170} />
+            </div>
+          </div>
+        </PlateSection>
       )}
-      {data.coping_mechanisms?.length > 0 && (
-        <Card title="Coping Mechanisms">
-          <TagList items={data.coping_mechanisms} />
-        </Card>
+
+      {hasProseData && (
+        <PlateSection label="Emotional Landscape">
+          {data.baseline_mood && <InsightPlate label="Baseline" text={data.baseline_mood} prominence="lead" />}
+          {data.emotional_range && <InsightPlate label="Range" text={data.emotional_range} />}
+          {data.regulation_style && <InsightPlate label="Regulation" text={data.regulation_style} />}
+          {data.granularity && <InsightPlate label="Granularity" text={data.granularity} />}
+        </PlateSection>
+      )}
+      {data?.triggers?.length > 0 && (
+        <PlateSection label="Triggers" count={data.triggers.length}>
+          <ConstellationCloud items={data.triggers} />
+        </PlateSection>
+      )}
+      {data?.coping_mechanisms?.length > 0 && (
+        <PlateSection label="Coping Mechanisms" count={data.coping_mechanisms.length}>
+          <ConstellationCloud items={data.coping_mechanisms} />
+        </PlateSection>
       )}
     </div>
   );
 }
 
 /* ─── Values Tab ─── */
-function ValuesTab({ data }: { data: any }) {
+// Heuristic match: for a value name like "Justice/Moral Integrity", split into tokens
+// and find tags whose lowercased text contains any token. Returns best-match normalized score.
+function tagMatchScore(valueName: string, byTagNorm: Record<string, number>): number {
+  if (!valueName || !byTagNorm) return 0;
+  const tokens = valueName.toLowerCase().split(/[\s/,_-]+/).filter(t => t.length >= 4);
+  if (!tokens.length) return 0;
+  let best = 0;
+  for (const tag of Object.keys(byTagNorm)) {
+    for (const tok of tokens) {
+      if (tag.includes(tok) || tok.includes(tag)) {
+        if (byTagNorm[tag] > best) best = byTagNorm[tag];
+        break;
+      }
+    }
+  }
+  return best;
+}
+
+function ValuesTab({ data, memoryStats }: { data: any; memoryStats: MemoryStats | null }) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="values hierarchy" />;
 
+  const ranked = data.ranked_values ?? [];
+  // Build divergence items for top-3 values
+  const divergenceItems = memoryStats && ranked.length > 0
+    ? ranked.slice(0, 3).map((v: any, i: number) => {
+        // Stated = inverse rank position (rank 1 = 1.0, rank 2 = 0.66, etc.)
+        const stated = ranked.length > 1 ? 1 - (i / Math.min(ranked.length, 5)) : 1;
+        const revealed = tagMatchScore(v.value || '', memoryStats.byTagNorm);
+        return { label: v.value, stated, revealed };
+      })
+    : [];
+
   return (
-    <div className="space-y-4">
-      {data.ranked_values?.length > 0 && (
-        <Card title="Values Hierarchy">
-          {data.ranked_values.map((v: any, i: number) => (
-            <div key={i} className="mb-3">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] font-mono" style={{ color: 'var(--text-whisper)', width: 16 }}>#{v.rank || i + 1}</span>
-                <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{v.value}</span>
-              </div>
-              {v.evidence && (
-                <div className="text-[11px] pl-6" style={{ color: 'var(--text-ghost)', lineHeight: 1.5 }}>{v.evidence}</div>
-              )}
-            </div>
-          ))}
-        </Card>
+    <div>
+      {ranked.length > 0 && (
+        <PlateSection label="Values hierarchy" count={ranked.length}>
+          <RankedList items={ranked.map((v: any, i: number) => ({
+            label: v.value, evidence: v.evidence, rank: v.rank ?? i + 1,
+          }))} />
+        </PlateSection>
       )}
-      {data.stated_vs_revealed && <InsightCard label="Stated vs Revealed Preferences" text={data.stated_vs_revealed} />}
-      {data.decision_framework && <InsightCard label="Decision Framework" text={data.decision_framework} />}
-      {data.temporal_orientation && <InsightCard label="Temporal Orientation" text={data.temporal_orientation} />}
+      {divergenceItems.length > 0 && (
+        <PlateSection label="Stated vs revealed">
+          <div style={{ marginBottom: 12, fontSize: 10.5, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.6 }}>
+            How prominently each top value appears in your tagged memories. Where stated rank diverges from revealed signal, the asterisk flags a potential blind-spot indicator.
+          </div>
+          <DivergenceBar items={divergenceItems} />
+        </PlateSection>
+      )}
+      <PlateSection label="Decision Architecture">
+        {data.stated_vs_revealed && <InsightPlate label="Stated vs Revealed" text={data.stated_vs_revealed} />}
+        {data.decision_framework && <InsightPlate label="Framework" text={data.decision_framework} />}
+        {data.temporal_orientation && <InsightPlate label="Temporal" text={data.temporal_orientation} />}
+      </PlateSection>
     </div>
   );
 }
@@ -489,48 +819,86 @@ function RelationshipsTab({ data }: { data: any }) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="relational dynamics" />;
 
   return (
-    <div className="space-y-4">
+    <div>
       {data.key_relationships?.length > 0 && (
-        <Card title="Key Relationships">
-          {data.key_relationships.map((r: any, i: number) => (
-            <div key={i} className="mb-3 flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[9px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-ghost)' }}>
-                {(r.role || '?')[0].toUpperCase()}
-              </div>
-              <div>
-                <div className="text-[11px] font-medium" style={{ color: 'var(--text-soft)', textTransform: 'capitalize' }}>{r.role}</div>
-                <div className="text-[11px]" style={{ color: 'var(--text-ghost)', lineHeight: 1.5 }}>{r.dynamic}</div>
-              </div>
-            </div>
-          ))}
-        </Card>
+        <PlateSection label="Key Relationships" count={data.key_relationships.length}>
+          <RankedList items={data.key_relationships.map((r: any, i: number) => ({
+            label: r.role, evidence: r.dynamic, rank: i + 1,
+          }))} />
+        </PlateSection>
       )}
-      {data.conflict_style && <InsightCard label="Conflict Style" text={data.conflict_style} />}
-      {data.power_orientation && <InsightCard label="Power Orientation" text={data.power_orientation} />}
-      {data.intimacy_comfort && <InsightCard label="Intimacy Comfort" text={data.intimacy_comfort} />}
-      {data.ai_relationship_style && <InsightCard label="AI Relationship Style" text={data.ai_relationship_style} />}
+      <PlateSection label="Relational Patterns">
+        {data.conflict_style && <InsightPlate label="Conflict" text={data.conflict_style} />}
+        {data.power_orientation && <InsightPlate label="Power" text={data.power_orientation} />}
+        {data.intimacy_comfort && <InsightPlate label="Intimacy" text={data.intimacy_comfort} />}
+        {data.ai_relationship_style && <InsightPlate label="AI Relationships" text={data.ai_relationship_style} prominence="lead" />}
+      </PlateSection>
     </div>
   );
 }
 
 /* ─── Cognition Tab ─── */
-function CognitionTab({ data }: { data: any }) {
+function CognitionTab({ data, memoryStats, engramSummary }: {
+  data: any; memoryStats: MemoryStats | null; engramSummary: EngramSummary | null;
+}) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="cognitive tendencies" />;
 
+  // Cognitive bandwidth — derived from memory_type distribution
+  const counts = memoryStats?.byType ?? {};
+  const get = (k: string) => counts[k] ?? 0;
+  const max = Math.max(1, ...Object.values(counts));
+  // Normalize to 0-100
+  const norm = (raw: number) => Math.min(100, Math.round((raw / max) * 100));
+
+  const bandwidthAxes = [
+    { key: 'logic', label: 'Logic' },
+    { key: 'creativity', label: 'Creativity' },
+    { key: 'pattern', label: 'Pattern' },
+    { key: 'memory', label: 'Memory' },
+    { key: 'integration', label: 'Integration' },
+    { key: 'abstract', label: 'Abstract' },
+  ];
+  const bandwidthValues = {
+    logic: norm(get('principle') + get('commitment')),
+    creativity: norm(get('synthesis') + get('reflection')),
+    pattern: norm(get('relationship') + (engramSummary?.total ? engramSummary.total / 10 : 0)),
+    memory: norm(get('fact') + get('moment')),
+    integration: norm((get('synthesis') + get('reflection')) * 0.7), // proxy — narrative_thread count would be ideal but not aggregated
+    abstract: norm(get('synthesis') + get('reflection') + get('principle') * 0.5),
+  };
+  const hasBandwidthSignal = Object.values(counts).some(v => v > 0);
+
   return (
-    <div className="space-y-4">
-      {data.thinking_style && <InsightCard label="Thinking Style" text={data.thinking_style} />}
-      {data.decision_patterns && <InsightCard label="Decision Patterns" text={data.decision_patterns} />}
-      {data.stress_response && <InsightCard label="Stress Response" text={data.stress_response} />}
+    <div>
+      {hasBandwidthSignal && (
+        <PlateSection label="Cognitive bandwidth">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+            <RadialChart
+              axes={bandwidthAxes}
+              traces={[{ values: bandwidthValues, primary: true }]}
+              size={240}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-body)', lineHeight: 1.7, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
+              6-axis allocation derived from your memory-type distribution. Higher values mean more memories of that flavor have accumulated.{' '}
+              <span style={{ color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'normal', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>derived signal</span>
+            </div>
+          </div>
+        </PlateSection>
+      )}
+      <PlateSection label="Cognitive Tendencies">
+        {data.thinking_style && <InsightPlate label="Thinking" text={data.thinking_style} prominence="lead" />}
+        {data.decision_patterns && <InsightPlate label="Decisions" text={data.decision_patterns} />}
+        {data.stress_response && <InsightPlate label="Stress Response" text={data.stress_response} />}
+      </PlateSection>
       {data.biases?.length > 0 && (
-        <Card title="Cognitive Biases Observed">
-          <TagList items={data.biases} />
-        </Card>
+        <PlateSection label="Cognitive Biases observed" count={data.biases.length}>
+          <ConstellationCloud items={data.biases} />
+        </PlateSection>
       )}
       {data.defense_mechanisms?.length > 0 && (
-        <Card title="Defense Mechanisms">
-          <TagList items={data.defense_mechanisms} />
-        </Card>
+        <PlateSection label="Defense Mechanisms" count={data.defense_mechanisms.length}>
+          <ConstellationCloud items={data.defense_mechanisms} />
+        </PlateSection>
       )}
     </div>
   );
@@ -541,62 +909,84 @@ function GrowthTab({ data }: { data: any }) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="growth edges" />;
 
   return (
-    <div className="space-y-4">
+    <div>
       {data.active_growth?.length > 0 && (
-        <Card title="Active Growth Areas">
-          <BulletList items={data.active_growth} color="var(--guardian)" />
-        </Card>
+        <PlateSection label="Active Growth Areas" count={data.active_growth.length}>
+          <RankedList items={data.active_growth.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
+        </PlateSection>
       )}
       {data.emerging_awareness?.length > 0 && (
-        <Card title="Emerging Awareness">
-          <BulletList items={data.emerging_awareness} color="var(--luca)" />
-        </Card>
+        <PlateSection label="Emerging Awareness" count={data.emerging_awareness.length}>
+          <RankedList items={data.emerging_awareness.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
+        </PlateSection>
       )}
       {data.integration_opportunities?.length > 0 && (
-        <Card title="Integration Opportunities">
-          <BulletList items={data.integration_opportunities} color="var(--text-soft)" />
-        </Card>
+        <PlateSection label="Integration Opportunities" count={data.integration_opportunities.length}>
+          <RankedList items={data.integration_opportunities.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
+        </PlateSection>
       )}
     </div>
   );
 }
 
 /* ─── Shadow Tab ─── */
-function ShadowTab({ data }: { data: any }) {
+function ShadowTab({ data, memoryStats, valuesData }: {
+  data: any; memoryStats: MemoryStats | null; valuesData: any;
+}) {
   if (!data || Object.keys(data).length === 0) return <EmptySection label="shadow patterns" />;
 
+  // For each blind spot prose entry, derive a divergence score by finding tag-keyword
+  // overlap between the blind spot and the user's stated top values.
+  // Magnitude = how much of the blind spot's vocabulary appears in revealed memory tags
+  // vs. how strongly it conflicts with stated top values.
+  const blindSpotItems = (data.blind_spots && memoryStats && valuesData?.ranked_values?.length)
+    ? (data.blind_spots as string[]).slice(0, 4).map((spot, i) => {
+        const stated = 0.5; // baseline — we have no per-spot stated weight, default to mid
+        const revealed = tagMatchScore(spot, memoryStats.byTagNorm);
+        return { label: spot.length > 80 ? spot.slice(0, 77) + '…' : spot, stated, revealed };
+      })
+    : [];
+
   return (
-    <div className="space-y-4">
+    <div>
       {data.contradictions?.length > 0 && (
-        <Card title="Contradictions">
-          <BulletList items={data.contradictions} color="#ad5b5b" />
-        </Card>
+        <PlateSection label="Contradictions" count={data.contradictions.length}>
+          <RankedList items={data.contradictions.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
+        </PlateSection>
       )}
       {data.blind_spots?.length > 0 && (
-        <Card title="Blind Spots">
-          <BulletList items={data.blind_spots} color="var(--luca)" />
-        </Card>
+        <PlateSection label="Blind Spots" count={data.blind_spots.length}>
+          <RankedList items={data.blind_spots.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
+        </PlateSection>
+      )}
+      {blindSpotItems.length > 0 && (
+        <PlateSection label="Blind-spot signal map">
+          <div style={{ marginBottom: 12, fontSize: 10.5, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.6 }}>
+            For each blind spot, the asterisk flags where revealed memory signal diverges sharply from baseline — a quantitative companion to the prose above.
+          </div>
+          <DivergenceBar items={blindSpotItems} />
+        </PlateSection>
       )}
       {data.avoidance_patterns?.length > 0 && (
-        <Card title="Avoidance Patterns">
-          <BulletList items={data.avoidance_patterns} color="var(--text-soft)" />
-        </Card>
+        <PlateSection label="Avoidance Patterns" count={data.avoidance_patterns.length}>
+          <ConstellationCloud items={data.avoidance_patterns} weighted={false} />
+        </PlateSection>
       )}
       {data.compensatory_behaviors?.length > 0 && (
-        <Card title="Compensatory Behaviors">
-          <BulletList items={data.compensatory_behaviors} color="var(--guardian)" />
-        </Card>
+        <PlateSection label="Compensatory Behaviors" count={data.compensatory_behaviors.length}>
+          <ConstellationCloud items={data.compensatory_behaviors} weighted={false} />
+        </PlateSection>
       )}
       {data.unasked_questions?.length > 0 && (
-        <Card title="Questions to Sit With">
-          <ul className="space-y-2">
+        <PlateSection label="Questions to Sit With" count={data.unasked_questions.length}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {data.unasked_questions.map((q: string, i: number) => (
-              <li key={i} className="text-[12px] italic" style={{ color: 'var(--text-body)', lineHeight: 1.6 }}>
+              <p key={i} style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.7, margin: 0, paddingLeft: 12, borderLeft: '1px solid rgba(244, 243, 240, 0.2)' }}>
                 "{q}"
-              </li>
+              </p>
             ))}
-          </ul>
-        </Card>
+          </div>
+        </PlateSection>
       )}
     </div>
   );
