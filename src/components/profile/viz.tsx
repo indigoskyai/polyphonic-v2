@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 /**
  * Profile visualization primitives.
@@ -47,6 +47,43 @@ const INK_SOFT = 'rgba(244, 243, 240, 0.6)';
 const INK_GHOST = 'rgba(244, 243, 240, 0.32)';
 const INK_HAIR = 'rgba(244, 243, 240, 0.10)';
 const INK_FAINT = 'rgba(244, 243, 240, 0.06)';
+
+/* ────────────────────────────────────────────────────────────
+   COLOR SYSTEM — restrained accent palette
+   Eight hues at similar lightness (~65-72%) and chroma (~30) so
+   they read as a family, not a rainbow. Color is only applied to
+   data marks that *encode* identity (a thread, a memory type, an
+   active state). Backgrounds, ledes, body, axes, eyebrows stay
+   cream/mono. Color earns its place.
+   ──────────────────────────────────────────────────────────── */
+
+export const THREAD_PALETTE: Array<{ name: string; hue: string; dim: string }> = [
+  { name: 'amber',  hue: 'rgba(228, 178,  98, 0.82)', dim: 'rgba(228, 178,  98, 0.32)' },
+  { name: 'sage',   hue: 'rgba(143, 175, 137, 0.82)', dim: 'rgba(143, 175, 137, 0.32)' },
+  { name: 'violet', hue: 'rgba(170, 145, 200, 0.82)', dim: 'rgba(170, 145, 200, 0.32)' },
+  { name: 'coral',  hue: 'rgba(218, 145, 130, 0.82)', dim: 'rgba(218, 145, 130, 0.32)' },
+  { name: 'cobalt', hue: 'rgba(135, 165, 200, 0.82)', dim: 'rgba(135, 165, 200, 0.32)' },
+  { name: 'ochre',  hue: 'rgba(200, 155, 105, 0.82)', dim: 'rgba(200, 155, 105, 0.32)' },
+  { name: 'rose',   hue: 'rgba(195, 130, 165, 0.82)', dim: 'rgba(195, 130, 165, 0.32)' },
+  { name: 'moss',   hue: 'rgba(150, 175, 110, 0.82)', dim: 'rgba(150, 175, 110, 0.32)' },
+];
+
+// Memory-type → palette mapping. Stable per type so colors are recognizable
+// across tabs (BurstPlot, future legend, etc.).
+export const MEMORY_TYPE_COLOR: Record<string, { hue: string; dim: string }> = {
+  goal:         { hue: 'rgba(228, 178,  98, 0.82)', dim: 'rgba(228, 178,  98, 0.30)' }, // amber
+  preference:   { hue: 'rgba(143, 175, 137, 0.82)', dim: 'rgba(143, 175, 137, 0.30)' }, // sage
+  principle:    { hue: 'rgba(200, 155, 105, 0.82)', dim: 'rgba(200, 155, 105, 0.30)' }, // ochre
+  commitment:   { hue: 'rgba(218, 145, 130, 0.82)', dim: 'rgba(218, 145, 130, 0.30)' }, // coral
+  fact:         { hue: 'rgba(135, 165, 200, 0.82)', dim: 'rgba(135, 165, 200, 0.30)' }, // cobalt
+  moment:       { hue: 'rgba(170, 145, 200, 0.82)', dim: 'rgba(170, 145, 200, 0.30)' }, // violet
+  relationship: { hue: 'rgba(195, 130, 165, 0.82)', dim: 'rgba(195, 130, 165, 0.30)' }, // rose
+  synthesis:    { hue: 'rgba(150, 175, 110, 0.82)', dim: 'rgba(150, 175, 110, 0.30)' }, // moss
+  reflection:   { hue: 'rgba(170, 145, 200, 0.82)', dim: 'rgba(170, 145, 200, 0.30)' }, // violet (shared with moment — both reflective)
+};
+
+const ACTIVE_GLOW = 'rgba(228, 178, 98, 0.85)'; // amber — JourneyTimeline active state
+const ACTIVE_GLOW_SOFT = 'rgba(228, 178, 98, 0.18)'; // amber inner halo (still hairline-discipline)
 
 /* ────────────────────────────────────────────────────────────
    Sigil — generative Big Five signature
@@ -578,15 +615,20 @@ export function EmptyState({ note, height = 80 }: { note: string; height?: numbe
    ──────────────────────────────────────────────────────────── */
 
 export function BurstPlot({ events, height = 100, label }: {
-  events: Array<{ at: number | string | Date; magnitude?: number }>;
+  events: Array<{ at: number | string | Date; magnitude?: number; memoryType?: string }>;
   height?: number;
   label?: string;
 }) {
+  const [tooltip, setTooltip] = useState<{
+    x: number; y: number; date: string; memoryType?: string; magnitude: number;
+  } | null>(null);
+
   const data = useMemo(() => {
     if (!events?.length) return null;
     const stamps = events.map(e => ({
       t: typeof e.at === 'number' ? e.at : new Date(e.at).getTime(),
       m: typeof e.magnitude === 'number' ? Math.max(0.1, Math.min(1, e.magnitude)) : 0.5,
+      type: e.memoryType,
     })).filter(e => Number.isFinite(e.t)).sort((a, b) => a.t - b.t);
     if (!stamps.length) return null;
     const tMin = stamps[0].t;
@@ -613,9 +655,19 @@ export function BurstPlot({ events, height = 100, label }: {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
+  // Build a legend of unique memory_types present (lowercased)
+  const typesPresent = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of data.stamps) if (s.type) set.add(s.type.toLowerCase());
+    return Array.from(set);
+  }, [data.stamps]);
+
   return (
-    <div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+    <div style={{ position: 'relative' }}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: 'block' }}
+        onMouseLeave={() => setTooltip(null)}
+      >
         {/* Baseline */}
         <line x1={padX} y1={H - padBot} x2={W - padX} y2={H - padBot} stroke={INK_HAIR} strokeWidth={0.5} />
         {/* Quartile gridlines */}
@@ -623,13 +675,32 @@ export function BurstPlot({ events, height = 100, label }: {
           <line key={q} x1={padX + q * innerW} y1={padTop} x2={padX + q * innerW} y2={H - padBot}
             stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
         ))}
-        {/* Event hairlines */}
+        {/* Event hairlines — colored by memory_type if available */}
         {data.stamps.map((s, i) => {
           const x = padX + ((s.t - data.tMin) / data.span) * innerW;
           const h = innerH * s.m;
           const y1 = H - padBot - h;
-          return <line key={i} x1={x} y1={y1} x2={x} y2={H - padBot}
-            stroke={INK} strokeWidth={0.7} opacity={0.55} />;
+          const typeKey = s.type?.toLowerCase();
+          const palette = typeKey ? MEMORY_TYPE_COLOR[typeKey] : undefined;
+          const stroke = palette ? palette.hue : INK;
+          return (
+            <line key={i}
+              x1={x} y1={y1} x2={x} y2={H - padBot}
+              stroke={stroke} strokeWidth={1} opacity={0.85}
+              onMouseEnter={(e) => {
+                const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                setTooltip({
+                  x: ((x / W) * r.width) + r.left,
+                  y: r.top + ((y1 / H) * r.height),
+                  date: fmt(s.t),
+                  memoryType: s.type,
+                  magnitude: s.m,
+                });
+              }}
+              onMouseLeave={() => setTooltip(null)}
+              style={{ cursor: 'default' }}
+            />
+          );
         })}
       </svg>
       <div style={{
@@ -641,6 +712,60 @@ export function BurstPlot({ events, height = 100, label }: {
         <span>{data.stamps.length} events</span>
         <span>{fmt(data.tMax)}</span>
       </div>
+      {/* Memory-type legend */}
+      {typesPresent.length > 0 && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: '6px 14px',
+          padding: '8px 12px 0',
+        }}>
+          {typesPresent.map(t => {
+            const c = MEMORY_TYPE_COLOR[t];
+            if (!c) return null;
+            return (
+              <span key={t} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontSize: 9, fontFamily: 'var(--font-mono)',
+                color: INK_GHOST, letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 8, height: 1.5,
+                  background: c.hue,
+                }} />
+                {t}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {/* Tooltip */}
+      {tooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x + 8,
+            top: tooltip.y - 30,
+            pointerEvents: 'none',
+            padding: '5px 9px',
+            background: 'rgba(20, 20, 22, 0.94)',
+            border: `1px solid ${INK_HAIR}`,
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: INK,
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap',
+            zIndex: 50,
+          }}
+        >
+          {tooltip.date}
+          {tooltip.memoryType && (
+            <> · <span style={{ color: MEMORY_TYPE_COLOR[tooltip.memoryType.toLowerCase()]?.hue ?? INK_SOFT }}>
+              {tooltip.memoryType}
+            </span></>
+          )}
+          {' · '}<span style={{ color: INK_GHOST }}>c{tooltip.magnitude.toFixed(2)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -674,21 +799,26 @@ export function JourneyTimeline({ phases, activeIndex = 0, onSelect }: {
           return (
             <g key={p.key} style={{ cursor: onSelect ? 'pointer' : 'default' }}
               onClick={onSelect ? () => onSelect(i) : undefined}>
+              {/* Outer halo on active — subtle amber, hairline-discipline */}
+              {isActive && (
+                <circle cx={x} cy={trackY} r={16}
+                  fill="none" stroke={ACTIVE_GLOW_SOFT} strokeWidth={1} />
+              )}
               {/* Outer ring */}
               <circle cx={x} cy={trackY} r={isActive ? 12 : 8} fill="rgba(10, 10, 12, 1)"
-                stroke={isActive ? INK : INK_GHOST} strokeWidth={isActive ? 1 : 0.75} />
+                stroke={isActive ? ACTIVE_GLOW : INK_GHOST} strokeWidth={isActive ? 1 : 0.75} />
               {/* Inner symbol or dot */}
               {p.symbol ? (
                 <text x={x} y={trackY} fontSize={11} fontFamily="var(--font-mono)"
-                  fill={isActive ? INK : INK_SOFT}
+                  fill={isActive ? ACTIVE_GLOW : INK_SOFT}
                   textAnchor="middle" dominantBaseline="central">{p.symbol}</text>
               ) : (
                 <circle cx={x} cy={trackY} r={isActive ? 3 : 1.5}
-                  fill={isActive ? INK : INK_GHOST} />
+                  fill={isActive ? ACTIVE_GLOW : INK_GHOST} />
               )}
               {/* Label */}
               <text x={x} y={trackY + 30} fontSize={9} fontFamily="var(--font-mono)"
-                fill={isActive ? INK_SOFT : INK_GHOST}
+                fill={isActive ? ACTIVE_GLOW : INK_GHOST}
                 textAnchor="middle" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 {p.label}
               </text>
@@ -1315,6 +1445,218 @@ export function SignalStrip({ children }: { children: ReactNode }) {
       borderBottom: `1px solid ${INK_HAIR}`,
     }}>
       {children}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ThreadArcs — narrative threads as stacked timeline lanes.
+   Each thread is one horizontal lane; vertical hairlines mark
+   each memory's arrival time. Each thread carries a palette
+   color so multiple parallel arcs are legible at a glance.
+
+   Interactivity:
+     • hover a lane → that lane stays full-opacity, others dim
+     • click a lane → locks the highlight; click again to release
+     • hover a tick → tooltip with date + thread name
+   ════════════════════════════════════════════════════════════ */
+
+export function ThreadArcs({ threads, laneHeight = 32 }: {
+  threads: Array<{
+    thread: string;
+    count: number;
+    events: Array<{ at: string; magnitude: number; memoryType?: string }>;
+  }>;
+  laneHeight?: number;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [locked, setLocked] = useState<number | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number; y: number; date: string; thread: string;
+  } | null>(null);
+
+  // Active = locked if set, else hovered
+  const active = locked !== null ? locked : hovered;
+
+  // Compute the global time range across all threads
+  const timeRange = useMemo(() => {
+    let tMin = Infinity, tMax = -Infinity;
+    for (const t of threads) {
+      for (const e of t.events) {
+        const ms = new Date(e.at).getTime();
+        if (Number.isFinite(ms)) {
+          if (ms < tMin) tMin = ms;
+          if (ms > tMax) tMax = ms;
+        }
+      }
+    }
+    if (!Number.isFinite(tMin)) return null;
+    return { tMin, tMax, span: Math.max(1, tMax - tMin) };
+  }, [threads]);
+
+  if (!threads?.length || !timeRange) {
+    return <EmptyState note="Threads will surface as memories accumulate" height={120} />;
+  }
+
+  const W = 1000;
+  const labelW = 240;
+  const trackX = labelW + 8;
+  const trackW = W - trackX - 12;
+  const axisH = 22; // bottom date axis
+  const totalH = threads.length * laneHeight + axisH;
+
+  const fmtDate = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const xOf = (ms: number) => trackX + ((ms - timeRange.tMin) / timeRange.span) * trackW;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg
+        width="100%"
+        height={totalH}
+        viewBox={`0 0 ${W} ${totalH}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block', overflow: 'visible' }}
+        onMouseLeave={() => { setHovered(null); setTooltip(null); }}
+      >
+        {threads.map((t, i) => {
+          const yTop = i * laneHeight;
+          const yMid = yTop + laneHeight / 2;
+          const baseColor = THREAD_PALETTE[i % THREAD_PALETTE.length];
+          const isActive = active === i;
+          const isOther = active !== null && active !== i;
+          const tickHue = isOther ? baseColor.dim : baseColor.hue;
+          const labelColor = isOther ? INK_GHOST : (isActive ? INK : INK_SOFT);
+
+          return (
+            <g
+              key={t.thread}
+              onMouseEnter={() => setHovered(i)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setLocked(prev => prev === i ? null : i);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              {/* Lane hit-region — invisible rect that captures hover/click across the whole row */}
+              <rect
+                x={0} y={yTop} width={W} height={laneHeight}
+                fill="transparent"
+              />
+              {/* Lane baseline */}
+              <line
+                x1={trackX} y1={yMid} x2={trackX + trackW} y2={yMid}
+                stroke={isOther ? INK_FAINT : INK_HAIR}
+                strokeWidth={0.5}
+              />
+              {/* Color swatch — small filled square next to the label */}
+              <rect
+                x={4} y={yMid - 4} width={6} height={6}
+                fill={isOther ? baseColor.dim : baseColor.hue}
+              />
+              {/* Thread label (italic-serif, capitalized) */}
+              <text
+                x={18} y={yMid}
+                fontSize={13} fontFamily="var(--font-serif)"
+                fontStyle="italic" fill={labelColor}
+                dominantBaseline="middle"
+                style={{ textTransform: 'capitalize', transition: 'fill 200ms ease' }}
+              >
+                {t.thread.length > 32 ? t.thread.slice(0, 30) + '…' : t.thread}
+              </text>
+              {/* Count — mono ghost on the right of the label area */}
+              <text
+                x={labelW - 4} y={yMid}
+                fontSize={9} fontFamily="var(--font-mono)"
+                fill={isOther ? 'rgba(244, 243, 240, 0.18)' : INK_GHOST}
+                textAnchor="end" dominantBaseline="middle"
+                style={{ letterSpacing: '0.06em', transition: 'fill 200ms ease' }}
+              >
+                {t.count}
+              </text>
+              {/* Memory ticks */}
+              {t.events.map((ev, j) => {
+                const ms = new Date(ev.at).getTime();
+                if (!Number.isFinite(ms)) return null;
+                const x = xOf(ms);
+                const tickH = 5 + ev.magnitude * 7; // 5..12
+                return (
+                  <line
+                    key={j}
+                    x1={x} y1={yMid - tickH / 2}
+                    x2={x} y2={yMid + tickH / 2}
+                    stroke={tickHue}
+                    strokeWidth={isActive ? 1.4 : 1}
+                    style={{ transition: 'stroke 200ms ease, stroke-width 200ms ease' }}
+                    onMouseEnter={(e) => {
+                      const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                      setTooltip({
+                        x: ((x / W) * r.width) + r.left,
+                        y: r.top + (yMid / totalH) * r.height,
+                        date: fmtDate(ms),
+                        thread: t.thread,
+                      });
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
+                  />
+                );
+              })}
+              {/* Locked indicator — small chevron at left edge */}
+              {locked === i && (
+                <text
+                  x={2} y={yMid + 1}
+                  fontSize={10} fontFamily="var(--font-mono)"
+                  fill={baseColor.hue}
+                  dominantBaseline="middle"
+                >
+                  ▸
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* Time axis */}
+        <g transform={`translate(0 ${threads.length * laneHeight + 14})`}>
+          <text x={trackX} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>
+            {fmtDate(timeRange.tMin)}
+          </text>
+          <text x={trackX + trackW / 2} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.06em' }}>
+            {locked !== null
+              ? `locked · ${threads[locked].thread}`
+              : (active !== null
+                ? `hover · ${threads[active].thread}`
+                : `${threads.length} threads · click to lock`)}
+          </text>
+          <text x={trackX + trackW} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>
+            {fmtDate(timeRange.tMax)}
+          </text>
+        </g>
+      </svg>
+      {/* Tooltip */}
+      {tooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x + 8,
+            top: tooltip.y - 30,
+            pointerEvents: 'none',
+            padding: '5px 9px',
+            background: 'rgba(20, 20, 22, 0.94)',
+            border: `1px solid ${INK_HAIR}`,
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: INK,
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap',
+            zIndex: 50,
+          }}
+        >
+          {tooltip.date} · <span style={{ color: INK_SOFT, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>{tooltip.thread}</span>
+        </div>
+      )}
     </div>
   );
 }

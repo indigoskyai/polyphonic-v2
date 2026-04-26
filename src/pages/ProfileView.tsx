@@ -10,7 +10,7 @@ import {
   EmptyState,
   SectionEyebrow, SectionDivider, TabColophon,
   SignalStrip, DiurnalRing, WeeklyMicroBars, ConfidencePulse, SignalCoherence,
-  ValenceTrajectory,
+  ValenceTrajectory, ThreadArcs,
 } from '@/components/profile/viz';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -39,7 +39,7 @@ type MemoryStats = {
   avgSharpness: number;
   topTags: string[];
   topTagsWithCount: Array<{ tag: string; count: number; avgConfidence: number }>;
-  arrivals: Array<{ at: string; magnitude: number }>;
+  arrivals: Array<{ at: string; magnitude: number; memoryType?: string }>;
   // Per-trait normalized scores (0-1) for blind-spot heuristic
   byTagNorm: Record<string, number>;
   // Behavioral rhythm — derived from created_at (in user-local time)
@@ -49,8 +49,12 @@ type MemoryStats = {
   byTypeHour: Record<string, number[]>; // { memory_type: number[24] }
   // Claim health
   confidenceTiers: { low: number; mid: number; high: number };
-  // Narrative thread distribution
-  topThreads: Array<{ thread: string; count: number }>;
+  // Narrative thread distribution — top threads with their event timestamps
+  topThreads: Array<{
+    thread: string;
+    count: number;
+    events: Array<{ at: string; magnitude: number; memoryType?: string }>;
+  }>;
   // Per-memory affective points — for Emotions trajectory plot
   affectiveTrajectory: Array<{ at: string; valence: number; intensity: number }>;
 };
@@ -211,11 +215,12 @@ export default function ProfileView() {
       let sharpCount = 0;
       const tagCounts: Record<string, number> = {};
       const tagConf: Record<string, number> = {};
-      const arrivals: Array<{ at: string; magnitude: number }> = [];
+      const arrivals: Array<{ at: string; magnitude: number; memoryType?: string }> = [];
       const hourBuckets = new Array<number>(24).fill(0);
       const dowBuckets = new Array<number>(7).fill(0);
       const confTiers = { low: 0, mid: 0, high: 0 };
       const threadCounts: Record<string, number> = {};
+      const threadEvents: Record<string, Array<{ at: string; magnitude: number; memoryType?: string }>> = {};
       const byTypeHour: Record<string, number[]> = {};
       const affectiveTrajectory: Array<{ at: string; valence: number; intensity: number }> = [];
       for (const m of rows) {
@@ -236,6 +241,14 @@ export default function ProfileView() {
         }
         if (m.narrative_thread) {
           threadCounts[m.narrative_thread] = (threadCounts[m.narrative_thread] || 0) + 1;
+          if (m.created_at) {
+            if (!threadEvents[m.narrative_thread]) threadEvents[m.narrative_thread] = [];
+            threadEvents[m.narrative_thread].push({
+              at: m.created_at,
+              magnitude: Math.max(0.1, conf || 0.5),
+              memoryType: type,
+            });
+          }
         }
         if (m.created_at) {
           const dt = new Date(m.created_at);
@@ -248,7 +261,7 @@ export default function ProfileView() {
               byTypeHour[type][h] += 1;
             }
           }
-          arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, conf || 0.5) });
+          arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, conf || 0.5), memoryType: type });
           // Affective trajectory — only memories with a real valence reading
           if (typeof m.emotional_valence === 'number') {
             affectiveTrajectory.push({
@@ -270,8 +283,15 @@ export default function ProfileView() {
       );
       const topThreads = Object.entries(threadCounts)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([thread, count]) => ({ thread, count }));
+        .slice(0, 8)
+        .map(([thread, count]) => ({
+          thread,
+          count,
+          // Events sorted oldest → newest for left-to-right rendering
+          events: (threadEvents[thread] ?? []).slice().sort(
+            (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+          ),
+        }));
 
       // Sort affective points oldest → newest (chronological for trajectory)
       affectiveTrajectory.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -696,16 +716,35 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
 
       <SectionDivider />
 
-      {/* ────────── § IV. TEMPORAL — Memory arrivals over time ────────── */}
+      {/* ────────── § IV. TEMPORAL — Memory arrivals + narrative threads ────────── */}
       <SectionEyebrow
         index="§ IV"
         label="Temporal"
-        lede="When memories were captured. Hairline height encodes confidence at the moment of capture."
+        lede="When memories arrived, and the threads they form. Hairline height encodes confidence; color encodes the kind of thinking captured. Threads are recurring story-lines the analysis identified — hover or click a lane to focus."
       />
+      <div style={{
+        fontSize: 9, color: 'rgba(244, 243, 240, 0.45)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.16em',
+        textTransform: 'uppercase', marginBottom: 12, paddingTop: 4,
+      }}>
+        Memory arrivals {memoryStats?.arrivals.length ? `· ${memoryStats.arrivals.length}` : ''}
+      </div>
       {memoryStats && memoryStats.arrivals.length > 0 ? (
         <BurstPlot events={memoryStats.arrivals} height={120} label="Memory arrivals" />
       ) : (
         <EmptyState note="Awaiting memory arrival history" height={120} />
+      )}
+      <div style={{
+        fontSize: 9, color: 'rgba(244, 243, 240, 0.45)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.16em',
+        textTransform: 'uppercase', marginTop: 28, marginBottom: 12,
+      }}>
+        Narrative threads {memoryStats?.topThreads.length ? `· ${memoryStats.topThreads.length}` : ''}
+      </div>
+      {memoryStats && memoryStats.topThreads.length > 0 ? (
+        <ThreadArcs threads={memoryStats.topThreads} />
+      ) : (
+        <EmptyState note="Threads will surface as memories accumulate" height={120} />
       )}
 
       <SectionDivider />
