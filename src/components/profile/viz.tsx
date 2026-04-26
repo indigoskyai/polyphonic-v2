@@ -6,6 +6,40 @@ import { useMemo, type ReactNode } from 'react';
  * All components share the lab-instrument aesthetic: hairline strokes only,
  * cream on dark, mathematical precision, no bloom. Each visual element earns
  * its place by encoding meaning — no decorative graphics.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * TYPE SYSTEM — three voices, never mixed accidentally.
+ *
+ *   mono   (--font-mono, JetBrains Mono)
+ *          Labels, eyebrows, indices, hints, axis ticks, footers, numerals
+ *          in an instrument context, status strips, page numbering.
+ *          Always tracked. Often uppercase. The "this is data" voice.
+ *
+ *   serif  (--font-serif, Instrument Serif)
+ *          Editorial accents — italic only. Ledes, lede sentences, named
+ *          entities (value names, ranked-list labels, theme constellation
+ *          items, divergence-bar labels), identity portrait, italic quotes.
+ *          The "this was named/written by a person" voice.
+ *
+ *   sans   (--font-sans, Switzer)
+ *          Body prose only. Plate body text, evidence paragraphs, derivation
+ *          explanations, descriptive copy. Always upright. Never italic —
+ *          if you want italic body, switch to serif. The "this is description"
+ *          voice.
+ *
+ * Type scale — keep additions inside this scale. No orphan sizes.
+ *   8.5 — sub-axis tick labels (day initials, axis abbreviations)
+ *   9   — micro mono (hints, footers, axis labels, colophons, eyebrow indices)
+ *   10  — eyebrow labels (uppercase tracked)
+ *   11  — TraitTrace label, status values, secondary mono numerals
+ *   12.5 — body sans normal (InsightPlate normal, evidence, derivation prose)
+ *          AND serif italic ledes (SectionEyebrow lede, prose pull-quotes)
+ *   14  — body sans lead (InsightPlate prominence='lead')
+ *          AND serif italic medium (RankedList entry labels)
+ *   15  — serif italic large (Identity Portrait, Questions to sit with)
+ *   18  — mono numeric display (RankedList rank)
+ *   22  — mono numeric display large (TraitTrace value)
+ * ──────────────────────────────────────────────────────────────────────────
  */
 
 const INK = 'rgba(244, 243, 240, 0.92)';
@@ -138,7 +172,14 @@ export function TraitTrace({ label, value, max = 100, evidence }: {
         <circle cx={markerX} cy={h - 4} r={3} fill={INK} />
       </svg>
       {evidence && (
-        <p style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.65, fontStyle: 'italic', margin: 0, paddingLeft: 142 }}>
+        <p style={{
+          fontSize: 12.5,
+          fontFamily: 'var(--font-sans)',
+          color: 'var(--text-body)',
+          lineHeight: 1.7,
+          margin: 0,
+          paddingLeft: 142,
+        }}>
           {evidence}
         </p>
       )}
@@ -169,6 +210,7 @@ export function InsightPlate({ label, text, prominence = 'normal' }: {
       </span>
       <p style={{
         fontSize: prominence === 'lead' ? 14 : 12.5,
+        fontFamily: 'var(--font-sans)',
         color: prominence === 'lead' ? 'var(--text-primary)' : 'var(--text-body)',
         lineHeight: 1.7,
         margin: 0,
@@ -212,7 +254,13 @@ export function RankedList({ items }: {
               )}
             </div>
             {item.evidence && (
-              <p style={{ fontSize: 12, color: 'var(--text-body)', lineHeight: 1.65, margin: 0 }}>
+              <p style={{
+                fontSize: 12.5,
+                fontFamily: 'var(--font-sans)',
+                color: 'var(--text-body)',
+                lineHeight: 1.7,
+                margin: 0,
+              }}>
                 {item.evidence}
               </p>
             )}
