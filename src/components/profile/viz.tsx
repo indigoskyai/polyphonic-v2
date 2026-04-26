@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 /**
  * Profile visualization primitives.
@@ -349,7 +349,7 @@ export function MagnitudeBars({ data, height = 80 }: {
    ──────────────────────────────────────────────────────────── */
 
 export function PlateSection({ label, count, children }: {
-  label: string; count?: number | string; children: React.ReactNode;
+  label: string; count?: number | string; children: ReactNode;
 }) {
   return (
     <section style={{ padding: '24px 0', borderTop: `1px solid ${INK_FAINT}` }}>
@@ -379,6 +379,81 @@ export function StatusStrip({ items }: { items: Array<{ label: string; value: st
           <span style={{ fontSize: 11, color: INK_SOFT, fontFamily: 'var(--font-mono)' }}>{item.value}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SectionEyebrow — editorial section heading
+   Numbered, monospace eyebrow + serif lede + optional ornament
+   ──────────────────────────────────────────────────────────── */
+
+export function SectionEyebrow({
+  index, label, lede, hint,
+}: {
+  index?: string; label: string; lede?: string; hint?: string;
+}) {
+  return (
+    <div style={{ paddingTop: 28, paddingBottom: 14 }}>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: lede ? 6 : 0,
+      }}>
+        {index !== undefined && (
+          <span style={{
+            fontSize: 9.5, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.16em', textTransform: 'uppercase',
+            minWidth: 28,
+          }}>
+            {index}
+          </span>
+        )}
+        <span style={{
+          fontSize: 10, color: INK_SOFT, fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.18em', textTransform: 'uppercase',
+        }}>
+          {label}
+        </span>
+        {hint && (
+          <span style={{
+            fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.1em', marginLeft: 'auto',
+          }}>
+            {hint}
+          </span>
+        )}
+      </div>
+      {lede && (
+        <p style={{
+          margin: 0, paddingLeft: index !== undefined ? 42 : 0,
+          fontSize: 12.5, fontStyle: 'italic',
+          color: INK_SOFT, fontFamily: 'var(--font-serif)',
+          lineHeight: 1.55, maxWidth: 640,
+        }}>
+          {lede}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SectionDivider — ornamental hairline between movements
+   ──────────────────────────────────────────────────────────── */
+
+export function SectionDivider({ ornament = '·∗·' }: { ornament?: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '20px 0 4px', color: INK_GHOST,
+    }}>
+      <div style={{ flex: 1, height: 1, background: INK_HAIR }} />
+      <span style={{
+        fontSize: 10, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.4em',
+      }}>
+        {ornament}
+      </span>
+      <div style={{ flex: 1, height: 1, background: INK_HAIR }} />
     </div>
   );
 }
@@ -828,6 +903,321 @@ export function DivergenceBar({ items }: {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   BEHAVIORAL RHYTHM — signal-strip primitives
+   Small instrument readouts derived from memories.created_at,
+   confidence, sharpness. Each is a tile in a 4-up signal band.
+   ════════════════════════════════════════════════════════════ */
+
+/* InstrumentTile — shared frame for the 4 signal-strip readouts */
+function InstrumentTile({
+  label, hint, children, footer,
+}: {
+  label: string; hint?: string; children: ReactNode; footer?: string;
+}) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      padding: '14px 16px 12px',
+      borderLeft: `1px solid ${INK_HAIR}`,
+      minHeight: 130, gap: 8,
+    }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        gap: 8,
+      }}>
+        <span style={{
+          fontSize: 9, color: INK_SOFT, fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.16em', textTransform: 'uppercase',
+        }}>
+          {label}
+        </span>
+        {hint && (
+          <span style={{
+            fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.05em',
+          }}>
+            {hint}
+          </span>
+        )}
+      </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+        {children}
+      </div>
+      {footer && (
+        <div style={{
+          fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.05em', textAlign: 'center',
+        }}>
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   DiurnalRing — 24-hour radial of memory-creation activity.
+   Each hour is a radial tick whose length = relative count.
+   Inner cardinal labels mark 00 / 06 / 12 / 18.
+   ──────────────────────────────────────────────────────────── */
+
+export function DiurnalRing({ buckets, size = 96 }: {
+  buckets: number[]; // length 24
+  size?: number;
+}) {
+  const cx = size / 2, cy = size / 2;
+  const rOuter = size / 2 - 6;
+  const rInner = rOuter * 0.55;
+  const max = Math.max(1, ...buckets);
+  const peakHour = buckets.indexOf(max);
+  const total = buckets.reduce((a, b) => a + b, 0);
+
+  // Peak detection: detect peak hour, tag morning/afternoon/evening/night
+  const phase = peakHour < 6 ? 'NIGHT'
+    : peakHour < 12 ? 'MORNING'
+    : peakHour < 18 ? 'AFTERNOON' : 'EVENING';
+
+  return (
+    <InstrumentTile
+      label="Diurnal rhythm"
+      hint={total > 0 ? `n=${total}` : undefined}
+      footer={total > 0 ? `peak ${String(peakHour).padStart(2, '0')}:00 · ${phase}` : 'awaiting history'}
+    >
+      <svg width={size} height={size} style={{ display: 'block', overflow: 'visible' }}>
+        {/* Reference rings */}
+        <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
+        <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
+        {/* Cardinal hour ticks at 0/6/12/18 */}
+        {[0, 6, 12, 18].map(h => {
+          const a = (h / 24) * Math.PI * 2 - Math.PI / 2;
+          const x1 = cx + Math.cos(a) * rOuter;
+          const y1 = cy + Math.sin(a) * rOuter;
+          const x2 = cx + Math.cos(a) * (rOuter + 3);
+          const y2 = cy + Math.sin(a) * (rOuter + 3);
+          return <line key={h} x1={x1} y1={y1} x2={x2} y2={y2} stroke={INK_GHOST} strokeWidth={0.5} />;
+        })}
+        {/* 24 hourly radial bars */}
+        {buckets.map((count, h) => {
+          const a = (h / 24) * Math.PI * 2 - Math.PI / 2;
+          const len = (count / max) * (rOuter - rInner);
+          const r1 = rInner;
+          const r2 = rInner + Math.max(0.5, len);
+          const x1 = cx + Math.cos(a) * r1;
+          const y1 = cy + Math.sin(a) * r1;
+          const x2 = cx + Math.cos(a) * r2;
+          const y2 = cy + Math.sin(a) * r2;
+          const isPeak = count === max && count > 0;
+          return (
+            <line
+              key={h}
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={count === 0 ? INK_FAINT : (isPeak ? INK : INK_SOFT)}
+              strokeWidth={isPeak ? 1.25 : 0.85}
+            />
+          );
+        })}
+        {/* Center dot */}
+        <circle cx={cx} cy={cy} r={1} fill={INK_GHOST} />
+      </svg>
+    </InstrumentTile>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   WeeklyMicroBars — 7-day vertical bars (Sun..Sat).
+   Memory volume by day-of-week.
+   ──────────────────────────────────────────────────────────── */
+
+export function WeeklyMicroBars({ buckets }: { buckets: number[] /* length 7, Sun..Sat */ }) {
+  const max = Math.max(1, ...buckets);
+  const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const peakDow = buckets.indexOf(max);
+  const dowName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][peakDow];
+  const total = buckets.reduce((a, b) => a + b, 0);
+  const W = 168, H = 86, padX = 4, gap = 6;
+  const colW = (W - padX * 2 - gap * 6) / 7;
+
+  return (
+    <InstrumentTile
+      label="Weekly cycle"
+      hint={total > 0 ? `n=${total}` : undefined}
+      footer={total > 0 ? `peak ${dowName}` : 'awaiting history'}
+    >
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        {/* Baseline */}
+        <line x1={padX} y1={H - 16} x2={W - padX} y2={H - 16} stroke={INK_FAINT} strokeWidth={0.5} />
+        {buckets.map((c, i) => {
+          const x = padX + i * (colW + gap);
+          const h = (c / max) * (H - 28);
+          const isPeak = c === max && c > 0;
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={H - 16 - h}
+                width={colW}
+                height={h}
+                fill={c === 0 ? INK_FAINT : (isPeak ? INK : INK_SOFT)}
+                opacity={c === 0 ? 0.4 : 1}
+              />
+              <text
+                x={x + colW / 2} y={H - 4}
+                fontSize={8.5} fontFamily="var(--font-mono)"
+                fill={isPeak ? INK_SOFT : INK_GHOST}
+                textAnchor="middle"
+                style={{ letterSpacing: '0.06em' }}
+              >
+                {labels[i]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </InstrumentTile>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   ConfidencePulse — horizontal stacked-bar of low/mid/high
+   confidence claims, with hairline tier markers above.
+   ──────────────────────────────────────────────────────────── */
+
+export function ConfidencePulse({ tiers }: {
+  tiers: { low: number; mid: number; high: number };
+}) {
+  const total = tiers.low + tiers.mid + tiers.high;
+  const W = 168, H = 86;
+  const barY = H / 2 - 6, barH = 12;
+  const padX = 6;
+  const trackW = W - padX * 2;
+
+  if (total === 0) {
+    return (
+      <InstrumentTile label="Confidence pulse" footer="awaiting claims">
+        <div style={{ width: '100%', height: 12, background: INK_FAINT, borderRadius: 1 }} />
+      </InstrumentTile>
+    );
+  }
+
+  const lowW = (tiers.low / total) * trackW;
+  const midW = (tiers.mid / total) * trackW;
+  const highW = (tiers.high / total) * trackW;
+  const dom =
+    tiers.high >= tiers.mid && tiers.high >= tiers.low ? 'high'
+    : tiers.mid >= tiers.low ? 'mid' : 'low';
+
+  return (
+    <InstrumentTile
+      label="Confidence pulse"
+      hint={`n=${total}`}
+      footer={`${dom}-confidence dominant`}
+    >
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        {/* Tier baseline */}
+        <line x1={padX} y1={barY + barH + 6} x2={W - padX} y2={barY + barH + 6} stroke={INK_FAINT} strokeWidth={0.5} />
+        {/* Low segment */}
+        <rect x={padX} y={barY} width={lowW} height={barH} fill={INK_GHOST} />
+        {/* Mid segment */}
+        <rect x={padX + lowW} y={barY} width={midW} height={barH} fill={INK_SOFT} />
+        {/* High segment */}
+        <rect x={padX + lowW + midW} y={barY} width={highW} height={barH} fill={INK} />
+        {/* Tier ticks above */}
+        <line x1={padX + lowW} y1={barY - 5} x2={padX + lowW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={0.5} />
+        <line x1={padX + lowW + midW} y1={barY - 5} x2={padX + lowW + midW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={0.5} />
+        {/* Tier labels */}
+        <text x={padX + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>LOW</text>
+        <text x={padX + lowW + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>MID</text>
+        <text x={padX + lowW + midW + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>HIGH</text>
+        {/* Counts beneath each segment */}
+        <text x={padX + lowW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle">{tiers.low}</text>
+        <text x={padX + lowW + midW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} textAnchor="middle">{tiers.mid}</text>
+        <text x={padX + lowW + midW + highW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK} textAnchor="middle">{tiers.high}</text>
+      </svg>
+    </InstrumentTile>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SignalCoherence — 2D scatter (sharpness × confidence).
+   The single point shows where the corpus sits inside the
+   unit square; reference quadrants imply meaning.
+   ──────────────────────────────────────────────────────────── */
+
+export function SignalCoherence({ sharpness, confidence }: {
+  sharpness: number; confidence: number;
+}) {
+  const W = 168, H = 86;
+  const padL = 26, padR = 12, padT = 8, padB = 22;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const x = padL + Math.max(0, Math.min(1, sharpness)) * plotW;
+  const y = padT + (1 - Math.max(0, Math.min(1, confidence))) * plotH;
+
+  // Quadrant phrasing
+  const verdict =
+    confidence >= 0.7 && sharpness >= 0.7 ? 'CRYSTALLINE'
+    : confidence >= 0.7 ? 'CONFIDENT · SOFT'
+    : sharpness >= 0.7 ? 'SHARP · UNCERTAIN'
+    : confidence === 0 && sharpness === 0 ? 'AWAITING'
+    : 'DEVELOPING';
+
+  return (
+    <InstrumentTile
+      label="Signal coherence"
+      hint={`σ${sharpness.toFixed(2)} · c${confidence.toFixed(2)}`}
+      footer={verdict.toLowerCase()}
+    >
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        {/* Plot frame */}
+        <rect x={padL} y={padT} width={plotW} height={plotH} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
+        {/* Quadrant midlines */}
+        <line x1={padL + plotW / 2} y1={padT} x2={padL + plotW / 2} y2={padT + plotH} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
+        <line x1={padL} y1={padT + plotH / 2} x2={padL + plotW} y2={padT + plotH / 2} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
+        {/* Y-axis label (CONFIDENCE) */}
+        <text x={4} y={padT + plotH / 2} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST}
+          textAnchor="middle" transform={`rotate(-90 4 ${padT + plotH / 2})`}
+          style={{ letterSpacing: '0.1em' }}>CONF</text>
+        {/* X-axis label (SHARPNESS) */}
+        <text x={padL + plotW / 2} y={H - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST}
+          textAnchor="middle" style={{ letterSpacing: '0.1em' }}>SHARP</text>
+        {/* The point — small open circle if data is real, ghost mark if zero */}
+        {(sharpness > 0 || confidence > 0) ? (
+          <>
+            {/* Crosshair */}
+            <line x1={padL} y1={y} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={0.5} />
+            <line x1={x} y1={padT + plotH} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={0.5} />
+            <circle cx={x} cy={y} r={3} fill="none" stroke={INK} strokeWidth={1} />
+            <circle cx={x} cy={y} r={0.8} fill={INK} />
+          </>
+        ) : (
+          <text x={padL + plotW / 2} y={padT + plotH / 2 + 4} fontSize={9}
+            fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle">—</text>
+        )}
+      </svg>
+    </InstrumentTile>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SignalStrip — 4-up container for the instrument tiles
+   Renders as a single bordered band; tiles are separated by
+   internal hairlines.
+   ──────────────────────────────────────────────────────────── */
+
+export function SignalStrip({ children }: { children: ReactNode }) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      borderTop: `1px solid ${INK_HAIR}`,
+      borderBottom: `1px solid ${INK_HAIR}`,
+    }}>
+      {children}
     </div>
   );
 }

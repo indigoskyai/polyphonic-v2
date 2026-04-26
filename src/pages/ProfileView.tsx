@@ -8,6 +8,8 @@ import {
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
   BurstPlot, JourneyTimeline, RadialChart, TimelineHeatmap, DivergenceBar,
   EmptyState,
+  SectionEyebrow, SectionDivider,
+  SignalStrip, DiurnalRing, WeeklyMicroBars, ConfidencePulse, SignalCoherence,
 } from '@/components/profile/viz';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -33,11 +35,19 @@ type MemoryStats = {
   total: number;
   byType: Record<string, number>;
   avgConfidence: number;
+  avgSharpness: number;
   topTags: string[];
   topTagsWithCount: Array<{ tag: string; count: number; avgConfidence: number }>;
   arrivals: Array<{ at: string; magnitude: number }>;
   // Per-trait normalized scores (0-1) for blind-spot heuristic
   byTagNorm: Record<string, number>;
+  // Behavioral rhythm — derived from created_at (in user-local time)
+  hourBuckets: number[]; // length 24 — count of memories created at hour h
+  dowBuckets: number[]; // length 7 — Sun..Sat
+  // Claim health
+  confidenceTiers: { low: number; mid: number; high: number };
+  // Narrative thread distribution
+  topThreads: Array<{ thread: string; count: number }>;
 };
 
 type EmotionalState = {
@@ -165,7 +175,7 @@ export default function ProfileView() {
         .maybeSingle(),
       supabase
         .from('memories')
-        .select('memory_type, confidence, tags, created_at, narrative_thread, emotional_valence, emotional_intensity')
+        .select('memory_type, confidence, sharpness, tags, created_at, narrative_thread, emotional_valence, emotional_intensity')
         .eq('user_id', user.id)
         .eq('is_deleted', false)
         .order('created_at', { ascending: false })
@@ -192,18 +202,40 @@ export default function ProfileView() {
       const rows = memoriesRes.value.data as any[];
       const byType: Record<string, number> = {};
       let totalConf = 0;
+      let totalSharp = 0;
+      let sharpCount = 0;
       const tagCounts: Record<string, number> = {};
       const tagConf: Record<string, number> = {};
       const arrivals: Array<{ at: string; magnitude: number }> = [];
+      const hourBuckets = new Array<number>(24).fill(0);
+      const dowBuckets = new Array<number>(7).fill(0);
+      const confTiers = { low: 0, mid: 0, high: 0 };
+      const threadCounts: Record<string, number> = {};
       for (const m of rows) {
         byType[m.memory_type] = (byType[m.memory_type] || 0) + 1;
-        totalConf += m.confidence ?? 0;
+        const conf = m.confidence ?? 0;
+        totalConf += conf;
+        if (typeof m.sharpness === 'number') {
+          totalSharp += m.sharpness;
+          sharpCount += 1;
+        }
+        if (conf < 0.5) confTiers.low += 1;
+        else if (conf < 0.8) confTiers.mid += 1;
+        else confTiers.high += 1;
         if (m.tags) for (const t of (m.tags as string[])) {
           tagCounts[t] = (tagCounts[t] || 0) + 1;
-          tagConf[t] = (tagConf[t] || 0) + (m.confidence ?? 0);
+          tagConf[t] = (tagConf[t] || 0) + conf;
+        }
+        if (m.narrative_thread) {
+          threadCounts[m.narrative_thread] = (threadCounts[m.narrative_thread] || 0) + 1;
         }
         if (m.created_at) {
-          arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, m.confidence ?? 0.5) });
+          const dt = new Date(m.created_at);
+          if (!isNaN(dt.getTime())) {
+            hourBuckets[dt.getHours()] += 1;
+            dowBuckets[dt.getDay()] += 1;
+          }
+          arrivals.push({ at: m.created_at, magnitude: Math.max(0.1, conf || 0.5) });
         }
       }
       const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
@@ -215,15 +247,24 @@ export default function ProfileView() {
       const byTagNorm: Record<string, number> = Object.fromEntries(
         sortedTags.map(([t, c]) => [t.toLowerCase(), c / maxTagCount])
       );
+      const topThreads = Object.entries(threadCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([thread, count]) => ({ thread, count }));
 
       setMemoryStats({
         total: rows.length,
         byType,
         avgConfidence: rows.length ? totalConf / rows.length : 0,
+        avgSharpness: sharpCount ? totalSharp / sharpCount : 0,
         topTags,
         topTagsWithCount,
         arrivals,
         byTagNorm,
+        hourBuckets,
+        dowBuckets,
+        confidenceTiers: confTiers,
+        topThreads,
       });
     }
 
@@ -446,72 +487,230 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
       description: 'All passes integrate into the structured profile. Future versions will compare drift across regenerations.' },
   ];
 
+  // Build the psychological signature passport stripe
+  const bf = profile.personality_dimensions?.big_five;
+  const oceanReadout = bf
+    ? ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']
+        .map(k => {
+          const entry = bf[k];
+          const v = typeof entry === 'number' ? entry : entry?.score ?? null;
+          return v == null ? '——' : String(Math.round(v));
+        })
+        .join(' · ')
+    : null;
+  const attachmentLabel = profile.relational_dynamics?.attachment_style?.primary
+    ?? profile.personality_dimensions?.attachment_style?.primary;
+  const cognitiveStyle = profile.cognitive_tendencies?.thinking_style?.split(/[:.]/)[0]?.trim()
+    ?? profile.cognitive_tendencies?.style;
+
+  const signatureItems: Array<{ label: string; value: string }> = [];
+  if (oceanReadout) signatureItems.push({ label: 'OCEAN', value: oceanReadout });
+  if (attachmentLabel) signatureItems.push({ label: 'attachment', value: String(attachmentLabel).toLowerCase() });
+  if (cognitiveStyle) signatureItems.push({ label: 'cognition', value: String(cognitiveStyle).toLowerCase() });
+  signatureItems.push({ label: 'profile', value: `v${profile.version ?? 1}` });
+
+  // Pre-compute signal-strip stat values (graceful for sparse data)
+  const hourBuckets = memoryStats?.hourBuckets ?? new Array(24).fill(0);
+  const dowBuckets = memoryStats?.dowBuckets ?? new Array(7).fill(0);
+  const confTiers = memoryStats?.confidenceTiers ?? { low: 0, mid: 0, high: 0 };
+  const sharpness = memoryStats?.avgSharpness ?? 0;
+  const confidence = memoryStats?.avgConfidence ?? 0;
+
   return (
     <div>
-      {/* Frontispiece — Sigil paired with Identity Portrait */}
-      {(profile.identity_narrative || profile.personality_dimensions?.big_five) && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(320px, 360px) 1fr',
-          gap: 48,
-          alignItems: 'flex-start',
-          padding: '40px 0 32px',
-          borderBottom: '1px solid rgba(244, 243, 240, 0.06)',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <Sigil
-              bigFive={profile.personality_dimensions?.big_five}
-              byType={memoryStats?.byType}
-              size={320}
-              showLabels={true}
-            />
-            <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.32)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', textAlign: 'center', maxWidth: 280, lineHeight: 1.6 }}>
-              Personality signature<br />
-              <span style={{ opacity: 0.7 }}>Big Five projected on pentagon · outer ticks = memory categories</span>
+      {/* ────────── § I. SIGNATURE — Frontispiece ────────── */}
+      {(profile.identity_narrative || bf) && (
+        <div style={{ paddingTop: 8 }}>
+          <SectionEyebrow
+            index="§ I"
+            label="Signature"
+            hint={profile.updated_at ? `synthesized ${new Date(profile.updated_at).toLocaleDateString()}` : undefined}
+          />
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(360px, 420px) 1fr',
+            gap: 56,
+            alignItems: 'flex-start',
+            paddingTop: 8,
+            paddingBottom: 28,
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <Sigil
+                bigFive={bf}
+                byType={memoryStats?.byType}
+                size={380}
+                showLabels={true}
+              />
+              <div style={{
+                fontSize: 9, color: 'rgba(244, 243, 240, 0.32)',
+                fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+                textTransform: 'uppercase', textAlign: 'center',
+                maxWidth: 320, lineHeight: 1.7,
+              }}>
+                Personality sigil<br />
+                <span style={{ opacity: 0.65, letterSpacing: '0.12em' }}>
+                  Big Five vertices · outer ticks encode memory taxonomy
+                </span>
+              </div>
+            </div>
+            <div style={{ paddingTop: 12 }}>
+              <div style={{
+                fontSize: 9, color: 'rgba(244, 243, 240, 0.5)',
+                fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+                textTransform: 'uppercase', marginBottom: 18,
+              }}>
+                Identity Portrait
+              </div>
+              {profile.identity_narrative ? (
+                <p style={{
+                  fontSize: 15, color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-serif)', fontStyle: 'italic',
+                  lineHeight: 1.85, margin: 0, letterSpacing: '0.005em',
+                }}>
+                  "{profile.identity_narrative}"
+                </p>
+              ) : (
+                <p style={{
+                  fontSize: 12, color: 'rgba(244, 243, 240, 0.4)',
+                  fontStyle: 'italic', fontFamily: 'var(--font-serif)',
+                }}>
+                  Identity portrait pending — generate to render the narrative.
+                </p>
+              )}
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 14 }}>
-              Identity Portrait
+          {/* Passport stripe */}
+          {signatureItems.length > 0 && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', alignItems: 'baseline',
+              gap: 28, padding: '14px 0',
+              borderTop: '1px solid rgba(244, 243, 240, 0.10)',
+              borderBottom: '1px solid rgba(244, 243, 240, 0.10)',
+            }}>
+              {signatureItems.map((it, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{
+                    fontSize: 9, color: 'rgba(244, 243, 240, 0.32)',
+                    fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                  }}>{it.label}</span>
+                  <span style={{
+                    fontSize: 11, color: 'rgba(244, 243, 240, 0.85)',
+                    fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                  }}>{it.value}</span>
+                </div>
+              ))}
             </div>
-            {profile.identity_narrative ? (
-              <p style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.85, margin: 0, letterSpacing: '0.005em' }}>
-                "{profile.identity_narrative}"
-              </p>
-            ) : (
-              <p style={{ fontSize: 12, color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'italic' }}>
-                Identity portrait pending — generate to render the narrative.
-              </p>
-            )}
-          </div>
+          )}
         </div>
       )}
 
-      {/* Memory Distribution as bar code */}
-      {memoryTypeData.length > 0 && (
-        <PlateSection label="Memory distribution" count={memoryStats?.total}>
-          <MagnitudeBars data={memoryTypeData} height={88} />
-        </PlateSection>
+      <SectionDivider />
+
+      {/* ────────── § II. SIGNAL — Behavioral rhythm ────────── */}
+      <SectionEyebrow
+        index="§ II"
+        label="Signal"
+        lede="Behavioral rhythm derived from memory arrival timestamps and claim-health metrics. The instruments fill in as more conversation history is imported."
+      />
+      <SignalStrip>
+        <DiurnalRing buckets={hourBuckets} />
+        <WeeklyMicroBars buckets={dowBuckets} />
+        <ConfidencePulse tiers={confTiers} />
+        <SignalCoherence sharpness={sharpness} confidence={confidence} />
+      </SignalStrip>
+
+      <SectionDivider />
+
+      {/* ────────── § III. COMPOSITION — Memory taxonomy + themes ────────── */}
+      <SectionEyebrow
+        index="§ III"
+        label="Composition"
+        lede="What the memory corpus is made of, and the themes that recur across it."
+      />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(320px, 1fr) minmax(360px, 1.2fr)',
+        gap: 56,
+        paddingTop: 8,
+        paddingBottom: 8,
+      }}>
+        <div>
+          <div style={{
+            fontSize: 9, color: 'rgba(244, 243, 240, 0.45)',
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.16em',
+            textTransform: 'uppercase', marginBottom: 18,
+          }}>
+            Memory distribution {memoryStats?.total ? `· ${memoryStats.total}` : ''}
+          </div>
+          {memoryTypeData.length > 0 ? (
+            <MagnitudeBars data={memoryTypeData} height={96} />
+          ) : (
+            <EmptyState note="No memory taxonomy yet" height={96} />
+          )}
+        </div>
+        <div>
+          <div style={{
+            fontSize: 9, color: 'rgba(244, 243, 240, 0.45)',
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.16em',
+            textTransform: 'uppercase', marginBottom: 18,
+          }}>
+            Recurring themes {memoryStats?.topTags?.length ? `· ${memoryStats.topTags.length}` : ''}
+          </div>
+          {memoryStats && memoryStats.topTags.length > 0 ? (
+            <ConstellationCloud items={memoryStats.topTags} />
+          ) : (
+            <EmptyState note="Themes will surface as memories accumulate" height={96} />
+          )}
+        </div>
+      </div>
+
+      <SectionDivider />
+
+      {/* ────────── § IV. TEMPORAL — Memory arrivals over time ────────── */}
+      <SectionEyebrow
+        index="§ IV"
+        label="Temporal"
+        lede="When memories were captured. Hairline height encodes confidence at the moment of capture."
+      />
+      {memoryStats && memoryStats.arrivals.length > 0 ? (
+        <BurstPlot events={memoryStats.arrivals} height={120} label="Memory arrivals" />
+      ) : (
+        <EmptyState note="Awaiting memory arrival history" height={120} />
       )}
 
-      {/* Recurring themes — constellation cloud */}
-      {memoryStats && memoryStats.topTags.length > 0 && (
-        <PlateSection label="Recurring themes" count={memoryStats.topTags.length}>
-          <ConstellationCloud items={memoryStats.topTags} />
-        </PlateSection>
-      )}
+      <SectionDivider />
 
-      {/* Memory arrival velocity — burst plot */}
-      {memoryStats && memoryStats.arrivals.length > 0 && (
-        <PlateSection label="Memory arrivals" count={memoryStats.arrivals.length}>
-          <BurstPlot events={memoryStats.arrivals} height={110} label="Memory arrivals" />
-        </PlateSection>
-      )}
-
-      {/* Analysis journey — 7-phase pipeline timeline */}
-      <PlateSection label="Analysis journey">
+      {/* ────────── § V. PROVENANCE — Analysis pipeline ────────── */}
+      <SectionEyebrow
+        index="§ V"
+        label="Provenance"
+        lede="The five-pass analysis pipeline that produced the profile above. Click a phase to see what it observed."
+      />
+      <div style={{ paddingTop: 8 }}>
         <JourneyTimeline phases={phases} activeIndex={activePhase} onSelect={setActivePhase} />
-      </PlateSection>
+      </div>
+
+      {/* Page numbering — colophon */}
+      <div style={{
+        marginTop: 36, paddingTop: 16,
+        borderTop: '1px solid rgba(244, 243, 240, 0.06)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      }}>
+        <span style={{
+          fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
+          fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+        }}>
+          Portrait · 01 / 09
+        </span>
+        <span style={{
+          fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
+          fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
+        }}>
+          polyphonic · psych. profile
+        </span>
+      </div>
     </div>
   );
 }
