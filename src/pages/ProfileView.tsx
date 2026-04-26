@@ -11,6 +11,7 @@ import {
   SectionEyebrow, SectionDivider, TabColophon,
   SignalStrip, DiurnalRing, WeeklyMicroBars, ConfidencePulse, SignalCoherence,
   ValenceTrajectory, ThreadArcs,
+  MEMORY_TYPE_COLOR,
 } from '@/components/profile/viz';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -690,7 +691,7 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
             Memory distribution {memoryStats?.total ? `· ${memoryStats.total}` : ''}
           </div>
           {memoryTypeData.length > 0 ? (
-            <MagnitudeBars data={memoryTypeData} height={96} />
+            <MagnitudeBars data={memoryTypeData} height={96} colorByLabel />
           ) : (
             <EmptyState note="No memory taxonomy yet" height={96} />
           )}
@@ -707,6 +708,7 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
             <ConstellationCloud
               items={memoryStats.topTagsWithCount.map(t => ({ label: t.tag, count: t.count }))}
               showCounts
+              accent="warm"
             />
           ) : (
             <EmptyState note="Themes will surface as memories accumulate" height={96} />
@@ -1016,7 +1018,7 @@ function EmotionsTab({ data, emotionalSeries, memoryStats }: { data: any; emotio
               <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.45)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 14 }}>
                 Last {Math.min(HISTORY_DAYS, emotionalSeries?.history.length ?? 0)} entries
               </div>
-              <TimelineHeatmap rows={heatmapRows} days={HISTORY_DAYS} height={180} />
+              <TimelineHeatmap rows={heatmapRows} days={HISTORY_DAYS} height={180} tone="affective" />
             </div>
           </div>
         </>
@@ -1066,7 +1068,7 @@ function EmotionsTab({ data, emotionalSeries, memoryStats }: { data: any; emotio
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Triggers · {data.triggers.length}
                 </div>
-                <ConstellationCloud items={data.triggers} />
+                <ConstellationCloud items={data.triggers} accent="cool" />
               </div>
             )}
             {data?.coping_mechanisms?.length > 0 && (
@@ -1074,7 +1076,7 @@ function EmotionsTab({ data, emotionalSeries, memoryStats }: { data: any; emotio
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Coping mechanisms · {data.coping_mechanisms.length}
                 </div>
-                <ConstellationCloud items={data.coping_mechanisms} />
+                <ConstellationCloud items={data.coping_mechanisms} accent="warm" />
               </div>
             )}
           </div>
@@ -1271,11 +1273,26 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
               const ordered = Object.entries(memoryStats.byTypeHour)
                 .map(([type, vals]) => ({ type, vals, total: vals.reduce((a, b) => a + b, 0) }))
                 .sort((a, b) => b.total - a.total);
-              const heatmapRows = ordered.map(o => ({
-                label: o.type,
-                values: o.vals,
-              }));
-              return <TimelineHeatmap rows={heatmapRows} days={24} height={Math.max(150, ordered.length * 22)} normalize="row" />;
+              // Map each row to its memory_type palette color (RGB-only string for the cell base)
+              const heatmapRows = ordered.map(o => {
+                const palette = MEMORY_TYPE_COLOR[o.type.toLowerCase()];
+                // Extract "R, G, B" from the rgba(...) string
+                const rgbMatch = palette?.hue.match(/rgba?\(([^,]+,[^,]+,[^,)]+)/);
+                return {
+                  label: o.type,
+                  values: o.vals,
+                  color: rgbMatch ? rgbMatch[1].trim() : undefined,
+                };
+              });
+              return (
+                <TimelineHeatmap
+                  rows={heatmapRows}
+                  days={24}
+                  height={Math.max(150, ordered.length * 22)}
+                  normalize="row"
+                  columnLabel={(h) => `${String(h).padStart(2, '0')}:00`}
+                />
+              );
             })()}
             {/* Hour-axis labels — 0/6/12/18 */}
             <div style={{
@@ -1320,7 +1337,7 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Cognitive biases · {data.biases.length}
                 </div>
-                <ConstellationCloud items={data.biases} />
+                <ConstellationCloud items={data.biases} accent="cool" />
               </div>
             )}
             {data.defense_mechanisms?.length > 0 && (
@@ -1328,7 +1345,7 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Defense mechanisms · {data.defense_mechanisms.length}
                 </div>
-                <ConstellationCloud items={data.defense_mechanisms} />
+                <ConstellationCloud items={data.defense_mechanisms} accent="warm" />
               </div>
             )}
           </div>
@@ -1455,7 +1472,7 @@ function ShadowTab({ data, memoryStats, valuesData }: {
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Avoidance · {data.avoidance_patterns.length}
                 </div>
-                <ConstellationCloud items={data.avoidance_patterns} weighted={false} />
+                <ConstellationCloud items={data.avoidance_patterns} weighted={false} accent="cool" />
               </div>
             )}
             {data.compensatory_behaviors?.length > 0 && (
@@ -1463,7 +1480,7 @@ function ShadowTab({ data, memoryStats, valuesData }: {
                 <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
                   Compensatory · {data.compensatory_behaviors.length}
                 </div>
-                <ConstellationCloud items={data.compensatory_behaviors} weighted={false} />
+                <ConstellationCloud items={data.compensatory_behaviors} weighted={false} accent="warm" />
               </div>
             )}
           </div>

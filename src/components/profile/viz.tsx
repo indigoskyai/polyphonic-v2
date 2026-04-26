@@ -124,6 +124,10 @@ export function Sigil({ bigFive, byType, size = 320, showLabels = false }: {
 
   const polygon = traits.map((t, i) => (i === 0 ? `M${t.x},${t.y}` : `L${t.x},${t.y}`)).join(' ') + ' Z';
 
+  // Identify the dominant trait (highest score) — its vertex gets a subtle amber accent
+  const dominantIdx = traits.reduce((bestIdx, t, i) => t.score > traits[bestIdx].score ? i : bestIdx, 0);
+  const submissiveIdx = traits.reduce((worstIdx, t, i) => t.score < traits[worstIdx].score ? i : worstIdx, 0);
+
   const ticks = useMemo(() => {
     if (!byType) return [];
     const entries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
@@ -132,8 +136,10 @@ export function Sigil({ bigFive, byType, size = 320, showLabels = false }: {
     return entries.map(([t, c], i, arr) => {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / arr.length;
       const len = 2 + (c / max) * 12;
+      const palette = MEMORY_TYPE_COLOR[t.toLowerCase()];
       return {
         type: t,
+        color: palette?.hue ?? INK_SOFT,
         x1: cx + Math.cos(angle) * (outerRadius + 4), y1: cy + Math.sin(angle) * (outerRadius + 4),
         x2: cx + Math.cos(angle) * (outerRadius + 4 + len), y2: cy + Math.sin(angle) * (outerRadius + 4 + len),
       };
@@ -146,12 +152,41 @@ export function Sigil({ bigFive, byType, size = 320, showLabels = false }: {
         <circle key={s} cx={cx} cy={cy} r={innerRadius + (outerRadius - innerRadius) * s} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
       ))}
       {traits.map(t => <line key={`spoke-${t.key}`} x1={cx} y1={cy} x2={t.spokeX} y2={t.spokeY} stroke={INK_FAINT} strokeWidth={0.5} />)}
-      <path d={polygon} fill="rgba(244, 240, 232, 0.045)" stroke={INK} strokeWidth={1} strokeLinejoin="round" />
-      {traits.map(t => <circle key={`v-${t.key}`} cx={t.x} cy={t.y} r={2} fill={INK} />)}
-      {showLabels && traits.map(t => (
-        <text key={`l-${t.key}`} x={t.labelX} y={t.labelY} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} textAnchor="middle" dominantBaseline="middle" style={{ letterSpacing: '0.1em' }}>{t.initial}</text>
+      {/* Subtle amber fill for the polygon — gives the sigil a center of warmth */}
+      <path d={polygon} fill="rgba(228, 178, 98, 0.06)" stroke={INK} strokeWidth={1} strokeLinejoin="round" />
+      {/* Trait vertices — dominant is amber, submissive is cobalt, others cream */}
+      {traits.map((t, i) => {
+        const isDominant = i === dominantIdx;
+        const isSubmissive = i === submissiveIdx && t.score <= 30;
+        const fill = isDominant ? 'rgba(228, 178, 98, 0.95)'
+                   : isSubmissive ? 'rgba(135, 165, 200, 0.95)'
+                   : INK;
+        return (
+          <g key={`v-${t.key}`}>
+            {isDominant && (
+              <circle cx={t.x} cy={t.y} r={5}
+                fill="none" stroke="rgba(228, 178, 98, 0.25)" strokeWidth={1} />
+            )}
+            <circle cx={t.x} cy={t.y} r={isDominant ? 2.6 : 2} fill={fill} />
+          </g>
+        );
+      })}
+      {showLabels && traits.map((t, i) => {
+        const isDominant = i === dominantIdx;
+        return (
+          <text key={`l-${t.key}`} x={t.labelX} y={t.labelY}
+            fontSize={9} fontFamily="var(--font-mono)"
+            fill={isDominant ? 'rgba(228, 178, 98, 0.9)' : INK_SOFT}
+            textAnchor="middle" dominantBaseline="middle"
+            style={{ letterSpacing: '0.1em' }}>{t.initial}</text>
+        );
+      })}
+      {/* Outer ticks colored by memory_type — gives the sigil a hint of the corpus */}
+      {ticks.map((tk, i) => (
+        <line key={`tk-${i}`}
+          x1={tk.x1} y1={tk.y1} x2={tk.x2} y2={tk.y2}
+          stroke={tk.color} strokeWidth={0.85} strokeLinecap="round" />
       ))}
-      {ticks.map((tk, i) => <line key={`tk-${i}`} x1={tk.x1} y1={tk.y1} x2={tk.x2} y2={tk.y2} stroke={INK_SOFT} strokeWidth={0.75} strokeLinecap="round" />)}
       <circle cx={cx} cy={cy} r={4} fill="none" stroke={INK_GHOST} strokeWidth={0.5} />
       <circle cx={cx} cy={cy} r={1.5} fill={INK_SOFT} />
     </svg>
@@ -184,16 +219,42 @@ export function TraitTrace({ label, value, max = 100, evidence }: {
 
   const markerX = pct * w;
 
+  // Score band — extreme high (>=80), extreme low (<=20), mid (else).
+  // Extremes pick up palette colors so the trait silhouette across Big Five
+  // becomes legible as a constellation of warm/cool/neutral markers.
+  const isHigh = value >= 80;
+  const isLow = value <= 20;
+  const markerColor = isHigh
+    ? 'rgba(228, 178, 98, 0.95)'   // amber — extreme high
+    : isLow
+      ? 'rgba(135, 165, 200, 0.95)' // cobalt — extreme low
+      : INK;                         // cream — mid range
+  const valueColor = isHigh || isLow ? markerColor : INK;
+
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
         <span style={{ fontSize: 11, color: INK_SOFT, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', minWidth: 130 }}>
           {label.replace(/_/g, ' ')}
         </span>
-        <span style={{ fontSize: 22, fontWeight: 300, color: INK, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+        <span style={{
+          fontSize: 22, fontWeight: 300, color: valueColor,
+          fontFamily: 'var(--font-mono)', lineHeight: 1,
+          transition: 'color 200ms ease',
+        }}>
           {value}
         </span>
         <span style={{ fontSize: 10, color: INK_GHOST, fontFamily: 'var(--font-mono)' }}>/{max}</span>
+        {(isHigh || isLow) && (
+          <span style={{
+            fontSize: 8, color: markerColor,
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            marginLeft: 4,
+          }}>
+            {isHigh ? '· extreme high' : '· extreme low'}
+          </span>
+        )}
       </div>
       <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', marginBottom: 8 }}>
         {/* Tick marks at quartiles */}
@@ -204,9 +265,9 @@ export function TraitTrace({ label, value, max = 100, evidence }: {
         <path d={bell} stroke={INK_HAIR} strokeWidth={0.75} fill="none" />
         {/* Baseline */}
         <line x1={0} y1={h - 4} x2={w} y2={h - 4} stroke={INK_HAIR} strokeWidth={0.5} />
-        {/* Marker — vertical hairline + dot */}
-        <line x1={markerX} y1={6} x2={markerX} y2={h - 4} stroke={INK} strokeWidth={1} />
-        <circle cx={markerX} cy={h - 4} r={3} fill={INK} />
+        {/* Marker — vertical hairline + dot, colored by score band */}
+        <line x1={markerX} y1={6} x2={markerX} y2={h - 4} stroke={markerColor} strokeWidth={1} />
+        <circle cx={markerX} cy={h - 4} r={3.5} fill={markerColor} />
       </svg>
       {evidence && (
         <p style={{
@@ -233,22 +294,40 @@ export function InsightPlate({ label, text, prominence = 'normal' }: {
 }) {
   const trimmed = (text ?? '').trim();
   if (!trimmed) return null;
+  const isLead = prominence === 'lead';
   return (
     <div style={{
-      padding: prominence === 'lead' ? '20px 20px' : '14px 20px',
+      position: 'relative',
+      padding: isLead ? '20px 20px' : '14px 20px',
       borderTop: `1px solid ${INK_HAIR}`,
       display: 'grid',
       gridTemplateColumns: '160px 1fr',
       gap: 24,
       alignItems: 'baseline',
     }}>
-      <span style={{ fontSize: 10, color: INK_SOFT, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+      {/* Lead variant gets a subtle amber left-edge accent to mark prominence */}
+      {isLead && (
+        <span style={{
+          position: 'absolute',
+          left: 0, top: 16, bottom: 16,
+          width: 1.5,
+          background: 'rgba(228, 178, 98, 0.55)',
+          pointerEvents: 'none',
+        }} />
+      )}
+      <span style={{
+        fontSize: 10,
+        color: isLead ? 'rgba(228, 178, 98, 0.85)' : INK_SOFT,
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+      }}>
         {label}
       </span>
       <p style={{
-        fontSize: prominence === 'lead' ? 14 : 12.5,
+        fontSize: isLead ? 14 : 12.5,
         fontFamily: 'var(--font-sans)',
-        color: prominence === 'lead' ? 'var(--text-primary)' : 'var(--text-body)',
+        color: isLead ? 'var(--text-primary)' : 'var(--text-body)',
         lineHeight: 1.7,
         margin: 0,
       }}>
@@ -312,20 +391,37 @@ export function RankedList({ items }: {
    ConstellationCloud — weighted tag cloud for themes/triggers/biases
    ──────────────────────────────────────────────────────────── */
 
-export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, minFontSize = 10, showCounts = false }: {
+export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, minFontSize = 10, showCounts = false, accent = 'cream' }: {
   items: Array<string | { label: string; count: number }>;
   weighted?: boolean; maxFontSize?: number; minFontSize?: number; showCounts?: boolean;
+  /** 'cream' (default) — top items brightest in cream, fading by rank
+   *  'warm' — top items pick up amber, fading toward cream by rank
+   *  'cool' — top items pick up cobalt, fading toward cream by rank
+   */
+  accent?: 'cream' | 'warm' | 'cool';
 }) {
   // Normalize to {label, count?}
   const normalized = items.map(it => typeof it === 'string' ? { label: it, count: undefined as number | undefined } : it);
   // For short lists (1-2 items), don't render the most prominent item huge — clamp range tightly.
   const span = normalized.length <= 3 ? Math.min(2, maxFontSize - minFontSize) : maxFontSize - minFontSize;
-  // Weight by reverse rank (first items are heavier — assumes pre-sorted by frequency)
+
+  // Accent-color top item, blend toward cream as rank descends. Subtle — color whispers, doesn't shout.
+  const accentRgb = accent === 'warm' ? [228, 178, 98]   // amber
+                  : accent === 'cool' ? [135, 165, 200]  // cobalt
+                  : [244, 243, 240];                     // cream
+  const creamRgb = [244, 243, 240];
+
   const sized = normalized.map((it, i) => {
     const rank = normalized.length > 1 ? i / (normalized.length - 1) : 0;
     const fontSize = minFontSize + (weighted ? (1 - rank) * span : span * 0.5);
     const opacity = weighted ? 0.4 + (1 - rank) * 0.5 : 0.7;
-    return { ...it, fontSize, opacity };
+    // Mix accent → cream by rank
+    const t = rank; // 0 at top, 1 at bottom
+    const r = Math.round(accentRgb[0] * (1 - t) + creamRgb[0] * t);
+    const g = Math.round(accentRgb[1] * (1 - t) + creamRgb[1] * t);
+    const b = Math.round(accentRgb[2] * (1 - t) + creamRgb[2] * t);
+    const color = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    return { ...it, fontSize, opacity, color };
   });
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 18px', padding: '4px 0' }}>
@@ -333,12 +429,13 @@ export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, m
         <span key={i} style={{
           display: 'inline-flex', alignItems: 'baseline', gap: 5,
           lineHeight: 1.4,
+          transition: 'color 200ms ease',
         }}>
           <span style={{
             fontSize: s.fontSize,
             fontFamily: 'var(--font-serif)',
             fontStyle: 'italic',
-            color: `rgba(244, 243, 240, ${s.opacity})`,
+            color: s.color,
             letterSpacing: '0.005em',
           }}>
             {s.label}
@@ -414,33 +511,96 @@ export function PhaseDiagram({ xLabel, yLabel, xValue, yValue, regions, point, s
    MagnitudeBars — vertical bar code for category distributions
    ──────────────────────────────────────────────────────────── */
 
-export function MagnitudeBars({ data, height = 80 }: {
-  data: Array<{ label: string; value: number }>; height?: number;
+export function MagnitudeBars({ data, height = 80, colorByLabel = false }: {
+  data: Array<{ label: string; value: number }>;
+  height?: number;
+  /** When true, each bar is colored using MEMORY_TYPE_COLOR keyed by label (lowercased). */
+  colorByLabel?: boolean;
 }) {
   const max = Math.max(...data.map(d => d.value), 1);
+  const total = data.reduce((a, d) => a + d.value, 0);
+  const [hover, setHover] = useState<number | null>(null);
   return (
-    <div>
+    <div style={{ position: 'relative' }} onMouseLeave={() => setHover(null)}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, padding: '4px 0', borderBottom: `1px solid ${INK_HAIR}` }}>
-        {data.map((d, i) => (
-          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-            <span style={{ fontSize: 10, color: INK_GHOST, fontFamily: 'var(--font-mono)', marginBottom: 4 }}>{d.value}</span>
-            <div style={{
-              width: '100%', maxWidth: 32,
-              height: `${(d.value / max) * 70}%`,
-              background: 'rgba(244, 240, 232, 0.5)',
-              borderRadius: 1,
-              minHeight: 1,
-            }} />
-          </div>
-        ))}
+        {data.map((d, i) => {
+          const palette = colorByLabel ? MEMORY_TYPE_COLOR[d.label.toLowerCase()] : undefined;
+          const baseColor = palette?.hue ?? 'rgba(244, 240, 232, 0.5)';
+          const dimColor = palette?.dim ?? 'rgba(244, 240, 232, 0.18)';
+          const isOther = hover !== null && hover !== i;
+          return (
+            <div key={i}
+              style={{
+                flex: 1, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'flex-end',
+                height: '100%', cursor: 'default',
+                transition: 'opacity 200ms ease',
+              }}
+              onMouseEnter={() => setHover(i)}
+            >
+              <span style={{
+                fontSize: 10, color: isOther ? 'rgba(244, 243, 240, 0.18)' : INK_GHOST,
+                fontFamily: 'var(--font-mono)', marginBottom: 4,
+                transition: 'color 200ms ease',
+              }}>
+                {d.value}
+              </span>
+              <div style={{
+                width: '100%', maxWidth: 32,
+                height: `${(d.value / max) * 70}%`,
+                background: isOther ? dimColor : baseColor,
+                borderRadius: 1,
+                minHeight: 1,
+                transition: 'background 200ms ease',
+              }} />
+            </div>
+          );
+        })}
       </div>
       <div style={{ display: 'flex', gap: 6, padding: '6px 0' }}>
-        {data.map((d, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: INK_SOFT, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            {d.label}
-          </div>
-        ))}
+        {data.map((d, i) => {
+          const isOther = hover !== null && hover !== i;
+          return (
+            <div key={i} style={{
+              flex: 1, textAlign: 'center', fontSize: 9,
+              color: isOther ? 'rgba(244, 243, 240, 0.22)' : INK_SOFT,
+              fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              transition: 'color 200ms ease',
+            }}>
+              {d.label}
+            </div>
+          );
+        })}
       </div>
+      {/* Inline tooltip — shows percentage + memory type when hovered */}
+      {hover !== null && (() => {
+        const d = data[hover];
+        const pct = total > 0 ? (d.value / total) * 100 : 0;
+        const palette = colorByLabel ? MEMORY_TYPE_COLOR[d.label.toLowerCase()] : undefined;
+        return (
+          <div style={{
+            marginTop: 8, padding: '6px 10px',
+            borderTop: `1px solid ${INK_HAIR}`,
+            display: 'flex', alignItems: 'baseline', gap: 12,
+            fontSize: 10, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.06em',
+          }}>
+            <span style={{
+              display: 'inline-block', width: 8, height: 1.5,
+              background: palette?.hue ?? INK,
+            }} />
+            <span style={{
+              color: palette?.hue ?? INK,
+              textTransform: 'uppercase', letterSpacing: '0.12em',
+            }}>
+              {d.label}
+            </span>
+            <span style={{ color: INK_SOFT }}>{d.value} memories</span>
+            <span style={{ color: INK_GHOST }}>{pct.toFixed(1)}% of corpus</span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -943,14 +1103,25 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
    Rows = dimensions (e.g. emotional axes); columns = days.
    ──────────────────────────────────────────────────────────── */
 
-export function TimelineHeatmap({ rows, days, height = 150, normalize = 'row' }: {
-  /** rows[i] = { label, values: number[] } where values.length === days */
-  rows: Array<{ label: string; values: Array<number | null | undefined> }>;
+export function TimelineHeatmap({ rows, days, height = 150, normalize = 'row', tone = 'cream', columnLabel }: {
+  /** rows[i] = { label, values: number[], color?: 'R, G, B' overrides cell fill base } */
+  rows: Array<{ label: string; values: Array<number | null | undefined>; color?: string }>;
   days: number;
   height?: number;
   /** 'row' = normalize per row; 'global' = single max across all */
   normalize?: 'row' | 'global';
+  /** When a row has no `color` override, this picks the two-tone palette.
+   * 'cream' (default) — original warm/cool cream variants for affective data
+   * 'affective' — sage (positive) / cobalt (negative)
+   */
+  tone?: 'cream' | 'affective';
+  /** Optional formatter for column index → label (for tooltip). Defaults to "j". */
+  columnLabel?: (j: number) => string;
 }) {
+  const [hover, setHover] = useState<{
+    rowI: number; colJ: number; v: number; x: number; y: number;
+  } | null>(null);
+
   if (!rows?.length || !days) {
     return <EmptyState note="Insufficient history yet" height={height} />;
   }
@@ -964,44 +1135,100 @@ export function TimelineHeatmap({ rows, days, height = 150, normalize = 'row' }:
   const cellH = Math.max(8, (height - rows.length * 2) / rows.length);
   const W = 1000;
   const cellW = (W - labelWidth) / days;
+  const totalH = rows.length * (cellH + 2) + 20;
+
+  // Default two-tone palette (when row.color is absent)
+  const positiveBase = tone === 'affective' ? '143, 175, 137' : '244, 240, 232';
+  const negativeBase = tone === 'affective' ? '135, 165, 200' : '194, 192, 188';
 
   return (
-    <svg width="100%" height={rows.length * (cellH + 2) + 20} viewBox={`0 0 ${W} ${rows.length * (cellH + 2) + 20}`}
-      preserveAspectRatio="none" style={{ display: 'block' }}>
-      {rows.map((row, i) => {
-        const rowMax = normalize === 'row' ? maxByRow[i] : globalMax;
-        const yTop = i * (cellH + 2);
+    <div style={{ position: 'relative' }}>
+      <svg width="100%" height={totalH} viewBox={`0 0 ${W} ${totalH}`}
+        preserveAspectRatio="none" style={{ display: 'block' }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {rows.map((row, i) => {
+          const rowMax = normalize === 'row' ? maxByRow[i] : globalMax;
+          const yTop = i * (cellH + 2);
+          const isOther = hover !== null && hover.rowI !== i;
+          const labelOpacity = isOther ? 0.35 : 1;
+          return (
+            <g key={row.label} style={{ transition: 'opacity 200ms ease' }}>
+              {/* Row label */}
+              <text x={labelWidth - 8} y={yTop + cellH / 2} fontSize={9}
+                fontFamily="var(--font-mono)" fill={INK_SOFT}
+                opacity={labelOpacity}
+                textAnchor="end" dominantBaseline="middle"
+                style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {row.label}
+              </text>
+              {/* Cells */}
+              {row.values.slice(0, days).map((v, j) => {
+                if (v == null) {
+                  return <rect key={j} x={labelWidth + j * cellW} y={yTop}
+                    width={Math.max(1, cellW - 0.5)} height={cellH}
+                    fill="none" stroke={INK_FAINT} strokeWidth={0.25}
+                    opacity={isOther ? 0.4 : 1} />;
+                }
+                const norm = Math.min(1, Math.abs(v) / rowMax);
+                const isNegative = v < 0;
+                const fillBase = row.color ?? (isNegative ? negativeBase : positiveBase);
+                const alpha = 0.06 + norm * 0.62;
+                const dimMul = isOther ? 0.35 : 1;
+                return (
+                  <rect key={j}
+                    x={labelWidth + j * cellW} y={yTop}
+                    width={Math.max(1, cellW - 0.5)} height={cellH}
+                    fill={`rgba(${fillBase}, ${(alpha * dimMul).toFixed(3)})`}
+                    stroke={INK_FAINT} strokeWidth={0.25}
+                    onMouseEnter={(e) => {
+                      const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                      const cx = labelWidth + j * cellW + cellW / 2;
+                      const cy = yTop + cellH / 2;
+                      setHover({
+                        rowI: i, colJ: j, v,
+                        x: ((cx / W) * r.width) + r.left,
+                        y: r.top + (cy / totalH) * r.height,
+                      });
+                    }}
+                    style={{ transition: 'fill 200ms ease' }}
+                  />
+                );
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      {hover && (() => {
+        const row = rows[hover.rowI];
+        const labelText = columnLabel ? columnLabel(hover.colJ) : `${hover.colJ}`;
         return (
-          <g key={row.label}>
-            {/* Row label */}
-            <text x={labelWidth - 8} y={yTop + cellH / 2} fontSize={9}
-              fontFamily="var(--font-mono)" fill={INK_SOFT}
-              textAnchor="end" dominantBaseline="middle"
-              style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <div
+            style={{
+              position: 'fixed',
+              left: hover.x + 8,
+              top: hover.y - 30,
+              pointerEvents: 'none',
+              padding: '5px 9px',
+              background: 'rgba(20, 20, 22, 0.94)',
+              border: `1px solid ${INK_HAIR}`,
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              color: INK,
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+              zIndex: 50,
+            }}
+          >
+            <span style={{ color: row.color ? `rgb(${row.color})` : INK_SOFT, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {row.label}
-            </text>
-            {/* Cells */}
-            {row.values.slice(0, days).map((v, j) => {
-              if (v == null) {
-                return <rect key={j} x={labelWidth + j * cellW} y={yTop}
-                  width={Math.max(1, cellW - 0.5)} height={cellH}
-                  fill="none" stroke={INK_FAINT} strokeWidth={0.25} />;
-              }
-              const norm = Math.min(1, Math.abs(v) / rowMax);
-              // Two-tone — negative values get a slightly cooler tint, positive warmer; both stay cream-family
-              const isNegative = v < 0;
-              const fillBase = isNegative ? '194, 192, 188' : '244, 240, 232';
-              const alpha = 0.04 + norm * 0.55;
-              return <rect key={j}
-                x={labelWidth + j * cellW} y={yTop}
-                width={Math.max(1, cellW - 0.5)} height={cellH}
-                fill={`rgba(${fillBase}, ${alpha.toFixed(3)})`}
-                stroke={INK_FAINT} strokeWidth={0.25} />;
-            })}
-          </g>
+            </span>
+            {' · '}<span style={{ color: INK_GHOST }}>{labelText}</span>
+            {' · '}<span>{typeof hover.v === 'number' ? (Number.isInteger(hover.v) ? hover.v : hover.v.toFixed(2)) : hover.v}</span>
+          </div>
         );
-      })}
-    </svg>
+      })()}
+    </div>
   );
 }
 
@@ -1069,12 +1296,12 @@ export function DivergenceBar({ items }: {
                   fontSize: 9,
                   fontFamily: 'var(--font-mono)',
                   letterSpacing: '0.12em',
-                  color: flagged ? INK_SOFT : INK_GHOST,
+                  color: flagged ? 'rgba(228, 178, 98, 0.85)' : INK_GHOST,
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
               >
-                {flagged && <span style={{ color: INK, marginRight: 8 }}>∗</span>}
+                {flagged && <span style={{ marginRight: 8 }}>∗</span>}
                 Δ{Math.round(divergence * 100)}
               </span>
             </div>
@@ -1092,10 +1319,10 @@ export function DivergenceBar({ items }: {
                 x1={trackX} y1={barH / 2} x2={trackX + trackW} y2={barH / 2}
                 stroke={INK_FAINT} strokeWidth={0.5}
               />
-              {/* Stated — upper hairline */}
+              {/* Stated — upper hairline (cream — what the profile claims) */}
               <line
                 x1={trackX} y1={barH / 2 - 4} x2={statedX} y2={barH / 2 - 4}
-                stroke={INK_SOFT} strokeWidth={1}
+                stroke="rgba(244, 243, 240, 0.75)" strokeWidth={1.1}
               />
               <text
                 x={Math.min(statedX + 6, W - 4)} y={barH / 2 - 4}
@@ -1105,10 +1332,10 @@ export function DivergenceBar({ items }: {
               >
                 STATED
               </text>
-              {/* Revealed — lower hairline */}
+              {/* Revealed — lower hairline (cobalt — what the data shows) */}
               <line
                 x1={trackX} y1={barH / 2 + 4} x2={revealedX} y2={barH / 2 + 4}
-                stroke={INK} strokeWidth={1}
+                stroke="rgba(135, 165, 200, 0.85)" strokeWidth={1.1}
               />
               <text
                 x={Math.min(revealedX + 6, W - 4)} y={barH / 2 + 4}
@@ -1118,11 +1345,11 @@ export function DivergenceBar({ items }: {
               >
                 REVEALED
               </text>
-              {/* Divergence connector */}
+              {/* Divergence connector — flagged uses amber so divergence reads warmly */}
               <line
                 x1={statedX} y1={barH / 2 - 4} x2={revealedX} y2={barH / 2 + 4}
-                stroke={flagged ? INK : INK_HAIR}
-                strokeWidth={0.75}
+                stroke={flagged ? 'rgba(228, 178, 98, 0.7)' : INK_HAIR}
+                strokeWidth={flagged ? 1 : 0.75}
                 strokeDasharray={flagged ? undefined : '2 3'}
               />
             </svg>
@@ -1674,6 +1901,10 @@ export function ValenceTrajectory({ events, height = 160 }: {
   events: Array<{ at: string; valence: number; intensity: number }>;
   height?: number;
 }) {
+  const [tooltip, setTooltip] = useState<{
+    x: number; y: number; date: string; valence: number; intensity: number;
+  } | null>(null);
+
   const data = useMemo(() => {
     if (!events?.length) return null;
     const stamps = events
@@ -1733,8 +1964,11 @@ export function ValenceTrajectory({ events, height = 160 }: {
   const negativeCount = data.stamps.filter(s => s.v < -0.05).length;
 
   return (
-    <div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+    <div style={{ position: 'relative' }}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: 'block' }}
+        onMouseLeave={() => setTooltip(null)}
+      >
         {/* Reference gridlines at ±0.5 */}
         <line x1={padL} y1={yOf(0.5)} x2={W - padR} y2={yOf(0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
         <line x1={padL} y1={yOf(-0.5)} x2={W - padR} y2={yOf(-0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
@@ -1744,21 +1978,38 @@ export function ValenceTrajectory({ events, height = 160 }: {
         <text x={padL - 2} y={yOf(0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>+.5</text>
         <text x={padL - 2} y={midY} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>0</text>
         <text x={padL - 2} y={yOf(-0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>-.5</text>
-        {/* Smoothed mean line — under the points */}
+        {/* Smoothed mean line — under the points (amber for visual coherence with active state) */}
         {data.stamps.length >= 2 && (
-          <path d={smoothedPath} stroke={INK_SOFT} strokeWidth={1} fill="none" opacity={0.55} />
+          <path d={smoothedPath} stroke="rgba(228, 178, 98, 0.45)" strokeWidth={1.1} fill="none" />
         )}
-        {/* Per-memory points — open circles, radius scaled by intensity */}
+        {/* Per-memory points — open circles, radius scaled by intensity, color by valence sign */}
         {data.stamps.map((s, i) => {
           const x = xOf(s.t);
           const y = yOf(s.v);
-          const r = 1.5 + s.i * 3.5; // 1.5..5px
-          const isNegative = s.v < -0.05;
-          const stroke = isNegative ? 'rgba(194, 192, 188, 0.75)' : INK;
+          const r = 1.8 + s.i * 3.5; // 1.8..5.3px
+          // Three bands: clearly positive → sage, clearly negative → cobalt, near-zero → cream
+          const stroke = s.v > 0.1
+            ? 'rgba(143, 175, 137, 0.9)'   // sage
+            : s.v < -0.1
+              ? 'rgba(135, 165, 200, 0.9)' // cobalt
+              : 'rgba(244, 243, 240, 0.55)'; // neutral cream
           return (
             <circle key={i} cx={x} cy={y} r={r}
               fill="none" stroke={stroke}
-              strokeWidth={0.85} opacity={0.85} />
+              strokeWidth={1} opacity={0.9}
+              onMouseEnter={(e) => {
+                const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                setTooltip({
+                  x: ((x / W) * rect.width) + rect.left,
+                  y: rect.top + (y / H) * rect.height,
+                  date: fmtDate(s.t),
+                  valence: s.v,
+                  intensity: s.i,
+                });
+              }}
+              onMouseLeave={() => setTooltip(null)}
+              style={{ cursor: 'default', transition: 'stroke-width 200ms ease' }}
+            />
           );
         })}
         {/* Date labels — corners + midpoint */}
@@ -1768,16 +2019,54 @@ export function ValenceTrajectory({ events, height = 160 }: {
         </text>
         <text x={W - padR} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>{fmtDate(data.tMax)}</text>
       </svg>
-      {/* Editorial caption beneath: positive vs negative split */}
+      {/* Editorial caption beneath: positive vs negative split — color-coded */}
       <div style={{
         marginTop: 8, display: 'flex', justifyContent: 'space-between',
-        fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
+        fontSize: 9, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.1em', textTransform: 'uppercase',
       }}>
-        <span>positive · {positiveCount}</span>
-        <span>neutral · {data.stamps.length - positiveCount - negativeCount}</span>
-        <span>negative · {negativeCount}</span>
+        <span style={{ color: 'rgba(143, 175, 137, 0.8)' }}>
+          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(143, 175, 137, 0.85)', marginRight: 6, verticalAlign: 'middle' }} />
+          positive · {positiveCount}
+        </span>
+        <span style={{ color: INK_GHOST }}>
+          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(244, 243, 240, 0.55)', marginRight: 6, verticalAlign: 'middle' }} />
+          neutral · {data.stamps.length - positiveCount - negativeCount}
+        </span>
+        <span style={{ color: 'rgba(135, 165, 200, 0.85)' }}>
+          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(135, 165, 200, 0.85)', marginRight: 6, verticalAlign: 'middle' }} />
+          negative · {negativeCount}
+        </span>
       </div>
+      {tooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x + 8,
+            top: tooltip.y - 30,
+            pointerEvents: 'none',
+            padding: '5px 9px',
+            background: 'rgba(20, 20, 22, 0.94)',
+            border: `1px solid ${INK_HAIR}`,
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: INK,
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap',
+            zIndex: 50,
+          }}
+        >
+          {tooltip.date}{' · '}
+          <span style={{
+            color: tooltip.valence > 0.1 ? 'rgba(143, 175, 137, 0.95)'
+                : tooltip.valence < -0.1 ? 'rgba(135, 165, 200, 0.95)'
+                : INK_SOFT,
+          }}>
+            v{tooltip.valence >= 0 ? '+' : ''}{tooltip.valence.toFixed(2)}
+          </span>
+          {' · '}<span style={{ color: INK_GHOST }}>i{tooltip.intensity.toFixed(2)}</span>
+        </div>
+      )}
     </div>
   );
 }
