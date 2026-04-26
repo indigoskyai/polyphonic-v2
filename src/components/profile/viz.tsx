@@ -227,31 +227,47 @@ export function RankedList({ items }: {
    ConstellationCloud — weighted tag cloud for themes/triggers/biases
    ──────────────────────────────────────────────────────────── */
 
-export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, minFontSize = 10 }: {
-  items: string[]; weighted?: boolean; maxFontSize?: number; minFontSize?: number;
+export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, minFontSize = 10, showCounts = false }: {
+  items: Array<string | { label: string; count: number }>;
+  weighted?: boolean; maxFontSize?: number; minFontSize?: number; showCounts?: boolean;
 }) {
+  // Normalize to {label, count?}
+  const normalized = items.map(it => typeof it === 'string' ? { label: it, count: undefined as number | undefined } : it);
   // For short lists (1-2 items), don't render the most prominent item huge — clamp range tightly.
-  const span = items.length <= 3 ? Math.min(2, maxFontSize - minFontSize) : maxFontSize - minFontSize;
+  const span = normalized.length <= 3 ? Math.min(2, maxFontSize - minFontSize) : maxFontSize - minFontSize;
   // Weight by reverse rank (first items are heavier — assumes pre-sorted by frequency)
-  const sized = items.map((label, i) => {
-    const rank = items.length > 1 ? i / (items.length - 1) : 0;
-    const weight = weighted ? 1 - rank * 0.5 : 1;
+  const sized = normalized.map((it, i) => {
+    const rank = normalized.length > 1 ? i / (normalized.length - 1) : 0;
     const fontSize = minFontSize + (weighted ? (1 - rank) * span : span * 0.5);
     const opacity = weighted ? 0.4 + (1 - rank) * 0.5 : 0.7;
-    return { label, weight, fontSize, opacity };
+    return { ...it, fontSize, opacity };
   });
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 14px', padding: '4px 0' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 18px', padding: '4px 0' }}>
       {sized.map((s, i) => (
         <span key={i} style={{
-          fontSize: s.fontSize,
-          fontFamily: 'var(--font-serif)',
-          fontStyle: 'italic',
-          color: `rgba(244, 243, 240, ${s.opacity})`,
+          display: 'inline-flex', alignItems: 'baseline', gap: 5,
           lineHeight: 1.4,
-          letterSpacing: '0.005em',
         }}>
-          {s.label}
+          <span style={{
+            fontSize: s.fontSize,
+            fontFamily: 'var(--font-serif)',
+            fontStyle: 'italic',
+            color: `rgba(244, 243, 240, ${s.opacity})`,
+            letterSpacing: '0.005em',
+          }}>
+            {s.label}
+          </span>
+          {showCounts && s.count !== undefined && (
+            <span style={{
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              color: `rgba(244, 243, 240, ${Math.max(0.25, s.opacity * 0.55)})`,
+              letterSpacing: '0.06em',
+            }}>
+              {s.count}
+            </span>
+          )}
         </span>
       ))}
     </div>
@@ -432,6 +448,38 @@ export function SectionEyebrow({
           {lede}
         </p>
       )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   TabColophon — page-numbered footer that closes each tab
+   ──────────────────────────────────────────────────────────── */
+
+export function TabColophon({ name, page, of = 9, kicker = 'polyphonic · psych. profile' }: {
+  name: string; page: number; of?: number; kicker?: string;
+}) {
+  const pp = String(page).padStart(2, '0');
+  const tt = String(of).padStart(2, '0');
+  return (
+    <div style={{
+      marginTop: 36, paddingTop: 16,
+      borderTop: `1px solid ${INK_FAINT}`,
+      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+    }}>
+      <span style={{
+        fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+      }}>
+        {name} · {pp} / {tt}
+      </span>
+      <span style={{
+        fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
+      }}>
+        {kicker}
+      </span>
     </div>
   );
 }
@@ -966,7 +1014,7 @@ function InstrumentTile({
    Inner cardinal labels mark 00 / 06 / 12 / 18.
    ──────────────────────────────────────────────────────────── */
 
-export function DiurnalRing({ buckets, size = 96 }: {
+export function DiurnalRing({ buckets, size = 110 }: {
   buckets: number[]; // length 24
   size?: number;
 }) {
@@ -1158,12 +1206,13 @@ export function SignalCoherence({ sharpness, confidence }: {
   const x = padL + Math.max(0, Math.min(1, sharpness)) * plotW;
   const y = padT + (1 - Math.max(0, Math.min(1, confidence))) * plotH;
 
-  // Quadrant phrasing
+  // Quadrant phrasing — softer thresholds; reserve "uncertain" for genuinely low confidence
   const verdict =
-    confidence >= 0.7 && sharpness >= 0.7 ? 'CRYSTALLINE'
+    confidence === 0 && sharpness === 0 ? 'AWAITING'
+    : confidence >= 0.75 && sharpness >= 0.75 ? 'CRYSTALLINE'
+    : sharpness >= 0.7 && confidence >= 0.55 ? 'SHARP · CONVERGING'
+    : sharpness >= 0.7 ? 'SHARP · UNSETTLED'
     : confidence >= 0.7 ? 'CONFIDENT · SOFT'
-    : sharpness >= 0.7 ? 'SHARP · UNCERTAIN'
-    : confidence === 0 && sharpness === 0 ? 'AWAITING'
     : 'DEVELOPING';
 
   return (

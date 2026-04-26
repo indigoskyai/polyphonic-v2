@@ -8,7 +8,7 @@ import {
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
   BurstPlot, JourneyTimeline, RadialChart, TimelineHeatmap, DivergenceBar,
   EmptyState,
-  SectionEyebrow, SectionDivider,
+  SectionEyebrow, SectionDivider, TabColophon,
   SignalStrip, DiurnalRing, WeeklyMicroBars, ConfidencePulse, SignalCoherence,
 } from '@/components/profile/viz';
 import {
@@ -657,8 +657,11 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
           }}>
             Recurring themes {memoryStats?.topTags?.length ? `· ${memoryStats.topTags.length}` : ''}
           </div>
-          {memoryStats && memoryStats.topTags.length > 0 ? (
-            <ConstellationCloud items={memoryStats.topTags} />
+          {memoryStats && memoryStats.topTagsWithCount.length > 0 ? (
+            <ConstellationCloud
+              items={memoryStats.topTagsWithCount.map(t => ({ label: t.tag, count: t.count }))}
+              showCounts
+            />
           ) : (
             <EmptyState note="Themes will surface as memories accumulate" height={96} />
           )}
@@ -691,26 +694,7 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
         <JourneyTimeline phases={phases} activeIndex={activePhase} onSelect={setActivePhase} />
       </div>
 
-      {/* Page numbering — colophon */}
-      <div style={{
-        marginTop: 36, paddingTop: 16,
-        borderTop: '1px solid rgba(244, 243, 240, 0.06)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-      }}>
-        <span style={{
-          fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
-          fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
-          textTransform: 'uppercase',
-        }}>
-          Portrait · 01 / 09
-        </span>
-        <span style={{
-          fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
-          fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
-        }}>
-          polyphonic · psych. profile
-        </span>
-      </div>
+      <TabColophon name="Portrait" page={1} />
     </div>
   );
 }
@@ -737,16 +721,29 @@ function PersonalityTab({ data }: { data: any }) {
   return (
     <div>
       {data.big_five && (
-        <PlateSection label="Big Five — Personality Dimensions">
-          {Object.entries(data.big_five).map(([trait, info]: [string, any]) => (
-            <TraitTrace key={trait} label={trait} value={info?.score ?? 50} max={100} evidence={info?.evidence} />
-          ))}
-        </PlateSection>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Traces"
+            lede="Big Five projected as oscilloscope traces. Each marker's deflection from the bell-curve mean is the deviation from population baseline."
+          />
+          <div style={{ paddingTop: 6 }}>
+            {Object.entries(data.big_five).map(([trait, info]: [string, any]) => (
+              <TraitTrace key={trait} label={trait} value={info?.score ?? 50} max={100} evidence={info?.evidence} />
+            ))}
+          </div>
+        </>
       )}
 
       {data.attachment_style && (
-        <PlateSection label="Attachment Style">
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Attachment"
+            lede="Attachment style placed inside the anxiety × closeness phase diagram. The dot is your position; the quadrant labels name the archetype."
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 300px) 1fr', gap: 40, alignItems: 'center', padding: '8px 0 12px' }}>
             <PhaseDiagram
               xLabel="Anxiety"
               yLabel="Comfort with Closeness"
@@ -758,33 +755,36 @@ function PersonalityTab({ data }: { data: any }) {
                 { label: 'Dismissive', x: 0, y: 0, w: 50, h: 50 },
                 { label: 'Fearful', x: 50, y: 0, w: 50, h: 50 },
               ]}
-              size={240}
+              size={260}
             />
             <div>
-              <div style={{ fontSize: 16, fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 12, textTransform: 'capitalize' }}>
+              <div style={{ fontSize: 18, fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 14, textTransform: 'capitalize', letterSpacing: '0.005em' }}>
                 {data.attachment_style.primary}
               </div>
               {data.attachment_style.evidence && (
-                <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.7, margin: 0 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.75, margin: 0 }}>
                   {data.attachment_style.evidence}
                 </p>
               )}
             </div>
           </div>
-        </PlateSection>
+        </>
       )}
 
-      {data.cognitive_style && (
-        <PlateSection label="Cognitive Style">
-          <InsightPlate label="Style" text={data.cognitive_style} prominence="lead" />
-        </PlateSection>
+      {(data.cognitive_style || data.locus_of_control) && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Orientation"
+            lede="Where your mind defaults: cognitive style and locus of control patterns observed across the corpus."
+          />
+          {data.cognitive_style && <InsightPlate label="Cognitive style" text={data.cognitive_style} prominence="lead" />}
+          {data.locus_of_control && <InsightPlate label="Locus of control" text={data.locus_of_control} prominence="lead" />}
+        </>
       )}
 
-      {data.locus_of_control && (
-        <PlateSection label="Locus of Control">
-          <InsightPlate label="Pattern" text={data.locus_of_control} prominence="lead" />
-        </PlateSection>
-      )}
+      <TabColophon name="Personality" page={2} />
     </div>
   );
 }
@@ -826,32 +826,52 @@ function CommunicationTab({ data }: { data: any }) {
   return (
     <div>
       {any && (
-        <PlateSection label="Communication signature">
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Signature"
+            lede="Five-axis communication snapshot inferred from prose dimensions below. The hairline polygon is your verbal fingerprint — the shape recurs across exchanges."
+            hint="uncalibrated estimate"
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 40, alignItems: 'center', padding: '6px 0 14px' }}>
             <RadialChart
               axes={commAxes}
               traces={[{ values: inferred, primary: true }]}
-              size={240}
+              size={260}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-body)', lineHeight: 1.7, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
-              5-axis snapshot inferred heuristically from the prose dimensions below — {' '}
-              <span style={{ color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'normal', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>uncalibrated estimate</span>
-            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-serif)', margin: 0 }}>
+              Each axis maps a prose dimension scored heuristically (extreme/very-high/high/moderate/low/very-low). With richer pipeline scoring this becomes calibrated; for now the shape is directional.
+            </p>
           </div>
-        </PlateSection>
+        </>
       )}
-      <PlateSection label="Communication Patterns">
-        {data.vocabulary_richness && <InsightPlate label="Vocabulary" text={data.vocabulary_richness} />}
-        {data.humor_style && <InsightPlate label="Humor" text={data.humor_style} />}
-        {data.hedging_frequency && <InsightPlate label="Hedging" text={data.hedging_frequency} />}
-        {data.assertion_strength && <InsightPlate label="Assertion" text={data.assertion_strength} />}
-        {data.emotional_vocabulary_range && <InsightPlate label="Emotional Range" text={data.emotional_vocabulary_range} />}
-      </PlateSection>
+
+      <SectionDivider />
+      <SectionEyebrow
+        index="§ II"
+        label="Patterns"
+        lede="Per-dimension prose readouts: vocabulary, humor, hedging, assertion, emotional range."
+      />
+      {data.vocabulary_richness && <InsightPlate label="Vocabulary" text={data.vocabulary_richness} />}
+      {data.humor_style && <InsightPlate label="Humor" text={data.humor_style} />}
+      {data.hedging_frequency && <InsightPlate label="Hedging" text={data.hedging_frequency} />}
+      {data.assertion_strength && <InsightPlate label="Assertion" text={data.assertion_strength} />}
+      {data.emotional_vocabulary_range && <InsightPlate label="Emotional range" text={data.emotional_vocabulary_range} />}
+
       {data.unique_signatures?.length > 0 && (
-        <PlateSection label="Verbal signatures" count={data.unique_signatures.length}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Verbal signatures"
+            lede="Phrases or constructs that recur in your speech — the verbal tics that mark your voice."
+            hint={`n=${data.unique_signatures.length}`}
+          />
           <RankedList items={data.unique_signatures.map((sig: string, i: number) => ({ label: sig, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
+
+      <TabColophon name="Communication" page={3} />
     </div>
   );
 }
@@ -904,52 +924,84 @@ function EmotionsTab({ data, emotionalSeries }: { data: any; emotionalSeries: Em
 
   return (
     <div>
-      {/* Snapshot + Timeline pair */}
       {(currentValues || heatmapRows.length > 0) && (
-        <PlateSection label="Emotional state" count={emotionalSeries?.history.length || 0}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Current state"
+            lede="Snapshot of present affective coordinates against a 90-day timeline. The radial polygon is right now; the heatmap is the past three months."
+            hint={emotionalSeries?.history.length ? `n=${emotionalSeries.history.length}` : undefined}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 40, alignItems: 'flex-start', padding: '6px 0 14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
               {currentValues ? (
                 <RadialChart
                   axes={emotionAxes}
                   traces={[{ values: currentValues, primary: true }]}
-                  size={240}
+                  size={260}
                 />
               ) : (
-                <EmptyState note="No current state recorded" height={200} />
+                <EmptyState note="No current state recorded" height={220} />
               )}
-              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.32)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', textAlign: 'center' }}>
-                Current state
+              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.32)', fontFamily: 'var(--font-mono)', letterSpacing: '0.18em', textTransform: 'uppercase', textAlign: 'center' }}>
+                Affective signature · now
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12 }}>
+              <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.45)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 14 }}>
                 Last {Math.min(HISTORY_DAYS, emotionalSeries?.history.length ?? 0)} entries
               </div>
-              <TimelineHeatmap rows={heatmapRows} days={HISTORY_DAYS} height={170} />
+              <TimelineHeatmap rows={heatmapRows} days={HISTORY_DAYS} height={180} />
             </div>
           </div>
-        </PlateSection>
+        </>
       )}
 
       {hasProseData && (
-        <PlateSection label="Emotional Landscape">
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Landscape"
+            lede="Baseline mood, range, and how emotion is regulated and expressed."
+          />
           {data.baseline_mood && <InsightPlate label="Baseline" text={data.baseline_mood} prominence="lead" />}
           {data.emotional_range && <InsightPlate label="Range" text={data.emotional_range} />}
           {data.regulation_style && <InsightPlate label="Regulation" text={data.regulation_style} />}
           {data.granularity && <InsightPlate label="Granularity" text={data.granularity} />}
-        </PlateSection>
+        </>
       )}
-      {data?.triggers?.length > 0 && (
-        <PlateSection label="Triggers" count={data.triggers.length}>
-          <ConstellationCloud items={data.triggers} />
-        </PlateSection>
+
+      {(data?.triggers?.length > 0 || data?.coping_mechanisms?.length > 0) && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Triggers + coping"
+            lede="What pulls you and what you reach for. Frequency-weighted constellations."
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, paddingTop: 4 }}>
+            {data?.triggers?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Triggers · {data.triggers.length}
+                </div>
+                <ConstellationCloud items={data.triggers} />
+              </div>
+            )}
+            {data?.coping_mechanisms?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Coping mechanisms · {data.coping_mechanisms.length}
+                </div>
+                <ConstellationCloud items={data.coping_mechanisms} />
+              </div>
+            )}
+          </div>
+        </>
       )}
-      {data?.coping_mechanisms?.length > 0 && (
-        <PlateSection label="Coping Mechanisms" count={data.coping_mechanisms.length}>
-          <ConstellationCloud items={data.coping_mechanisms} />
-        </PlateSection>
-      )}
+
+      <TabColophon name="Emotions" page={4} />
     </div>
   );
 }
@@ -990,25 +1042,46 @@ function ValuesTab({ data, memoryStats }: { data: any; memoryStats: MemoryStats 
   return (
     <div>
       {ranked.length > 0 && (
-        <PlateSection label="Values hierarchy" count={ranked.length}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Hierarchy"
+            lede="Top values in ranked order with the evidence that placed them."
+            hint={`n=${ranked.length}`}
+          />
           <RankedList items={ranked.map((v: any, i: number) => ({
             label: v.value, evidence: v.evidence, rank: v.rank ?? i + 1,
           }))} />
-        </PlateSection>
+        </>
       )}
+
       {divergenceItems.length > 0 && (
-        <PlateSection label="Stated vs revealed">
-          <div style={{ marginBottom: 12, fontSize: 10.5, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.6 }}>
-            How prominently each top value appears in your tagged memories. Where stated rank diverges from revealed signal, the asterisk flags a potential blind-spot indicator.
-          </div>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Stated vs revealed"
+            lede="How prominently each top value appears in your tagged memories. Where stated rank diverges from revealed signal, the asterisk flags a potential blind-spot indicator."
+          />
           <DivergenceBar items={divergenceItems} />
-        </PlateSection>
+        </>
       )}
-      <PlateSection label="Decision Architecture">
-        {data.stated_vs_revealed && <InsightPlate label="Stated vs Revealed" text={data.stated_vs_revealed} />}
-        {data.decision_framework && <InsightPlate label="Framework" text={data.decision_framework} />}
-        {data.temporal_orientation && <InsightPlate label="Temporal" text={data.temporal_orientation} />}
-      </PlateSection>
+
+      {(data.stated_vs_revealed || data.decision_framework || data.temporal_orientation) && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Architecture"
+            lede="How values translate into decisions: framework, temporal orientation, gap between aspiration and behavior."
+          />
+          {data.stated_vs_revealed && <InsightPlate label="Stated vs revealed" text={data.stated_vs_revealed} />}
+          {data.decision_framework && <InsightPlate label="Framework" text={data.decision_framework} />}
+          {data.temporal_orientation && <InsightPlate label="Temporal orientation" text={data.temporal_orientation} />}
+        </>
+      )}
+
+      <TabColophon name="Values" page={5} />
     </div>
   );
 }
@@ -1020,18 +1093,31 @@ function RelationshipsTab({ data }: { data: any }) {
   return (
     <div>
       {data.key_relationships?.length > 0 && (
-        <PlateSection label="Key Relationships" count={data.key_relationships.length}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Key relationships"
+            lede="The relational categories that show up most in the corpus, with the dynamic each follows."
+            hint={`n=${data.key_relationships.length}`}
+          />
           <RankedList items={data.key_relationships.map((r: any, i: number) => ({
             label: r.role, evidence: r.dynamic, rank: i + 1,
           }))} />
-        </PlateSection>
+        </>
       )}
-      <PlateSection label="Relational Patterns">
-        {data.conflict_style && <InsightPlate label="Conflict" text={data.conflict_style} />}
-        {data.power_orientation && <InsightPlate label="Power" text={data.power_orientation} />}
-        {data.intimacy_comfort && <InsightPlate label="Intimacy" text={data.intimacy_comfort} />}
-        {data.ai_relationship_style && <InsightPlate label="AI Relationships" text={data.ai_relationship_style} prominence="lead" />}
-      </PlateSection>
+
+      <SectionDivider />
+      <SectionEyebrow
+        index="§ II"
+        label="Patterns"
+        lede="Conflict style, power orientation, intimacy comfort, and the specific shape of relationship with AI."
+      />
+      {data.conflict_style && <InsightPlate label="Conflict" text={data.conflict_style} />}
+      {data.power_orientation && <InsightPlate label="Power" text={data.power_orientation} />}
+      {data.intimacy_comfort && <InsightPlate label="Intimacy" text={data.intimacy_comfort} />}
+      {data.ai_relationship_style && <InsightPlate label="AI relationships" text={data.ai_relationship_style} prominence="lead" />}
+
+      <TabColophon name="Relationships" page={6} />
     </div>
   );
 }
@@ -1070,35 +1156,66 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
   return (
     <div>
       {hasBandwidthSignal && (
-        <PlateSection label="Cognitive bandwidth">
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 32, alignItems: 'center' }}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Bandwidth"
+            lede="Six-axis cognitive allocation derived from memory-type distribution. A profile of which mental flavors accumulate most."
+            hint="derived signal"
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 40, alignItems: 'center', padding: '6px 0 14px' }}>
             <RadialChart
               axes={bandwidthAxes}
               traces={[{ values: bandwidthValues, primary: true }]}
-              size={240}
+              size={260}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-body)', lineHeight: 1.7, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
-              6-axis allocation derived from your memory-type distribution. Higher values mean more memories of that flavor have accumulated.{' '}
-              <span style={{ color: 'rgba(244, 243, 240, 0.4)', fontStyle: 'normal', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>derived signal</span>
-            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-serif)', margin: 0 }}>
+              Logic ← principle + commitment. Creativity ← synthesis + reflection. Pattern ← relationship + engram density. Memory ← fact + moment. Integration weighted from synthesis/reflection. Abstract ← all reflective categories. Each axis normalized to your own corpus max.
+            </p>
           </div>
-        </PlateSection>
+        </>
       )}
-      <PlateSection label="Cognitive Tendencies">
-        {data.thinking_style && <InsightPlate label="Thinking" text={data.thinking_style} prominence="lead" />}
-        {data.decision_patterns && <InsightPlate label="Decisions" text={data.decision_patterns} />}
-        {data.stress_response && <InsightPlate label="Stress Response" text={data.stress_response} />}
-      </PlateSection>
-      {data.biases?.length > 0 && (
-        <PlateSection label="Cognitive Biases observed" count={data.biases.length}>
-          <ConstellationCloud items={data.biases} />
-        </PlateSection>
+
+      <SectionDivider />
+      <SectionEyebrow
+        index="§ II"
+        label="Tendencies"
+        lede="How thinking proceeds: synthesis style, decision pattern, response under stress."
+      />
+      {data.thinking_style && <InsightPlate label="Thinking" text={data.thinking_style} prominence="lead" />}
+      {data.decision_patterns && <InsightPlate label="Decisions" text={data.decision_patterns} />}
+      {data.stress_response && <InsightPlate label="Stress response" text={data.stress_response} />}
+
+      {(data.biases?.length > 0 || data.defense_mechanisms?.length > 0) && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Biases + defenses"
+            lede="Biases observed in the corpus and the defenses that ride alongside them."
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, paddingTop: 4 }}>
+            {data.biases?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Cognitive biases · {data.biases.length}
+                </div>
+                <ConstellationCloud items={data.biases} />
+              </div>
+            )}
+            {data.defense_mechanisms?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Defense mechanisms · {data.defense_mechanisms.length}
+                </div>
+                <ConstellationCloud items={data.defense_mechanisms} />
+              </div>
+            )}
+          </div>
+        </>
       )}
-      {data.defense_mechanisms?.length > 0 && (
-        <PlateSection label="Defense Mechanisms" count={data.defense_mechanisms.length}>
-          <ConstellationCloud items={data.defense_mechanisms} />
-        </PlateSection>
-      )}
+
+      <TabColophon name="Cognition" page={7} />
     </div>
   );
 }
@@ -1110,20 +1227,42 @@ function GrowthTab({ data }: { data: any }) {
   return (
     <div>
       {data.active_growth?.length > 0 && (
-        <PlateSection label="Active Growth Areas" count={data.active_growth.length}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Active"
+            lede="Edges where work is happening now."
+            hint={`n=${data.active_growth.length}`}
+          />
           <RankedList items={data.active_growth.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
       {data.emerging_awareness?.length > 0 && (
-        <PlateSection label="Emerging Awareness" count={data.emerging_awareness.length}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Emerging"
+            lede="Awareness still forming — recognized but not yet integrated."
+            hint={`n=${data.emerging_awareness.length}`}
+          />
           <RankedList items={data.emerging_awareness.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
       {data.integration_opportunities?.length > 0 && (
-        <PlateSection label="Integration Opportunities" count={data.integration_opportunities.length}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Integration"
+            lede="Opportunities to consolidate what's been learned."
+            hint={`n=${data.integration_opportunities.length}`}
+          />
           <RankedList items={data.integration_opportunities.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
+
+      <TabColophon name="Growth" page={8} />
     </div>
   );
 }
@@ -1149,44 +1288,87 @@ function ShadowTab({ data, memoryStats, valuesData }: {
   return (
     <div>
       {data.contradictions?.length > 0 && (
-        <PlateSection label="Contradictions" count={data.contradictions.length}>
+        <>
+          <SectionEyebrow
+            index="§ I"
+            label="Contradictions"
+            lede="Places where the corpus contradicts itself. Tension is information."
+            hint={`n=${data.contradictions.length}`}
+          />
           <RankedList items={data.contradictions.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
       {data.blind_spots?.length > 0 && (
-        <PlateSection label="Blind Spots" count={data.blind_spots.length}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ II"
+            label="Blind spots"
+            lede="What's likely outside your field of view — observed by the analysis but unlikely to feel true to you yet."
+            hint={`n=${data.blind_spots.length}`}
+          />
           <RankedList items={data.blind_spots.map((s: string, i: number) => ({ label: s, rank: i + 1 }))} />
-        </PlateSection>
+        </>
       )}
       {blindSpotItems.length > 0 && (
-        <PlateSection label="Blind-spot signal map">
-          <div style={{ marginBottom: 12, fontSize: 10.5, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.6 }}>
-            For each blind spot, the asterisk flags where revealed memory signal diverges sharply from baseline — a quantitative companion to the prose above.
-          </div>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ III"
+            label="Signal map"
+            lede="Where each blind spot's revealed memory signal diverges from baseline — a quantitative companion to the prose above."
+          />
           <DivergenceBar items={blindSpotItems} />
-        </PlateSection>
+        </>
       )}
-      {data.avoidance_patterns?.length > 0 && (
-        <PlateSection label="Avoidance Patterns" count={data.avoidance_patterns.length}>
-          <ConstellationCloud items={data.avoidance_patterns} weighted={false} />
-        </PlateSection>
-      )}
-      {data.compensatory_behaviors?.length > 0 && (
-        <PlateSection label="Compensatory Behaviors" count={data.compensatory_behaviors.length}>
-          <ConstellationCloud items={data.compensatory_behaviors} weighted={false} />
-        </PlateSection>
+      {(data.avoidance_patterns?.length > 0 || data.compensatory_behaviors?.length > 0) && (
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ IV"
+            label="Avoidance + compensation"
+            lede="What you turn from, and what you reach for instead."
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, paddingTop: 4 }}>
+            {data.avoidance_patterns?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Avoidance · {data.avoidance_patterns.length}
+                </div>
+                <ConstellationCloud items={data.avoidance_patterns} weighted={false} />
+              </div>
+            )}
+            {data.compensatory_behaviors?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: 'rgba(244, 243, 240, 0.5)', fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  Compensatory · {data.compensatory_behaviors.length}
+                </div>
+                <ConstellationCloud items={data.compensatory_behaviors} weighted={false} />
+              </div>
+            )}
+          </div>
+        </>
       )}
       {data.unasked_questions?.length > 0 && (
-        <PlateSection label="Questions to Sit With" count={data.unasked_questions.length}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <>
+          <SectionDivider />
+          <SectionEyebrow
+            index="§ V"
+            label="Questions to sit with"
+            lede="Open questions surfaced by the analysis. Not answers — invitations."
+            hint={`n=${data.unasked_questions.length}`}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 4 }}>
             {data.unasked_questions.map((q: string, i: number) => (
-              <p key={i} style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.7, margin: 0, paddingLeft: 12, borderLeft: '1px solid rgba(244, 243, 240, 0.2)' }}>
+              <p key={i} style={{ fontSize: 15, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.75, margin: 0, paddingLeft: 16, borderLeft: '1px solid rgba(244, 243, 240, 0.22)' }}>
                 "{q}"
               </p>
             ))}
           </div>
-        </PlateSection>
+        </>
       )}
+
+      <TabColophon name="Shadow" page={9} />
     </div>
   );
 }
