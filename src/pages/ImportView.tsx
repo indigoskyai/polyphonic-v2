@@ -1,8 +1,22 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
+import { supabase } from '@/integrations/supabase/client';
 import EchoField from '@/components/EchoField';
+
+type ImportRecord = {
+  id: string;
+  status: string;
+  source_platform: string | null;
+  total_conversations: number | null;
+  processed_conversations: number | null;
+  memories_created: number | null;
+  file_size_bytes: number | null;
+  pipeline_stage: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
   idle: 'Ready',
@@ -41,6 +55,21 @@ export default function ImportView() {
     const file = e.target.files?.[0];
     if (file) parseAndFilter(file);
   }, [parseAndFilter]);
+
+  const [pastImports, setPastImports] = useState<ImportRecord[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('chat_imports')
+      .select('id, status, source_platform, total_conversations, processed_conversations, memories_created, file_size_bytes, pipeline_stage, created_at, completed_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setPastImports(data as ImportRecord[]);
+      });
+  }, [user, stage]); // re-fetch when stage changes (after an import completes)
 
   const isProcessing = ['extracting', 'synthesizing', 'profiling'].includes(stage);
   const showPreAnalysis = stage === 'idle' && filterStats !== null;
@@ -98,6 +127,129 @@ export default function ImportView() {
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Claude:</span> Settings → Account → Export Data → use the conversations .json file
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── IMPORT HISTORY ── */}
+          {(showUpload || stage === 'complete') && pastImports.length > 0 && (
+            <div style={{
+              marginTop: stage === 'complete' ? 48 : 40,
+              paddingTop: 32,
+              borderTop: '1px solid var(--border-subtle)',
+              animation: 'viewFadeIn 0.6s var(--ease-out) both',
+            }}>
+              <div style={{
+                fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+                letterSpacing: '0.08em', color: 'var(--text-ghost)', marginBottom: 20,
+              }}>
+                Import History
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {pastImports.map((imp, i) => {
+                  const platform = (imp.source_platform ?? 'unknown').toLowerCase();
+                  const isGpt = platform === 'chatgpt';
+                  const isClaude = platform === 'claude';
+                  const platformLabel = isGpt ? 'GPT' : isClaude ? 'CL' : '?';
+                  const platformColor = isGpt ? 'rgba(228, 178, 98, 0.8)' : isClaude ? 'rgba(135, 165, 200, 0.8)' : 'var(--text-ghost)';
+                  const platformBg = isGpt ? 'rgba(228, 178, 98, 0.12)' : isClaude ? 'rgba(135, 165, 200, 0.10)' : 'rgba(244, 243, 240, 0.06)';
+
+                  const date = new Date(imp.created_at);
+                  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+                  const sizeStr = imp.file_size_bytes
+                    ? imp.file_size_bytes > 1_000_000
+                      ? `${(imp.file_size_bytes / 1_000_000).toFixed(1)} MB`
+                      : `${Math.round(imp.file_size_bytes / 1_000)} KB`
+                    : null;
+
+                  const isActive = imp.status === 'processing';
+                  const isError = imp.status === 'error';
+                  const isCompleted = imp.status === 'completed';
+
+                  let duration: string | null = null;
+                  if (imp.completed_at && imp.created_at) {
+                    const ms = new Date(imp.completed_at).getTime() - new Date(imp.created_at).getTime();
+                    const mins = Math.floor(ms / 60000);
+                    const secs = Math.round((ms % 60000) / 1000);
+                    duration = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                  }
+
+                  return (
+                    <div key={imp.id}>
+                      {/* Timeline connector */}
+                      {i > 0 && (
+                        <div style={{ display: 'flex', paddingLeft: 15 }}>
+                          <div style={{ width: 1, height: 12, background: 'var(--border-subtle)' }} />
+                        </div>
+                      )}
+                      <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 14,
+                        padding: '12px 0',
+                      }}>
+                        {/* Platform icon */}
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '50%',
+                          background: platformBg,
+                          border: `1px solid ${isActive ? platformColor : 'transparent'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 600,
+                          color: platformColor,
+                          letterSpacing: '0.04em',
+                          flexShrink: 0,
+                          animation: isActive ? 'breathe 2s ease-in-out infinite' : undefined,
+                        }}>
+                          {platformLabel}
+                        </div>
+
+                        {/* Details */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 420 }}>
+                              {dateStr}
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
+                              {timeStr}
+                            </span>
+                          </div>
+                          <div style={{
+                            fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)',
+                            letterSpacing: '0.02em', display: 'flex', flexWrap: 'wrap', gap: '2px 12px',
+                          }}>
+                            {imp.total_conversations != null && (
+                              <span>{imp.total_conversations} conversations</span>
+                            )}
+                            {imp.memories_created != null && imp.memories_created > 0 && (
+                              <span>{imp.memories_created} memories</span>
+                            )}
+                            {sizeStr && <span>{sizeStr}</span>}
+                            {duration && <span>{duration}</span>}
+                          </div>
+                        </div>
+
+                        {/* Status badge */}
+                        <div style={{
+                          fontSize: 9, fontFamily: 'var(--font-mono)',
+                          letterSpacing: '0.08em', textTransform: 'uppercase',
+                          padding: '3px 8px', borderRadius: 999,
+                          fontWeight: 500,
+                          background: isCompleted ? 'rgba(74, 222, 128, 0.10)'
+                            : isActive ? 'rgba(228, 178, 98, 0.10)'
+                            : isError ? 'rgba(248, 113, 113, 0.10)'
+                            : 'rgba(244, 243, 240, 0.06)',
+                          color: isCompleted ? 'rgba(74, 222, 128, 0.8)'
+                            : isActive ? 'rgba(228, 178, 98, 0.8)'
+                            : isError ? 'rgba(248, 113, 113, 0.8)'
+                            : 'var(--text-ghost)',
+                          flexShrink: 0,
+                        }}>
+                          {isCompleted ? 'completed' : isActive ? (imp.pipeline_stage ?? 'processing') : isError ? 'error' : imp.status}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

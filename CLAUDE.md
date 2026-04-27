@@ -29,12 +29,10 @@ Read [`LUCA_PLAN.md`](./LUCA_PLAN.md) at the start of every session. It's the in
 
 - Concise responses. Lead with the action taken. Don't re-explain diffs.
 - Honest opinions. Give a take, not a list of options.
-- Visual excellence is the bar. If something feels white/bright/off, dim it. If something feels dim/unreadable, brighten it. Use mockups as the spec.
+- Visual excellence is the bar. The profile/dashboard should feel rich, warm, and visually compelling — not clinical or monochrome. Use color, gradients, glow, and depth freely on profile surfaces. Other app chrome (chat, nav, settings) can stay minimal.
 - Iterate fast. Small verified increments beat one big unverified push.
 - No emojis in UI. SVG icons everywhere (Lucide preferred when filling in unspecified icons).
 - Pill buttons for everything button-like (`border-radius: 999px`).
-- Agent identity colors are monochrome cream by default; full ochre/blue/magenta only in identity-rich contexts.
-- Body text never brighter than `--ink: rgba(244, 243, 240, 0.93)`. That's the cap.
 
 ## Autonomous decision rules
 

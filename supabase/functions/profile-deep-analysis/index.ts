@@ -23,7 +23,15 @@ Extract:
 - **Code-switching**: do they shift register between topics? When do they become more formal/informal?
 - **Unique verbal signatures**: phrases, patterns, or constructions that are distinctively theirs
 
-Be specific. Quote actual patterns you observe. This is forensic-level analysis.`;
+Be specific. Quote actual patterns you observe. This is forensic-level analysis.
+
+Additionally, extract these SPECIFIC structured metrics for the final synthesis:
+- Identify the user's most-used distinctive phrase/construction and count its occurrences across the corpus.
+- Score hedging rate (0.0-1.0) for each of these domains: emotions, future plans, others' motives, aesthetics, technical opinions, ethical claims. List the top hedge words per domain.
+- Cluster vocabulary into 3 domains (technical, emotional, philosophical). For each: count unique words, estimate percentile vs general population, list top 10 words with approximate occurrence counts.
+- Compare formal vs casual register: provide avg sentence length, passive voice ratio, filler word rate, and a representative 1-2 sentence quote for each register.
+- Categorize humor instances into: dry/understated, self-deprecating, wordplay, observational, absurdist. Estimate the proportion of each (should sum to ~1.0).
+- For each unique verbal signature/construction, estimate its occurrence count.`;
 
 // ── Pass 2: Psychological Profiling ──
 const PSYCHOLOGICAL_PROMPT =
@@ -45,7 +53,12 @@ Analyze:
 - **Stress response patterns**: Fight, flight, freeze, or fawn tendencies
 - **Self-concept**: How they see themselves vs how they present to others
 
-Ground every claim in observed behavior from the conversations. No speculation without evidence.`;
+Ground every claim in observed behavior from the conversations. No speculation without evidence.
+
+For the final structured synthesis, also provide:
+- For each Big Five trait: a confidence interval (low and high bounds, 0-100) alongside the score.
+- For attachment style: numerical anxiety_score (0.0-1.0) and avoidance_score (0.0-1.0) in addition to the categorical label.
+- For cognitive style: percentage splits as numbers: analytical_pct vs intuitive (should sum to ~1.0), abstract_pct vs concrete, systematic_pct vs heuristic.`;
 
 // ── Pass 3: Relational Mapping ──
 const RELATIONAL_PROMPT =
@@ -63,7 +76,12 @@ Analyze:
   - Do they treat the AI as a tool, companion, therapist, intellectual peer?
   - What needs does AI interaction fulfill that human relationships might not?
 
-Be forensic about what their relational language reveals about their inner world.`;
+Be forensic about what their relational language reveals about their inner world.
+
+For the final structured synthesis, also:
+- Extract named individuals mentioned in conversations. For each, provide: their name or identifier (first name, nickname, or "Mom"/"Dad"/etc.), their role (partner, friend, parent, colleague, sibling, mentor, etc.), proximity tier (intimate/close/known/distant), and the relational dynamic type (warm/cool/tense).
+- Identify 3-5 recurring relational patterns as named behaviors (e.g., "Over-gives when others struggle", "Under-asks for support").
+- For the AI relationship, list 3-5 specific needs the user fulfills through AI interaction (e.g., "Sparring partner", "Synthesizer", "Witness to thought").`;
 
 // ── Pass 4: Values & Motivation ──
 const VALUES_PROMPT =
@@ -79,7 +97,13 @@ Analyze:
 - **Meaning-making**: How do they construct narrative meaning from their experiences?
 - **Growth orientation**: Fixed vs growth mindset indicators, areas where each dominates
 
-Distinguish between stated values and revealed preferences (what they say they care about vs what their behavior shows).`;
+Distinguish between stated values and revealed preferences (what they say they care about vs what their behavior shows).
+
+For the final structured synthesis, for each ranked value provide TWO numerical scores (0.0-1.0 each):
+- stated_score: how prominently and frequently they verbally espouse this value
+- revealed_score: how much their actual behavior and choices reflect this value
+Also classify each value's divergence as: "aligned" (gap < 0.10), "over-stated" (stated exceeds revealed by 0.10+), or "under-stated" (revealed exceeds stated by 0.10+).
+Provide a brief narrative for each divergence explaining what the gap means.`;
 
 // ── Pass 5: Shadow Analysis ──
 const SHADOW_PROMPT =
@@ -97,7 +121,11 @@ Analyze with compassion but unflinching honesty:
 
 Frame this with deep empathy. These insights should feel like a wise friend who sees them clearly and loves them anyway. Never judgmental, always illuminating.
 
-IMPORTANT: End with a "Portrait" — a single flowing paragraph that captures the ESSENCE of this person in a way that would make them feel truly, deeply seen. Like a mirror that shows not just their reflection but their soul.`;
+IMPORTANT: End with a "Portrait" — a single flowing paragraph that captures the ESSENCE of this person in a way that would make them feel truly, deeply seen. Like a mirror that shows not just their reflection but their soul.
+
+For the final structured synthesis:
+- For each contradiction, blind spot, compensatory behavior, and avoidance pattern: include a specific evidence quote or data point, and note which analysis pass or data source supports it.
+- Provide 3-5 "horizons" — concrete growth directions with a direction label (e.g., "Toward integration", "Toward rest") and a 1-2 sentence description of what it would look like.`;
 
 // ── Synthesis tool schema ──
 const profileTool = {
@@ -124,6 +152,8 @@ const profileTool = {
                   properties: {
                     score: { type: "number" },
                     evidence: { type: "string" },
+                    confidence_low: { type: "number" },
+                    confidence_high: { type: "number" },
                   },
                 },
                 conscientiousness: {
@@ -131,6 +161,8 @@ const profileTool = {
                   properties: {
                     score: { type: "number" },
                     evidence: { type: "string" },
+                    confidence_low: { type: "number" },
+                    confidence_high: { type: "number" },
                   },
                 },
                 extraversion: {
@@ -138,6 +170,8 @@ const profileTool = {
                   properties: {
                     score: { type: "number" },
                     evidence: { type: "string" },
+                    confidence_low: { type: "number" },
+                    confidence_high: { type: "number" },
                   },
                 },
                 agreeableness: {
@@ -145,6 +179,8 @@ const profileTool = {
                   properties: {
                     score: { type: "number" },
                     evidence: { type: "string" },
+                    confidence_low: { type: "number" },
+                    confidence_high: { type: "number" },
                   },
                 },
                 neuroticism: {
@@ -152,6 +188,8 @@ const profileTool = {
                   properties: {
                     score: { type: "number" },
                     evidence: { type: "string" },
+                    confidence_low: { type: "number" },
+                    confidence_high: { type: "number" },
                   },
                 },
               },
@@ -161,9 +199,19 @@ const profileTool = {
               properties: {
                 primary: { type: "string" },
                 evidence: { type: "string" },
+                anxiety_score: { type: "number" },
+                avoidance_score: { type: "number" },
               },
             },
-            cognitive_style: { type: "string" },
+            cognitive_style: {
+              type: "object",
+              properties: {
+                prose: { type: "string" },
+                analytical_pct: { type: "number" },
+                abstract_pct: { type: "number" },
+                systematic_pct: { type: "number" },
+              },
+            },
             locus_of_control: { type: "string" },
           },
         },
@@ -174,8 +222,91 @@ const profileTool = {
             humor_style: { type: "string" },
             hedging_frequency: { type: "string" },
             assertion_strength: { type: "string" },
-            unique_signatures: { type: "array", items: { type: "string" } },
+            unique_signatures: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  phrase: { type: "string" },
+                  count: { type: "number" },
+                },
+              },
+            },
             emotional_vocabulary_range: { type: "string" },
+            signature_phrase: {
+              type: "object",
+              properties: {
+                phrase: { type: "string" },
+                count: { type: "number" },
+                span_months: { type: "number" },
+              },
+            },
+            hedging_by_topic: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  topic: { type: "string" },
+                  rate: { type: "number" },
+                  hedge_words: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+              },
+            },
+            vocabulary_domains: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  unique_count: { type: "number" },
+                  percentile: { type: "string" },
+                  top_words: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        word: { type: "string" },
+                        count: { type: "number" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            register_metrics: {
+              type: "object",
+              properties: {
+                formal: {
+                  type: "object",
+                  properties: {
+                    avg_sentence_length: { type: "number" },
+                    passive_ratio: { type: "number" },
+                    example: { type: "string" },
+                  },
+                },
+                casual: {
+                  type: "object",
+                  properties: {
+                    avg_sentence_length: { type: "number" },
+                    filler_rate: { type: "number" },
+                    example: { type: "string" },
+                  },
+                },
+              },
+            },
+            humor_distribution: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string" },
+                  proportion: { type: "number" },
+                },
+              },
+            },
           },
         },
         emotional_landscape: {
@@ -200,6 +331,13 @@ const profileTool = {
                   value: { type: "string" },
                   rank: { type: "number" },
                   evidence: { type: "string" },
+                  stated_score: { type: "number" },
+                  revealed_score: { type: "number" },
+                  divergence_tag: {
+                    type: "string",
+                    enum: ["aligned", "over-stated", "under-stated"],
+                  },
+                  divergence_narrative: { type: "string" },
                 },
               },
             },
@@ -225,6 +363,32 @@ const profileTool = {
             power_orientation: { type: "string" },
             intimacy_comfort: { type: "string" },
             ai_relationship_style: { type: "string" },
+            named_people: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  role: { type: "string" },
+                  proximity: { type: "string" },
+                  dynamic_type: { type: "string" },
+                },
+              },
+            },
+            relational_patterns: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  description: { type: "string" },
+                },
+              },
+            },
+            ai_needs: {
+              type: "array",
+              items: { type: "string" },
+            },
           },
         },
         cognitive_tendencies: {
@@ -246,17 +410,64 @@ const profileTool = {
               type: "array",
               items: { type: "string" },
             },
+            horizons: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  direction: { type: "string" },
+                  description: { type: "string" },
+                },
+              },
+            },
           },
         },
         shadow_patterns: {
           type: "object",
           properties: {
-            contradictions: { type: "array", items: { type: "string" } },
-            blind_spots: { type: "array", items: { type: "string" } },
-            avoidance_patterns: { type: "array", items: { type: "string" } },
+            contradictions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  claim: { type: "string" },
+                  evidence: { type: "string" },
+                  source: { type: "string" },
+                },
+              },
+            },
+            blind_spots: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  claim: { type: "string" },
+                  evidence: { type: "string" },
+                  source: { type: "string" },
+                },
+              },
+            },
+            avoidance_patterns: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  claim: { type: "string" },
+                  evidence: { type: "string" },
+                  source: { type: "string" },
+                },
+              },
+            },
             compensatory_behaviors: {
               type: "array",
-              items: { type: "string" },
+              items: {
+                type: "object",
+                properties: {
+                  claim: { type: "string" },
+                  evidence: { type: "string" },
+                  source: { type: "string" },
+                },
+              },
             },
             unasked_questions: { type: "array", items: { type: "string" } },
           },
@@ -652,11 +863,12 @@ ${pass5}`;
 
     // Store shadow insights
     if (profile.shadow_patterns?.blind_spots?.length) {
+      const spotTexts = profile.shadow_patterns.blind_spots.map(
+        (s: any) => (typeof s === "string" ? s : s.claim ?? JSON.stringify(s)),
+      );
       engramInserts.push({
         user_id,
-        content: `SHADOW PATTERNS — Blind spots: ${
-          profile.shadow_patterns.blind_spots.join("; ")
-        }`,
+        content: `SHADOW PATTERNS — Blind spots: ${spotTexts.join("; ")}`,
         engram_type: "semantic",
         strength: 0.85,
         stability: 0.8,

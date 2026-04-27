@@ -42,6 +42,30 @@
   --text-ghost:      rgba(178, 176, 172, 0.36);
   --text-whisper:    rgba(178, 176, 172, 0.22);
 
+  /* Genome profile — warmer cream scale for the psychological dossier */
+  --genome-ink:       rgba(247, 245, 240, 1.00);
+  --genome-primary:   rgba(244, 243, 240, 0.95);
+  --genome-body:      rgba(232, 230, 225, 0.86);
+  --genome-secondary: rgba(208, 205, 198, 0.72);
+  --genome-soft:      rgba(184, 180, 172, 0.62);
+  --genome-tertiary:  rgba(160, 156, 148, 0.50);
+  --genome-ghost:     rgba(140, 136, 128, 0.36);
+  --genome-whisper:   rgba(120, 116, 108, 0.26);
+  --genome-hairline:  rgba(108, 104, 98,  0.18);
+
+  /* Genome accent colors */
+  --rose:       #c97c8a;
+  --rose-faint: rgba(201, 124, 138, 0.10);
+  --sage:       #8aa888;
+  --sage-faint: rgba(138, 168, 136, 0.10);
+  --surface-shadow: #0c0b0e;
+
+  /* Genome column widths */
+  --col-prose:     36rem;
+  --col-portrait:  40rem;
+  --col-data:      56rem;
+  --col-page:      76rem;
+
   /* Border ladder (cream, 5 levels) */
   --border:         rgba(220, 219, 216, 0.08);
   --border-subtle:  rgba(220, 219, 216, 0.06);

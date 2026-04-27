@@ -3,9 +3,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 /**
  * Profile visualization primitives.
  *
- * All components share the lab-instrument aesthetic: hairline strokes only,
- * cream on dark, mathematical precision, no bloom. Each visual element earns
- * its place by encoding meaning — no decorative graphics.
+ * Visual style is flexible — components can range from minimal hairline
+ * instruments to rich, colorful dashboard cards with gradients, glow,
+ * and depth. Match the treatment to what the data deserves.
  *
  * ──────────────────────────────────────────────────────────────────────────
  * TYPE SYSTEM — three voices, never mixed accidentally.
@@ -49,12 +49,10 @@ const INK_HAIR = 'rgba(244, 243, 240, 0.10)';
 const INK_FAINT = 'rgba(244, 243, 240, 0.06)';
 
 /* ────────────────────────────────────────────────────────────
-   COLOR SYSTEM — restrained accent palette
-   Eight hues at similar lightness (~65-72%) and chroma (~30) so
-   they read as a family, not a rainbow. Color is only applied to
-   data marks that *encode* identity (a thread, a memory type, an
-   active state). Backgrounds, ledes, body, axes, eyebrows stay
-   cream/mono. Color earns its place.
+   COLOR SYSTEM — warm accent palette
+   Eight hues at similar lightness (~65-72%) and chroma (~30).
+   Use freely on profile surfaces: backgrounds, fills, borders,
+   labels, data marks. The palette should feel alive, not whispered.
    ──────────────────────────────────────────────────────────── */
 
 export const THREAD_PALETTE: Array<{ name: string; hue: string; dim: string }> = [
@@ -83,7 +81,7 @@ export const MEMORY_TYPE_COLOR: Record<string, { hue: string; dim: string }> = {
 };
 
 const ACTIVE_GLOW = 'rgba(228, 178, 98, 0.85)'; // amber — JourneyTimeline active state
-const ACTIVE_GLOW_SOFT = 'rgba(228, 178, 98, 0.18)'; // amber inner halo (still hairline-discipline)
+const ACTIVE_GLOW_SOFT = 'rgba(228, 178, 98, 0.4)'; // amber halo — visible presence
 
 /* ────────────────────────────────────────────────────────────
    Sigil — generative Big Five signature
@@ -147,48 +145,72 @@ export function Sigil({ bigFive, byType, size = 320, showLabels = false }: {
   }, [byType, cx, cy, outerRadius]);
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block', overflow: 'visible' }} role="img" aria-label="Personality signature">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block', overflow: 'visible', filter: 'drop-shadow(0 0 24px rgba(228, 178, 98, 0.08))' }} role="img" aria-label="Personality signature">
+      <defs>
+        <radialGradient id="sigil-fill" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor="rgba(228, 178, 98, 0.55)" />
+          <stop offset="100%" stopColor="rgba(228, 178, 98, 0.15)" />
+        </radialGradient>
+        <filter id="sigil-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {/* Reference rings — subtle but visible */}
       {[0.25, 0.5, 0.75, 1].map(s => (
-        <circle key={s} cx={cx} cy={cy} r={innerRadius + (outerRadius - innerRadius) * s} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
+        <circle key={s} cx={cx} cy={cy} r={innerRadius + (outerRadius - innerRadius) * s}
+          fill="none" stroke="rgba(244, 243, 240, 0.08)" strokeWidth={1.5}
+          strokeDasharray={s < 1 ? '2 6' : undefined} />
       ))}
-      {traits.map(t => <line key={`spoke-${t.key}`} x1={cx} y1={cy} x2={t.spokeX} y2={t.spokeY} stroke={INK_FAINT} strokeWidth={0.5} />)}
-      {/* Subtle amber fill for the polygon — gives the sigil a center of warmth */}
-      <path d={polygon} fill="rgba(228, 178, 98, 0.06)" stroke={INK} strokeWidth={1} strokeLinejoin="round" />
-      {/* Trait vertices — dominant is amber, submissive is cobalt, others cream */}
+      {/* Spokes */}
+      {traits.map(t => (
+        <line key={`spoke-${t.key}`} x1={cx} y1={cy} x2={t.spokeX} y2={t.spokeY}
+          stroke="rgba(244, 243, 240, 0.06)" strokeWidth={1} />
+      ))}
+      {/* Polygon — gradient fill with solid stroke */}
+      <path d={polygon} fill="url(#sigil-fill)" stroke="rgba(228, 178, 98, 0.8)" strokeWidth={2.5} strokeLinejoin="round" filter="url(#sigil-glow)" />
+      {/* Trait vertices */}
       {traits.map((t, i) => {
         const isDominant = i === dominantIdx;
         const isSubmissive = i === submissiveIdx && t.score <= 30;
-        const fill = isDominant ? 'rgba(228, 178, 98, 0.95)'
-                   : isSubmissive ? 'rgba(135, 165, 200, 0.95)'
-                   : INK;
+        const fill = isDominant ? 'rgba(228, 178, 98, 1)'
+                   : isSubmissive ? 'rgba(135, 165, 200, 1)'
+                   : 'rgba(244, 243, 240, 0.9)';
         return (
           <g key={`v-${t.key}`}>
             {isDominant && (
-              <circle cx={t.x} cy={t.y} r={5}
-                fill="none" stroke="rgba(228, 178, 98, 0.25)" strokeWidth={1} />
+              <circle cx={t.x} cy={t.y} r={12}
+                fill="none" stroke="rgba(228, 178, 98, 0.25)" strokeWidth={2} />
             )}
-            <circle cx={t.x} cy={t.y} r={isDominant ? 2.6 : 2} fill={fill} />
+            <circle cx={t.x} cy={t.y} r={isDominant ? 7 : 5} fill={fill}
+              stroke="rgba(10, 10, 12, 0.6)" strokeWidth={1.5}
+              style={{ filter: isDominant ? 'drop-shadow(0 0 6px rgba(228, 178, 98, 0.5))' : undefined }} />
           </g>
         );
       })}
+      {/* Labels */}
       {showLabels && traits.map((t, i) => {
         const isDominant = i === dominantIdx;
         return (
           <text key={`l-${t.key}`} x={t.labelX} y={t.labelY}
-            fontSize={9} fontFamily="var(--font-mono)"
-            fill={isDominant ? 'rgba(228, 178, 98, 0.9)' : INK_SOFT}
+            fontSize={11} fontFamily="var(--font-mono)" fontWeight={isDominant ? 600 : 400}
+            fill={isDominant ? 'rgba(228, 178, 98, 1)' : 'rgba(244, 243, 240, 0.65)'}
             textAnchor="middle" dominantBaseline="middle"
-            style={{ letterSpacing: '0.1em' }}>{t.initial}</text>
+            style={{ letterSpacing: '0.12em' }}>{t.initial}</text>
         );
       })}
-      {/* Outer ticks colored by memory_type — gives the sigil a hint of the corpus */}
+      {/* Outer memory-type ticks */}
       {ticks.map((tk, i) => (
         <line key={`tk-${i}`}
           x1={tk.x1} y1={tk.y1} x2={tk.x2} y2={tk.y2}
-          stroke={tk.color} strokeWidth={0.85} strokeLinecap="round" />
+          stroke={tk.color} strokeWidth={3} strokeLinecap="round" />
       ))}
-      <circle cx={cx} cy={cy} r={4} fill="none" stroke={INK_GHOST} strokeWidth={0.5} />
-      <circle cx={cx} cy={cy} r={1.5} fill={INK_SOFT} />
+      {/* Center mark */}
+      <circle cx={cx} cy={cy} r={5} fill="none" stroke="rgba(244, 243, 240, 0.15)" strokeWidth={1} />
+      <circle cx={cx} cy={cy} r={2.5} fill="rgba(228, 178, 98, 0.6)" />
     </svg>
   );
 }
@@ -259,15 +281,16 @@ export function TraitTrace({ label, value, max = 100, evidence }: {
       <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', marginBottom: 8 }}>
         {/* Tick marks at quartiles */}
         {[0.25, 0.5, 0.75].map(t => (
-          <line key={t} x1={t * w} y1={h - 4} x2={t * w} y2={h - 1} stroke={INK_HAIR} strokeWidth={0.5} />
+          <line key={t} x1={t * w} y1={h - 4} x2={t * w} y2={h - 1} stroke={INK_HAIR} strokeWidth={1} />
         ))}
-        {/* Bell curve */}
-        <path d={bell} stroke={INK_HAIR} strokeWidth={0.75} fill="none" />
+        {/* Bell curve — filled area */}
+        <path d={bell + ` L${w},${h - 4} L0,${h - 4} Z`} fill="rgba(244, 243, 240, 0.04)" stroke="none" />
+        <path d={bell} stroke={INK_GHOST} strokeWidth={1.5} fill="none" />
         {/* Baseline */}
-        <line x1={0} y1={h - 4} x2={w} y2={h - 4} stroke={INK_HAIR} strokeWidth={0.5} />
-        {/* Marker — vertical hairline + dot, colored by score band */}
-        <line x1={markerX} y1={6} x2={markerX} y2={h - 4} stroke={markerColor} strokeWidth={1} />
-        <circle cx={markerX} cy={h - 4} r={3.5} fill={markerColor} />
+        <line x1={0} y1={h - 4} x2={w} y2={h - 4} stroke={INK_HAIR} strokeWidth={1} />
+        {/* Marker — vertical line + dot, colored by score band */}
+        <line x1={markerX} y1={6} x2={markerX} y2={h - 4} stroke={markerColor} strokeWidth={2} />
+        <circle cx={markerX} cy={h - 4} r={5} fill={markerColor} stroke="rgba(10,10,12,0.5)" strokeWidth={1} />
       </svg>
       {evidence && (
         <p style={{
@@ -414,17 +437,17 @@ export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, m
   const sized = normalized.map((it, i) => {
     const rank = normalized.length > 1 ? i / (normalized.length - 1) : 0;
     const fontSize = minFontSize + (weighted ? (1 - rank) * span : span * 0.5);
-    const opacity = weighted ? 0.4 + (1 - rank) * 0.5 : 0.7;
+    const opacity = weighted ? 0.65 + (1 - rank) * 0.35 : 0.8;
     // Mix accent → cream by rank
     const t = rank; // 0 at top, 1 at bottom
     const r = Math.round(accentRgb[0] * (1 - t) + creamRgb[0] * t);
     const g = Math.round(accentRgb[1] * (1 - t) + creamRgb[1] * t);
     const b = Math.round(accentRgb[2] * (1 - t) + creamRgb[2] * t);
     const color = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-    return { ...it, fontSize, opacity, color };
+    return { ...it, fontSize, opacity, color, isTop3: i < 3 };
   });
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 18px', padding: '4px 0' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '8px 20px', padding: '4px 0' }}>
       {sized.map((s, i) => (
         <span key={i} style={{
           display: 'inline-flex', alignItems: 'baseline', gap: 5,
@@ -435,6 +458,7 @@ export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, m
             fontSize: s.fontSize,
             fontFamily: 'var(--font-serif)',
             fontStyle: 'italic',
+            fontWeight: s.isTop3 ? 500 : undefined,
             color: s.color,
             letterSpacing: '0.005em',
           }}>
@@ -442,9 +466,9 @@ export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, m
           </span>
           {showCounts && s.count !== undefined && (
             <span style={{
-              fontSize: 9,
+              fontSize: 10,
               fontFamily: 'var(--font-mono)',
-              color: `rgba(244, 243, 240, ${Math.max(0.25, s.opacity * 0.55)})`,
+              color: `rgba(244, 243, 240, ${Math.max(0.45, s.opacity * 0.7)})`,
               letterSpacing: '0.06em',
             }}>
               {s.count}
@@ -474,18 +498,18 @@ export function PhaseDiagram({ xLabel, yLabel, xValue, yValue, regions, point, s
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
       {/* Frame */}
-      <rect x={pad} y={pad} width={inner} height={inner} fill="none" stroke={INK_HAIR} strokeWidth={0.75} />
+      <rect x={pad} y={pad} width={inner} height={inner} fill="none" stroke={INK_HAIR} strokeWidth={1} />
       {/* Grid */}
       {[0.25, 0.5, 0.75].map(t => (
         <g key={t}>
-          <line x1={pad + t * inner} y1={pad} x2={pad + t * inner} y2={pad + inner} stroke={INK_FAINT} strokeWidth={0.5} />
-          <line x1={pad} y1={pad + t * inner} x2={pad + inner} y2={pad + t * inner} stroke={INK_FAINT} strokeWidth={0.5} />
+          <line x1={pad + t * inner} y1={pad} x2={pad + t * inner} y2={pad + inner} stroke={INK_FAINT} strokeWidth={0.75} />
+          <line x1={pad} y1={pad + t * inner} x2={pad + inner} y2={pad + t * inner} stroke={INK_FAINT} strokeWidth={0.75} />
         </g>
       ))}
       {/* Regions */}
       {regions?.map((r, i) => (
         <g key={i}>
-          <rect x={px(r.x)} y={py(r.y + r.h)} width={(r.w / 100) * inner} height={(r.h / 100) * inner} fill="rgba(244, 240, 232, 0.025)" stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 3" />
+          <rect x={px(r.x)} y={py(r.y + r.h)} width={(r.w / 100) * inner} height={(r.h / 100) * inner} fill="rgba(244, 240, 232, 0.035)" stroke={INK_HAIR} strokeWidth={0.75} />
           <text x={px(r.x + r.w / 2)} y={py(r.y + r.h / 2)} fontSize={9} fill={INK_GHOST} textAnchor="middle" dominantBaseline="middle" fontFamily="var(--font-mono)" style={{ letterSpacing: '0.05em' }}>
             {r.label}
           </text>
@@ -495,11 +519,11 @@ export function PhaseDiagram({ xLabel, yLabel, xValue, yValue, regions, point, s
       <text x={size / 2} y={size - 8} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} textAnchor="middle" style={{ letterSpacing: '0.1em', textTransform: 'uppercase' }}>{xLabel}</text>
       <text x={10} y={size / 2} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} textAnchor="middle" style={{ letterSpacing: '0.1em', textTransform: 'uppercase' }} transform={`rotate(-90, 10, ${size / 2})`}>{yLabel}</text>
       {/* Crosshair to point */}
-      <line x1={pad} y1={py(yValue)} x2={px(xValue)} y2={py(yValue)} stroke={INK_HAIR} strokeWidth={0.5} strokeDasharray="1 2" />
-      <line x1={px(xValue)} y1={pad + inner} x2={px(xValue)} y2={py(yValue)} stroke={INK_HAIR} strokeWidth={0.5} strokeDasharray="1 2" />
+      <line x1={pad} y1={py(yValue)} x2={px(xValue)} y2={py(yValue)} stroke={INK_HAIR} strokeWidth={1} strokeDasharray="2 3" />
+      <line x1={px(xValue)} y1={pad + inner} x2={px(xValue)} y2={py(yValue)} stroke={INK_HAIR} strokeWidth={1} strokeDasharray="2 3" />
       {/* The point */}
-      <circle cx={px(xValue)} cy={py(yValue)} r={5} fill="none" stroke={INK} strokeWidth={1} />
-      <circle cx={px(xValue)} cy={py(yValue)} r={2} fill={INK} />
+      <circle cx={px(xValue)} cy={py(yValue)} r={7} fill="rgba(228, 178, 98, 0.2)" stroke="rgba(228, 178, 98, 0.8)" strokeWidth={1.5} />
+      <circle cx={px(xValue)} cy={py(yValue)} r={2.5} fill="rgba(228, 178, 98, 0.95)" />
       {point?.label && (
         <text x={px(xValue) + 8} y={py(yValue) - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} style={{ letterSpacing: '0.06em' }}>{point.label}</text>
       )}
@@ -522,10 +546,10 @@ export function MagnitudeBars({ data, height = 80, colorByLabel = false }: {
   const [hover, setHover] = useState<number | null>(null);
   return (
     <div style={{ position: 'relative' }} onMouseLeave={() => setHover(null)}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, padding: '4px 0', borderBottom: `1px solid ${INK_HAIR}` }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height, padding: '4px 0', borderBottom: `1px solid ${INK_HAIR}` }}>
         {data.map((d, i) => {
           const palette = colorByLabel ? MEMORY_TYPE_COLOR[d.label.toLowerCase()] : undefined;
-          const baseColor = palette?.hue ?? 'rgba(244, 240, 232, 0.5)';
+          const baseColor = palette?.hue ?? 'rgba(244, 240, 232, 0.85)';
           const dimColor = palette?.dim ?? 'rgba(244, 240, 232, 0.18)';
           const isOther = hover !== null && hover !== i;
           return (
@@ -539,31 +563,33 @@ export function MagnitudeBars({ data, height = 80, colorByLabel = false }: {
               onMouseEnter={() => setHover(i)}
             >
               <span style={{
-                fontSize: 10, color: isOther ? 'rgba(244, 243, 240, 0.18)' : INK_GHOST,
+                fontSize: 12, color: isOther ? 'rgba(244, 243, 240, 0.18)' : INK_SOFT,
                 fontFamily: 'var(--font-mono)', marginBottom: 4,
                 transition: 'color 200ms ease',
               }}>
                 {d.value}
               </span>
               <div style={{
-                width: '100%', maxWidth: 32,
-                height: `${(d.value / max) * 70}%`,
+                width: '100%', maxWidth: 56,
+                height: `${Math.max(4, (d.value / max) * 75)}%`,
                 background: isOther ? dimColor : baseColor,
-                borderRadius: 1,
-                minHeight: 1,
+                borderRadius: 4,
+                minHeight: 4,
                 transition: 'background 200ms ease',
               }} />
             </div>
           );
         })}
       </div>
-      <div style={{ display: 'flex', gap: 6, padding: '6px 0' }}>
+      <div style={{ display: 'flex', gap: 4, padding: '6px 0' }}>
         {data.map((d, i) => {
+          const palette = colorByLabel ? MEMORY_TYPE_COLOR[d.label.toLowerCase()] : undefined;
+          const labelHue = palette?.hue?.replace(/[\d.]+\)$/, '0.7)') ?? INK_SOFT;
           const isOther = hover !== null && hover !== i;
           return (
             <div key={i} style={{
-              flex: 1, textAlign: 'center', fontSize: 9,
-              color: isOther ? 'rgba(244, 243, 240, 0.22)' : INK_SOFT,
+              flex: 1, textAlign: 'center', fontSize: 11,
+              color: isOther ? 'rgba(244, 243, 240, 0.22)' : labelHue,
               fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
               textTransform: 'uppercase',
               transition: 'color 200ms ease',
@@ -583,7 +609,7 @@ export function MagnitudeBars({ data, height = 80, colorByLabel = false }: {
             marginTop: 8, padding: '6px 10px',
             borderTop: `1px solid ${INK_HAIR}`,
             display: 'flex', alignItems: 'baseline', gap: 12,
-            fontSize: 10, fontFamily: 'var(--font-mono)',
+            fontSize: 11, fontFamily: 'var(--font-mono)',
             letterSpacing: '0.06em',
           }}>
             <span style={{
@@ -655,29 +681,29 @@ export function SectionEyebrow({
   index?: string; label: string; lede?: string; hint?: string;
 }) {
   return (
-    <div style={{ paddingTop: 28, paddingBottom: 14 }}>
+    <div style={{ paddingTop: 36, paddingBottom: 18 }}>
       <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: lede ? 6 : 0,
+        display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: lede ? 10 : 0,
       }}>
         {index !== undefined && (
           <span style={{
-            fontSize: 9.5, color: INK_GHOST, fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.16em', textTransform: 'uppercase',
-            minWidth: 28,
+            fontSize: 11, color: 'rgba(228, 178, 98, 0.6)', fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.14em', textTransform: 'uppercase',
+            minWidth: 32,
           }}>
             {index}
           </span>
         )}
         <span style={{
-          fontSize: 10, color: INK_SOFT, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.18em', textTransform: 'uppercase',
+          fontSize: 13, color: 'rgba(244, 243, 240, 0.75)', fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 500,
         }}>
           {label}
         </span>
         {hint && (
           <span style={{
-            fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.1em', marginLeft: 'auto',
+            fontSize: 10, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.08em', marginLeft: 'auto',
           }}>
             {hint}
           </span>
@@ -685,10 +711,10 @@ export function SectionEyebrow({
       </div>
       {lede && (
         <p style={{
-          margin: 0, paddingLeft: index !== undefined ? 42 : 0,
-          fontSize: 12.5, fontStyle: 'italic',
-          color: INK_SOFT, fontFamily: 'var(--font-serif)',
-          lineHeight: 1.55, maxWidth: 640,
+          margin: 0, paddingLeft: index !== undefined ? 46 : 0,
+          fontSize: 15, fontStyle: 'italic',
+          color: 'rgba(244, 243, 240, 0.6)', fontFamily: 'var(--font-serif)',
+          lineHeight: 1.55, maxWidth: 680,
         }}>
           {lede}
         </p>
@@ -708,20 +734,20 @@ export function TabColophon({ name, page, of = 9, kicker = 'polyphonic · psych.
   const tt = String(of).padStart(2, '0');
   return (
     <div style={{
-      marginTop: 36, paddingTop: 16,
-      borderTop: `1px solid ${INK_FAINT}`,
+      marginTop: 48, paddingTop: 20,
+      borderTop: `1px solid rgba(244, 243, 240, 0.08)`,
       display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
     }}>
       <span style={{
-        fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
-        fontFamily: 'var(--font-mono)', letterSpacing: '0.18em',
+        fontSize: 10, color: 'rgba(244, 243, 240, 0.45)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
         textTransform: 'uppercase',
       }}>
         {name} · {pp} / {tt}
       </span>
       <span style={{
-        fontSize: 9, color: 'rgba(244, 243, 240, 0.28)',
-        fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
+        fontSize: 10, color: 'rgba(244, 243, 240, 0.35)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
       }}>
         {kicker}
       </span>
@@ -736,13 +762,13 @@ export function TabColophon({ name, page, of = 9, kicker = 'polyphonic · psych.
 export function SectionDivider({ ornament = '·∗·' }: { ornament?: string }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '20px 0 4px', color: INK_GHOST,
+      display: 'flex', alignItems: 'center', gap: 16,
+      padding: '28px 0 8px', color: 'rgba(244, 243, 240, 0.3)',
     }}>
-      <div style={{ flex: 1, height: 1, background: INK_HAIR }} />
+      <div style={{ flex: 1, height: 1, background: 'rgba(244, 243, 240, 0.08)' }} />
       <span style={{
-        fontSize: 10, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.4em',
+        fontSize: 12, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.35em',
       }}>
         {ornament}
       </span>
@@ -829,11 +855,11 @@ export function BurstPlot({ events, height = 100, label }: {
         onMouseLeave={() => setTooltip(null)}
       >
         {/* Baseline */}
-        <line x1={padX} y1={H - padBot} x2={W - padX} y2={H - padBot} stroke={INK_HAIR} strokeWidth={0.5} />
+        <line x1={padX} y1={H - padBot} x2={W - padX} y2={H - padBot} stroke={INK_HAIR} strokeWidth={2} />
         {/* Quartile gridlines */}
         {[0.25, 0.5, 0.75].map(q => (
           <line key={q} x1={padX + q * innerW} y1={padTop} x2={padX + q * innerW} y2={H - padBot}
-            stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
+            stroke={INK_FAINT} strokeWidth={1} strokeDasharray="2 4" />
         ))}
         {/* Event hairlines — colored by memory_type if available */}
         {data.stamps.map((s, i) => {
@@ -846,7 +872,7 @@ export function BurstPlot({ events, height = 100, label }: {
           return (
             <line key={i}
               x1={x} y1={y1} x2={x} y2={H - padBot}
-              stroke={stroke} strokeWidth={1} opacity={0.85}
+              stroke={stroke} strokeWidth={3} opacity={0.9} strokeLinecap="round"
               onMouseEnter={(e) => {
                 const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
                 setTooltip({
@@ -865,7 +891,7 @@ export function BurstPlot({ events, height = 100, label }: {
       </svg>
       <div style={{
         display: 'flex', justifyContent: 'space-between',
-        fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+        fontSize: 11, color: INK_GHOST, fontFamily: 'var(--font-mono)',
         letterSpacing: '0.06em', padding: '4px 12px 0',
       }}>
         <span>{fmt(data.tMin)}</span>
@@ -884,12 +910,13 @@ export function BurstPlot({ events, height = 100, label }: {
             return (
               <span key={t} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 9, fontFamily: 'var(--font-mono)',
+                fontSize: 10, fontFamily: 'var(--font-mono)',
                 color: INK_GHOST, letterSpacing: '0.1em',
                 textTransform: 'uppercase',
               }}>
                 <span style={{
-                  display: 'inline-block', width: 8, height: 1.5,
+                  display: 'inline-block', width: 14, height: 4,
+                  borderRadius: 2,
                   background: c.hue,
                 }} />
                 {t}
@@ -909,7 +936,7 @@ export function BurstPlot({ events, height = 100, label }: {
             padding: '5px 9px',
             background: 'rgba(20, 20, 22, 0.94)',
             border: `1px solid ${INK_HAIR}`,
-            fontSize: 10,
+            fontSize: 11,
             fontFamily: 'var(--font-mono)',
             color: INK,
             letterSpacing: '0.04em',
@@ -951,7 +978,7 @@ export function JourneyTimeline({ phases, activeIndex = 0, onSelect }: {
     <div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
         {/* Track */}
-        <line x1={padX} y1={trackY} x2={W - padX} y2={trackY} stroke={INK_HAIR} strokeWidth={0.75} />
+        <line x1={padX} y1={trackY} x2={W - padX} y2={trackY} stroke={INK_HAIR} strokeWidth={2.5} />
         {/* Phase nodes */}
         {phases.map((p, i) => {
           const x = padX + i * step;
@@ -961,29 +988,29 @@ export function JourneyTimeline({ phases, activeIndex = 0, onSelect }: {
               onClick={onSelect ? () => onSelect(i) : undefined}>
               {/* Outer halo on active — subtle amber, hairline-discipline */}
               {isActive && (
-                <circle cx={x} cy={trackY} r={16}
-                  fill="none" stroke={ACTIVE_GLOW_SOFT} strokeWidth={1} />
+                <circle cx={x} cy={trackY} r={22}
+                  fill="none" stroke={ACTIVE_GLOW_SOFT} strokeWidth={1.5} />
               )}
               {/* Outer ring */}
-              <circle cx={x} cy={trackY} r={isActive ? 12 : 8} fill="rgba(10, 10, 12, 1)"
-                stroke={isActive ? ACTIVE_GLOW : INK_GHOST} strokeWidth={isActive ? 1 : 0.75} />
+              <circle cx={x} cy={trackY} r={isActive ? 16 : 12} fill="rgba(10, 10, 12, 1)"
+                stroke={isActive ? ACTIVE_GLOW : INK_GHOST} strokeWidth={isActive ? 2 : 1.5} />
               {/* Inner symbol or dot */}
               {p.symbol ? (
                 <text x={x} y={trackY} fontSize={11} fontFamily="var(--font-mono)"
                   fill={isActive ? ACTIVE_GLOW : INK_SOFT}
                   textAnchor="middle" dominantBaseline="central">{p.symbol}</text>
               ) : (
-                <circle cx={x} cy={trackY} r={isActive ? 3 : 1.5}
+                <circle cx={x} cy={trackY} r={3}
                   fill={isActive ? ACTIVE_GLOW : INK_GHOST} />
               )}
               {/* Label */}
-              <text x={x} y={trackY + 30} fontSize={9} fontFamily="var(--font-mono)"
+              <text x={x} y={trackY + 30} fontSize={11} fontFamily="var(--font-mono)"
                 fill={isActive ? ACTIVE_GLOW : INK_GHOST}
                 textAnchor="middle" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 {p.label}
               </text>
               {/* Index folio */}
-              <text x={x} y={trackY - 18} fontSize={8} fontFamily="var(--font-mono)"
+              <text x={x} y={trackY - 24} fontSize={10} fontFamily="var(--font-mono)"
                 fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.1em' }}>
                 {String(i + 1).padStart(2, '0')}
               </text>
@@ -1054,12 +1081,12 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
       {/* Reference rings */}
       {[0.25, 0.5, 0.75, 1].map(s => (
         <circle key={s} cx={cx} cy={cy} r={innerRadius + (outerRadius - innerRadius) * s}
-          fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
+          fill="none" stroke={INK_HAIR} strokeWidth={0.75} />
       ))}
       {/* Spokes */}
       {points.map(p => (
         <line key={`spoke-${p.key}`} x1={cx} y1={cy} x2={p.spokeX} y2={p.spokeY}
-          stroke={INK_FAINT} strokeWidth={0.5} />
+          stroke={INK_HAIR} strokeWidth={0.75} />
       ))}
       {/* Traces (lower-priority first, so primary draws on top) */}
       {traces.map((trace, i) => {
@@ -1068,9 +1095,9 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
         return (
           <g key={i} opacity={op}>
             <path d={tracePath(trace.values)}
-              fill={isPrimary ? 'rgba(244, 240, 232, 0.045)' : 'none'}
-              stroke={isPrimary ? INK : INK_GHOST}
-              strokeWidth={isPrimary ? 1 : 0.75}
+              fill={isPrimary ? 'rgba(135, 165, 200, 0.12)' : 'none'}
+              stroke={isPrimary ? 'rgba(135, 165, 200, 0.8)' : INK_GHOST}
+              strokeWidth={isPrimary ? 2 : 1}
               strokeLinejoin="round"
               strokeDasharray={isPrimary ? undefined : '2 3'} />
             {isPrimary && points.map(p => {
@@ -1078,7 +1105,7 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
               const r = innerRadius + (outerRadius - innerRadius) * (v / 100);
               const x = cx + Math.cos(p.angle) * r;
               const y = cy + Math.sin(p.angle) * r;
-              return <circle key={`pt-${p.key}`} cx={x} cy={y} r={2} fill={INK} />;
+              return <circle key={`pt-${p.key}`} cx={x} cy={y} r={3.5} fill="rgba(135, 165, 200, 0.9)" stroke="rgba(10,10,12,0.6)" strokeWidth={1} />;
             })}
           </g>
         );
@@ -1317,12 +1344,12 @@ export function DivergenceBar({ items }: {
               {/* Track */}
               <line
                 x1={trackX} y1={barH / 2} x2={trackX + trackW} y2={barH / 2}
-                stroke={INK_FAINT} strokeWidth={0.5}
+                stroke={INK_FAINT} strokeWidth={1}
               />
-              {/* Stated — upper hairline (cream — what the profile claims) */}
+              {/* Stated — upper bar (cream — what the profile claims) */}
               <line
                 x1={trackX} y1={barH / 2 - 4} x2={statedX} y2={barH / 2 - 4}
-                stroke="rgba(244, 243, 240, 0.75)" strokeWidth={1.1}
+                stroke="rgba(244, 243, 240, 0.75)" strokeWidth={2.5} strokeLinecap="round"
               />
               <text
                 x={Math.min(statedX + 6, W - 4)} y={barH / 2 - 4}
@@ -1332,10 +1359,10 @@ export function DivergenceBar({ items }: {
               >
                 STATED
               </text>
-              {/* Revealed — lower hairline (cobalt — what the data shows) */}
+              {/* Revealed — lower bar (cobalt — what the data shows) */}
               <line
                 x1={trackX} y1={barH / 2 + 4} x2={revealedX} y2={barH / 2 + 4}
-                stroke="rgba(135, 165, 200, 0.85)" strokeWidth={1.1}
+                stroke="rgba(135, 165, 200, 0.85)" strokeWidth={2.5} strokeLinecap="round"
               />
               <text
                 x={Math.min(revealedX + 6, W - 4)} y={barH / 2 + 4}
@@ -1376,7 +1403,7 @@ function InstrumentTile({
     <div style={{
       display: 'flex', flexDirection: 'column',
       padding: '14px 16px 12px',
-      borderLeft: `1px solid ${INK_HAIR}`,
+      borderLeft: `1.5px solid ${INK_HAIR}`,
       minHeight: 130, gap: 8,
     }}>
       <div style={{
@@ -1384,14 +1411,14 @@ function InstrumentTile({
         gap: 8,
       }}>
         <span style={{
-          fontSize: 9, color: INK_SOFT, fontFamily: 'var(--font-mono)',
+          fontSize: 10, color: INK_SOFT, fontFamily: 'var(--font-mono)',
           letterSpacing: '0.16em', textTransform: 'uppercase',
         }}>
           {label}
         </span>
         {hint && (
           <span style={{
-            fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+            fontSize: 10, color: INK_GHOST, fontFamily: 'var(--font-mono)',
             letterSpacing: '0.05em',
           }}>
             {hint}
@@ -1403,7 +1430,7 @@ function InstrumentTile({
       </div>
       {footer && (
         <div style={{
-          fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)',
+          fontSize: 10, color: INK_GHOST, fontFamily: 'var(--font-mono)',
           letterSpacing: '0.05em', textAlign: 'center',
         }}>
           {footer}
@@ -1442,24 +1469,43 @@ export function DiurnalRing({ buckets, size = 110 }: {
       footer={total > 0 ? `peak ${String(peakHour).padStart(2, '0')}:00 · ${phase}` : 'awaiting history'}
     >
       <svg width={size} height={size} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <filter id="diurnal-peak-glow">
+            <feDropShadow dx={0} dy={0} stdDeviation={2.5} floodColor="rgba(228, 178, 98, 0.6)" />
+          </filter>
+        </defs>
         {/* Reference rings */}
-        <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
-        <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
-        {/* Cardinal hour ticks at 0/6/12/18 */}
-        {[0, 6, 12, 18].map(h => {
+        <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={INK_HAIR} strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={INK_FAINT} strokeWidth={1} strokeDasharray="2 4" />
+        {/* Cardinal hour ticks at 0/6/12/18 + labels */}
+        {([0, 6, 12, 18] as const).map(h => {
           const a = (h / 24) * Math.PI * 2 - Math.PI / 2;
           const x1 = cx + Math.cos(a) * rOuter;
           const y1 = cy + Math.sin(a) * rOuter;
-          const x2 = cx + Math.cos(a) * (rOuter + 3);
-          const y2 = cy + Math.sin(a) * (rOuter + 3);
-          return <line key={h} x1={x1} y1={y1} x2={x2} y2={y2} stroke={INK_GHOST} strokeWidth={0.5} />;
+          const x2 = cx + Math.cos(a) * (rOuter + 5);
+          const y2 = cy + Math.sin(a) * (rOuter + 5);
+          const lx = cx + Math.cos(a) * (rOuter + 12);
+          const ly = cy + Math.sin(a) * (rOuter + 12);
+          return (
+            <g key={h}>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={INK_GHOST} strokeWidth={1.5} />
+              <text
+                x={lx} y={ly + 3}
+                fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST}
+                textAnchor="middle" style={{ letterSpacing: '0.06em' }}
+              >
+                {String(h).padStart(2, '0')}
+              </text>
+            </g>
+          );
         })}
-        {/* 24 hourly radial bars */}
+        {/* 24 hourly radial bars — skip zero-count hours */}
         {buckets.map((count, h) => {
+          if (count === 0) return null;
           const a = (h / 24) * Math.PI * 2 - Math.PI / 2;
           const len = (count / max) * (rOuter - rInner);
           const r1 = rInner;
-          const r2 = rInner + Math.max(0.5, len);
+          const r2 = rInner + Math.max(2, len);
           const x1 = cx + Math.cos(a) * r1;
           const y1 = cy + Math.sin(a) * r1;
           const x2 = cx + Math.cos(a) * r2;
@@ -1469,13 +1515,15 @@ export function DiurnalRing({ buckets, size = 110 }: {
             <line
               key={h}
               x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={count === 0 ? INK_FAINT : (isPeak ? INK : INK_SOFT)}
-              strokeWidth={isPeak ? 1.25 : 0.85}
+              stroke={isPeak ? 'rgba(228, 178, 98, 0.95)' : INK_SOFT}
+              strokeWidth={5}
+              strokeLinecap="round"
+              filter={isPeak ? 'url(#diurnal-peak-glow)' : undefined}
             />
           );
         })}
-        {/* Center dot */}
-        <circle cx={cx} cy={cy} r={1} fill={INK_GHOST} />
+        {/* Center dot — amber */}
+        <circle cx={cx} cy={cy} r={3} fill="rgba(228, 178, 98, 0.85)" />
       </svg>
     </InstrumentTile>
   );
@@ -1492,7 +1540,7 @@ export function WeeklyMicroBars({ buckets }: { buckets: number[] /* length 7, Su
   const peakDow = buckets.indexOf(max);
   const dowName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][peakDow];
   const total = buckets.reduce((a, b) => a + b, 0);
-  const W = 168, H = 86, padX = 4, gap = 6;
+  const W = 168, H = 86, padX = 4, gap = 3;
   const colW = (W - padX * 2 - gap * 6) / 7;
 
   return (
@@ -1503,7 +1551,7 @@ export function WeeklyMicroBars({ buckets }: { buckets: number[] /* length 7, Su
     >
       <svg width={W} height={H} style={{ display: 'block' }}>
         {/* Baseline */}
-        <line x1={padX} y1={H - 16} x2={W - padX} y2={H - 16} stroke={INK_FAINT} strokeWidth={0.5} />
+        <line x1={padX} y1={H - 16} x2={W - padX} y2={H - 16} stroke={INK_HAIR} strokeWidth={1.5} />
         {buckets.map((c, i) => {
           const x = padX + i * (colW + gap);
           const h = (c / max) * (H - 28);
@@ -1512,16 +1560,17 @@ export function WeeklyMicroBars({ buckets }: { buckets: number[] /* length 7, Su
             <g key={i}>
               <rect
                 x={x}
-                y={H - 16 - h}
+                y={H - 16 - Math.max(h, c > 0 ? 2 : 0)}
                 width={colW}
-                height={h}
-                fill={c === 0 ? INK_FAINT : (isPeak ? INK : INK_SOFT)}
-                opacity={c === 0 ? 0.4 : 1}
+                height={Math.max(h, c > 0 ? 2 : 0)}
+                rx={2} ry={2}
+                fill={c === 0 ? 'none' : (isPeak ? 'rgba(228, 178, 98, 0.85)' : INK_SOFT)}
+                opacity={c === 0 ? 0 : 0.7}
               />
               <text
                 x={x + colW / 2} y={H - 4}
-                fontSize={8.5} fontFamily="var(--font-mono)"
-                fill={isPeak ? INK_SOFT : INK_GHOST}
+                fontSize={10} fontFamily="var(--font-mono)"
+                fill={isPeak ? 'rgba(228, 178, 98, 0.85)' : INK_GHOST}
                 textAnchor="middle"
                 style={{ letterSpacing: '0.06em' }}
               >
@@ -1545,7 +1594,7 @@ export function ConfidencePulse({ tiers }: {
 }) {
   const total = tiers.low + tiers.mid + tiers.high;
   const W = 168, H = 86;
-  const barY = H / 2 - 6, barH = 12;
+  const barY = H / 2 - 8, barH = 16;
   const padX = 6;
   const trackW = W - padX * 2;
 
@@ -1572,24 +1621,26 @@ export function ConfidencePulse({ tiers }: {
     >
       <svg width={W} height={H} style={{ display: 'block' }}>
         {/* Tier baseline */}
-        <line x1={padX} y1={barY + barH + 6} x2={W - padX} y2={barY + barH + 6} stroke={INK_FAINT} strokeWidth={0.5} />
-        {/* Low segment */}
-        <rect x={padX} y={barY} width={lowW} height={barH} fill={INK_GHOST} />
-        {/* Mid segment */}
-        <rect x={padX + lowW} y={barY} width={midW} height={barH} fill={INK_SOFT} />
-        {/* High segment */}
-        <rect x={padX + lowW + midW} y={barY} width={highW} height={barH} fill={INK} />
+        <line x1={padX} y1={barY + barH + 6} x2={W - padX} y2={barY + barH + 6} stroke={INK_HAIR} strokeWidth={1.5} />
+        {/* Low segment — cobalt, rounded left end */}
+        <rect x={padX} y={barY} width={lowW} height={barH} fill="rgba(135, 165, 200, 0.7)" />
+        {lowW > 0 && <rect x={padX} y={barY} width={Math.min(lowW, 4)} height={barH} rx={4} ry={4} fill="rgba(135, 165, 200, 0.7)" />}
+        {/* Mid segment — amber */}
+        <rect x={padX + lowW} y={barY} width={midW} height={barH} fill="rgba(228, 178, 98, 0.7)" />
+        {/* High segment — sage, rounded right end */}
+        <rect x={padX + lowW + midW} y={barY} width={highW} height={barH} fill="rgba(143, 175, 137, 0.8)" />
+        {highW > 0 && <rect x={padX + lowW + midW + highW - Math.min(highW, 4)} y={barY} width={Math.min(highW, 4)} height={barH} rx={4} ry={4} fill="rgba(143, 175, 137, 0.8)" />}
         {/* Tier ticks above */}
-        <line x1={padX + lowW} y1={barY - 5} x2={padX + lowW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={0.5} />
-        <line x1={padX + lowW + midW} y1={barY - 5} x2={padX + lowW + midW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={0.5} />
-        {/* Tier labels */}
-        <text x={padX + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>LOW</text>
-        <text x={padX + lowW + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>MID</text>
-        <text x={padX + lowW + midW + 2} y={barY - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} style={{ letterSpacing: '0.08em' }}>HIGH</text>
-        {/* Counts beneath each segment */}
-        <text x={padX + lowW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle">{tiers.low}</text>
-        <text x={padX + lowW + midW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK_SOFT} textAnchor="middle">{tiers.mid}</text>
-        <text x={padX + lowW + midW + highW / 2} y={barY + barH + 16} fontSize={9} fontFamily="var(--font-mono)" fill={INK} textAnchor="middle">{tiers.high}</text>
+        <line x1={padX + lowW} y1={barY - 5} x2={padX + lowW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={1} />
+        <line x1={padX + lowW + midW} y1={barY - 5} x2={padX + lowW + midW} y2={barY - 1} stroke={INK_GHOST} strokeWidth={1} />
+        {/* Tier labels — colored to match segments */}
+        <text x={padX + 2} y={barY - 8} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(135, 165, 200, 0.85)" style={{ letterSpacing: '0.08em' }}>LOW</text>
+        <text x={padX + lowW + 2} y={barY - 8} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(228, 178, 98, 0.85)" style={{ letterSpacing: '0.08em' }}>MID</text>
+        <text x={padX + lowW + midW + 2} y={barY - 8} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(143, 175, 137, 0.9)" style={{ letterSpacing: '0.08em' }}>HIGH</text>
+        {/* Counts beneath each segment — colored to match */}
+        <text x={padX + lowW / 2} y={barY + barH + 18} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(135, 165, 200, 0.85)" textAnchor="middle">{tiers.low}</text>
+        <text x={padX + lowW + midW / 2} y={barY + barH + 18} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(228, 178, 98, 0.85)" textAnchor="middle">{tiers.mid}</text>
+        <text x={padX + lowW + midW + highW / 2} y={barY + barH + 18} fontSize={10} fontFamily="var(--font-mono)" fill="rgba(143, 175, 137, 0.9)" textAnchor="middle">{tiers.high}</text>
       </svg>
     </InstrumentTile>
   );
@@ -1627,29 +1678,36 @@ export function SignalCoherence({ sharpness, confidence }: {
       footer={verdict.toLowerCase()}
     >
       <svg width={W} height={H} style={{ display: 'block' }}>
+        <defs>
+          <filter id="coherence-point-glow">
+            <feDropShadow dx={0} dy={0} stdDeviation={3} floodColor="rgba(228, 178, 98, 0.5)" />
+          </filter>
+        </defs>
         {/* Plot frame */}
-        <rect x={padL} y={padT} width={plotW} height={plotH} fill="none" stroke={INK_FAINT} strokeWidth={0.5} />
+        <rect x={padL} y={padT} width={plotW} height={plotH} fill="none" stroke={INK_GHOST} strokeWidth={1.5} />
+        {/* Subtle quadrant tints */}
+        <rect x={padL + plotW / 2} y={padT} width={plotW / 2} height={plotH / 2} fill="rgba(143, 175, 137, 0.04)" />
+        <rect x={padL} y={padT + plotH / 2} width={plotW / 2} height={plotH / 2} fill="rgba(195, 130, 165, 0.04)" />
         {/* Quadrant midlines */}
-        <line x1={padL + plotW / 2} y1={padT} x2={padL + plotW / 2} y2={padT + plotH} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
-        <line x1={padL} y1={padT + plotH / 2} x2={padL + plotW} y2={padT + plotH / 2} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="1 3" />
+        <line x1={padL + plotW / 2} y1={padT} x2={padL + plotW / 2} y2={padT + plotH} stroke={INK_HAIR} strokeWidth={1} strokeDasharray="2 4" />
+        <line x1={padL} y1={padT + plotH / 2} x2={padL + plotW} y2={padT + plotH / 2} stroke={INK_HAIR} strokeWidth={1} strokeDasharray="2 4" />
         {/* Y-axis label (CONFIDENCE) */}
-        <text x={4} y={padT + plotH / 2} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST}
+        <text x={4} y={padT + plotH / 2} fontSize={10} fontFamily="var(--font-mono)" fill={INK_GHOST}
           textAnchor="middle" transform={`rotate(-90 4 ${padT + plotH / 2})`}
           style={{ letterSpacing: '0.1em' }}>CONF</text>
         {/* X-axis label (SHARPNESS) */}
-        <text x={padL + plotW / 2} y={H - 8} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST}
+        <text x={padL + plotW / 2} y={H - 6} fontSize={10} fontFamily="var(--font-mono)" fill={INK_GHOST}
           textAnchor="middle" style={{ letterSpacing: '0.1em' }}>SHARP</text>
-        {/* The point — small open circle if data is real, ghost mark if zero */}
+        {/* The point — solid amber circle with glow if data is real, ghost mark if zero */}
         {(sharpness > 0 || confidence > 0) ? (
           <>
-            {/* Crosshair */}
-            <line x1={padL} y1={y} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={0.5} />
-            <line x1={x} y1={padT + plotH} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={0.5} />
-            <circle cx={x} cy={y} r={3} fill="none" stroke={INK} strokeWidth={1} />
-            <circle cx={x} cy={y} r={0.8} fill={INK} />
+            {/* Crosshairs to point — solid */}
+            <line x1={padL} y1={y} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={1} />
+            <line x1={x} y1={padT + plotH} x2={x} y2={y} stroke={INK_HAIR} strokeWidth={1} />
+            <circle cx={x} cy={y} r={8} fill="rgba(228, 178, 98, 0.85)" stroke="rgba(10, 10, 12, 0.5)" strokeWidth={1.5} filter="url(#coherence-point-glow)" />
           </>
         ) : (
-          <text x={padL + plotW / 2} y={padT + plotH / 2 + 4} fontSize={9}
+          <text x={padL + plotW / 2} y={padT + plotH / 2 + 4} fontSize={10}
             fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle">—</text>
         )}
       </svg>
@@ -1668,8 +1726,8 @@ export function SignalStrip({ children }: { children: ReactNode }) {
     <div style={{
       display: 'grid',
       gridTemplateColumns: 'repeat(4, 1fr)',
-      borderTop: `1px solid ${INK_HAIR}`,
-      borderBottom: `1px solid ${INK_HAIR}`,
+      borderTop: `1.5px solid ${INK_HAIR}`,
+      borderBottom: `1.5px solid ${INK_HAIR}`,
     }}>
       {children}
     </div>
@@ -1777,17 +1835,18 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
               <line
                 x1={trackX} y1={yMid} x2={trackX + trackW} y2={yMid}
                 stroke={isOther ? INK_FAINT : INK_HAIR}
-                strokeWidth={0.5}
+                strokeWidth={1.5}
               />
               {/* Color swatch — small filled square next to the label */}
               <rect
-                x={4} y={yMid - 4} width={6} height={6}
+                x={4} y={yMid - 4} width={8} height={8}
+                rx={2} ry={2}
                 fill={isOther ? baseColor.dim : baseColor.hue}
               />
               {/* Thread label (italic-serif, capitalized) */}
               <text
-                x={18} y={yMid}
-                fontSize={13} fontFamily="var(--font-serif)"
+                x={20} y={yMid}
+                fontSize={15} fontFamily="var(--font-serif)"
                 fontStyle="italic" fill={labelColor}
                 dominantBaseline="middle"
                 style={{ textTransform: 'capitalize', transition: 'fill 200ms ease' }}
@@ -1797,7 +1856,7 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
               {/* Count — mono ghost on the right of the label area */}
               <text
                 x={labelW - 4} y={yMid}
-                fontSize={9} fontFamily="var(--font-mono)"
+                fontSize={10} fontFamily="var(--font-mono)"
                 fill={isOther ? 'rgba(244, 243, 240, 0.18)' : INK_GHOST}
                 textAnchor="end" dominantBaseline="middle"
                 style={{ letterSpacing: '0.06em', transition: 'fill 200ms ease' }}
@@ -1809,14 +1868,15 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
                 const ms = new Date(ev.at).getTime();
                 if (!Number.isFinite(ms)) return null;
                 const x = xOf(ms);
-                const tickH = 5 + ev.magnitude * 7; // 5..12
+                const tickH = 8 + ev.magnitude * 12; // 8..20
                 return (
                   <line
                     key={j}
                     x1={x} y1={yMid - tickH / 2}
                     x2={x} y2={yMid + tickH / 2}
                     stroke={tickHue}
-                    strokeWidth={isActive ? 1.4 : 1}
+                    strokeWidth={isActive ? 5 : 4}
+                    strokeLinecap="round"
                     style={{ transition: 'stroke 200ms ease, stroke-width 200ms ease' }}
                     onMouseEnter={(e) => {
                       const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
@@ -1847,17 +1907,17 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
         })}
         {/* Time axis */}
         <g transform={`translate(0 ${threads.length * laneHeight + 14})`}>
-          <text x={trackX} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>
+          <text x={trackX} y={0} fontSize={10} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>
             {fmtDate(timeRange.tMin)}
           </text>
-          <text x={trackX + trackW / 2} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.06em' }}>
+          <text x={trackX + trackW / 2} y={0} fontSize={10} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.06em' }}>
             {locked !== null
               ? `locked · ${threads[locked].thread}`
               : (active !== null
                 ? `hover · ${threads[active].thread}`
                 : `${threads.length} threads · click to lock`)}
           </text>
-          <text x={trackX + trackW} y={0} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>
+          <text x={trackX + trackW} y={0} fontSize={10} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>
             {fmtDate(timeRange.tMax)}
           </text>
         </g>
@@ -1897,17 +1957,16 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
    circles, a smoothed running-mean hairline, date axis labels.
    ════════════════════════════════════════════════════════════ */
 
-export function ValenceTrajectory({ events, height = 160 }: {
+export function ValenceTrajectory({ events, height = 180 }: {
   events: Array<{ at: string; valence: number; intensity: number }>;
   height?: number;
 }) {
-  const [tooltip, setTooltip] = useState<{
-    x: number; y: number; date: string; valence: number; intensity: number;
-  } | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const data = useMemo(() => {
+  // Downsample into buckets for a clean area chart instead of 481 individual dots
+  const chart = useMemo(() => {
     if (!events?.length) return null;
-    const stamps = events
+    const sorted = events
       .map(e => ({
         t: new Date(e.at).getTime(),
         v: Math.max(-1, Math.min(1, e.valence)),
@@ -1915,35 +1974,52 @@ export function ValenceTrajectory({ events, height = 160 }: {
       }))
       .filter(e => Number.isFinite(e.t))
       .sort((a, b) => a.t - b.t);
-    if (!stamps.length) return null;
-    const tMin = stamps[0].t;
-    const tMax = stamps[stamps.length - 1].t;
-    const span = Math.max(1, tMax - tMin);
-    // Running mean — window of min(11, n/4) so it's never overwhelmed
-    const window = Math.max(3, Math.min(11, Math.floor(stamps.length / 4)));
-    const smoothed = stamps.map((_, i) => {
-      const lo = Math.max(0, i - Math.floor(window / 2));
-      const hi = Math.min(stamps.length, i + Math.ceil(window / 2));
-      const slice = stamps.slice(lo, hi);
-      const m = slice.reduce((acc, s) => acc + s.v, 0) / slice.length;
-      return m;
-    });
-    return { stamps, tMin, tMax, span, smoothed };
+    if (!sorted.length) return null;
+
+    // Create ~60 buckets (or fewer if less data) for a smooth curve
+    const bucketCount = Math.min(60, sorted.length);
+    const perBucket = Math.ceil(sorted.length / bucketCount);
+    const buckets: Array<{ meanV: number; maxV: number; minV: number; meanI: number; n: number; t: number }> = [];
+
+    for (let b = 0; b < bucketCount; b++) {
+      const start = b * perBucket;
+      const end = Math.min(start + perBucket, sorted.length);
+      const slice = sorted.slice(start, end);
+      if (!slice.length) continue;
+      const sumV = slice.reduce((a, s) => a + s.v, 0);
+      const sumI = slice.reduce((a, s) => a + s.i, 0);
+      buckets.push({
+        meanV: sumV / slice.length,
+        maxV: Math.max(...slice.map(s => s.v)),
+        minV: Math.min(...slice.map(s => s.v)),
+        meanI: sumI / slice.length,
+        n: slice.length,
+        t: slice[Math.floor(slice.length / 2)].t,
+      });
+    }
+
+    const tMin = sorted[0].t;
+    const tMax = sorted[sorted.length - 1].t;
+    const meanV = sorted.reduce((a, s) => a + s.v, 0) / sorted.length;
+    const posCount = sorted.filter(s => s.v > 0.05).length;
+    const negCount = sorted.filter(s => s.v < -0.05).length;
+
+    return { buckets, tMin, tMax, total: sorted.length, meanV, posCount, negCount };
   }, [events]);
 
-  if (!data) {
+  if (!chart) {
     return <EmptyState note="awaiting per-memory affective signal" height={height} />;
   }
 
   const W = 1000;
   const H = height;
-  const padL = 12, padR = 12, padT = 14, padB = 24;
+  const padL = 36, padR = 16, padT = 16, padB = 32;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
   const midY = padT + innerH / 2;
+  const n = chart.buckets.length;
 
-  const xOf = (t: number) => padL + ((t - data.tMin) / data.span) * innerW;
-  // valence -1..+1 → bottom..top
+  const xOf = (i: number) => padL + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2);
   const yOf = (v: number) => midY - (v * (innerH / 2));
 
   const fmtDate = (ms: number) => {
@@ -1951,122 +2027,343 @@ export function ValenceTrajectory({ events, height = 160 }: {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // Smoothed mean path
-  const smoothedPath = data.stamps.map((s, i) => {
-    const x = xOf(s.t);
-    const y = yOf(data.smoothed[i]);
+  // Build smooth curve paths using the bucket means
+  const meanPath = chart.buckets.map((b, i) => {
+    const x = xOf(i), y = yOf(b.meanV);
     return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
 
-  // Means for hint
-  const meanV = data.stamps.reduce((a, s) => a + s.v, 0) / data.stamps.length;
-  const positiveCount = data.stamps.filter(s => s.v > 0.05).length;
-  const negativeCount = data.stamps.filter(s => s.v < -0.05).length;
+  // Range band (min-max envelope) — shows the spread within each bucket
+  const rangePath = chart.buckets.map((b, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(b.maxV).toFixed(1)}`).join(' ')
+    + chart.buckets.slice().reverse().map((b, i) => `L${xOf(n - 1 - i).toFixed(1)},${yOf(b.minV).toFixed(1)}`).join(' ')
+    + ' Z';
+
+  // Positive area (mean to zero, clamped above zero)
+  const posAreaPath = chart.buckets.map((b, i) => {
+    const y = yOf(Math.max(0, b.meanV));
+    return `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ') + ` L${xOf(n - 1).toFixed(1)},${midY} L${xOf(0).toFixed(1)},${midY} Z`;
+
+  // Negative area (mean to zero, clamped below zero)
+  const negAreaPath = chart.buckets.map((b, i) => {
+    const y = yOf(Math.min(0, b.meanV));
+    return `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ') + ` L${xOf(n - 1).toFixed(1)},${midY} L${xOf(0).toFixed(1)},${midY} Z`;
+
+  const hb = hoverIdx !== null ? chart.buckets[hoverIdx] : null;
+  const hx = hoverIdx !== null ? xOf(hoverIdx) : 0;
 
   return (
     <div style={{ position: 'relative' }}>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-        style={{ display: 'block' }}
-        onMouseLeave={() => setTooltip(null)}
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}
+        onMouseLeave={() => setHoverIdx(null)}
       >
-        {/* Reference gridlines at ±0.5 */}
-        <line x1={padL} y1={yOf(0.5)} x2={W - padR} y2={yOf(0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
-        <line x1={padL} y1={yOf(-0.5)} x2={W - padR} y2={yOf(-0.5)} stroke={INK_FAINT} strokeWidth={0.5} strokeDasharray="2 4" />
-        {/* Zero baseline */}
-        <line x1={padL} y1={midY} x2={W - padR} y2={midY} stroke={INK_HAIR} strokeWidth={0.75} />
-        {/* Y-axis tick labels — left margin */}
-        <text x={padL - 2} y={yOf(0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>+.5</text>
-        <text x={padL - 2} y={midY} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>0</text>
-        <text x={padL - 2} y={yOf(-0.5)} fontSize={8} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" dominantBaseline="middle" style={{ letterSpacing: '0.06em' }}>-.5</text>
-        {/* Smoothed mean line — under the points (amber for visual coherence with active state) */}
-        {data.stamps.length >= 2 && (
-          <path d={smoothedPath} stroke="rgba(228, 178, 98, 0.45)" strokeWidth={1.1} fill="none" />
-        )}
-        {/* Per-memory points — open circles, radius scaled by intensity, color by valence sign */}
-        {data.stamps.map((s, i) => {
-          const x = xOf(s.t);
-          const y = yOf(s.v);
-          const r = 1.8 + s.i * 3.5; // 1.8..5.3px
-          // Three bands: clearly positive → sage, clearly negative → cobalt, near-zero → cream
-          const stroke = s.v > 0.1
-            ? 'rgba(143, 175, 137, 0.9)'   // sage
-            : s.v < -0.1
-              ? 'rgba(135, 165, 200, 0.9)' // cobalt
-              : 'rgba(244, 243, 240, 0.55)'; // neutral cream
+        <defs>
+          <linearGradient id="vt-pos-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(143, 175, 137, 0.25)" />
+            <stop offset="100%" stopColor="rgba(143, 175, 137, 0.02)" />
+          </linearGradient>
+          <linearGradient id="vt-neg-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(135, 165, 200, 0.02)" />
+            <stop offset="100%" stopColor="rgba(135, 165, 200, 0.20)" />
+          </linearGradient>
+        </defs>
+
+        {/* Faint reference gridlines */}
+        <line x1={padL} y1={yOf(0.5)} x2={W - padR} y2={yOf(0.5)} stroke={INK_FAINT} strokeWidth={0.75} strokeDasharray="4 8" />
+        <line x1={padL} y1={yOf(-0.5)} x2={W - padR} y2={yOf(-0.5)} stroke={INK_FAINT} strokeWidth={0.75} strokeDasharray="4 8" />
+
+        {/* Zero baseline — subtle, not dominant */}
+        <line x1={padL} y1={midY} x2={W - padR} y2={midY} stroke={INK_HAIR} strokeWidth={1} />
+
+        {/* Range envelope — light band showing min/max spread */}
+        <path d={rangePath} fill="rgba(244, 243, 240, 0.04)" stroke="none" />
+
+        {/* Positive area fill — sage gradient fading toward zero */}
+        <path d={posAreaPath} fill="url(#vt-pos-grad)" stroke="none" />
+
+        {/* Negative area fill — cobalt gradient fading toward zero */}
+        <path d={negAreaPath} fill="url(#vt-neg-grad)" stroke="none" />
+
+        {/* Mean line — the hero element */}
+        <path d={meanPath} stroke="rgba(228, 178, 98, 0.8)" strokeWidth={2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Bucket interaction columns — invisible hit regions */}
+        {chart.buckets.map((b, i) => {
+          const x = xOf(i);
+          const colW = innerW / n;
           return (
-            <circle key={i} cx={x} cy={y} r={r}
-              fill="none" stroke={stroke}
-              strokeWidth={1} opacity={0.9}
-              onMouseEnter={(e) => {
-                const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
-                setTooltip({
-                  x: ((x / W) * rect.width) + rect.left,
-                  y: rect.top + (y / H) * rect.height,
-                  date: fmtDate(s.t),
-                  valence: s.v,
-                  intensity: s.i,
-                });
-              }}
-              onMouseLeave={() => setTooltip(null)}
-              style={{ cursor: 'default', transition: 'stroke-width 200ms ease' }}
+            <rect key={i}
+              x={x - colW / 2} y={padT} width={colW} height={innerH}
+              fill="transparent"
+              onMouseEnter={() => setHoverIdx(i)}
             />
           );
         })}
-        {/* Date labels — corners + midpoint */}
-        <text x={padL} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>{fmtDate(data.tMin)}</text>
-        <text x={W / 2} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.04em' }}>
-          n={data.stamps.length} · μ={meanV >= 0 ? '+' : ''}{meanV.toFixed(2)}
+
+        {/* Hover crosshair + dot */}
+        {hoverIdx !== null && hb && (
+          <g>
+            <line x1={hx} y1={padT} x2={hx} y2={padT + innerH} stroke={INK_HAIR} strokeWidth={1} />
+            <circle cx={hx} cy={yOf(hb.meanV)} r={4}
+              fill="rgba(228, 178, 98, 0.9)" stroke="rgba(10,10,12,0.5)" strokeWidth={1.5} />
+            {/* Min/max markers */}
+            {hb.maxV !== hb.minV && (
+              <>
+                <circle cx={hx} cy={yOf(hb.maxV)} r={2} fill="rgba(143, 175, 137, 0.7)" />
+                <circle cx={hx} cy={yOf(hb.minV)} r={2} fill="rgba(135, 165, 200, 0.7)" />
+              </>
+            )}
+          </g>
+        )}
+
+        {/* Y-axis labels */}
+        <text x={padL - 8} y={yOf(0.5)} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" dominantBaseline="middle">+.5</text>
+        <text x={padL - 8} y={midY} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" dominantBaseline="middle">0</text>
+        <text x={padL - 8} y={yOf(-0.5)} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" dominantBaseline="middle">-.5</text>
+
+        {/* X-axis labels */}
+        <text x={padL} y={H - 8} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="start" style={{ letterSpacing: '0.04em' }}>{fmtDate(chart.tMin)}</text>
+        <text x={W / 2} y={H - 8} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="middle" style={{ letterSpacing: '0.04em' }}>
+          {chart.total} memories · μ={chart.meanV >= 0 ? '+' : ''}{chart.meanV.toFixed(2)}
         </text>
-        <text x={W - padR} y={H - 6} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>{fmtDate(data.tMax)}</text>
+        <text x={W - padR} y={H - 8} fontSize={9} fontFamily="var(--font-mono)" fill={INK_GHOST} textAnchor="end" style={{ letterSpacing: '0.04em' }}>{fmtDate(chart.tMax)}</text>
       </svg>
-      {/* Editorial caption beneath: positive vs negative split — color-coded */}
+
+      {/* Hover tooltip */}
+      {hoverIdx !== null && hb && (
+        <div style={{
+          position: 'absolute',
+          left: `${(hx / W) * 100}%`, top: 0,
+          transform: 'translateX(-50%)',
+          padding: '6px 10px',
+          background: 'rgba(20, 20, 22, 0.95)',
+          border: `1px solid ${INK_HAIR}`,
+          borderRadius: 6,
+          fontSize: 10, fontFamily: 'var(--font-mono)', color: INK,
+          letterSpacing: '0.04em', whiteSpace: 'nowrap', zIndex: 50,
+          pointerEvents: 'none',
+        }}>
+          {fmtDate(hb.t)}{' · '}
+          <span style={{
+            color: hb.meanV > 0.05 ? 'rgba(143, 175, 137, 0.95)'
+                : hb.meanV < -0.05 ? 'rgba(135, 165, 200, 0.95)' : INK_SOFT,
+          }}>
+            {hb.meanV >= 0 ? '+' : ''}{hb.meanV.toFixed(2)}
+          </span>
+          {hb.n > 1 && <span style={{ color: INK_GHOST }}>{' · '}{hb.n} memories</span>}
+        </div>
+      )}
+
+      {/* Legend */}
       <div style={{
-        marginTop: 8, display: 'flex', justifyContent: 'space-between',
+        marginTop: 10, display: 'flex', justifyContent: 'center', gap: 28,
         fontSize: 9, fontFamily: 'var(--font-mono)',
         letterSpacing: '0.1em', textTransform: 'uppercase',
       }}>
-        <span style={{ color: 'rgba(143, 175, 137, 0.8)' }}>
-          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(143, 175, 137, 0.85)', marginRight: 6, verticalAlign: 'middle' }} />
-          positive · {positiveCount}
+        <span style={{ color: 'rgba(143, 175, 137, 0.8)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 4, background: 'rgba(143, 175, 137, 0.7)', borderRadius: 2, display: 'inline-block' }} />
+          positive · {chart.posCount}
         </span>
-        <span style={{ color: INK_GHOST }}>
-          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(244, 243, 240, 0.55)', marginRight: 6, verticalAlign: 'middle' }} />
-          neutral · {data.stamps.length - positiveCount - negativeCount}
+        <span style={{ color: INK_GHOST, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 4, background: 'rgba(244, 243, 240, 0.35)', borderRadius: 2, display: 'inline-block' }} />
+          neutral · {chart.total - chart.posCount - chart.negCount}
         </span>
-        <span style={{ color: 'rgba(135, 165, 200, 0.85)' }}>
-          <span style={{ display: 'inline-block', width: 8, height: 1.5, background: 'rgba(135, 165, 200, 0.85)', marginRight: 6, verticalAlign: 'middle' }} />
-          negative · {negativeCount}
+        <span style={{ color: 'rgba(135, 165, 200, 0.85)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 4, background: 'rgba(135, 165, 200, 0.7)', borderRadius: 2, display: 'inline-block' }} />
+          negative · {chart.negCount}
         </span>
       </div>
-      {tooltip && (
-        <div
-          style={{
-            position: 'fixed',
-            left: tooltip.x + 8,
-            top: tooltip.y - 30,
-            pointerEvents: 'none',
-            padding: '5px 9px',
-            background: 'rgba(20, 20, 22, 0.94)',
-            border: `1px solid ${INK_HAIR}`,
-            fontSize: 10,
-            fontFamily: 'var(--font-mono)',
-            color: INK,
-            letterSpacing: '0.04em',
-            whiteSpace: 'nowrap',
-            zIndex: 50,
-          }}
-        >
-          {tooltip.date}{' · '}
-          <span style={{
-            color: tooltip.valence > 0.1 ? 'rgba(143, 175, 137, 0.95)'
-                : tooltip.valence < -0.1 ? 'rgba(135, 165, 200, 0.95)'
-                : INK_SOFT,
-          }}>
-            v{tooltip.valence >= 0 ? '+' : ''}{tooltip.valence.toFixed(2)}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CognitionRhythm — memory-type × hour-of-day visualization.
+   Shows only active hours as stacked colored bars.
+   Designed for sparse data where most hours are empty.
+   ══════════════════════════════════════════════════════════════ */
+
+export function CognitionRhythm({ byTypeHour }: {
+  byTypeHour: Record<string, number[]>; // { memory_type: number[24] }
+}) {
+  const [hoverHour, setHoverHour] = useState<number | null>(null);
+
+  const chart = useMemo(() => {
+    const entries = Object.entries(byTypeHour);
+    if (!entries.length) return null;
+
+    // Get total per hour across all types
+    const hourTotals = new Array(24).fill(0);
+    for (const [, vals] of entries) {
+      for (let h = 0; h < 24; h++) hourTotals[h] += vals[h] ?? 0;
+    }
+    const maxHour = Math.max(1, ...hourTotals);
+
+    // Sort types by total count desc
+    const types = entries
+      .map(([type, vals]) => ({ type, vals, total: vals.reduce((a, b) => a + b, 0) }))
+      .sort((a, b) => b.total - a.total);
+
+    return { hourTotals, maxHour, types };
+  }, [byTypeHour]);
+
+  if (!chart) return <EmptyState note="Awaiting hour-of-day data" height={150} />;
+
+  const W = 1000;
+  const H = 220;
+  const padL = 40, padR = 16, padT = 8, padB = 36;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const barW = innerW / 24;
+
+  // Find which hours have data for highlighting
+  const activeHours = chart.hourTotals.map((t, h) => ({ h, t })).filter(x => x.t > 0);
+  const peakHour = chart.hourTotals.indexOf(Math.max(...chart.hourTotals));
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}
+        onMouseLeave={() => setHoverHour(null)}
+      >
+        {/* Subtle horizontal gridlines */}
+        {[0.25, 0.5, 0.75].map(frac => (
+          <line key={frac}
+            x1={padL} y1={padT + innerH * (1 - frac)} x2={W - padR} y2={padT + innerH * (1 - frac)}
+            stroke={INK_FAINT} strokeWidth={0.75} strokeDasharray="4 8" />
+        ))}
+
+        {/* Baseline */}
+        <line x1={padL} y1={padT + innerH} x2={W - padR} y2={padT + innerH} stroke={INK_HAIR} strokeWidth={1} />
+
+        {/* Stacked bars per hour */}
+        {Array.from({ length: 24 }, (_, h) => {
+          const total = chart.hourTotals[h];
+          if (total === 0) return null;
+
+          const x = padL + h * barW;
+          const isHovered = hoverHour === h;
+          const isPeak = h === peakHour;
+          let yStack = padT + innerH; // bottom of chart
+
+          return (
+            <g key={h}>
+              {/* Invisible hit region */}
+              <rect x={x} y={padT} width={barW} height={innerH} fill="transparent"
+                onMouseEnter={() => setHoverHour(h)} />
+
+              {/* Stacked segments per type */}
+              {chart.types.map(({ type, vals }) => {
+                const count = vals[h] ?? 0;
+                if (count === 0) return null;
+                const segH = (count / chart.maxHour) * innerH;
+                yStack -= segH;
+                const palette = MEMORY_TYPE_COLOR[type.toLowerCase()];
+                const color = palette?.hue ?? INK_SOFT;
+                const dimmed = hoverHour !== null && !isHovered;
+                return (
+                  <rect key={`${h}-${type}`}
+                    x={x + 1} y={yStack} width={barW - 2} height={segH}
+                    rx={1.5}
+                    fill={color}
+                    opacity={dimmed ? 0.25 : (isPeak ? 1 : 0.8)}
+                    style={{ transition: 'opacity 150ms ease' }}
+                  />
+                );
+              })}
+            </g>
+          );
+        })}
+
+        {/* Hour labels on x-axis */}
+        {Array.from({ length: 24 }, (_, h) => {
+          const x = padL + h * barW + barW / 2;
+          const hasData = chart.hourTotals[h] > 0;
+          const isPeak = h === peakHour;
+          const show = h % 3 === 0 || hasData;
+          if (!show) return null;
+          return (
+            <text key={h} x={x} y={H - 10}
+              fontSize={isPeak ? 10 : 9} fontFamily="var(--font-mono)"
+              fill={isPeak ? 'rgba(228, 178, 98, 0.9)' : hasData ? INK_SOFT : INK_GHOST}
+              fontWeight={isPeak ? 600 : 400}
+              textAnchor="middle"
+              style={{ letterSpacing: '0.04em' }}>
+              {String(h).padStart(2, '0')}
+            </text>
+          );
+        })}
+
+        {/* Hover crosshair */}
+        {hoverHour !== null && chart.hourTotals[hoverHour] > 0 && (
+          <line
+            x1={padL + hoverHour * barW + barW / 2}
+            y1={padT}
+            x2={padL + hoverHour * barW + barW / 2}
+            y2={padT + innerH}
+            stroke={INK_HAIR} strokeWidth={1} />
+        )}
+      </svg>
+
+      {/* Hover tooltip */}
+      {hoverHour !== null && chart.hourTotals[hoverHour] > 0 && (
+        <div style={{
+          position: 'absolute',
+          left: `${((padL + hoverHour * barW + barW / 2) / W) * 100}%`,
+          top: 0, transform: 'translateX(-50%)',
+          padding: '6px 12px',
+          background: 'rgba(20, 20, 22, 0.95)',
+          border: `1px solid ${INK_HAIR}`,
+          borderRadius: 6,
+          fontSize: 10, fontFamily: 'var(--font-mono)', color: INK,
+          letterSpacing: '0.04em', whiteSpace: 'nowrap', zIndex: 50,
+          pointerEvents: 'none',
+        }}>
+          <span style={{ color: 'rgba(228, 178, 98, 0.9)' }}>
+            {String(hoverHour).padStart(2, '0')}:00
           </span>
-          {' · '}<span style={{ color: INK_GHOST }}>i{tooltip.intensity.toFixed(2)}</span>
+          {' · '}{chart.hourTotals[hoverHour]} memories
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {chart.types.filter(t => (t.vals[hoverHour] ?? 0) > 0).map(t => {
+              const palette = MEMORY_TYPE_COLOR[t.type.toLowerCase()];
+              return (
+                <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: 1,
+                    background: palette?.hue ?? INK_SOFT,
+                    display: 'inline-block',
+                  }} />
+                  <span style={{ color: INK_SOFT, textTransform: 'uppercase', fontSize: 9, letterSpacing: '0.08em' }}>
+                    {t.type}
+                  </span>
+                  <span style={{ color: INK_GHOST }}>{t.vals[hoverHour]}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
+
+      {/* Legend — type colors */}
+      <div style={{
+        marginTop: 10, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 16px',
+        fontSize: 9, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+      }}>
+        {chart.types.slice(0, 6).map(t => {
+          const palette = MEMORY_TYPE_COLOR[t.type.toLowerCase()];
+          return (
+            <span key={t.type} style={{ color: INK_GHOST, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{
+                width: 10, height: 4, borderRadius: 1,
+                background: palette?.hue ?? INK_SOFT,
+                display: 'inline-block',
+              }} />
+              {t.type}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
