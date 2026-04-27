@@ -417,8 +417,8 @@ function EnsembleSettings() {
               per-message in the chat input.
             </div>
           </div>
-        </>
-      )}
+      </>
+    </>
     </>
   );
 }
