@@ -277,8 +277,7 @@ function EnsembleSettings() {
         </div>
       </div>
 
-      {multi_model_enabled && (
-        <>
+      <>
           <div style={{ marginTop: 16 }}>
             <div
               style={{
@@ -418,8 +417,7 @@ function EnsembleSettings() {
               per-message in the chat input.
             </div>
           </div>
-        </>
-      )}
+      </>
     </>
   );
 }
