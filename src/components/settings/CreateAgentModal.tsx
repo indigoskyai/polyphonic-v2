@@ -13,13 +13,21 @@ interface Props {
 }
 
 const MODELS = [
-  { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
-  { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4' },
+  { value: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7' },
+  { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
   { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
-  { value: 'openai/gpt-5', label: 'GPT-5' },
-  { value: 'openai/gpt-5-mini', label: 'GPT-5 mini' },
+  { value: 'openai/gpt-5.5', label: 'GPT-5.5' },
+  { value: 'openai/gpt-5.4', label: 'GPT-5.4' },
+  { value: 'openai/gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash' },
   { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { value: 'x-ai/grok-4.20', label: 'Grok 4.20' },
+  { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+  { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+  { value: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
+  { value: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5' },
 ];
 
 const ROLE_HINTS = ['custom', 'analyst', 'researcher', 'writer', 'coach', 'planner'];
