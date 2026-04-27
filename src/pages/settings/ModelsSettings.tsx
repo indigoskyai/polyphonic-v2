@@ -419,6 +419,5 @@ function EnsembleSettings() {
           </div>
       </>
     </>
-    </>
   );
 }
