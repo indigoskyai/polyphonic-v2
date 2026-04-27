@@ -106,8 +106,12 @@ export default function Rail() {
         L
       </div>
 
-      {/* Spacer */}
-      <div className="flex-1 w-full" />
+      {/* Spacer — click to toggle sidebar */}
+      <div
+        className="flex-1 w-full cursor-pointer"
+        onClick={toggleSidebar}
+        title="Toggle sidebar"
+      />
 
       {/* Nav icons */}
       <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
