@@ -277,8 +277,7 @@ function EnsembleSettings() {
         </div>
       </div>
 
-      {multi_model_enabled && (
-        <>
+      <>
           <div style={{ marginTop: 16 }}>
             <div
               style={{
