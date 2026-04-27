@@ -91,48 +91,6 @@ export default function ModelsSettings() {
       />
 
       <div style={{ padding: '0 32px 80px', maxWidth: 880 }}>
-        <SectionTitle>Available models</SectionTitle>
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}
-        >
-          {MODEL_CARDS.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: 16,
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                  {m.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 500,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    padding: '2px 8px',
-                    borderRadius: 100,
-                    background: 'var(--bg-surface)',
-                    color: m.badge === 'deep' ? 'var(--luca)' : 'var(--text-tertiary)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {m.badge}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-                {m.desc}
-              </div>
-            </div>
-          ))}
-        </div>
-
         <SectionTitle>API key</SectionTitle>
         {keyPreview ? (
           <div className="flex items-center gap-3 mb-3">
