@@ -166,6 +166,15 @@ export function buildQuickActions(handlers: NavigationHandlers): PaletteResult[]
       hint: 'ACTION ↵',
       onActivate: () => handlers.openDrawer('notifications'),
     },
+    {
+      id: 'qa-activity-timeline',
+      scope: 'settings',
+      title: 'Activity timeline',
+      subtitle: 'Everything Luca has done autonomously',
+      glyph: 'agent-luca',
+      hint: 'ACTION ↵',
+      onActivate: () => handlers.openDrawer('activity-timeline'),
+    },
   ];
 }
 
