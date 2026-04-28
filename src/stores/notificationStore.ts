@@ -17,6 +17,8 @@ export interface ActivityEntry {
   summary: string | null;
   content: Record<string, unknown> | null;
   source: string | null;
+  severity: 'info' | 'notable' | 'important';
+  surface_to_user: boolean;
   created_at: string;
 }
 
@@ -25,19 +27,23 @@ export type NotificationFilter = 'all' | 'unread' | 'agents' | 'permissions' | '
 interface NotificationState {
   initiations: ThoughtInitiation[];
   activity: ActivityEntry[];
+  /** Persisted server-side via profiles.last_seen_activity_at — drives unread. */
+  lastSeenAt: string | null;
+  /** Local fallback for items the user has explicitly clicked. */
   readIds: Set<string>;
   filter: NotificationFilter;
   setFilter: (f: NotificationFilter) => void;
   load: (userId: string) => Promise<void>;
   subscribe: (userId: string) => () => void;
   markRead: (id: string) => void;
-  markAllRead: () => void;
+  markAllSeen: () => Promise<void>;
   updateInitiationStatus: (id: string, status: 'delivered' | 'dismissed') => Promise<void>;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   initiations: [],
   activity: [],
+  lastSeenAt: null,
   readIds: new Set<string>(),
   filter: 'all',
   setFilter: (f) => set({ filter: f }),
@@ -52,16 +58,24 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         .limit(50),
       supabase
         .from('entity_activity_log')
-        .select('id, activity_type, title, summary, content, source, created_at')
+        .select('id, activity_type, title, summary, content, source, severity, surface_to_user, created_at')
         .eq('user_id', userId)
+        .eq('surface_to_user', true)
         .order('created_at', { ascending: false })
-        .limit(60),
+        .limit(80),
+      supabase
+        .from('profiles')
+        .select('last_seen_activity_at')
+        .eq('user_id', userId)
+        .maybeSingle(),
     ]);
     const initRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: [] };
     const actRes = settled[1].status === 'fulfilled' ? settled[1].value : { data: [] };
+    const profRes = settled[2].status === 'fulfilled' ? settled[2].value : { data: null };
     set({
       initiations: (initRes.data ?? []) as ThoughtInitiation[],
       activity: (actRes.data ?? []) as ActivityEntry[],
+      lastSeenAt: ((profRes as any)?.data?.last_seen_activity_at as string | null) ?? null,
     });
   },
 
@@ -89,7 +103,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${userId}` },
         (payload) => {
           const row = payload.new as ActivityEntry;
-          set((s) => ({ activity: [row, ...s.activity].slice(0, 60) }));
+          if (!row.surface_to_user) return;
+          set((s) => ({ activity: [row, ...s.activity].slice(0, 80) }));
         },
       )
       .subscribe();
@@ -106,12 +121,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       return { readIds: next };
     }),
 
-  markAllRead: () => {
-    const { initiations, activity } = get();
-    const ids = new Set<string>();
-    initiations.forEach((i) => ids.add(i.id));
-    activity.forEach((a) => ids.add(a.id));
-    set({ readIds: ids });
+  markAllSeen: async () => {
+    const nowIso = new Date().toISOString();
+    set({ lastSeenAt: nowIso });
+    const { error } = await supabase.rpc('mark_activity_seen');
+    if (error) {
+      // Fallback: update locally only.
+      console.error('[notifications] mark_activity_seen failed', error);
+    }
   },
 
   updateInitiationStatus: async (id, status) => {
@@ -132,9 +149,27 @@ export function selectPendingInitiationsCount(s: NotificationState): number {
   return s.initiations.filter((i) => i.status !== 'delivered' && i.status !== 'dismissed').length;
 }
 
-/** Unread count for header crumb. */
+/** Unread count = items newer than last_seen_activity_at, plus pending initiations. */
 export function selectUnreadCount(s: NotificationState): number {
-  const unreadInits = s.initiations.filter((i) => !s.readIds.has(i.id) && i.status !== 'delivered' && i.status !== 'dismissed').length;
-  const unreadActivity = s.activity.filter((a) => !s.readIds.has(a.id)).length;
-  return unreadInits + unreadActivity;
+  const seenMs = s.lastSeenAt ? new Date(s.lastSeenAt).getTime() : 0;
+  const unreadActivity = s.activity.filter(
+    (a) => new Date(a.created_at).getTime() > seenMs && !s.readIds.has(a.id),
+  ).length;
+  const unreadInits = s.initiations.filter(
+    (i) =>
+      i.status !== 'delivered' &&
+      i.status !== 'dismissed' &&
+      new Date(i.created_at).getTime() > seenMs,
+  ).length;
+  return unreadActivity + unreadInits;
+}
+
+/** Notable + important activity since last_seen_at — drives the welcome-back card. */
+export function selectUnseenImportant(s: NotificationState): ActivityEntry[] {
+  const seenMs = s.lastSeenAt ? new Date(s.lastSeenAt).getTime() : 0;
+  return s.activity.filter(
+    (a) =>
+      (a.severity === 'notable' || a.severity === 'important') &&
+      new Date(a.created_at).getTime() > seenMs,
+  );
 }

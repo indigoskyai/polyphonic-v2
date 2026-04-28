@@ -119,3 +119,9 @@ verify_jwt = false
 
 [functions.openclaw-heartbeat]
 verify_jwt = false
+
+[functions.luca-initiate]
+verify_jwt = false
+
+[functions.luca-pulse]
+verify_jwt = false
