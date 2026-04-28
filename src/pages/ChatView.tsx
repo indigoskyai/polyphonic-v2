@@ -13,6 +13,7 @@ import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import PermissionInline from '@/components/permissions/PermissionInline';
+import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
 import ImagePreview from '@/components/attachments/ImagePreview';
