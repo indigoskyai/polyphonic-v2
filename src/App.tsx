@@ -18,6 +18,7 @@ import ProfileIdentityView from "./pages/ProfileIdentityView";
 import ProfileSkillsView from "./pages/ProfileSkillsView";
 import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
+import WorkspaceView from "./pages/WorkspaceView";
 import AgentsList from "./pages/settings/AgentsList";
 import AgentDetail from "./pages/settings/AgentDetail";
 import SettingsPlaceholder from "./pages/settings/SettingsPlaceholder";
@@ -213,6 +214,7 @@ const App = () => (
             <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
+            <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
             <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
             <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
             <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />

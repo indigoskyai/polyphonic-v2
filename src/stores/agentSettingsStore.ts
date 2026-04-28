@@ -49,12 +49,14 @@ export interface CreateAgentInput {
 }
 
 const SEED_TOOLS: ToolDef[] = [
-  { id: 'fs_read', name: 'fs.read', on: true },
-  { id: 'fs_write', name: 'fs.write', on: false, gated: true },
-  { id: 'bash', name: 'bash', on: false, gated: true },
+  { id: 'browse', name: 'browse', on: false, gated: true },
+  { id: 'workspace_file', name: 'workspace.file', on: true },
   { id: 'web_search', name: 'web.search', on: true },
+  { id: 'read_url', name: 'read.url', on: true },
   { id: 'memory_read', name: 'memory.read', on: true },
   { id: 'memory_write', name: 'memory.write', on: false },
+  { id: 'update_soul', name: 'soul.update', on: false, gated: true },
+  { id: 'update_self_model', name: 'self-model.update', on: false, gated: true },
 ];
 
 const DEFAULT_PERSONALITY: Personality = {

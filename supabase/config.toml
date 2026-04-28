@@ -3,6 +3,9 @@ project_id = "kknchdnrujzheulqzowv"
 [functions.chat]
 verify_jwt = false
 
+[functions.chat-multi]
+verify_jwt = false
+
 [functions.memory-extract]
 verify_jwt = false
 
@@ -75,6 +78,12 @@ verify_jwt = false
 [functions.anima-tool-execute]
 verify_jwt = false
 
+[functions.anima-browser]
+verify_jwt = false
+
+[functions.anima-workspace-file]
+verify_jwt = false
+
 [functions.anima-heartbeat]
 verify_jwt = false
 
@@ -124,4 +133,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.luca-pulse]
+verify_jwt = false
+
+[functions.observer-watch]
+verify_jwt = false
+
+[functions.mnemos-dialectic]
+verify_jwt = false
+
+[functions.skills-distill]
+verify_jwt = false
+
+[functions.skills-manage]
 verify_jwt = false

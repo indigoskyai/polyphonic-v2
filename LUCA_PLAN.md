@@ -64,7 +64,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 ### Wave 2 (after L1-L3)
 - [x] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.
 - [x] **L5** Skills system — Skill distillation, skill prompt retrieval, and user-facing skills controls.
-- [ ] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
+- [x] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
 - [ ] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
 - [ ] **L8** User-facing scheduler — Scheduled task schema, runner, and schedule management UI.
 - [ ] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
@@ -86,6 +86,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 05:21 · phase L1 · migrated locked system Luca rows from old Sonnet defaults but left `user_settings.default_model` rows untouched · the handoff says existing user model preferences override, while locked system-agent seed rows are platform defaults rather than user preference.
 - 2026-04-28 15:27 · phase L4 · reused the L3-created `pending_revisions` table and tightened every chat completion exit to fire observer/dialectic hooks · L3 already needed the table to record honest revision provenance, while L4's responsibility is surfacing, classification, and coverage across runtime paths.
 - 2026-04-28 15:38 · phase L5 · added `skills-manage` for rename/delete/reject instead of direct client updates to agent-populated skill rows · Luca writes skill content through service-role background work; user controls still work without granting broad client update rights.
+- 2026-04-28 16:03 · phase L6 · shipped Browserbase as a bounded CDP page-inspection tool and MCP as a thin HTTP JSON-RPC client · the existing runtime has a planner/executor architecture, so this makes the tools callable now while avoiding invented browser progress or unsupported MCP transports.
 
 
 ## Backend asks queue

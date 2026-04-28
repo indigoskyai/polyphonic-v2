@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { applyMarkdownPatch, type DialecticPatch } from "../_shared/mnemos/dialectic.ts";
+import {
+  callMcpTool,
+  loadMcpToolRegistrations,
+  type McpToolRegistration,
+} from "../_shared/mcp/client.ts";
 
 const TOOL_SCHEMAS = [
   {
@@ -31,20 +37,97 @@ const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "browse",
+      description: "Navigate a website in a Browserbase browser session and inspect the resulting page. Use for web tasks that need an actual browser. For simple reading, use read_url.",
+      parameters: {
+        type: "object",
+        properties: {
+          goal: { type: "string", description: "What you are trying to accomplish on the site" },
+          starting_url: { type: "string", description: "URL to start from" },
+          max_steps: { type: "integer", default: 10, description: "Cap on browser actions" },
+        },
+        required: ["goal", "starting_url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_file",
+      description: "Read, write, list, or delete files in the user's persistent workspace.",
+      parameters: {
+        type: "object",
+        properties: {
+          operation: { type: "string", enum: ["read", "write", "list", "delete"] },
+          path: { type: "string", description: "Relative path within the workspace" },
+          content: { type: "string", description: "Content to write for write operations" },
+        },
+        required: ["operation", "path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_soul",
+      description: "Update your own SOUL.md. Use rarely, only when a sustained reflection has surfaced an identity-level change worth recording.",
+      parameters: {
+        type: "object",
+        properties: {
+          section: { type: "string", description: "Existing markdown heading to update" },
+          operation: { type: "string", enum: ["append", "refine", "retire"] },
+          content: { type: "string", description: "Patch content" },
+          rationale: { type: "string", description: "Why this belongs in SOUL.md" },
+        },
+        required: ["section", "operation", "content", "rationale"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_self_model",
+      description: "Update your self-model: how you have been showing up with this user. Use rarely and keep it evidence-based.",
+      parameters: {
+        type: "object",
+        properties: {
+          section: { type: "string", description: "Existing markdown heading to update" },
+          operation: { type: "string", enum: ["append", "refine", "retire"] },
+          content: { type: "string", description: "Patch content" },
+          rationale: { type: "string", description: "Why this belongs in the self-model" },
+        },
+        required: ["section", "operation", "content", "rationale"],
+      },
+    },
+  },
 ];
 
-const PLANNING_SYSTEM_PROMPT = `You are a tool-planning assistant. Your ONLY job is to decide whether the user's message requires using a tool, and if so, call the appropriate tool(s).
+function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
+  const mcpToolLines = mcpTools.map((tool) => `- ${tool.registeredName}: ${tool.schema.function.description}`);
+  return `You are a tool-planning assistant. Your ONLY job is to decide whether the user's message requires using a tool, and if so, call the appropriate tool(s).
 
 Available tools:
 - web_search: Search the web for current/recent information, news, facts, or anything the user wants looked up.
 - read_url: Read a specific URL to extract its content.
+- browse: Open a real browser session for web pages that need browser behavior.
+- workspace_file: Read, write, list, or delete persistent workspace files.
+- update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
+- update_self_model: Luca updates their self-model from evidence about how they are showing up.
+${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
 - If the user asks about current events, recent news, real-time data, or anything that requires up-to-date information, use web_search.
 - If the user provides a URL or asks to read/summarize a link, use read_url.
+- If the task needs clicking, page state, or browser-only behavior, use browse.
+- If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
+- update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing, etc.), respond with a brief text explanation of why no tools are needed.
 - You may call multiple tools if needed.
 - Be decisive and fast.`;
+}
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -87,7 +170,7 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const { messages, custom_instructions } = await req.json();
+    const { messages, custom_instructions, thread_id, source_message_id } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -110,12 +193,15 @@ serve(async (req) => {
       );
     }
 
+    const mcpTools = userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
+    const toolSchemas = [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
+
     // Build planning messages: system + last few user/assistant messages for context
     const planningMessages = [
       {
         role: "system",
         content:
-          PLANNING_SYSTEM_PROMPT +
+          buildPlanningSystemPrompt(mcpTools) +
           (custom_instructions
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
             : ""),
@@ -145,7 +231,7 @@ serve(async (req) => {
           body: JSON.stringify({
             model: "google/gemini-2.5-flash",
             messages: planningMessages,
-            tools: TOOL_SCHEMAS,
+            tools: toolSchemas,
             temperature: 0.2,
             max_tokens: 700,
           }),
@@ -204,6 +290,8 @@ serve(async (req) => {
       toolCalls.map((tc: any) => tc.function.name)
     );
 
+    const mcpByName = new Map(mcpTools.map((tool) => [tool.registeredName, tool]));
+
     // Execute tools in parallel
     const toolResults = await Promise.all(
       toolCalls.map(async (tc: any) => {
@@ -229,6 +317,7 @@ serve(async (req) => {
         try {
           let edgeFn: string;
           let body: any;
+          const mcpTool = mcpByName.get(fnName);
 
           if (fnName === "web_search") {
             edgeFn = "anima-web-search";
@@ -236,6 +325,47 @@ serve(async (req) => {
           } else if (fnName === "read_url") {
             edgeFn = "anima-web-read";
             body = { url: args.url, focus: args.focus };
+          } else if (fnName === "browse") {
+            edgeFn = "anima-browser";
+            body = {
+              user_id: userId,
+              goal: args.goal,
+              starting_url: args.starting_url,
+              max_steps: args.max_steps,
+            };
+          } else if (fnName === "workspace_file") {
+            edgeFn = "anima-workspace-file";
+            body = {
+              user_id: userId,
+              operation: args.operation,
+              path: args.path,
+              content: args.content,
+            };
+          } else if (fnName === "update_soul" || fnName === "update_self_model") {
+            clearTimeout(timeout);
+            const output = await executeIdentityPatch(
+              supabase,
+              userId,
+              typeof thread_id === "string" ? thread_id : null,
+              typeof source_message_id === "string" ? source_message_id : null,
+              fnName === "update_soul" ? "soul" : "self_model",
+              args,
+            );
+            return {
+              tool_call_id: tc.id,
+              tool: fnName,
+              input: args,
+              output,
+            };
+          } else if (mcpTool) {
+            clearTimeout(timeout);
+            const output = await callMcpTool(mcpTool, args);
+            return {
+              tool_call_id: tc.id,
+              tool: fnName,
+              input: args,
+              output,
+            };
           } else {
             clearTimeout(timeout);
             return {
@@ -323,3 +453,73 @@ serve(async (req) => {
     );
   }
 });
+
+async function executeIdentityPatch(
+  supabase: any,
+  userId: string | null,
+  threadId: string | null,
+  sourceMessageId: string | null,
+  docType: "soul" | "self_model",
+  args: any,
+) {
+  if (!userId) return { error: "Missing user context" };
+
+  const patch: DialecticPatch = {
+    doc_type: docType,
+    section: String(args.section || "").replace(/^#+\s*/, "").trim(),
+    operation: args.operation,
+    patch_content: String(args.content || "").trim(),
+    rationale: String(args.rationale || "").trim(),
+    confidence: 1,
+    category: docType === "soul" ? "agent-authored-soul-edit" : "agent-authored-self-model-edit",
+  };
+
+  if (!patch.section || !patch.patch_content || !["append", "refine", "retire"].includes(patch.operation)) {
+    return { error: "Invalid identity patch" };
+  }
+
+  const { error: patchError } = await supabase.from("agent_identity_patches").insert({
+    user_id: userId,
+    agent_id: "luca",
+    doc_type: docType,
+    section: patch.section,
+    operation: patch.operation,
+    patch_content: patch.patch_content,
+    rationale: patch.rationale,
+    source_thread_id: threadId,
+    source_message_ids: sourceMessageId ? [sourceMessageId] : [],
+    confidence: 1,
+    category: patch.category,
+    status: "applied",
+    applied_at: new Date().toISOString(),
+  });
+
+  if (patchError) return { error: patchError.message };
+
+  const { data: current, error: currentError } = await supabase
+    .from("agent_identity")
+    .select("content, version")
+    .eq("user_id", userId)
+    .eq("agent_id", "luca")
+    .eq("doc_type", docType)
+    .maybeSingle();
+
+  if (currentError || !current) {
+    return { ok: true, queued: true, warning: "Patch logged, but identity document was not found." };
+  }
+
+  const nextContent = applyMarkdownPatch(current.content || "", patch);
+  const { error: updateError } = await supabase
+    .from("agent_identity")
+    .update({
+      content: nextContent,
+      version: (current.version || 1) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("agent_id", "luca")
+    .eq("doc_type", docType);
+
+  if (updateError) return { error: updateError.message };
+  return { ok: true, doc_type: docType, section: patch.section, operation: patch.operation };
+}

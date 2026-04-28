@@ -78,6 +78,8 @@ Set these secrets for edge functions:
 | Secret | Value | Purpose |
 |--------|-------|---------|
 | `OPENROUTER_API_KEY` | Your OpenRouter API key (`sk-or-...`) | Fallback LLM API key for users without their own key |
+| `BROWSERBASE_API_KEY` | Your Browserbase API key | Cloud browser sessions for Luca's `browse` tool |
+| `BROWSERBASE_PROJECT_ID` | Optional Browserbase project ID | Browserbase can infer the project from the key, but setting this is safer for multi-project accounts |
 
 The following are auto-provided by Supabase (no action needed):
 - `SUPABASE_URL`
@@ -106,6 +108,7 @@ Create a storage bucket:
 | Bucket | Access | Purpose |
 |--------|--------|---------|
 | `generated-images` | Private | Stores AI-generated images. Functions create signed URLs for access. |
+| `workspace-files` | Private | Stores per-user workspace files under `workspaces/{user_id}/`. Luca writes through `anima-workspace-file`; users read from `/workspace`. |
 
 ## 7. Authentication
 
