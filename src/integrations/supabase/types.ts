@@ -1660,6 +1660,57 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_tasks: {
+        Row: {
+          agent_id: string
+          created_at: string
+          delivery_mode: string
+          enabled: boolean
+          id: string
+          last_run_at: string | null
+          last_run_status: string | null
+          name: string
+          next_run_at: string | null
+          prompt: string
+          schedule_expr: string
+          target_thread_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          delivery_mode?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          name: string
+          next_run_at?: string | null
+          prompt: string
+          schedule_expr: string
+          target_thread_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          delivery_mode?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          name?: string
+          next_run_at?: string | null
+          prompt?: string
+          schedule_expr?: string
+          target_thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pending_revisions: {
         Row: {
           created_at: string

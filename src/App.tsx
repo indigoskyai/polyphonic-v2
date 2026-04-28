@@ -16,6 +16,7 @@ import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import ProfileIdentityView from "./pages/ProfileIdentityView";
 import ProfileSkillsView from "./pages/ProfileSkillsView";
+import ProfileScheduleView from "./pages/ProfileScheduleView";
 import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
 import WorkspaceView from "./pages/WorkspaceView";
@@ -213,6 +214,7 @@ const App = () => (
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
+            <Route path="/profile/schedule" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
             <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
@@ -224,7 +226,7 @@ const App = () => (
             <Route path="/settings/models" element={<ProtectedRoute><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
             <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
             <Route path="/settings/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/routines" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ROUTINES" title="Routines" description="Scheduled and event-driven routines your agents run without prompting." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/routines" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
             <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
             <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
