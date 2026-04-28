@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { evaluate, logProcessRan } from "../_shared/activity-gate.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { maybeInitiate } from "../_shared/initiate-gate.ts";
 
 /**
  * anima-heartbeat — autonomous loop that runs every 2 hours via cron.
