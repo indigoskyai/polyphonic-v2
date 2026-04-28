@@ -112,7 +112,7 @@ export default function NotificationsDrawer() {
   const setFilter = useNotificationStore((s) => s.setFilter);
   const readIds = useNotificationStore((s) => s.readIds);
   const markRead = useNotificationStore((s) => s.markRead);
-  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  const markAllSeen = useNotificationStore((s) => s.markAllSeen);
   const updateInitiationStatus = useNotificationStore((s) => s.updateInitiationStatus);
   const unreadCount = useNotificationStore(selectUnreadCount);
 
@@ -313,7 +313,7 @@ export default function NotificationsDrawer() {
         })}
       </DrawerBody>
       <DrawerFooter>
-        <Pill variant="ghost" size="xs" onClick={markAllRead}>Mark all read</Pill>
+        <Pill variant="ghost" size="xs" onClick={markAllSeen}>Mark all read</Pill>
         <DrawerFooterSep />
         <Pill variant="ghost" size="xs">Preferences</Pill>
       </DrawerFooter>
