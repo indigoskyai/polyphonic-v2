@@ -11,6 +11,26 @@ function generateCode(): string {
   return n.toString().padStart(6, "0");
 }
 
+function generateDeviceToken(): string {
+  // 32 random bytes → URL-safe base64 (≈43 chars)
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -27,7 +47,6 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     if (action === "issue") {
-      // Authenticated user requesting a new pairing code
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -47,7 +66,6 @@ Deno.serve(async (req) => {
         });
       }
       const userId = claims.claims.sub;
-
       const admin = createClient(supabaseUrl, serviceKey);
       const code = generateCode();
       const expires = new Date(Date.now() + 15 * 60_000).toISOString();
@@ -57,7 +75,6 @@ Deno.serve(async (req) => {
         expires_at: expires,
       });
       if (error) throw error;
-
       return new Response(
         JSON.stringify({ code, expires_at: expires, ttl_seconds: 15 * 60 }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -65,7 +82,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "claim") {
-      // Anonymous bridge CLI claiming a code
       const body = await req.json().catch(() => null);
       if (!body || typeof body.code !== "string" || typeof body.device_name !== "string") {
         return new Response(JSON.stringify({ error: "code and device_name required" }), {
@@ -80,7 +96,6 @@ Deno.serve(async (req) => {
         .select("code, user_id, expires_at, consumed_device_id")
         .eq("code", body.code)
         .maybeSingle();
-
       if (lookupErr) throw lookupErr;
       if (!row || row.consumed_device_id) {
         return new Response(JSON.stringify({ error: "Invalid or used code" }), {
@@ -95,13 +110,15 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Insert device first (need its id to compute the token hash)
       const { data: device, error: devErr } = await admin
         .from("openclaw_devices")
         .insert({
           user_id: row.user_id,
           name: body.device_name.slice(0, 80),
           platform: typeof body.platform === "string" ? body.platform.slice(0, 40) : null,
-          bridge_version: typeof body.bridge_version === "string" ? body.bridge_version.slice(0, 40) : null,
+          bridge_version:
+            typeof body.bridge_version === "string" ? body.bridge_version.slice(0, 40) : null,
           status: "online",
           last_seen_at: new Date().toISOString(),
         })
@@ -109,18 +126,25 @@ Deno.serve(async (req) => {
         .single();
       if (devErr) throw devErr;
 
+      // Generate the secret token, hash with the device id, persist hash only.
+      const deviceToken = generateDeviceToken();
+      const tokenHash = await sha256Hex(`${device.id}:${deviceToken}`);
+      const { error: hashErr } = await admin
+        .from("openclaw_devices")
+        .update({ device_token_hash: tokenHash })
+        .eq("id", device.id);
+      if (hashErr) throw hashErr;
+
       await admin
         .from("openclaw_pairing_codes")
         .update({ consumed_device_id: device.id, consumed_at: new Date().toISOString() })
         .eq("code", row.code);
 
-      // Device token = signed payload the bridge presents to openclaw-bridge.
-      // For v1 we use a simple opaque token = device.id; future: rotate JWT.
       return new Response(
         JSON.stringify({
           device_id: device.id,
           user_id: device.user_id,
-          device_token: device.id,
+          device_token: deviceToken, // shown ONCE, bridge stores in OS keychain
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );

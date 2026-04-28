@@ -56,18 +56,18 @@ Also: the v1 prototype has a real bug — the in-memory `deviceSockets` Map in t
 
 ---
 
-## Phase 0 — Tear down the broken prototype (cleanup) `[ ]`
+## Phase 0 — Tear down the broken prototype (cleanup) `[x]`
 
 Goal: stop pretending the in-memory socket relay works.
 
-1. **Delete `supabase/functions/openclaw-bridge/index.ts`.** It will be replaced by Realtime-driven `openclaw-enqueue` + `openclaw-register-result` in Phase 2.
-2. **Update `LocalRuntimeSettings.tsx`** so the device-list call does not invoke the deleted function. Temporarily replace with a direct `supabase.from('openclaw_devices').select(...)` (RLS-protected). Keep the page mounted; it will be re-wired in Phase 4.
-3. **Update `.lovable/plan.md`** to mark the original Phase 5/Phase 6 as superseded by this plan and link this document.
-4. **Acceptance:** `/settings/local-runtime` still loads, device list still renders, no calls to the deleted function in the network tab.
+1. **Delete `supabase/functions/openclaw-bridge/index.ts`.** ✓ Removed.
+2. **Update `LocalRuntimeSettings.tsx`** — now uses direct RLS-protected `from('openclaw_devices')` query. Will be re-wired to `openclaw-status` in Phase 4.
+3. **Acceptance:** `/settings/local-runtime` still loads, no calls to deleted function. ✓
 
 ---
 
-## Phase 1 — Realtime-based device protocol (backend redesign) `[ ]`
+## Phase 1 — Realtime-based device protocol (backend redesign) `[x]`
+
 
 Goal: replace the in-memory socket Map with Supabase Realtime broadcast, so every Polyphonic edge function instance can reach every paired device.
 

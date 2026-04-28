@@ -38,15 +38,26 @@ export default function LocalRuntimeSettings() {
   const [now, setNow] = useState(Date.now());
 
   const loadDevices = useCallback(async () => {
-    const { data, error } = await supabase.functions.invoke('openclaw-bridge', {
-      body: { action: 'list_devices' },
-    });
+    // Phase 0 (interim): direct table query under RLS. Will switch to
+    // openclaw-status edge function in Phase 4.
+    const { data, error } = await (supabase as any)
+      .from('openclaw_devices')
+      .select('id, name, platform, status, last_seen_at, bridge_version, is_default')
+      .order('created_at', { ascending: false });
     if (error) {
       console.error(error);
       setLoading(false);
       return;
     }
-    setDevices((data?.devices ?? []) as Device[]);
+    const rows = (data ?? []) as Device[];
+    const withConnected = rows.map((d) => ({
+      ...d,
+      connected:
+        d.status === 'online' &&
+        !!d.last_seen_at &&
+        Date.now() - new Date(d.last_seen_at).getTime() < 90_000,
+    }));
+    setDevices(withConnected);
     setLoading(false);
   }, []);
 
