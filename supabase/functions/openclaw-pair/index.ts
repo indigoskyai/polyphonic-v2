@@ -16,7 +16,11 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "issue";
+    let bodyJson: any = null;
+    if (req.method === "POST") {
+      bodyJson = await req.clone().json().catch(() => null);
+    }
+    const action = url.searchParams.get("action") || bodyJson?.action || "issue";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

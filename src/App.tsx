@@ -23,6 +23,7 @@ import GeneralSettings from "./pages/settings/GeneralSettings";
 import ModelsSettings from "./pages/settings/ModelsSettings";
 import AppearanceSettings from "./pages/settings/AppearanceSettings";
 import AccountSettings from "./pages/settings/AccountSettings";
+import LocalRuntimeSettings from "./pages/settings/LocalRuntimeSettings";
 import Onboarding from "./pages/Onboarding";
 import MobilePreview from "./pages/MobilePreview";
 import { isFirstRun } from "./lib/firstRun";
@@ -214,6 +215,7 @@ const App = () => (
             <Route path="/settings/skills" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / SKILLS" title="Skills" description="Manage which skills each agent can invoke. Scope access per-agent and per-surface." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/routines" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / ROUTINES" title="Routines" description="Scheduled and event-driven routines your agents run without prompting." /></AppShell></ProtectedRoute>} />
             <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
+            <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
             <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
             <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
