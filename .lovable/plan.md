@@ -575,8 +575,8 @@ This is where it stops feeling like a chatbot.
 7. **A7 + A8** — continuity, polish, production gates.
 
 ## Status
-- [ ] A0  Foundations & Telemetry
-- [ ] A1  Activity Timeline & Initiative
+- [x] A0  Foundations & Telemetry
+- [x] A1  Activity Timeline & Initiative
 - [ ] A2  Tool Expansion
 - [ ] A3  Skills System
 - [ ] A4  Sub-Agents

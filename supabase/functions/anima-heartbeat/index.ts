@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { evaluate, logProcessRan } from "../_shared/activity-gate.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { maybeInitiate } from "../_shared/initiate-gate.ts";
 
 /**
  * anima-heartbeat — autonomous loop that runs every 2 hours via cron.
@@ -169,11 +170,19 @@ async function processUser(
 
     actions.push({ userId, action: "web_search_curiosity", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "question_researched",
-      title: "Heartbeat: Question Researched",
-      summary: `Researched curiosity question: ${highCuriosityQ.question.slice(0, 100)}`,
+      title: "Researched a question I'd been holding",
+      summary: `Followed up on: ${highCuriosityQ.question.slice(0, 140)}`,
       content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
+      severity: "notable",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "notable",
+      title: "Researched a question I'd been holding",
+      summary: highCuriosityQ.question.slice(0, 140),
     });
 
     // Mark question as being worked on
@@ -194,11 +203,19 @@ async function processUser(
 
     actions.push({ userId, action: "reflect_on_thought", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "thought_deepened",
-      title: "Heartbeat: Thought Deepened",
-      summary: `Deepened reflection on: ${highSalienceThought.content.slice(0, 100)}`,
+      title: "Sat with a thought a little longer",
+      summary: highSalienceThought.content.slice(0, 140),
       content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
+      severity: "notable",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "notable",
+      title: "Sat with a thought a little longer",
+      summary: highSalienceThought.content.slice(0, 140),
     });
   }
 
@@ -214,11 +231,19 @@ async function processUser(
 
     actions.push({ userId, action: "challenge_belief", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "belief_challenged",
-      title: "Heartbeat: Belief Challenged",
-      summary: `Challenged stagnant belief: ${stagnantBelief.content.slice(0, 100)}`,
+      title: "Pushed back on something I'd been assuming",
+      summary: stagnantBelief.content.slice(0, 140),
       content: { belief_id: stagnantBelief.id, function: "anima-believe" },
+      severity: "important",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "important",
+      title: "Pushed back on something I'd been assuming",
+      summary: stagnantBelief.content.slice(0, 140),
     });
   }
 
@@ -244,23 +269,32 @@ async function processUser(
 
       actions.push({ userId, action: "curiosity_exploration", result });
 
-      await logActivity(supabase, userId, {
+      const logged = await logActivity(supabase, userId, {
         type: "curiosity_explored",
-        title: "Heartbeat: Curiosity Explored",
-        summary: `Explored topic from high curiosity state: ${topic.slice(0, 80)}`,
+        title: "Wandered off on a tangent that caught me",
+        summary: topic.slice(0, 140),
         content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
+        severity: "notable",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: userId,
+        activity_id: logged?.id,
+        severity: "notable",
+        title: "Wandered off on a tangent that caught me",
+        summary: topic.slice(0, 140),
       });
     }
   }
 
-  // If no signals triggered any action, log a quiet cycle
+  // If no signals triggered any action, log a quiet cycle (info — never surfaces)
   if (actions.length === 0) {
     actions.push({ userId, action: "quiet_cycle", result: "No actionable signals" });
 
     await logActivity(supabase, userId, {
       type: "quiet_cycle",
-      title: "Heartbeat: Quiet Cycle",
+      title: "Quiet cycle",
       summary: "Heartbeat ran but found no actionable signals",
+      severity: "info",
     });
   }
 
@@ -341,11 +375,19 @@ async function processTaskQueue(
         result: { task_id: task.id, function: functionName },
       });
 
-      await logActivity(supabase, task.user_id, {
+      const logged = await logActivity(supabase, task.user_id, {
         type: "task_completed",
-        title: "Heartbeat: Task Completed",
-        summary: `Completed queued task: ${task.description.slice(0, 100)}`,
+        title: "Finished something you asked me to do",
+        summary: task.description.slice(0, 140),
         content: { task_id: task.id, function: functionName },
+        severity: "important",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: task.user_id,
+        activity_id: logged?.id,
+        severity: "important",
+        title: "Finished something you asked me to do",
+        summary: task.description.slice(0, 140),
       });
     } catch (taskErr) {
       const errMsg = taskErr instanceof Error ? taskErr.message : "Unknown error";
@@ -366,11 +408,19 @@ async function processTaskQueue(
         error: errMsg,
       });
 
-      await logActivity(supabase, task.user_id, {
+      const logged = await logActivity(supabase, task.user_id, {
         type: "task_failed",
-        title: "Heartbeat: Task Failed",
-        summary: `Task failed: ${task.description.slice(0, 100)}`,
+        title: "Hit a wall on something you asked",
+        summary: task.description.slice(0, 140),
         content: { task_id: task.id, error: errMsg },
+        severity: "important",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: task.user_id,
+        activity_id: logged?.id,
+        severity: "important",
+        title: "Hit a wall on something you asked",
+        summary: task.description.slice(0, 140),
       });
     }
   }

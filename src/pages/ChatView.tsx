@@ -13,6 +13,7 @@ import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import PermissionInline from '@/components/permissions/PermissionInline';
+import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
 import ImagePreview from '@/components/attachments/ImagePreview';
@@ -424,7 +425,7 @@ export default function ChatView() {
     (async () => {
       const { supabase } = await import('@/integrations/supabase/client');
 
-      // Check for pending thought initiations first (highest priority)
+      // Highest priority: explicit thought initiation queued for the user
       const { data: initiations } = await supabase
         .from('thought_initiations')
         .select('message, created_at')
@@ -436,6 +437,32 @@ export default function ChatView() {
       if (initiations && initiations.length > 0) {
         setWelcomeBack({ type: 'initiation', content: initiations[0].message });
         setDynamicPlaceholder('Luca wants to tell you something...');
+        return;
+      }
+
+      // Next: any unseen surfaced activity from autonomous loops (the new pulse/heartbeat).
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('last_seen_activity_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const seenIso = profile?.last_seen_activity_at ?? new Date(0).toISOString();
+      const { data: surfaced } = await supabase
+        .from('entity_activity_log')
+        .select('title, summary, severity, created_at')
+        .eq('user_id', user.id)
+        .eq('surface_to_user', true)
+        .in('severity', ['notable', 'important'])
+        .gt('created_at', seenIso)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (surfaced && surfaced.length > 0) {
+        const a = surfaced[0] as { title: string | null; summary: string | null; severity: string };
+        setWelcomeBack({
+          type: 'thought',
+          content: a.summary || a.title || 'something happened while you were away',
+        });
+        setDynamicPlaceholder(a.title || 'while you were away...');
         return;
       }
 
@@ -907,33 +934,11 @@ export default function ChatView() {
               polyphonic
             </h1>
             {welcomeBack && (
-              <div
-                style={{
-                  maxWidth: 400,
-                  margin: '20px auto 0',
-                  animation: 'viewFadeIn 0.8s var(--ease-out) 0.4s both',
-                  cursor: 'pointer',
-                }}
-                onClick={() => {
-                  if (welcomeBack.type === 'initiation') setInput(welcomeBack.content);
-                  setWelcomeBack(null);
-                }}
-              >
-                <span style={{
-                  fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
-                  color: 'var(--text-whisper)', display: 'block', marginBottom: 8,
-                }}>
-                  {welcomeBack.type === 'initiation' ? 'i\u2019ve been thinking about something...'
-                    : welcomeBack.type === 'journal' ? 'while you were away...'
-                    : 'a thought surfaced...'}
-                </span>
-                <span style={{
-                  fontSize: 13, lineHeight: 1.6, color: 'var(--text-ghost)',
-                  fontStyle: 'italic', display: 'block',
-                }}>
-                  {welcomeBack.content}
-                </span>
-              </div>
+              <WelcomeBackCard
+                data={welcomeBack}
+                onUseAsInput={(t) => setInput(t)}
+                onDismiss={() => setWelcomeBack(null)}
+              />
             )}
           </div>
 

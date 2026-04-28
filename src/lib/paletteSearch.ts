@@ -39,7 +39,7 @@ function scoreResult(title: string, query: string, recencyScore: number): number
 interface NavigationHandlers {
   navigate: (path: string) => void;
   openSettings: () => void;
-  openDrawer: (key: 'notifications' | 'thread-detail' | 'memory-detail' | 'agent-inspector') => void;
+  openDrawer: (key: 'notifications' | 'activity-timeline' | 'thread-detail' | 'memory-detail' | 'agent-inspector') => void;
   createThread: () => Promise<void> | void;
 }
 
@@ -165,6 +165,15 @@ export function buildQuickActions(handlers: NavigationHandlers): PaletteResult[]
       glyph: 'agent-anima',
       hint: 'ACTION ↵',
       onActivate: () => handlers.openDrawer('notifications'),
+    },
+    {
+      id: 'qa-activity-timeline',
+      scope: 'settings',
+      title: 'Activity timeline',
+      subtitle: 'Everything Luca has done autonomously',
+      glyph: 'agent-luca',
+      hint: 'ACTION ↵',
+      onActivate: () => handlers.openDrawer('activity-timeline'),
     },
   ];
 }
