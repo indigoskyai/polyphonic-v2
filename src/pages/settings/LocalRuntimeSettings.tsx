@@ -76,7 +76,7 @@ export default function LocalRuntimeSettings() {
     setIssuingCode(true);
     try {
       const { data, error } = await supabase.functions.invoke('openclaw-pair', {
-        body: { action: 'issue_code' },
+        body: { action: 'issue' },
       });
       if (error) throw error;
       setPairCode(data.code);
