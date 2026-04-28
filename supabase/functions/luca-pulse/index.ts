@@ -59,8 +59,9 @@ serve(async (req) => {
     summary.cycles = userIds.length;
 
     // ── Phase 1: drain a single task per user ──
+    // Soft-fails if entity_task_queue isn't present in this project.
     for (const userId of userIds) {
-      const { data: task } = await supabase
+      const taskRes = await supabase
         .from("entity_task_queue")
         .select("id, description, metadata")
         .eq("user_id", userId)
@@ -70,6 +71,11 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
+      if (taskRes.error) {
+        // Table doesn't exist in this project — skip phase entirely.
+        break;
+      }
+      const task = taskRes.data;
       if (!task) continue;
 
       try {
