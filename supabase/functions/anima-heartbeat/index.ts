@@ -170,11 +170,19 @@ async function processUser(
 
     actions.push({ userId, action: "web_search_curiosity", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "question_researched",
-      title: "Heartbeat: Question Researched",
-      summary: `Researched curiosity question: ${highCuriosityQ.question.slice(0, 100)}`,
+      title: "Researched a question I'd been holding",
+      summary: `Followed up on: ${highCuriosityQ.question.slice(0, 140)}`,
       content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
+      severity: "notable",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "notable",
+      title: "Researched a question I'd been holding",
+      summary: highCuriosityQ.question.slice(0, 140),
     });
 
     // Mark question as being worked on
