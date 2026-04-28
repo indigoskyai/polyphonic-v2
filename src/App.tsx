@@ -14,6 +14,7 @@ import MemoryView from "./pages/MemoryView";
 import MindView from "./pages/MindView";
 import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
+import ProfileIdentityView from "./pages/ProfileIdentityView";
 import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
 import AgentsList from "./pages/settings/AgentsList";
@@ -207,6 +208,7 @@ const App = () => (
             <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
             <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
+            <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
             <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />

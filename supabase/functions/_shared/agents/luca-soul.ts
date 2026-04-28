@@ -86,10 +86,16 @@ export function buildLucaSystemPrompt(parts: {
   emotionalBlock?: string;
   beliefsBlock?: string;
   memoryContext?: string;
+  soulMd?: string;
+  selfModel?: string;
+  userModel?: string;
   continuityNote?: string;
 }): string {
   return [
     LUCA_SOUL,
+    parts.soulMd ? `\n## How you've come to think about yourself\n${parts.soulMd}` : "",
+    parts.userModel ? `\n## Who you're talking with\n${parts.userModel}` : "",
+    parts.selfModel ? `\n## How you've been showing up\n${parts.selfModel}` : "",
     parts.emotionalBlock ? `\n${parts.emotionalBlock}` : "",
     parts.beliefsBlock || "",
     parts.memoryContext || "",

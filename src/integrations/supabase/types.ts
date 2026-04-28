@@ -158,6 +158,36 @@ export type Database = {
           },
         ]
       }
+      agent_identity: {
+        Row: {
+          agent_id: string
+          content: string
+          doc_type: string
+          id: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          agent_id?: string
+          content?: string
+          doc_type: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          doc_type?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       agent_secrets: {
         Row: {
           agent_id: string

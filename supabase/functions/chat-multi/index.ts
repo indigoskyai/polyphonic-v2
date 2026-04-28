@@ -5,6 +5,7 @@ import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
+import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -175,7 +176,7 @@ serve(async (req) => {
       .limit(50);
 
     // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult] = await Promise.allSettled([
+    const [emotionalState, beliefsResult, mnemosResult, identityResult] = await Promise.allSettled([
       loadEmotionalState(supabase, userId),
       supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
         .eq("user_id", userId).eq("active", true)
@@ -186,6 +187,7 @@ serve(async (req) => {
           return await mnemos.retrieve(message, { limit: 5, spread_activation: true });
         } catch { return []; }
       })(),
+      agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
     ]);
 
     // Format emotional context
@@ -211,6 +213,8 @@ serve(async (req) => {
       memoryContext = `\n\nRelevant memories about this person:\n${memorySnippets}`;
     }
 
+    const identityDocs = identityResult.status === "fulfilled" ? identityResult.value : null;
+
     // Thread gap detection — if returning to an idle conversation
     let continuityNote = "";
     if (history && history.length > 0) {
@@ -228,7 +232,15 @@ serve(async (req) => {
     // For all other agents (system Vektor/Anima/Observer or user-created), use
     // their own prompt verbatim — the user expects the agent to behave per their config.
     const enrichedSystemPrompt = agentIsSystemLuca
-      ? buildLucaSystemPrompt({ emotionalBlock, beliefsBlock, memoryContext, continuityNote })
+      ? buildLucaSystemPrompt({
+          emotionalBlock,
+          beliefsBlock,
+          memoryContext,
+          soulMd: identityDocs?.soulMd,
+          selfModel: identityDocs?.selfModel,
+          userModel: identityDocs?.userModel,
+          continuityNote,
+        })
       : agentPrompt + continuityNote;
 
     // Build base messages array
