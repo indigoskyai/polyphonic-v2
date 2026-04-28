@@ -85,8 +85,10 @@ export type Database = {
           locked: boolean
           model: string | null
           name: string
+          openclaw_agent_id: string | null
           pending: boolean
           personality: Json
+          preferred_device_id: string | null
           prompt: string | null
           role: string
           subagents: Json
@@ -105,8 +107,10 @@ export type Database = {
           locked?: boolean
           model?: string | null
           name: string
+          openclaw_agent_id?: string | null
           pending?: boolean
           personality?: Json
+          preferred_device_id?: string | null
           prompt?: string | null
           role: string
           subagents?: Json
@@ -125,8 +129,10 @@ export type Database = {
           locked?: boolean
           model?: string | null
           name?: string
+          openclaw_agent_id?: string | null
           pending?: boolean
           personality?: Json
+          preferred_device_id?: string | null
           prompt?: string | null
           role?: string
           subagents?: Json
@@ -135,7 +141,22 @@ export type Database = {
           user_id?: string
           voices?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agent_configs_openclaw_agent_id_fkey"
+            columns: ["openclaw_agent_id"]
+            isOneToOne: false
+            referencedRelation: "openclaw_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_configs_preferred_device_id_fkey"
+            columns: ["preferred_device_id"]
+            isOneToOne: false
+            referencedRelation: "openclaw_devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_secrets: {
         Row: {
@@ -1143,6 +1164,151 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      openclaw_agents: {
+        Row: {
+          agent_config_id: string
+          created_at: string
+          id: string
+          spec: Json
+          spec_version: number
+          sync_history: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_config_id: string
+          created_at?: string
+          id?: string
+          spec?: Json
+          spec_version?: number
+          sync_history?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_config_id?: string
+          created_at?: string
+          id?: string
+          spec?: Json
+          spec_version?: number
+          sync_history?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      openclaw_devices: {
+        Row: {
+          bridge_version: string | null
+          created_at: string
+          id: string
+          is_default: boolean
+          last_seen_at: string | null
+          name: string
+          platform: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bridge_version?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          last_seen_at?: string | null
+          name: string
+          platform?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bridge_version?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          last_seen_at?: string | null
+          name?: string
+          platform?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      openclaw_pairing_codes: {
+        Row: {
+          code: string
+          consumed_at: string | null
+          consumed_device_id: string | null
+          created_at: string
+          expires_at: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          consumed_at?: string | null
+          consumed_device_id?: string | null
+          created_at?: string
+          expires_at: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          consumed_at?: string | null
+          consumed_device_id?: string | null
+          created_at?: string
+          expires_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "openclaw_pairing_codes_consumed_device_id_fkey"
+            columns: ["consumed_device_id"]
+            isOneToOne: false
+            referencedRelation: "openclaw_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      openclaw_relay_sessions: {
+        Row: {
+          closed_at: string | null
+          device_id: string
+          id: string
+          last_ping_at: string
+          metadata: Json
+          opened_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          device_id: string
+          id?: string
+          last_ping_at?: string
+          metadata?: Json
+          opened_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          device_id?: string
+          id?: string
+          last_ping_at?: string
+          metadata?: Json
+          opened_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "openclaw_relay_sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "openclaw_devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profile_chat_messages: {
         Row: {
