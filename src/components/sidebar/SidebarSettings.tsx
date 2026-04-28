@@ -19,6 +19,7 @@ const SYSTEM_GROUP: Entry[] = [
   { key: 'skills', label: 'Skills', path: '/settings/skills' },
   { key: 'routines', label: 'Routines', path: '/settings/routines' },
   { key: 'voice', label: 'Voice & security', path: '/settings/voice' },
+  { key: 'local-runtime', label: 'Local runtime', path: '/settings/local-runtime' },
   { key: 'portability', label: 'Import & export', path: '/settings/portability' },
   { key: 'account', label: 'Account & preferences', path: '/settings/account' },
 ];
