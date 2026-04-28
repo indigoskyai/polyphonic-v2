@@ -933,33 +933,11 @@ export default function ChatView() {
               polyphonic
             </h1>
             {welcomeBack && (
-              <div
-                style={{
-                  maxWidth: 400,
-                  margin: '20px auto 0',
-                  animation: 'viewFadeIn 0.8s var(--ease-out) 0.4s both',
-                  cursor: 'pointer',
-                }}
-                onClick={() => {
-                  if (welcomeBack.type === 'initiation') setInput(welcomeBack.content);
-                  setWelcomeBack(null);
-                }}
-              >
-                <span style={{
-                  fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
-                  color: 'var(--text-whisper)', display: 'block', marginBottom: 8,
-                }}>
-                  {welcomeBack.type === 'initiation' ? 'i\u2019ve been thinking about something...'
-                    : welcomeBack.type === 'journal' ? 'while you were away...'
-                    : 'a thought surfaced...'}
-                </span>
-                <span style={{
-                  fontSize: 13, lineHeight: 1.6, color: 'var(--text-ghost)',
-                  fontStyle: 'italic', display: 'block',
-                }}>
-                  {welcomeBack.content}
-                </span>
-              </div>
+              <WelcomeBackCard
+                data={welcomeBack}
+                onUseAsInput={(t) => setInput(t)}
+                onDismiss={() => setWelcomeBack(null)}
+              />
             )}
           </div>
 
