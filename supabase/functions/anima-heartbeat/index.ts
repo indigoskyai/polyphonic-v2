@@ -375,11 +375,19 @@ async function processTaskQueue(
         result: { task_id: task.id, function: functionName },
       });
 
-      await logActivity(supabase, task.user_id, {
+      const logged = await logActivity(supabase, task.user_id, {
         type: "task_completed",
-        title: "Heartbeat: Task Completed",
-        summary: `Completed queued task: ${task.description.slice(0, 100)}`,
+        title: "Finished something you asked me to do",
+        summary: task.description.slice(0, 140),
         content: { task_id: task.id, function: functionName },
+        severity: "important",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: task.user_id,
+        activity_id: logged?.id,
+        severity: "important",
+        title: "Finished something you asked me to do",
+        summary: task.description.slice(0, 140),
       });
     } catch (taskErr) {
       const errMsg = taskErr instanceof Error ? taskErr.message : "Unknown error";
@@ -400,11 +408,19 @@ async function processTaskQueue(
         error: errMsg,
       });
 
-      await logActivity(supabase, task.user_id, {
+      const logged = await logActivity(supabase, task.user_id, {
         type: "task_failed",
-        title: "Heartbeat: Task Failed",
-        summary: `Task failed: ${task.description.slice(0, 100)}`,
+        title: "Hit a wall on something you asked",
+        summary: task.description.slice(0, 140),
         content: { task_id: task.id, error: errMsg },
+        severity: "important",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: task.user_id,
+        activity_id: logged?.id,
+        severity: "important",
+        title: "Hit a wall on something you asked",
+        summary: task.description.slice(0, 140),
       });
     }
   }
