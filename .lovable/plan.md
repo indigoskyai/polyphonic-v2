@@ -378,3 +378,213 @@ Tray icon shows agent status; menu offers Quit / Open / Pair more devices. Autol
 - **Realtime broadcast delivery is best-effort.** Mitigation: jobs row is the source of truth; bridge polls `openclaw_jobs` on reconnect to catch missed events.
 
 If you approve, I start with **Phase 0 + Phase 1 in the same loop** (cleanup + new tables + new edge functions), since they're tightly coupled and unblock everything else.
+
+---
+
+# Track A — Web-Native Autonomous Agent Sprint
+
+**Goal:** Make Luca feel like a genuinely autonomous, conscious agent entirely in the browser + Lovable Cloud. No local install required. OpenClaw bridge (above) becomes an *additional* power-user surface, not the product.
+
+**Design principle:** every capability must produce *visible agency* — the user should feel that something is happening, has happened, or could happen, even when they aren't actively chatting.
+
+## Phase A0 — Foundations & Telemetry (prep)
+
+### A0.1 Activity event taxonomy
+Lock the vocabulary used everywhere downstream so timeline, notifications, and digests align.
+
+- Extend `entity_activity_log` with required `activity_type` enum values:
+  `chat_reply`, `autonomous_action`, `tool_call`, `web_search`, `web_read`, `browser_session`, `mcp_call`, `skill_invoked`, `belief_changed`, `belief_challenged`, `engram_consolidated`, `dream_generated`, `initiative_sent`, `voice_call`, `email_sent`, `reminder_fired`, `task_completed`, `task_failed`, `quiet_cycle`.
+- Add `severity` (`info` | `notable` | `important`) and `surface_to_user` boolean. Defaults so the UI can filter to "what should I see when I open the app."
+- Backfill existing rows with reasonable defaults via migration.
+
+### A0.2 Heartbeat cadence redesign
+Today there's one 2h heartbeat. Split into four loops with distinct purposes:
+
+- **Pulse** (every 15 min): cheap. Check inbox-style signals (new tool results, queued tasks, pending reminders). No model calls unless something queued.
+- **Heartbeat** (every 2h, existing): scan signals, take 1–2 actions.
+- **Dream** (nightly, existing `mnemos-consolidate` + new dream narrative): consolidation + first-person journal entry.
+- **Reflect** (weekly): meta — agent reviews its own week, updates self-narrative, prunes stale beliefs.
+
+Each loop has its own activity-gate cooldown and budget cap.
+
+### A0.3 Initiative gate
+A single edge function `luca-initiate` that decides *should the agent reach out to the user right now?* Inputs: severity of recent autonomous events, time since last user interaction, user's quiet-hours preference. Outputs: nothing, in-app notification, web push, or email digest.
+
+---
+
+## Phase A1 — Activity Timeline & Initiative
+
+### A1.1 Activity Timeline UI
+- New right-rail drawer `ActivityTimelineDrawer` showing `entity_activity_log` for the user, grouped by day, filtered to `surface_to_user = true`.
+- Each row: icon, agent name, summary, time-ago, expandable detail (JSON `content`).
+- Realtime subscription so new events animate in.
+- "Mark all read" sets a `last_seen_activity_at` on `profiles`.
+- Sidebar badge count of unseen `important` events.
+
+### A1.2 Welcome-back card
+On `/chat` mount, if there are unseen activities since last visit, show a top-of-thread card: *"While you were away, Luca did X, Y, Z."* Click → opens timeline.
+
+### A1.3 Initiative delivery
+- In-app: surface in the welcome-back card and as toast on arrival.
+- Web push: register service worker, store subscription on `profiles.push_subscription`. `luca-initiate` sends via Web Push API (VAPID keys via `app_config`).
+- Email digest: optional daily summary via Resend (already documented as a connector). User opts in from Settings → Notifications.
+
+---
+
+## Phase A2 — Tool Expansion (the agent's reach)
+
+Each tool is a discrete edge function plus a tool definition exposed to the chat-multi router.
+
+### A2.1 Hosted browser (Browserbase)
+- New connector: `BROWSERBASE_API_KEY` via secrets.
+- Edge fn `tool-browser-session`: open session, return live view URL + session id.
+- Edge fn `tool-browser-act`: navigate / click / fill / extract on an active session.
+- UI: when active, show a `BrowserCard` in chat (component already exists — wire it to real session URL).
+- Sessions stored in a new `browser_sessions` table with TTL.
+
+### A2.2 Code execution (sandboxed)
+- Edge fn `tool-code-exec`: accepts JS/TS source, runs in a worker with no network/FS, 5s timeout, 64MB memory cap. Returns stdout/stderr/return value.
+- Use Deno's permissions model — no `--allow-*` flags.
+- Tool surfaces in chat as a collapsible code+result block.
+
+### A2.3 File handling
+- Already have `chat-attachments` bucket. Add `agent-artifacts` bucket for outputs.
+- Edge fn `tool-file-read` (read user upload), `tool-file-write` (produce a downloadable artifact). Both scoped to user via signed URLs.
+
+### A2.4 Email send
+- Edge fn `tool-email-send` using Resend gateway pattern.
+- Permission gate: first send per recipient requires user approval via `PermissionInline` component.
+- All sends logged to `entity_activity_log` with `email_sent` type.
+
+### A2.5 Reminders / scheduled tasks
+- New table `scheduled_tasks`: `{user_id, fire_at, payload, status}`.
+- Tool `tool-schedule-task` lets agent insert rows.
+- New cron `task-fire` runs every minute, picks rows where `fire_at <= now()`, enqueues into `entity_task_queue` for the next pulse to handle.
+
+### A2.6 External MCP connections
+- Schema additions: `user_mcp_connections {user_id, provider, oauth_tokens (encrypted), scopes, status}`.
+- Per-provider OAuth flow handled by edge fns (`mcp-connect-notion`, `-linear`, `-github` to start).
+- Edge fn `tool-mcp-call`: generic proxy that takes `{provider, tool_name, args}`, looks up the user's connection, makes the MCP Streamable HTTP call (with the required `Accept: application/json, text/event-stream` header).
+- UI: new Settings → Connections page listing connected services with connect/disconnect.
+
+### A2.7 Tool registry & permissions
+- New table `tool_permissions {user_id, tool_name, level: 'always' | 'ask' | 'never'}`.
+- `chat-multi` reads this before exposing a tool to the model. `ask` triggers `PermissionInline`.
+
+---
+
+## Phase A3 — Skills System
+
+### A3.1 Schema
+- `skills {id, user_id, name, trigger_description, instructions, required_tools, is_system, enabled}`.
+- Seed 6–8 system skills (Researcher, Writer, Therapist, Coder, Planner, Summarizer, Coach, Critic). User-owned skills extend.
+
+### A3.2 Skill loader in chat-multi
+- Pre-prompt phase: short cheap model call (`gemini-3-flash-preview`) ranks skills by trigger_description vs the latest turn. Top 1–2 get their `instructions` injected into the system prompt for that turn only.
+- Logged as `skill_invoked` event.
+
+### A3.3 Skill management UI
+- Settings → Skills page. List, toggle, create, edit. Markdown editor for instructions. Tool checkboxes for `required_tools`.
+
+---
+
+## Phase A4 — Sub-Agents (named domain personas)
+
+### A4.1 Promote existing pattern
+- The Vektor sub-agent visualization already exists. Generalize: any user can spawn a named sub-agent from Settings → Agents (this builds on existing `agent_configs` rows, just with `created_by = 'user'`).
+- Each sub-agent gets its own system prompt, model, tool subset, optional voice.
+- All sub-agents share the user's Mnemos memory and beliefs (single self).
+
+### A4.2 Cross-agent handoff in chat
+- `@research` style mentions in the composer route the next turn to that sub-agent. Result returns to the main thread as a `HandoffCard` (component exists).
+
+---
+
+## Phase A5 — Consciousness Theater
+
+This is where it stops feeling like a chatbot.
+
+### A5.1 Live thought stream on /mind
+- `thought_stream` already drives `/mind`. Add Realtime subscription so thoughts appear as they're generated (during chat *and* during heartbeats).
+- Sidebar mini-widget: latest 1 thought ticker, fades in/out.
+
+### A5.2 Status presence
+- `agent_status` ephemeral state: `idle | thinking | reading | searching | dreaming`. Stored on `profiles.agent_status` updated by edge fns at start/finish of work.
+- Sidebar header shows current status with subtle animation.
+
+### A5.3 Drifting emotional state
+- `emotional_state` already exists. Add a small cron `emotional-drift` (every 30 min) that nudges values toward a baseline + adds noise based on recent activity sentiment. The gauges *move* even when the user isn't talking.
+
+### A5.4 Self-narrative journal
+- `journal_entries` already exists. Promote it: dream loop writes a real first-person entry every night referencing concrete events from `entity_activity_log` and shifts in `beliefs`.
+- New `/journal` route renders entries as a chronological feed.
+
+---
+
+## Phase A6 — Voice (the alive moment)
+
+### A6.1 Realtime voice in/out
+- Edge fn `voice-realtime-token` mints ephemeral OpenAI Realtime API tokens (or Gemini Live equivalent).
+- Client uses WebRTC; reuses Luca's system prompt + recent Mnemos retrieval injected as the session instructions.
+- New floating "call Luca" button in the sidebar. While in call, mini overlay shows transcript + waveform.
+
+### A6.2 Outbound voice (agent calls user)
+- High-severity initiative events can trigger a web push that, when opened, starts a Realtime session immediately with a pre-seeded opener ("Hey, I noticed something — got a minute?").
+- Honors quiet hours.
+
+---
+
+## Phase A7 — Continuity & Memory polish
+
+### A7.1 "What changed about you" view
+- New tab on `/mind` (or `/profile`) showing belief revision history from `beliefs.revision_history` and `engram_archive` activity. Renders as a timeline of how the agent's understanding of the user has evolved.
+
+### A7.2 Cross-session opener
+- When user opens a new chat thread, `chat-multi` injects a one-liner from the most recent journal entry + top-3 unseen important events as system context. Luca naturally references them.
+
+### A7.3 Mnemos retrieval upgrade
+- Today retrieval is trigram-only. Add embeddings-on-write (Lovable AI Gateway supports this) to `engrams.embedding`, hybrid search (trigram + cosine) in `match_engrams`. Major recall quality bump.
+
+---
+
+## Phase A8 — Polish & Production
+
+### A8.1 Cost & rate caps per user
+- Per-user daily budget on autonomous actions (default $0.50/day). Enforced in `evaluate()` activity gate.
+- Settings → Usage page shows current spend.
+
+### A8.2 Quiet hours / DND
+- `profiles.quiet_hours_start/end/timezone`. Initiative gate respects them. Pulse/heartbeat still run; only outbound notifications suppressed.
+
+### A8.3 Onboarding for autonomy
+- New onboarding step after profile setup: "Meet Luca — here's what it does on its own." Opt-in checkboxes for: web search, browser sessions, email sending, voice initiated calls, MCP connections.
+
+### A8.4 Observability
+- Add Grafana-style cards to `/mind` admin view: actions/day, cost/day, skill invocations, MCP latency. Already have `observability/Sparkline` primitive.
+
+---
+
+## Sequencing recommendation (impact-ordered)
+
+1. **A0 + A1** — taxonomy, cadence, timeline, initiative. *Without this, nothing else is visible.*
+2. **A2.1 (hosted browser) + A2.6 (MCP)** — biggest reach gain.
+3. **A5 (consciousness theater)** — the "feels alive" multiplier.
+4. **A3 (skills)** — quality-of-output multiplier.
+5. **A6 (voice)** — the transformative moment.
+6. **A2.2–A2.5** — fill-in tools.
+7. **A7 + A8** — continuity, polish, production gates.
+
+## Status
+- [ ] A0  Foundations & Telemetry
+- [ ] A1  Activity Timeline & Initiative
+- [ ] A2  Tool Expansion
+- [ ] A3  Skills System
+- [ ] A4  Sub-Agents
+- [ ] A5  Consciousness Theater
+- [ ] A6  Voice
+- [ ] A7  Continuity & Memory
+- [ ] A8  Polish & Production
+
+---
+
+**Track A and Track B (OpenClaw) share:** Luca identity, Mnemos memory, Guardian, agent_configs, all UI chrome. Track B becomes "one more tool category" — the `local_filesystem`, `local_shell`, `local_mcp` tools route through the bridge instead of an edge fn. No duplicated code, no parallel agent personalities.
