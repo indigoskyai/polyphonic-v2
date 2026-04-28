@@ -110,3 +110,22 @@ export const MAX_CONNECTION_WEIGHT = 1.0;
 
 /** Weight boost per co-activation during consolidation. */
 export const CO_ACTIVATION_WEIGHT_BOOST = 0.05;
+
+// ---------------------------------------------------------------------------
+// Dialectic Identity Patches
+// ---------------------------------------------------------------------------
+
+/** Default turn cadence for post-conversation dialectic reflection. */
+export const DIALECTIC_TURN_CADENCE = 8;
+
+/** Self/user model patches at or above this confidence apply automatically. */
+export const DIALECTIC_MODEL_APPLY_THRESHOLD = 0.6;
+
+/** Self/user model patches at or above this confidence queue for later evidence. */
+export const DIALECTIC_MODEL_QUEUE_THRESHOLD = 0.4;
+
+/** SOUL.md patches require higher confidence because they are identity-level. */
+export const DIALECTIC_SOUL_APPLY_THRESHOLD = 0.8;
+
+/** SOUL.md patches at or above this confidence queue for corroborating cycles. */
+export const DIALECTIC_SOUL_QUEUE_THRESHOLD = 0.6;

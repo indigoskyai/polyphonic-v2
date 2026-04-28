@@ -544,6 +544,7 @@ serve(async (req) => {
 
           // Fire observer-watch (best-effort)
           fireObserverWatch(thread_id, agentId, authHeader);
+          fireMnemosDialectic(thread_id, agentId, authHeader);
 
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
@@ -592,6 +593,24 @@ function fireObserverWatch(threadId: string, agentId: string, authHeader: string
     }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("observer-watch dispatch error:", e);
+  }
+}
+
+/** Fire mnemos-dialectic in the background. Best-effort. Luca only. */
+function fireMnemosDialectic(threadId: string, agentId: string, authHeader: string) {
+  if (agentId !== "luca") return;
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mnemos-dialectic`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
+    }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("mnemos-dialectic dispatch error:", e);
   }
 }
 
@@ -999,8 +1018,11 @@ async function singleModelStream(
         // Encode into Mnemos
         encodeMnemosMemory(supabase, userId, userMessage, fullContent).catch(() => {});
 
-        // Fire observer-watch (best-effort)
-        if (authHeader) fireObserverWatch(threadId, agentId, authHeader);
+        // Fire post-turn background reflection (best-effort)
+        if (authHeader) {
+          fireObserverWatch(threadId, agentId, authHeader);
+          fireMnemosDialectic(threadId, agentId, authHeader);
+        }
 
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {

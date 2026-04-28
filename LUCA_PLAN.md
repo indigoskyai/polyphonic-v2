@@ -59,7 +59,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 ### Wave 1 (sequential)
 - [x] **L1** Default model upgrade to Opus 4.7 — User-facing Luca defaults move to `anthropic/claude-opus-4-7`; background loops stay on cheap models.
 - [x] **L2** Four-document identity stack — Agent identity docs table, prompt composition, seeding, and read-only identity surface foundation.
-- [ ] **L3** Dialectic layer — Mnemos dialectic module, post-turn edge function, identity patch audit trail, and pending revision output.
+- [x] **L3** Dialectic layer — Mnemos dialectic module, post-turn edge function, identity patch audit trail, and pending revision output.
 
 ### Wave 2 (after L1-L3)
 - [ ] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.

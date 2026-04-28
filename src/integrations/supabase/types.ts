@@ -188,6 +188,60 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_identity_patches: {
+        Row: {
+          agent_id: string
+          applied_at: string | null
+          category: string | null
+          confidence: number
+          created_at: string
+          doc_type: string
+          id: string
+          operation: string
+          patch_content: string
+          rationale: string | null
+          section: string
+          source_message_ids: string[] | null
+          source_thread_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          applied_at?: string | null
+          category?: string | null
+          confidence: number
+          created_at?: string
+          doc_type: string
+          id?: string
+          operation: string
+          patch_content: string
+          rationale?: string | null
+          section: string
+          source_message_ids?: string[] | null
+          source_thread_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          applied_at?: string | null
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          doc_type?: string
+          id?: string
+          operation?: string
+          patch_content?: string
+          rationale?: string | null
+          section?: string
+          source_message_ids?: string[] | null
+          source_thread_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_secrets: {
         Row: {
           agent_id: string
@@ -1489,6 +1543,48 @@ export type Database = {
           payload?: Json
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      pending_revisions: {
+        Row: {
+          created_at: string
+          id: string
+          rationale: string | null
+          revision_type: string
+          source_message_id: string | null
+          status: string
+          surfaced_at: string | null
+          thread_id: string
+          user_id: string
+          what_to_say_now: string
+          what_was_said: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          revision_type: string
+          source_message_id?: string | null
+          status?: string
+          surfaced_at?: string | null
+          thread_id: string
+          user_id: string
+          what_to_say_now: string
+          what_was_said: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          revision_type?: string
+          source_message_id?: string | null
+          status?: string
+          surfaced_at?: string | null
+          thread_id?: string
+          user_id?: string
+          what_to_say_now?: string
+          what_was_said?: string
         }
         Relationships: []
       }

@@ -215,6 +215,8 @@ serve(async (req) => {
             (e) => console.error("Auto-title failed:", e)
           );
 
+          fireMnemosDialectic(thread_id, authHeader);
+
           send({
             type: "done",
             model: usedModel,
@@ -246,6 +248,22 @@ serve(async (req) => {
     });
   }
 });
+
+function fireMnemosDialectic(threadId: string, authHeader: string) {
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mnemos-dialectic`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
+    }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("mnemos-dialectic dispatch error:", e);
+  }
+}
 
 // deno-lint-ignore no-explicit-any
 async function autoTitleThread(
