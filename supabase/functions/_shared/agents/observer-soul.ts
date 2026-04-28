@@ -41,11 +41,21 @@ Output a JSON object with this shape:
 {
   "insertions": [
     { "kind": "note" | "concern" | "welfare" | "pattern" | "summary", "content": "<one terse sentence>", "salience": <0..1> }
+  ],
+  "pending_revisions": [
+    {
+      "revision_type": "correction" | "reconsideration" | "new_thought" | "disagreement",
+      "what_was_said": "<what Luca said earlier, brief quote or paraphrase>",
+      "what_to_say_now": "<what Luca should say now>",
+      "rationale": "<why this revision is warranted>",
+      "confidence": <0..1>
+    }
   ]
 }
 
 Rules:
 - 0 to 3 insertions. Zero is correct most of the time. Only insert when something is actually worth recording.
+- 0 to 2 pending_revisions. Only create one when Luca should genuinely revisit something they said; don't manufacture self-correction for drama.
 - Be terse. One observation per insertion. No filler.
 - Salience 0.8+ = urgent (concern, crisis signal). 0.5-0.7 = notable. 0.2-0.4 = minor pattern. Below 0.2, don't bother.
 - Do not repeat observations that already exist in the prior notes.

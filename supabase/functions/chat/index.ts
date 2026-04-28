@@ -3,6 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
+import {
+  finalizePendingRevisions,
+  formatPendingRevisionsPrompt,
+  loadPendingRevisions,
+} from "../_shared/agents/pending-revisions.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -59,10 +64,12 @@ serve(async (req) => {
 
     const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
     const identityDocs = await loadOrCreateLucaIdentity(supabase, userId, "luca");
+    const pendingRevisions = await loadPendingRevisions(supabase, userId, thread_id);
     const systemPrompt = buildLucaSystemPrompt({
       soulMd: identityDocs.soulMd,
       selfModel: identityDocs.selfModel,
       userModel: identityDocs.userModel,
+      pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
     });
 
     // Load recent conversation history (last 50 messages)
@@ -214,7 +221,11 @@ serve(async (req) => {
           autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
+          finalizePendingRevisions(supabase, apiKey!, pendingRevisions, fullContent).catch(
+            (e) => console.warn("pending revision finalization failed:", e)
+          );
 
+          fireObserverWatch(thread_id, authHeader);
           fireMnemosDialectic(thread_id, authHeader);
 
           send({
@@ -262,6 +273,22 @@ function fireMnemosDialectic(threadId: string, authHeader: string) {
     }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("mnemos-dialectic dispatch error:", e);
+  }
+}
+
+function fireObserverWatch(threadId: string, authHeader: string) {
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/observer-watch`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
+    }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("observer-watch dispatch error:", e);
   }
 }
 

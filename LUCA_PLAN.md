@@ -62,7 +62,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **L3** Dialectic layer — Mnemos dialectic module, post-turn edge function, identity patch audit trail, and pending revision output.
 
 ### Wave 2 (after L1-L3)
-- [ ] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.
+- [x] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.
 - [ ] **L5** Skills system — Skill distillation, skill prompt retrieval, and user-facing skills controls.
 - [ ] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
 - [ ] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
@@ -84,6 +84,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-24 09:38 · phase 11 · used `mc-` prefix instead of spec's `.msg-row` / `.thinking-dots` / `.streaming-cursor` · those three classes already existed in `index.css` from pre-phase code (existing `.msg-row` is sidehead grid w/ 24px gap and right-aligned author; existing `.thinking-dots` owns the 9-dot murmur grid; existing `.streaming-cursor` has its own ::after cursor). Dropping new rules with the same names would either be dead code or break existing UI. Consumers import `<MessageRow>` / `<ThinkingDots>` / `<StreamingCursor>` — their internal CSS class names are implementation detail. Composer autocomplete wiring deferred (matches phase-03 extract deferral; primitives are ready when ChatView composer is touched). 
 - 2026-04-28 05:15 · phase L1 · used a clean clone at `/private/tmp/polyphonic-v2-luca-clean` for L-phase commits · the requested checkout had 204 deleted tracked files, no `origin`, and could not build; using a clean remote clone avoids overwriting Riley's dirty workspace while still letting the phase ship.
 - 2026-04-28 05:21 · phase L1 · migrated locked system Luca rows from old Sonnet defaults but left `user_settings.default_model` rows untouched · the handoff says existing user model preferences override, while locked system-agent seed rows are platform defaults rather than user preference.
+- 2026-04-28 15:27 · phase L4 · reused the L3-created `pending_revisions` table and tightened every chat completion exit to fire observer/dialectic hooks · L3 already needed the table to record honest revision provenance, while L4's responsibility is surfacing, classification, and coverage across runtime paths.
 
 
 ## Backend asks queue

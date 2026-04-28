@@ -6,6 +6,12 @@ import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
+import {
+  finalizePendingRevisions,
+  formatPendingRevisionsPrompt,
+  loadPendingRevisions,
+  type PendingRevision,
+} from "../_shared/agents/pending-revisions.ts";
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -176,7 +182,7 @@ serve(async (req) => {
       .limit(50);
 
     // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult, identityResult] = await Promise.allSettled([
+    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult] = await Promise.allSettled([
       loadEmotionalState(supabase, userId),
       supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
         .eq("user_id", userId).eq("active", true)
@@ -188,6 +194,7 @@ serve(async (req) => {
         } catch { return []; }
       })(),
       agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
+      agentIsSystemLuca ? loadPendingRevisions(supabase, userId, thread_id) : Promise.resolve([]),
     ]);
 
     // Format emotional context
@@ -214,6 +221,8 @@ serve(async (req) => {
     }
 
     const identityDocs = identityResult.status === "fulfilled" ? identityResult.value : null;
+    const pendingRevisions = pendingRevisionsResult.status === "fulfilled" ? pendingRevisionsResult.value : [];
+    const pendingRevisionsBlock = formatPendingRevisionsPrompt(pendingRevisions || []);
 
     // Thread gap detection — if returning to an idle conversation
     let continuityNote = "";
@@ -239,6 +248,7 @@ serve(async (req) => {
           soulMd: identityDocs?.soulMd,
           selfModel: identityDocs?.selfModel,
           userModel: identityDocs?.userModel,
+          pendingRevisions: pendingRevisionsBlock,
           continuityNote,
         })
       : agentPrompt + continuityNote;
@@ -275,6 +285,7 @@ serve(async (req) => {
         corsHeaders,
         agentId,
         authHeader,
+        pendingRevisions || [],
       );
     }
 
@@ -330,7 +341,15 @@ serve(async (req) => {
             }
             send({ type: "content", text: variants[0].content });
             await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking, agentId);
+            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], variants[0].content).catch(
+              (e) => console.warn("pending revision finalization failed:", e)
+            );
             await autoTitleThread(supabase, thread_id, message, variants[0].content, apiKey!);
+            encodeMnemosMemory(supabase, userId, message, variants[0].content).catch(
+              (e) => console.warn("Mnemos encode failed (non-fatal):", e)
+            );
+            fireObserverWatch(thread_id, agentId, authHeader);
+            fireMnemosDialectic(thread_id, agentId, authHeader);
             send({ type: "done", model: "synthesis", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -455,6 +474,15 @@ serve(async (req) => {
               if (retryContent) {
                 send({ type: "content", text: retryContent });
                 await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+                finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], retryContent).catch(
+                  (e) => console.warn("pending revision finalization failed:", e)
+                );
+                await autoTitleThread(supabase, thread_id, message, retryContent, apiKey!);
+                encodeMnemosMemory(supabase, userId, message, retryContent).catch(
+                  (e) => console.warn("Mnemos encode failed (non-fatal):", e)
+                );
+                fireObserverWatch(thread_id, agentId, authHeader);
+                fireMnemosDialectic(thread_id, agentId, authHeader);
                 send({ type: "done", model: "synthesis", tokens_used: null });
                 controller.close();
                 clearInterval(heartbeat);
@@ -466,6 +494,15 @@ serve(async (req) => {
             const best = variants[0];
             send({ type: "content", text: best.content });
             await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], best.content).catch(
+              (e) => console.warn("pending revision finalization failed:", e)
+            );
+            await autoTitleThread(supabase, thread_id, message, best.content, apiKey!);
+            encodeMnemosMemory(supabase, userId, message, best.content).catch(
+              (e) => console.warn("Mnemos encode failed (non-fatal):", e)
+            );
+            fireObserverWatch(thread_id, agentId, authHeader);
+            fireMnemosDialectic(thread_id, agentId, authHeader);
             send({ type: "done", model: "fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -525,6 +562,9 @@ serve(async (req) => {
 
           // Save the synthesized message (thinking separate from variants)
           await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+          finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], synthesizedContent).catch(
+            (e) => console.warn("pending revision finalization failed:", e)
+          );
 
           // Update thread timestamp
           await supabase
@@ -927,6 +967,7 @@ async function singleModelStream(
   corsHeaders: Record<string, string>,
   agentId: string = "luca",
   authHeader: string = "",
+  pendingRevisions: PendingRevision[] = [],
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1014,6 +1055,9 @@ async function singleModelStream(
         });
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
+        finalizePendingRevisions(supabase, apiKey, pendingRevisions || [], fullContent).catch(
+          (e) => console.warn("pending revision finalization failed:", e)
+        );
 
         // Encode into Mnemos
         encodeMnemosMemory(supabase, userId, userMessage, fullContent).catch(() => {});

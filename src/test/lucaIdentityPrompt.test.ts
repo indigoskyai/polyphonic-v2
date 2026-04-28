@@ -7,6 +7,7 @@ describe('buildLucaSystemPrompt identity layers', () => {
       soulMd: '## What I value\nTruth before polish.',
       userModel: 'Prefers direct, concrete critique.',
       selfModel: 'Sometimes over-compresses too early.',
+      pendingRevisions: 'Earlier you said: X\nOn reflection: Y',
       emotionalBlock: 'Current emotional state: steady.',
       beliefsBlock: 'Beliefs: craft matters.',
       memoryContext: 'Relevant memories about this person: ships fast.',
@@ -17,13 +18,15 @@ describe('buildLucaSystemPrompt identity layers', () => {
     const soulMdIndex = prompt.indexOf("## How you've come to think about yourself");
     const userModelIndex = prompt.indexOf("## Who you're talking with");
     const selfModelIndex = prompt.indexOf("## How you've been showing up");
+    const revisionsIndex = prompt.indexOf('## Pending revisions');
     const stateIndex = prompt.indexOf('Current emotional state: steady.');
 
     expect(soulIndex).toBeGreaterThanOrEqual(0);
     expect(soulIndex).toBeLessThan(soulMdIndex);
     expect(soulMdIndex).toBeLessThan(userModelIndex);
     expect(userModelIndex).toBeLessThan(selfModelIndex);
-    expect(selfModelIndex).toBeLessThan(stateIndex);
+    expect(selfModelIndex).toBeLessThan(revisionsIndex);
+    expect(revisionsIndex).toBeLessThan(stateIndex);
     expect(prompt).toContain('Truth before polish.');
     expect(prompt).toContain('Prefers direct, concrete critique.');
     expect(prompt).toContain('Sometimes over-compresses too early.');

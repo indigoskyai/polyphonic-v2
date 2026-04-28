@@ -58,7 +58,7 @@ serve(async (req) => {
     // Load recent thread + prior notes + emotional state in parallel
     const [historyRes, notesRes, emotionalRes] = await Promise.allSettled([
       supabase.from("messages")
-        .select("role, content, agent, created_at")
+        .select("id, role, content, agent, created_at")
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -134,7 +134,16 @@ serve(async (req) => {
     const data = await orResponse.json();
     const raw = data?.choices?.[0]?.message?.content || "";
 
-    let parsed: { insertions?: Array<{ kind?: string; content?: string; salience?: number }> } = {};
+    let parsed: {
+      insertions?: Array<{ kind?: string; content?: string; salience?: number }>;
+      pending_revisions?: Array<{
+        revision_type?: string;
+        what_was_said?: string;
+        what_to_say_now?: string;
+        rationale?: string;
+        confidence?: number;
+      }>;
+    } = {};
     try {
       // Strip code fences if any
       const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
@@ -164,7 +173,34 @@ serve(async (req) => {
       await supabase.from("observer_notes").insert(insertions);
     }
 
-    return new Response(JSON.stringify({ ok: true, inserted: insertions.length }), {
+    const validRevisionTypes = new Set(["correction", "reconsideration", "new_thought", "disagreement"]);
+    const assistantMessages = history.filter((m: { role: string }) => m.role === "assistant");
+    const revisions = (parsed.pending_revisions || [])
+      .filter((revision) =>
+        revision &&
+        typeof revision.what_was_said === "string" &&
+        typeof revision.what_to_say_now === "string" &&
+        revision.what_was_said.trim().length > 0 &&
+        revision.what_to_say_now.trim().length > 0 &&
+        (revision.confidence ?? 0) >= 0.6
+      )
+      .slice(0, 2)
+      .map((revision) => ({
+        user_id: user.id,
+        thread_id,
+        source_message_id: findRevisionSourceMessageId(assistantMessages, revision.what_was_said || ""),
+        revision_type: validRevisionTypes.has(revision.revision_type || "") ? revision.revision_type! : "reconsideration",
+        what_was_said: revision.what_was_said!.trim().slice(0, 1000),
+        what_to_say_now: revision.what_to_say_now!.trim().slice(0, 1600),
+        rationale: typeof revision.rationale === "string" ? revision.rationale.slice(0, 1000) : null,
+        status: "pending",
+      }));
+
+    if (revisions.length > 0) {
+      await supabase.from("pending_revisions").insert(revisions);
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted: insertions.length, revisions: revisions.length }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
@@ -174,3 +210,15 @@ serve(async (req) => {
     });
   }
 });
+
+function findRevisionSourceMessageId(
+  messages: Array<{ id?: string; content?: string }>,
+  whatWasSaid: string,
+): string | null {
+  const needle = whatWasSaid.toLowerCase().slice(0, 180);
+  if (needle.length < 12) return null;
+  const source = [...messages].reverse().find((message) =>
+    (message.content || "").toLowerCase().includes(needle)
+  );
+  return source?.id || null;
+}
