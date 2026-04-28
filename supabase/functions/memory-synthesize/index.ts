@@ -174,8 +174,8 @@ serve(async (req) => {
 ALL MEMORIES FOR THIS USER (${allMemories.length} total):
 ${memoryDump}`;
 
-    // Use gemini-2.5-pro for synthesis (better reasoning for cross-referencing)
-    const synthesisModel = "google/gemini-2.5-pro";
+    // Background synthesis stays on a cheap model; user-facing chat owns the Opus budget.
+    const synthesisModel = "google/gemini-2.5-flash";
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

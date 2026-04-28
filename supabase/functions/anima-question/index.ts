@@ -82,7 +82,7 @@ serve(async (req) => {
     const { data: modelConfig } = await supabase
       .from("model_configs").select("model_id")
       .eq("feature_key", "anima_question").eq("is_active", true).maybeSingle();
-    const questionModel = modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    const questionModel = modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Gather context
     const [

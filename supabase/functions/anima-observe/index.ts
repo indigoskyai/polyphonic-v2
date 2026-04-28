@@ -293,7 +293,7 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "anthropic/claude-sonnet-4.6",
+            model: "google/gemini-2.5-flash",
             messages: [{ role: "user", content: synthLines.join("\n") }],
             temperature: 0.5,
             max_tokens: 500,

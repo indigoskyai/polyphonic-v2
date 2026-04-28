@@ -194,7 +194,7 @@ Write ONLY the message. Nothing else.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "anthropic/claude-sonnet-4.6",
+            model: "google/gemini-2.5-flash",
             messages: [{ role: "user", content: compositionPrompt }],
             temperature: 0.7,
             max_tokens: 200,

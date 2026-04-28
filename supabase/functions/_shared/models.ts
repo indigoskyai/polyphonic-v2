@@ -16,6 +16,7 @@ interface ModelMeta {
 
 export const REASONING_MODELS: Record<string, ModelMeta> = {
   // Anthropic — uses thinking.type + budget_tokens
+  'anthropic/claude-opus-4-7': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
   'anthropic/claude-opus-4.7': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
   'anthropic/claude-opus-4.6': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6' },
   'anthropic/claude-opus-4.6-fast': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6 Fast' },

@@ -8,7 +8,7 @@ import {
 } from '@/components/settings/FormControls';
 
 const ENSEMBLE_MODELS = [
-  { id: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7 (reasoning)' },
+  { id: 'anthropic/claude-opus-4-7', label: 'Claude Opus 4.7 (reasoning)' },
   { id: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6 (reasoning)' },
   { id: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6 (reasoning)' },
   { id: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },

@@ -54,6 +54,26 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **19** [Attachments + computer-use](./design-system/19-attachments-computeruse.md) — Attachment chips, drag-drop, image/code previews, browser viewport with cursor halo
 - [x] **20** [Mobile shell](./design-system/20-mobile.md) — Phone frame, bottom nav, slide drawer, mobile sub-agent strip
 
+## Luca Completion L-Phases
+
+### Wave 1 (sequential)
+- [x] **L1** Default model upgrade to Opus 4.7 — User-facing Luca defaults move to `anthropic/claude-opus-4-7`; background loops stay on cheap models.
+- [ ] **L2** Four-document identity stack — Agent identity docs table, prompt composition, seeding, and read-only identity surface foundation.
+- [ ] **L3** Dialectic layer — Mnemos dialectic module, post-turn edge function, identity patch audit trail, and pending revision output.
+
+### Wave 2 (after L1-L3)
+- [ ] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.
+- [ ] **L5** Skills system — Skill distillation, skill prompt retrieval, and user-facing skills controls.
+- [ ] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
+- [ ] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
+- [ ] **L8** User-facing scheduler — Scheduled task schema, runner, and schedule management UI.
+- [ ] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
+
+### Wave 3 (last)
+- [ ] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
+- [ ] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
+- [ ] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
+
 ## Decision log
 
 (Append entries here when you make a non-obvious choice during execution. Format: `YYYY-MM-DD HH:MM · phase NN · what · why`.)
@@ -62,6 +82,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-24 08:57 · phase 03 · shipped CSS shimmer alignment only; deferred `Composer.tsx` extraction · existing inline composer in `ChatView.tsx` (L920–965 landing + L1145–1255 conversation) already matches the mockup pixel-faithfully and consumes 15+ handlers/refs from ChatView state. Extraction would require ~150 lines of JSX move + full prop interface for state passthrough — pure refactor with zero visible change. The phase's visual goal (locked shimmer-c1..c8 keyframes @ prime durations + `.input-shell:focus-within` intensification) is achieved. Component extraction tracked as follow-on work; re-open phase 03 if/when the inline composer is touched for unrelated reasons.
 - 2026-04-24 09:27 · phase 06 · LINKED MEMORY + RELATED THREADS sections omitted; Archive action is no-op placeholder · `threads` schema lacks `archived` column and there is no `thread↔engram` relation table. Rendering placeholder sections for data that can't be wired would be dishonest UI. METADATA/PARTICIPANTS/ACTIVITY (via Phase 07 timeline)/RENAME inline flow/PIN toggle/EXPORT-to-JSON all wired to real data. Archive Pill currently just closes drawer until a `threads.archived` column lands.
 - 2026-04-24 09:38 · phase 11 · used `mc-` prefix instead of spec's `.msg-row` / `.thinking-dots` / `.streaming-cursor` · those three classes already existed in `index.css` from pre-phase code (existing `.msg-row` is sidehead grid w/ 24px gap and right-aligned author; existing `.thinking-dots` owns the 9-dot murmur grid; existing `.streaming-cursor` has its own ::after cursor). Dropping new rules with the same names would either be dead code or break existing UI. Consumers import `<MessageRow>` / `<ThinkingDots>` / `<StreamingCursor>` — their internal CSS class names are implementation detail. Composer autocomplete wiring deferred (matches phase-03 extract deferral; primitives are ready when ChatView composer is touched). 
+- 2026-04-28 05:15 · phase L1 · used a clean clone at `/private/tmp/polyphonic-v2-luca-clean` for L-phase commits · the requested checkout had 204 deleted tracked files, no `origin`, and could not build; using a clean remote clone avoids overwriting Riley's dirty workspace while still letting the phase ship.
+- 2026-04-28 05:21 · phase L1 · migrated locked system Luca rows from old Sonnet defaults but left `user_settings.default_model` rows untouched · the handoff says existing user model preferences override, while locked system-agent seed rows are platform defaults rather than user preference.
 
 
 ## Backend asks queue

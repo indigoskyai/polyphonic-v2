@@ -79,7 +79,7 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const model = modelOverride || settings?.default_model || "anthropic/claude-sonnet-4-20250514";
+    const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
 
     // Load recent conversation history (last 50 messages)
     const { data: history } = await supabase

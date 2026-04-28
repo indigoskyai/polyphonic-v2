@@ -106,7 +106,7 @@ function rowToConfig(
     locked: !!row.locked,
     created_by: ((row.created_by as CreatedBy) || 'user'),
     pending: !!row.pending,
-    model: normalizeAgentModel((row.model as string | null) ?? 'anthropic/claude-sonnet-4'),
+    model: normalizeAgentModel((row.model as string | null) ?? 'anthropic/claude-opus-4-7'),
     status: 'on',
     uptimeMs: 0,
     env: ((row.env as Env | null) ?? 'prod'),
@@ -157,10 +157,12 @@ function normalizeAgentModel(model: string | null | undefined): string {
       return 'anthropic/claude-sonnet-4';
     case 'anthropic/claude-opus-4-20250514':
       return 'anthropic/claude-opus-4';
+    case 'anthropic/claude-opus-4.7':
+      return 'anthropic/claude-opus-4-7';
     case 'anthropic/claude-haiku-4-5':
       return 'anthropic/claude-haiku-4.5';
     default:
-      return model ?? 'anthropic/claude-sonnet-4';
+      return model ?? 'anthropic/claude-opus-4-7';
   }
 }
 

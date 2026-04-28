@@ -129,11 +129,11 @@ serve(async (req) => {
       supabase.from("user_settings").select("dreamer_model").eq("user_id", user_id).maybeSingle(),
     ]);
 
-    // Architecture: Dreaming uses non-Claude models for cognitive diversity
-    // Priority: user setting > admin config > alternating default
+    // Architecture: Dreaming uses non-Claude models for cognitive diversity.
+    // Keep the default cheap; user/admin overrides still win.
     let dreamModel = userSettings?.dreamer_model || modelConfig?.model_id;
     if (!dreamModel) {
-      const DREAM_MODELS = ["google/gemini-3-pro-preview", "moonshotai/kimi-k2.5"];
+      const DREAM_MODELS = ["google/gemini-2.5-flash", "google/gemini-3-flash-preview"];
       // Alternate via journal entry count parity (lightweight, no missing column)
       const { count } = await supabase
         .from("journal_entries")

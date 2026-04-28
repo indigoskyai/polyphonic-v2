@@ -85,7 +85,7 @@ serve(async (req) => {
       .eq("user_id", userId)
       .maybeSingle();
 
-    const model = settings?.synthesis_model || "anthropic/claude-sonnet-4-20250514";
+    const model = settings?.synthesis_model || "anthropic/claude-opus-4-7";
 
     // Load Guardian's custom system prompt if configured (maybeSingle to avoid error when no row exists)
     const { data: agentConfig } = await supabase

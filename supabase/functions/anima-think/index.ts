@@ -94,7 +94,7 @@ serve(async (req) => {
       supabase.from("user_settings").select("voice_model").eq("user_id", user_id).maybeSingle(),
       supabase.from("model_configs").select("model_id").eq("feature_key", "anima_think").eq("is_active", true).maybeSingle(),
     ]);
-    const thinkModel = userSettings?.voice_model || modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    const thinkModel = userSettings?.voice_model || modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Gather context
     const [

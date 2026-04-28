@@ -137,7 +137,7 @@ serve(async (req) => {
       supabase.from("user_settings").select("belief_model").eq("user_id", user_id).maybeSingle(),
     ]);
 
-    const challengeModel = beliefUserSettings?.belief_model || modelConfig?.model_id || "google/gemini-3-pro-preview";
+    const challengeModel = beliefUserSettings?.belief_model || modelConfig?.model_id || "google/gemini-2.5-flash";
     const results: any[] = [];
 
     for (const belief of stagnantBeliefs) {

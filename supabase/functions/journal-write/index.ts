@@ -115,7 +115,7 @@ serve(async (req) => {
       .maybeSingle();
 
     // Priority: user preference > admin config > hardcoded default
-    const journalModel = userSettings?.journal_model || modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    const journalModel = userSettings?.journal_model || modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Gather context: recent memories
     const { data: memories } = await supabase

@@ -83,7 +83,7 @@ serve(async (req) => {
     const { data: modelConfig } = await supabase
       .from("model_configs").select("model_id")
       .eq("feature_key", "anima_consolidate").eq("is_active", true).maybeSingle();
-    const consolidateModel = modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    const consolidateModel = modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Gather last 24h of data
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

@@ -85,7 +85,7 @@ serve(async (req) => {
       supabase.from("user_settings").select("memory_model").eq("user_id", user_id).maybeSingle(),
     ]);
 
-    const reflectionModel = memUserSettings?.memory_model || modelConfig?.model_id || "anthropic/claude-sonnet-4.6";
+    const reflectionModel = memUserSettings?.memory_model || modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Get admin-configured prompt
     const { data: promptConfig } = await supabase

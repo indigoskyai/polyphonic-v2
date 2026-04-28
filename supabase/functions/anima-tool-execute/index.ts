@@ -143,7 +143,7 @@ serve(async (req) => {
             "X-Title": "Polyphonic",
           },
           body: JSON.stringify({
-            model: "anthropic/claude-sonnet-4.6",
+            model: "google/gemini-2.5-flash",
             messages: planningMessages,
             tools: TOOL_SCHEMAS,
             temperature: 0.2,

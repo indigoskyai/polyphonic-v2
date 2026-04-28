@@ -93,7 +93,7 @@ serve(async (req) => {
     const { data: modelConfig } = await supabase
       .from("model_configs").select("model_id")
       .eq("feature_key", "anima_reflect").eq("is_active", true).maybeSingle();
-    const reflectModel = modelConfig?.model_id || "anthropic/claude-opus-4.6";
+    const reflectModel = modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Gather context (last 48h focus)
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();

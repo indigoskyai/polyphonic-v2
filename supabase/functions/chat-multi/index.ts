@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
-import { isReasoningModel, buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
+import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
 
@@ -41,12 +41,12 @@ How to handle the council's deliberation:
 }
 
 const DEFAULT_ENSEMBLE = [
-  "anthropic/claude-sonnet-4",
+  "anthropic/claude-opus-4-7",
   "openai/gpt-5.4",
   "google/gemini-3.1-pro-preview",
 ];
 
-const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_SYNTHESIS_MODEL = "anthropic/claude-opus-4-7";
 
 function normalizeModelId(model: string | null | undefined): string | null {
   if (!model) return null;
@@ -55,6 +55,8 @@ function normalizeModelId(model: string | null | undefined): string | null {
   const aliases: Record<string, string> = {
     "anthropic/claude-sonnet-4-20250514": "anthropic/claude-sonnet-4",
     "anthropic/claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+    "anthropic/claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
+    "anthropic/claude-opus-4.7": "anthropic/claude-opus-4-7",
   };
 
   return aliases[normalized] || normalized;
@@ -62,7 +64,7 @@ function normalizeModelId(model: string | null | undefined): string | null {
 
 // Council (LLM-Council pattern, single judge variant) — see plan
 // /Users/rileycoyote/.claude/plans/ethereal-orbiting-sparkle.md
-const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4-5-20251001";
+const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4.5";
 const STAGE2_TIMEOUT_MS = 8000;
 
 serve(async (req) => {
@@ -192,8 +194,8 @@ serve(async (req) => {
 
     // Format beliefs context
     let beliefsBlock = "";
-    if (beliefsResult.status === "fulfilled" && beliefsResult.value.data?.length > 0) {
-      const beliefs = beliefsResult.value.data;
+    if (beliefsResult.status === "fulfilled" && (beliefsResult.value.data || []).length > 0) {
+      const beliefs = beliefsResult.value.data || [];
       const beliefLines = beliefs.map((b: { content: string; confidence: number; confidence_tier?: string; domain?: string }) =>
         `- [${b.confidence.toFixed(2)} ${b.confidence_tier || ''}] ${b.content}`
       );
@@ -245,7 +247,11 @@ serve(async (req) => {
     const useEnsemble = multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-      const singleModel = normalizeModelId(agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
+      const singleModel = normalizeModelId(
+        agentIsSystemLuca
+          ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
+          : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
+      ) || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
         singleModel,

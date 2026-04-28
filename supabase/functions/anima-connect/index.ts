@@ -82,7 +82,7 @@ serve(async (req) => {
     const { data: modelConfig } = await supabase
       .from("model_configs").select("model_id")
       .eq("feature_key", "anima_connect").eq("is_active", true).maybeSingle();
-    const connectModel = modelConfig?.model_id || "anthropic/claude-sonnet-4.6";
+    const connectModel = modelConfig?.model_id || "google/gemini-2.5-flash";
 
     // Select candidate memory pairs using tag overlap
     const { data: memories } = await supabase
