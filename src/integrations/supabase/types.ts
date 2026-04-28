@@ -1202,11 +1202,13 @@ export type Database = {
         Row: {
           bridge_version: string | null
           created_at: string
+          device_token_hash: string | null
           id: string
           is_default: boolean
           last_seen_at: string | null
           name: string
           platform: string | null
+          revoked_at: string | null
           status: string
           updated_at: string
           user_id: string
@@ -1214,11 +1216,13 @@ export type Database = {
         Insert: {
           bridge_version?: string | null
           created_at?: string
+          device_token_hash?: string | null
           id?: string
           is_default?: boolean
           last_seen_at?: string | null
           name: string
           platform?: string | null
+          revoked_at?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -1226,13 +1230,63 @@ export type Database = {
         Update: {
           bridge_version?: string | null
           created_at?: string
+          device_token_hash?: string | null
           id?: string
           is_default?: boolean
           last_seen_at?: string | null
           name?: string
           platform?: string | null
+          revoked_at?: string | null
           status?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      openclaw_jobs: {
+        Row: {
+          agent_config_id: string | null
+          completed_at: string | null
+          created_at: string
+          device_id: string
+          error: string | null
+          id: string
+          kind: string
+          payload: Json
+          result: Json | null
+          started_at: string | null
+          status: string
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_config_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          device_id: string
+          error?: string | null
+          id?: string
+          kind: string
+          payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_config_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          device_id?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          thread_id?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1773,6 +1827,10 @@ export type Database = {
           similarity: number
           tags: string[]
         }[]
+      }
+      openclaw_verify_device_token: {
+        Args: { p_device_id: string; p_token: string }
+        Returns: boolean
       }
       save_user_api_key: { Args: { p_key: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
