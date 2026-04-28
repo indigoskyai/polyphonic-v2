@@ -150,6 +150,7 @@ function DrawerRouter() {
 
   const label =
     active === 'notifications' ? 'Activity'
+    : active === 'activity-timeline' ? 'Activity timeline'
     : active === 'thread-detail' ? 'Thread detail'
     : active === 'memory-detail' ? 'Memory detail'
     : active === 'agent-inspector' ? 'Agent inspector'
@@ -159,9 +160,10 @@ function DrawerRouter() {
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
       {active === 'notifications' && <NotificationsDrawer />}
+      {active === 'activity-timeline' && <ActivityTimelineDrawer />}
       {active === 'thread-detail' && <ThreadDetailDrawer />}
       {active === 'observer' && <ObserverDrawer />}
-      {active !== null && active !== 'notifications' && active !== 'thread-detail' && active !== 'observer' && (
+      {active !== null && active !== 'notifications' && active !== 'activity-timeline' && active !== 'thread-detail' && active !== 'observer' && (
         <>
           <DrawerHeader>
             <DrawerTitle>{label}</DrawerTitle>
