@@ -203,11 +203,19 @@ async function processUser(
 
     actions.push({ userId, action: "reflect_on_thought", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "thought_deepened",
-      title: "Heartbeat: Thought Deepened",
-      summary: `Deepened reflection on: ${highSalienceThought.content.slice(0, 100)}`,
+      title: "Sat with a thought a little longer",
+      summary: highSalienceThought.content.slice(0, 140),
       content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
+      severity: "notable",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "notable",
+      title: "Sat with a thought a little longer",
+      summary: highSalienceThought.content.slice(0, 140),
     });
   }
 
@@ -223,11 +231,19 @@ async function processUser(
 
     actions.push({ userId, action: "challenge_belief", result });
 
-    await logActivity(supabase, userId, {
+    const logged = await logActivity(supabase, userId, {
       type: "belief_challenged",
-      title: "Heartbeat: Belief Challenged",
-      summary: `Challenged stagnant belief: ${stagnantBelief.content.slice(0, 100)}`,
+      title: "Pushed back on something I'd been assuming",
+      summary: stagnantBelief.content.slice(0, 140),
       content: { belief_id: stagnantBelief.id, function: "anima-believe" },
+      severity: "important",
+    });
+    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+      user_id: userId,
+      activity_id: logged?.id,
+      severity: "important",
+      title: "Pushed back on something I'd been assuming",
+      summary: stagnantBelief.content.slice(0, 140),
     });
   }
 
