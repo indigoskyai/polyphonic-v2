@@ -37,6 +37,7 @@ import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
+import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
