@@ -269,23 +269,32 @@ async function processUser(
 
       actions.push({ userId, action: "curiosity_exploration", result });
 
-      await logActivity(supabase, userId, {
+      const logged = await logActivity(supabase, userId, {
         type: "curiosity_explored",
-        title: "Heartbeat: Curiosity Explored",
-        summary: `Explored topic from high curiosity state: ${topic.slice(0, 80)}`,
+        title: "Wandered off on a tangent that caught me",
+        summary: topic.slice(0, 140),
         content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
+        severity: "notable",
+      });
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: userId,
+        activity_id: logged?.id,
+        severity: "notable",
+        title: "Wandered off on a tangent that caught me",
+        summary: topic.slice(0, 140),
       });
     }
   }
 
-  // If no signals triggered any action, log a quiet cycle
+  // If no signals triggered any action, log a quiet cycle (info — never surfaces)
   if (actions.length === 0) {
     actions.push({ userId, action: "quiet_cycle", result: "No actionable signals" });
 
     await logActivity(supabase, userId, {
       type: "quiet_cycle",
-      title: "Heartbeat: Quiet Cycle",
+      title: "Quiet cycle",
       summary: "Heartbeat ran but found no actionable signals",
+      severity: "info",
     });
   }
 
