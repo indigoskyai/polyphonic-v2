@@ -18,6 +18,8 @@ import AgentErroredCard from '@/components/states/AgentErroredCard';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
 import ImagePreview from '@/components/attachments/ImagePreview';
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
+import ArtifactCard from '@/components/canvas/ArtifactCard';
+import { useArtifactStore } from '@/stores/artifactStore';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -303,6 +305,12 @@ export default function ChatView() {
     loadMessages, setCurrentThread, createThread, addMessage,
     setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
+  const loadArtifacts = useArtifactStore((s) => s.loadForThread);
+  const artifactsByThread = useArtifactStore((s) => s.byThread);
+  const threadArtifacts = useMemo(
+    () => currentThreadId ? (artifactsByThread[currentThreadId] || []) : [],
+    [artifactsByThread, currentThreadId],
+  );
   const agents = useAgentSettingsStore((s) => s.agents);
   const currentThread = threads.find((t) => t.id === currentThreadId);
   // Pending agent id: used when there's no thread yet (empty state). Once a
@@ -416,8 +424,9 @@ export default function ChatView() {
     if (threadId) {
       setCurrentThread(threadId);
       loadMessages(threadId);
+      loadArtifacts(threadId);
     }
-  }, [threadId]);
+  }, [threadId, loadMessages, loadArtifacts, setCurrentThread]);
 
   // Welcome back awareness + dynamic placeholder
   useEffect(() => {
@@ -762,6 +771,7 @@ export default function ChatView() {
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
                   ...(councilMetadata ? { metadata: councilMetadata } : {}),
                 } as any);
+                if (tid) loadArtifacts(tid);
               } else if (data.type === 'error') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
@@ -793,7 +803,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId]);
+  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1185,10 +1195,29 @@ export default function ChatView() {
                     })}
                   </div>
                 )}
+
+                {threadArtifacts
+                  .filter((artifact) => artifact.source_message_id === msg.id)
+                  .map((artifact) => (
+                    <ArtifactCard key={artifact.id} artifact={artifact} />
+                  ))}
               </div>
             </div>
             );
           })}
+
+          {threadArtifacts
+            .filter((artifact) => !artifact.source_message_id)
+            .map((artifact) => (
+              <div key={artifact.id} className="msg-row" style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}>
+                <div className="msg-sidehead">
+                  <div className="msg-author">Luca</div>
+                </div>
+                <div className="msg-body">
+                  <ArtifactCard artifact={artifact} />
+                </div>
+              </div>
+            ))}
 
 
           {/* Streaming message — stays mounted until typewriter settles, even after isStreaming flips */}

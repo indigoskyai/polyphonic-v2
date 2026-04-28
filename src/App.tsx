@@ -47,6 +47,7 @@ import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
+import CanvasPanel from "./components/canvas/CanvasPanel";
 
 const queryClient = new QueryClient();
 
@@ -215,6 +216,7 @@ const App = () => (
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
             <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
+            <Route path="/canvas/:artifactId" element={<ProtectedRoute><AppShell><CanvasPanel /></AppShell></ProtectedRoute>} />
             <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
             <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
             <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />

@@ -65,7 +65,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **L4** Self-correction and pending revisions — Pending revisions table, prompt injection, and after-turn surfacing classifier.
 - [x] **L5** Skills system — Skill distillation, skill prompt retrieval, and user-facing skills controls.
 - [x] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
-- [ ] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
+- [x] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
 - [ ] **L8** User-facing scheduler — Scheduled task schema, runner, and schedule management UI.
 - [ ] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
 
@@ -87,6 +87,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 15:27 · phase L4 · reused the L3-created `pending_revisions` table and tightened every chat completion exit to fire observer/dialectic hooks · L3 already needed the table to record honest revision provenance, while L4's responsibility is surfacing, classification, and coverage across runtime paths.
 - 2026-04-28 15:38 · phase L5 · added `skills-manage` for rename/delete/reject instead of direct client updates to agent-populated skill rows · Luca writes skill content through service-role background work; user controls still work without granting broad client update rights.
 - 2026-04-28 16:03 · phase L6 · shipped Browserbase as a bounded CDP page-inspection tool and MCP as a thin HTTP JSON-RPC client · the existing runtime has a planner/executor architecture, so this makes the tools callable now while avoiding invented browser progress or unsupported MCP transports.
+- 2026-04-28 16:53 · phase L7 · wired the existing tool planner into chat while adding `create_artifact` · artifacts, workspace, browser, MCP, and identity tools are only genuinely callable once chat supplies the planner's tool results to Luca's final response.
 
 
 ## Backend asks queue

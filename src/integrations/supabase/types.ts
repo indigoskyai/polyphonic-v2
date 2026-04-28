@@ -479,6 +479,45 @@ export type Database = {
         }
         Relationships: []
       }
+      artifacts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          parent_artifact_id: string | null
+          source_message_id: string | null
+          thread_id: string
+          title: string | null
+          user_id: string
+          version: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind: string
+          parent_artifact_id?: string | null
+          source_message_id?: string | null
+          thread_id: string
+          title?: string | null
+          user_id: string
+          version?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          parent_artifact_id?: string | null
+          source_message_id?: string | null
+          thread_id?: string
+          title?: string | null
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       checkpoint_files: {
         Row: {
           added: number

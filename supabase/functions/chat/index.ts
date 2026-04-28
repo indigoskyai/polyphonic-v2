@@ -87,7 +87,7 @@ serve(async (req) => {
       .limit(50);
 
     // Build messages array for OpenRouter
-    const openRouterMessages: Array<{ role: string; content: string }> = [
+    const openRouterMessages: any[] = [
       { role: "system", content: systemPrompt },
     ];
 
@@ -108,6 +108,11 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const toolMessages = await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1));
+    if (toolMessages.length > 0) {
+      openRouterMessages.push(...toolMessages);
     }
 
     // Start SSE stream
@@ -312,6 +317,29 @@ function fireSkillsDistill(threadId: string, authHeader: string) {
     }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("skills-distill dispatch error:", e);
+  }
+}
+
+async function runToolPlanner(threadId: string, authHeader: string, messages: any[]): Promise<any[]> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/anima-tool-execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, messages }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data?.used_tools && Array.isArray(data.tool_messages) ? data.tool_messages : [];
+  } catch (e) {
+    console.warn("tool planner skipped:", e);
+    return [];
   }
 }
 

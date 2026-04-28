@@ -103,6 +103,23 @@ const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_artifact",
+      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants something visible or iteratable.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["html", "react", "svg", "mermaid", "markdown"] },
+          title: { type: "string", description: "Short title for the artifact header" },
+          content: { type: "string", description: "Artifact source code or markdown" },
+          iterates_on: { type: "string", description: "Optional artifact id this revises" },
+        },
+        required: ["kind", "title", "content"],
+      },
+    },
+  },
 ];
 
 function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
@@ -116,6 +133,7 @@ Available tools:
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
 - update_self_model: Luca updates their self-model from evidence about how they are showing up.
+- create_artifact: Create a rendered artifact when the user wants something visual, interactive, diagrammatic, or iteratable.
 ${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
@@ -124,6 +142,7 @@ Rules:
 - If the task needs clicking, page state, or browser-only behavior, use browse.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
+- If the user wants a webpage, component, diagram, visualization, or polished document they can inspect, use create_artifact.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing, etc.), respond with a brief text explanation of why no tools are needed.
 - You may call multiple tools if needed.
 - Be decisive and fast.`;
@@ -357,6 +376,21 @@ serve(async (req) => {
               input: args,
               output,
             };
+          } else if (fnName === "create_artifact") {
+            clearTimeout(timeout);
+            const output = await executeCreateArtifact(
+              supabase,
+              userId,
+              typeof thread_id === "string" ? thread_id : null,
+              typeof source_message_id === "string" ? source_message_id : null,
+              args,
+            );
+            return {
+              tool_call_id: tc.id,
+              tool: fnName,
+              input: args,
+              output,
+            };
           } else if (mcpTool) {
             clearTimeout(timeout);
             const output = await callMcpTool(mcpTool, args);
@@ -522,4 +556,54 @@ async function executeIdentityPatch(
 
   if (updateError) return { error: updateError.message };
   return { ok: true, doc_type: docType, section: patch.section, operation: patch.operation };
+}
+
+async function executeCreateArtifact(
+  supabase: any,
+  userId: string | null,
+  threadId: string | null,
+  sourceMessageId: string | null,
+  args: any,
+) {
+  if (!userId || !threadId) return { error: "Missing user or thread context" };
+
+  const validKinds = new Set(["html", "react", "svg", "mermaid", "markdown"]);
+  const kind = String(args.kind || "");
+  const title = String(args.title || "Untitled artifact").trim().slice(0, 120);
+  const content = String(args.content || "").trim();
+  const parentArtifactId = typeof args.iterates_on === "string" && args.iterates_on.trim()
+    ? args.iterates_on.trim()
+    : null;
+
+  if (!validKinds.has(kind)) return { error: "Invalid artifact kind" };
+  if (!content) return { error: "Artifact content is required" };
+
+  let version = 1;
+  if (parentArtifactId) {
+    const { data: parent } = await supabase
+      .from("artifacts")
+      .select("version")
+      .eq("id", parentArtifactId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    version = Number(parent?.version || 0) + 1;
+  }
+
+  const { data, error } = await supabase
+    .from("artifacts")
+    .insert({
+      user_id: userId,
+      thread_id: threadId,
+      source_message_id: sourceMessageId,
+      kind,
+      title,
+      content,
+      parent_artifact_id: parentArtifactId,
+      version,
+    })
+    .select("id, kind, title, version")
+    .single();
+
+  if (error) return { error: error.message };
+  return { ok: true, artifact: data };
 }
