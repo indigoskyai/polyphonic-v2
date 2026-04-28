@@ -731,8 +731,10 @@ export type Database = {
           created_at: string
           emotional_context: Json | null
           id: string
+          severity: string
           source: string | null
           summary: string | null
+          surface_to_user: boolean
           title: string | null
           user_id: string
         }
@@ -742,8 +744,10 @@ export type Database = {
           created_at?: string
           emotional_context?: Json | null
           id?: string
+          severity?: string
           source?: string | null
           summary?: string | null
+          surface_to_user?: boolean
           title?: string | null
           user_id: string
         }
@@ -753,8 +757,10 @@ export type Database = {
           created_at?: string
           emotional_context?: Json | null
           id?: string
+          severity?: string
           source?: string | null
           summary?: string | null
+          surface_to_user?: boolean
           title?: string | null
           user_id?: string
         }
@@ -1458,26 +1464,47 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agent_status: string
           avatar_url: string | null
           created_at: string
           display_name: string | null
           id: string
+          last_seen_activity_at: string | null
+          notification_prefs: Json
+          push_subscription: Json | null
+          quiet_hours_end: number | null
+          quiet_hours_start: number | null
+          quiet_hours_tz: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          agent_status?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          last_seen_activity_at?: string | null
+          notification_prefs?: Json
+          push_subscription?: Json | null
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
+          quiet_hours_tz?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          agent_status?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          last_seen_activity_at?: string | null
+          notification_prefs?: Json
+          push_subscription?: Json | null
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
+          quiet_hours_tz?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1789,6 +1816,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
         Args: { match_count?: number; p_user_id?: string; query_text: string }
         Returns: {
