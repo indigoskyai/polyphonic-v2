@@ -102,3 +102,20 @@ verify_jwt = false
 [functions.agent-config-save]
 verify_jwt = false
 
+[functions.openclaw-pair]
+verify_jwt = false
+
+[functions.openclaw-deploy]
+verify_jwt = false
+
+[functions.openclaw-enqueue]
+verify_jwt = false
+
+[functions.openclaw-register-result]
+verify_jwt = false
+
+[functions.openclaw-status]
+verify_jwt = false
+
+[functions.openclaw-heartbeat]
+verify_jwt = false
