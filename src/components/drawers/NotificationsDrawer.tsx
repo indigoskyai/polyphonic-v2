@@ -315,6 +315,14 @@ export default function NotificationsDrawer() {
       <DrawerFooter>
         <Pill variant="ghost" size="xs" onClick={markAllSeen}>Mark all read</Pill>
         <DrawerFooterSep />
+        <Pill
+          variant="ghost"
+          size="xs"
+          onClick={() => useDrawerStore.getState().open('activity-timeline')}
+        >
+          Full timeline
+        </Pill>
+        <DrawerFooterSep />
         <Pill variant="ghost" size="xs">Preferences</Pill>
       </DrawerFooter>
     </>
