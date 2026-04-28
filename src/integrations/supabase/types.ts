@@ -242,6 +242,81 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_skill_denials: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string | null
+          id: string
+          skill_name: string
+          source_skill_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name: string
+          source_skill_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name?: string
+          source_skill_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      agent_skills: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          description: string
+          id: string
+          last_used_at: string | null
+          name: string
+          source_thread_id: string | null
+          trigger_keywords: string[] | null
+          updated_at: string
+          use_count: number
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          content: string
+          created_at?: string
+          description: string
+          id?: string
+          last_used_at?: string | null
+          name: string
+          source_thread_id?: string | null
+          trigger_keywords?: string[] | null
+          updated_at?: string
+          use_count?: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          description?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          source_thread_id?: string | null
+          trigger_keywords?: string[] | null
+          updated_at?: string
+          use_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_secrets: {
         Row: {
           agent_id: string

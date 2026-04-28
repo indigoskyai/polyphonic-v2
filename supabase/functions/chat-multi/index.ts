@@ -12,6 +12,10 @@ import {
   loadPendingRevisions,
   type PendingRevision,
 } from "../_shared/agents/pending-revisions.ts";
+import {
+  formatAgentSkillsPrompt,
+  loadRelevantAgentSkills,
+} from "../_shared/agents/skills.ts";
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -182,7 +186,7 @@ serve(async (req) => {
       .limit(50);
 
     // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult] = await Promise.allSettled([
+    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult] = await Promise.allSettled([
       loadEmotionalState(supabase, userId),
       supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
         .eq("user_id", userId).eq("active", true)
@@ -195,6 +199,7 @@ serve(async (req) => {
       })(),
       agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
       agentIsSystemLuca ? loadPendingRevisions(supabase, userId, thread_id) : Promise.resolve([]),
+      agentIsSystemLuca ? loadRelevantAgentSkills(supabase, userId, agentId, message) : Promise.resolve([]),
     ]);
 
     // Format emotional context
@@ -223,6 +228,8 @@ serve(async (req) => {
     const identityDocs = identityResult.status === "fulfilled" ? identityResult.value : null;
     const pendingRevisions = pendingRevisionsResult.status === "fulfilled" ? pendingRevisionsResult.value : [];
     const pendingRevisionsBlock = formatPendingRevisionsPrompt(pendingRevisions || []);
+    const relevantSkills = skillsResult.status === "fulfilled" ? skillsResult.value : [];
+    const skillsBlock = formatAgentSkillsPrompt(relevantSkills || []);
 
     // Thread gap detection — if returning to an idle conversation
     let continuityNote = "";
@@ -248,6 +255,7 @@ serve(async (req) => {
           soulMd: identityDocs?.soulMd,
           selfModel: identityDocs?.selfModel,
           userModel: identityDocs?.userModel,
+          skillsBlock,
           pendingRevisions: pendingRevisionsBlock,
           continuityNote,
         })
@@ -350,6 +358,7 @@ serve(async (req) => {
             );
             fireObserverWatch(thread_id, agentId, authHeader);
             fireMnemosDialectic(thread_id, agentId, authHeader);
+            fireSkillsDistill(thread_id, agentId, authHeader);
             send({ type: "done", model: "synthesis", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -483,6 +492,7 @@ serve(async (req) => {
                 );
                 fireObserverWatch(thread_id, agentId, authHeader);
                 fireMnemosDialectic(thread_id, agentId, authHeader);
+                fireSkillsDistill(thread_id, agentId, authHeader);
                 send({ type: "done", model: "synthesis", tokens_used: null });
                 controller.close();
                 clearInterval(heartbeat);
@@ -503,6 +513,7 @@ serve(async (req) => {
             );
             fireObserverWatch(thread_id, agentId, authHeader);
             fireMnemosDialectic(thread_id, agentId, authHeader);
+            fireSkillsDistill(thread_id, agentId, authHeader);
             send({ type: "done", model: "fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -585,6 +596,7 @@ serve(async (req) => {
           // Fire observer-watch (best-effort)
           fireObserverWatch(thread_id, agentId, authHeader);
           fireMnemosDialectic(thread_id, agentId, authHeader);
+          fireSkillsDistill(thread_id, agentId, authHeader);
 
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
@@ -651,6 +663,24 @@ function fireMnemosDialectic(threadId: string, agentId: string, authHeader: stri
     }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("mnemos-dialectic dispatch error:", e);
+  }
+}
+
+/** Fire skills-distill in the background. Best-effort. Luca only. */
+function fireSkillsDistill(threadId: string, agentId: string, authHeader: string) {
+  if (agentId !== "luca") return;
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/skills-distill`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
+    }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("skills-distill dispatch error:", e);
   }
 }
 
@@ -1066,6 +1096,7 @@ async function singleModelStream(
         if (authHeader) {
           fireObserverWatch(threadId, agentId, authHeader);
           fireMnemosDialectic(threadId, agentId, authHeader);
+          fireSkillsDistill(threadId, agentId, authHeader);
         }
 
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });

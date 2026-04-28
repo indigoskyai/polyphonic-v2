@@ -8,6 +8,10 @@ import {
   formatPendingRevisionsPrompt,
   loadPendingRevisions,
 } from "../_shared/agents/pending-revisions.ts";
+import {
+  formatAgentSkillsPrompt,
+  loadRelevantAgentSkills,
+} from "../_shared/agents/skills.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -65,10 +69,12 @@ serve(async (req) => {
     const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
     const identityDocs = await loadOrCreateLucaIdentity(supabase, userId, "luca");
     const pendingRevisions = await loadPendingRevisions(supabase, userId, thread_id);
+    const relevantSkills = await loadRelevantAgentSkills(supabase, userId, "luca", message);
     const systemPrompt = buildLucaSystemPrompt({
       soulMd: identityDocs.soulMd,
       selfModel: identityDocs.selfModel,
       userModel: identityDocs.userModel,
+      skillsBlock: formatAgentSkillsPrompt(relevantSkills),
       pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
     });
 
@@ -227,6 +233,7 @@ serve(async (req) => {
 
           fireObserverWatch(thread_id, authHeader);
           fireMnemosDialectic(thread_id, authHeader);
+          fireSkillsDistill(thread_id, authHeader);
 
           send({
             type: "done",
@@ -289,6 +296,22 @@ function fireObserverWatch(threadId: string, authHeader: string) {
     }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("observer-watch dispatch error:", e);
+  }
+}
+
+function fireSkillsDistill(threadId: string, authHeader: string) {
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/skills-distill`;
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
+    }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("skills-distill dispatch error:", e);
   }
 }
 

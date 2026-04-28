@@ -26,6 +26,7 @@ export default function SidebarProfile() {
       <SidebarHeader folio="§ 04" title="Profile" />
       <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px', scrollbarWidth: 'none' }}>
         <SidebarRow label="Identity" active={path === '/profile/identity'} onClick={() => navigate('/profile/identity')} />
+        <SidebarRow label="Skills" active={path === '/profile/skills'} onClick={() => navigate('/profile/skills')} />
         {TABS.map((t) => (
           <SidebarRow
             key={t}

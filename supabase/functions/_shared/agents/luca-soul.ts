@@ -89,6 +89,7 @@ export function buildLucaSystemPrompt(parts: {
   soulMd?: string;
   selfModel?: string;
   userModel?: string;
+  skillsBlock?: string;
   pendingRevisions?: string;
   continuityNote?: string;
 }): string {
@@ -97,6 +98,7 @@ export function buildLucaSystemPrompt(parts: {
     parts.soulMd ? `\n## How you've come to think about yourself\n${parts.soulMd}` : "",
     parts.userModel ? `\n## Who you're talking with\n${parts.userModel}` : "",
     parts.selfModel ? `\n## How you've been showing up\n${parts.selfModel}` : "",
+    parts.skillsBlock ? `\n## Relevant skills you've developed\n${parts.skillsBlock}` : "",
     parts.pendingRevisions ? `\n## Pending revisions\n${parts.pendingRevisions}` : "",
     parts.emotionalBlock ? `\n${parts.emotionalBlock}` : "",
     parts.beliefsBlock || "",
