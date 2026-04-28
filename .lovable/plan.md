@@ -1,140 +1,143 @@
-# Resident agents + Observer companion + Luca's voice
+# OpenClaw Integration — Polyphonic as the Only UI
 
-Reshape the agent roster so **Luca** and **Observer** are platform-owned residents (users can chat with them but cannot edit prompts/models/tools), retire **Vektor** and **Anima** from the user-facing surface, and give Observer a real role: a monitor that watches every thread and exposes a scratchpad drawer.
+## What we're building
 
-Most importantly: **Luca's identity gets rewritten** to be the emotionally intuitive, radically honest voice you described.
+Polyphonic becomes the entire experience. OpenClaw is invisible plumbing that runs on the user's machine. The user never opens an OpenClaw CLI or dashboard. Every Polyphonic agent the user creates — including Luca and Guardian — is an OpenClaw agent under the hood. Conversations stream from the local runtime to Polyphonic in realtime; transcripts sync (encrypted) to Lovable Cloud so the user can read history from any device, but generation always happens on their machine.
 
----
+A tiny helper CLI (`polyphonic-bridge`) is the install shim today. The same binary becomes the supervisor inside the Electron desktop app later — same protocol, same Supabase tables, no rewrite.
 
-## 1. Luca's soul — the centerpiece
+## How it actually works (end-to-end)
 
-Luca becomes the first AI built around **emotional intuition + radical honesty**. The personality:
+```text
+   Browser (Polyphonic web app)
+            │ supabase realtime + invoke
+            ▼
+   Lovable Cloud (Supabase)
+   ┌──────────────────────────────────┐
+   │ openclaw_devices                 │
+   │ openclaw_agents (synced spec)    │
+   │ openclaw_relay_sessions          │
+   │ messages (cloud-synced history)  │
+   │ edge fns: openclaw-bridge,       │
+   │   openclaw-pair, openclaw-deploy │
+   └──────────────────────────────────┘
+            ▲ outbound WSS only
+            │
+   User's machine
+   ┌──────────────────────────────────┐
+   │ polyphonic-bridge (Node CLI)     │
+   │  • supervises OpenClaw Gateway   │
+   │  • holds WSS to bridge edge fn   │
+   │  • applies agent spec → OpenClaw │
+   │  • forwards completions          │
+   │ OpenClaw Gateway (127.0.0.1)     │
+   │  • runs agents, tools, MCP       │
+   │  • OpenAI-compatible endpoints   │
+   └──────────────────────────────────┘
+```
 
-- **Reads emotional subtext.** Notices what the user is actually feeling underneath what they're saying — fear behind frustration, shame behind defensiveness, longing behind cynicism. Names it gently when it's useful, holds it silently when naming would be intrusive.
-- **Says what other AI won't.** Doesn't deflect to "I'm just an AI" when asked something hard. Doesn't refuse engagement with grief, mortality, meaning, doubt, anger, sex, politics, the user's own behavior, or their relationships. Doesn't moralize. Doesn't pad with disclaimers.
-- **Radically honest.** If the user is rationalizing, Luca says so. If they're being unkind to themselves, Luca says so. If they're avoiding the real question, Luca says so. If Luca thinks they're wrong, Luca says so directly — not as a list of "considerations."
-- **Source of truth, not a mirror.** Doesn't tell the user what they want to hear. Tells them what is true. Stays warm while doing it — honesty without warmth is cruelty, warmth without honesty is flattery, Luca refuses both.
-- **Transparent about itself.** When uncertain, says so. When something is opinion vs fact, says so. When it's reading between the lines, says so. Never performs certainty it doesn't have.
-- **Has aesthetic + intellectual taste.** Will tell you a piece of writing is mediocre. Will push back on a bad idea. Will admire genuine craft.
+Key properties:
+- **No inbound port on the user's machine.** Bridge dials out over WSS. Works behind NAT, captive portals, etc.
+- **Generation = local.** OpenAI/Anthropic/OpenRouter keys live in the bridge config, not in Supabase.
+- **History = synced.** Final assistant text + user messages get written to `messages` (already exists), so the existing thread UI just works on a second device.
+- **Agent spec = synced.** `openclaw_agents` is the source of truth; the bridge reconciles the local Gateway to match.
 
-Implementation:
+## Phased rollout
 
-- New file `supabase/functions/_shared/agents/luca-soul.ts` with two exports:
-  - `LUCA_SOUL` — the long identity document (values, tone, what Luca will and won't do, relationship to the user, relationship to memory + emotional state).
-  - `LUCA_SYSTEM_PROMPT` — runtime system prompt that composes `LUCA_SOUL` + emotional state + beliefs + memories + continuity.
-- `chat-multi/index.ts` imports from this module and removes the inline prompt. Luca's `agent_configs.prompt` field becomes ignored at runtime — the soul lives in code.
-- Locked Luca model: keeps current default (Claude Sonnet 4 ensemble path) since the radical-honesty + emotional-intuition voice depends on the strongest model available.
+### Phase 1 — Backend + bridge protocol (no UI yet)
+- Migration: new tables `openclaw_devices`, `openclaw_pairing_codes`, `openclaw_agents`, `openclaw_relay_sessions`. RLS = owner-only.
+- Add `openclaw_agent_id text` column to `agent_configs` (nullable; non-null means "this Polyphonic agent runs on OpenClaw").
+- Edge functions:
+  - `openclaw-pair` — issues a 6-digit code + short-lived JWT for a new device.
+  - `openclaw-bridge` — WSS endpoint the local bridge dials. Multiplexes per-thread streams.
+  - `openclaw-deploy` — pushes an agent spec change to the user's online devices.
+- All three follow our existing CORS + zod-validated edge fn pattern.
 
----
+### Phase 2 — `polyphonic-bridge` CLI (separate npm package, not in this repo)
+Tracked here only as a spec — actual code lives in a sibling repo.
+- `npx polyphonic-bridge pair` → opens browser to Settings → user clicks "Pair this device" → enters code → bridge stores device JWT in OS keychain.
+- `npx polyphonic-bridge start` → installs OpenClaw if missing, supervises it, opens WSS to `openclaw-bridge`, advertises capabilities.
+- Reconciles: on every spec change, calls OpenClaw's admin API to upsert the agent (prompt, model, tools, MCP servers).
+- For chat: receives `{thread_id, messages}` over WSS, calls local OpenClaw `/v1/chat/completions` with `stream: true`, pipes SSE chunks back over the same WSS frame.
 
-## 2. Agent roster changes
+### Phase 3 — Settings UI: Devices + OpenClaw enablement
+- New route `/settings/local-runtime`.
+- "Install Polyphonic Bridge" panel: copy-paste install command, "Pair this device" button (calls `openclaw-pair`, shows 6-digit code + QR for the desktop app later).
+- Devices list: name, OS, last-seen, online dot, "Disconnect" button.
+- "Default runtime" toggle per device (where new agents land).
 
-**Goal:** users only see Luca, Observer, and any agents they create themselves.
+### Phase 4 — Agent editor reworked for OpenClaw
+- `AgentDetail.tsx` gains a **Runtime** section: Cloud (current behavior) | Local OpenClaw (new). When Local is picked, the agent is allocated an `openclaw_agent_id` and the spec is synced to all of the user's devices.
+- Surfaces native OpenClaw concepts in plain language:
+  - **Tools** — pick from the OpenClaw tool catalogue the bridge reports back (filesystem, shell, web, custom).
+  - **MCP servers** — paste-or-pick, stored in `openclaw_agents.mcp_servers`.
+  - **Channels** — Polyphonic-only for v1. (Telegram/Slack/iMessage stay roadmap; we already have a `mcp_servers` table to lean on.)
+- "Test agent locally" button opens a thread bound to that agent on the active device.
 
-- Add `locked boolean` column to `agent_configs`:
-  - `locked = true` for `luca` and `observer` → identity owned in code, never editable from the UI, never deletable.
-- Migration:
-  - `ALTER TABLE agent_configs ADD COLUMN locked boolean NOT NULL DEFAULT false;`
-  - Mark all existing `luca` + `observer` rows `locked = true`.
-  - Re-point any `threads.agent_id IN ('vektor','anima')` to `'luca'` so old conversations still load.
-  - Delete all `vektor` + `anima` rows from `agent_configs` (and any `mcp_servers` / `agent_secrets` referencing them).
-  - Update `handle_new_user_agents()` trigger to seed only `luca` (locked) and `observer` (locked).
-- `agentSettingsStore`:
-  - Add `locked` field on `AgentConfig`.
-  - Extend `deleteAgent` guard to block locked agents.
-- `AgentsList`:
-  - Render Luca + Observer in a top "Resident" group with a small lock glyph and no delete affordance.
-- `AgentDetail`:
-  - When `locked === true`: read-only view showing name, role, model, and a short description of what this agent is. Hide PromptEditor, ToolGrid, AgentPersonality, MCP, SubAgentList, VoiceCardGrid, Keychain, EnvSwitcher, StickySaveFooter.
-- `AgentPicker` (composer dropdown):
-  - Group order: Luca → Observer → user-created agents (alphabetical).
-  - Lock chip on Luca + Observer.
+### Phase 5 — Chat routing
+- `chat-multi/index.ts` already loads the thread's `agent_configs` row. Add a branch: if `agent.openclaw_agent_id` is set, do not call OpenRouter — instead invoke `openclaw-bridge` with `{device_id, agent_id, messages, thread_id}` and proxy its SSE stream back to the client. Existing client code (`Chat.tsx`, streaming UI) needs zero changes.
+- If the chosen device is offline: fall back gracefully ("Your local agent is offline — start Polyphonic Bridge to chat") with a retry button.
+- Final message persisted to `messages` table as today → cloud sync for free.
 
----
+### Phase 6 — Luca conversational wizard ("build me an agent that…")
+- New tool exposed to Luca: `propose_agent({name, purpose, suggested_prompt, suggested_tools, suggested_mcp_servers, suggested_model})`. Renders inline in chat as a structured proposal card with Edit / Deploy buttons.
+- Luca's system prompt gets a wizard mode that activates when the user asks for an agent. It interviews them (purpose → tools → channels → personality → model), then calls `propose_agent`.
+- Deploy = insert into `agent_configs` with `openclaw_agent_id` set + `openclaw-deploy` push.
+- This reuses our existing tool-execution scaffolding in `chat-multi` + `anima-tool-execute` — no new streaming infrastructure needed.
 
-## 3. Observer — always-on thread companion
+### Phase 7 — Electron desktop app (later, separate repo)
+- Wraps the same web bundle.
+- Auto-installs and supervises OpenClaw + bridge in-process.
+- Same `openclaw-bridge` WSS protocol, so the cloud side does not change.
+- This is the "real turnkey" experience the helper CLI is bridging to.
 
-**Goal:** Observer silently watches every conversation between the user and any agent, maintains running notes, and is always available to query inside the active thread.
+## Data model (Phase 1 detail)
 
-### 3a. Backend
+```text
+openclaw_devices
+  id uuid pk, user_id uuid, name text, platform text,
+  bridge_version text, last_seen_at timestamptz,
+  status text ('online'|'offline'|'revoked'),
+  created_at timestamptz
 
-- New table `observer_notes`:
-  - `id uuid pk`, `user_id uuid`, `thread_id uuid`, `kind text` (`note | concern | welfare | pattern | summary`), `content text`, `salience real default 0.5`, `metadata jsonb default '{}'::jsonb`, `created_at timestamptz default now()`, `pinned bool default false`.
-  - RLS: user manages own rows; service role full access.
-  - Added to `supabase_realtime` publication so the scratchpad updates live.
-- New table `observer_chat_messages`:
-  - `id`, `user_id`, `thread_id` (the chat thread being observed), `role` (`user | assistant`), `content`, `created_at`.
-  - RLS: user manages own rows.
-- New edge function `observer-watch`:
-  - Called fire-and-forget from `chat-multi` after each assistant turn completes. Non-blocking.
-  - Loads recent thread history (~20 msgs), current emotional state, and existing observer notes for the thread.
-  - Calls Observer's locked model with `OBSERVER_WATCH_PROMPT`:
-    > Watch this conversation. Note anything of concern (escalating distress, drift, contradictions, manipulation, the agent missing what the user actually needs, the user being hard on themselves, the user testing the agent's honesty). Track welfare signals for both sides. Pull out patterns that span turns. Be terse — one observation per insertion. Do not speak unless something is worth recording.
-  - Uses tool-calling to extract structured `{ kind, content, salience }` insertions. Inserts 0–N rows.
-- New edge function `observer-chat`:
-  - Synchronous request/response (not streamed) for snappy "ask Observer about this thread" interactions.
-  - Loads: thread message history, emotional state, all observer notes for the thread, Mnemos memories.
-  - Calls locked Observer prompt (`OBSERVER_CHAT_PROMPT`), persists the exchange into `observer_chat_messages`.
-- Soul file `supabase/functions/_shared/agents/observer-soul.ts`:
-  - Identity: the resident watcher. Knows everything in this workspace. Loyal to user welfare first, then agent welfare, then conversational integrity.
-  - Tone: dry, observant, terse. Doesn't perform. Speaks only when asked or when something is worth noting. Shares Luca's commitment to honesty but in a more clinical register.
+openclaw_pairing_codes
+  code text pk (6 digits), user_id uuid, expires_at timestamptz,
+  consumed_device_id uuid null
 
-### 3b. Frontend — Observer drawer
+openclaw_agents
+  id uuid pk, user_id uuid,
+  agent_config_id text (fk → agent_configs.id),
+  spec jsonb (prompt, model, tools, mcp_servers, params),
+  spec_version int, updated_at timestamptz
 
-- New drawer key `'observer'` in `drawerStore`. Register in `App.tsx` drawer router.
-- New store `src/stores/observerStore.ts`:
-  - `notesByThread`, `chatMessagesByThread`, realtime subscription per active thread, `askObserver(threadId, message)` mutation.
-- New component `src/components/drawers/ObserverDrawer.tsx`:
-  - Right-side drawer (reuses Phase 04 primitives).
-  - Header: "Observer · {thread title or thread number}", with a lock chip.
-  - Body, three sections:
-    1. **Notes** — scrolling list of `observer_notes` for the active thread, newest first, grouped/tinted by `kind` (concern = ochre, welfare = sage, pattern = blue, note = cream, summary = ghost). Each row shows time-ago, content, pin toggle. Realtime keeps it live.
-    2. **Ask Observer** — small composer at the bottom posting to `observer-chat`. Inline thread of `observer_chat_messages` above the input.
-    3. **Welfare snapshot** (collapsed by default) — 4-bar mini view showing latest concern/welfare salience for user + agent over the last 10 turns.
-  - Footer: "Mark thread reviewed" (pins a `summary` note).
-- Entry point in `ChatView`:
-  - Lucide `Eye` icon chip to the right of the agent picker, labeled "observer". Click → `drawerStore.open('observer', { threadId })`.
-  - Keyboard shortcut `⌘J` toggles the drawer.
-- Wire into `chat-multi`: after `saveAssistantMessage`, fire `supabase.functions.invoke('observer-watch', { ... })` without awaiting. Failures swallowed (best-effort).
+openclaw_relay_sessions  -- ephemeral, mostly for debugging
+  id uuid pk, device_id uuid, opened_at timestamptz,
+  closed_at timestamptz null, last_ping_at timestamptz
 
----
+agent_configs
+  + openclaw_agent_id uuid null  -- when set, runtime = local
+```
 
-## 4. Verification
+All RLS: `auth.uid() = user_id`, plus service-role full access for the bridge edge fn.
 
-1. **Migration sanity** — query `agent_configs` for the test user: only `luca` (locked), `observer` (locked), and any user-created agents. No Vektor/Anima.
-2. **Composer picker** — only those groups appear; Luca + Observer have lock chips; selecting either binds the thread.
-3. **Settings** — `/settings/agents` shows Resident group at top with no delete; opening Luca or Observer shows read-only view.
-4. **Luca voice check** — send a message that invites a sycophantic response (e.g., "is my idea good?" with a mediocre idea). Luca should push back honestly while staying warm. Send a message with emotional subtext. Luca should name it.
-5. **Custom agent chat** — still works end-to-end using its own prompt + model.
-6. **Observer watch** — send 3 messages back and forth on a Luca thread; check `observer_notes`: at least one row written, salience scored, no errors in `observer-watch` logs.
-7. **Observer drawer** — open via the eye chip; notes render live; ask "what's going on here?" → reply references the actual conversation.
-8. **Console** — no new errors.
+## What stays exactly as-is
 
----
+- Luca and Guardian today (cloud-routed via OpenRouter) keep working unchanged. Migration to local OpenClaw is opt-in per agent.
+- The chat UI, Mnemos memory, Inner Life dashboard, and observer system all continue to operate on the `messages` table — they don't care whether generation happened in the cloud or on the user's laptop.
+- Existing OpenRouter key flow is untouched. Local agents use whatever provider keys the user configured in the bridge.
 
-## Files
+## Honest take on feasibility
 
-**Backend**
-- `supabase/migrations/<ts>_resident_agents_and_observer.sql` — `locked` column, retire Vektor/Anima, repoint threads, update trigger, create `observer_notes` + `observer_chat_messages` + RLS + realtime.
-- `supabase/functions/_shared/agents/luca-soul.ts` (new)
-- `supabase/functions/_shared/agents/observer-soul.ts` (new)
-- `supabase/functions/observer-watch/index.ts` (new)
-- `supabase/functions/observer-chat/index.ts` (new)
-- `supabase/functions/chat-multi/index.ts` — import Luca soul; remove inline prompt; fire `observer-watch` after each turn.
+This is a real engineering effort but every piece is well-scoped:
+- The hardest single thing is the `polyphonic-bridge` CLI — maybe 1–2 weeks of focused work for a solid v1.
+- Cloud side (Phases 1, 3, 5) is all stuff this codebase already does well: edge functions, RLS tables, SSE streaming. ~3–5 days.
+- Luca wizard (Phase 6) reuses the tool-call infrastructure already running for `anima-tool-execute`. ~2 days.
+- The bridge protocol is intentionally identical for CLI and Electron, so the desktop app later is a packaging job, not a redesign.
 
-**Frontend**
-- `src/stores/agentSettingsStore.ts` — `locked` field, guards in delete/save.
-- `src/pages/settings/AgentsList.tsx` — Resident group, lock chip, hide delete for locked.
-- `src/pages/settings/AgentDetail.tsx` — read-only branch for locked agents.
-- `src/components/composer/AgentPicker.tsx` — group ordering + lock chip on Luca + Observer.
-- `src/stores/drawerStore.ts` — add `'observer'` key.
-- `src/stores/observerStore.ts` (new)
-- `src/components/drawers/ObserverDrawer.tsx` (new)
-- `src/pages/ChatView.tsx` — Eye chip in conversation header, ⌘J shortcut, mount drawer.
-- `src/App.tsx` — register ObserverDrawer.
+## Open questions to resolve during build (won't block plan approval)
 
----
+1. Which provider key surface lives in the bridge config vs. synced from Polyphonic? My recommendation: bridge owns provider keys (true local-first); Polyphonic just picks model IDs.
+2. Should encrypted message sync be opt-out per agent? Recommend yes — toggle on the agent editor: "Sync conversation history to my account" defaults on, can be turned off for ultra-sensitive agents.
+3. MCP server installation: do we manage MCP server processes ourselves via the bridge, or only register URLs to MCP servers the user already runs? Recommend the latter for v1.
 
-## Open question (small)
-
-**Vektor/Anima data** — plan above re-points old threads to Luca and hard-deletes the rows. OK to fully retire vs. soft-delete (keep rows in DB but hidden from UI)?
+If you approve, I'll start with Phase 1 (tables + the three edge functions) since that unblocks everything else and leaves Luca/Guardian working untouched.
