@@ -158,6 +158,105 @@ export type Database = {
           },
         ]
       }
+      agent_identity: {
+        Row: {
+          agent_id: string
+          content: string
+          doc_type: string
+          id: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          agent_id?: string
+          content?: string
+          doc_type: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          doc_type?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      agent_identity_patches: {
+        Row: {
+          agent_id: string
+          applied_at: string | null
+          category: string | null
+          confidence: number
+          created_at: string
+          doc_type: string
+          id: string
+          operation: string
+          patch_content: string
+          rationale: string | null
+          section: string
+          source_message_ids: string[] | null
+          source_thread_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          applied_at?: string | null
+          category?: string | null
+          confidence: number
+          created_at?: string
+          doc_type: string
+          id?: string
+          operation: string
+          patch_content: string
+          rationale?: string | null
+          section: string
+          source_message_ids?: string[] | null
+          source_thread_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          applied_at?: string | null
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          doc_type?: string
+          id?: string
+          operation?: string
+          patch_content?: string
+          rationale?: string | null
+          section?: string
+          source_message_ids?: string[] | null
+          source_thread_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_identity_patches_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_identity_patches_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_secrets: {
         Row: {
           agent_id: string
@@ -188,6 +287,104 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_skill_denials: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string | null
+          id: string
+          skill_name: string
+          source_skill_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name: string
+          source_skill_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name?: string
+          source_skill_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_skill_denials_source_skill_id_fkey"
+            columns: ["source_skill_id"]
+            isOneToOne: false
+            referencedRelation: "agent_skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_skills: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          description: string
+          id: string
+          last_used_at: string | null
+          name: string
+          source_thread_id: string | null
+          trigger_keywords: string[] | null
+          updated_at: string
+          use_count: number
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          content: string
+          created_at?: string
+          description: string
+          id?: string
+          last_used_at?: string | null
+          name: string
+          source_thread_id?: string | null
+          trigger_keywords?: string[] | null
+          updated_at?: string
+          use_count?: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          description?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          source_thread_id?: string | null
+          trigger_keywords?: string[] | null
+          updated_at?: string
+          use_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_skills_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_skills_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           created_at: string
@@ -205,6 +402,74 @@ export type Database = {
           value?: string
         }
         Relationships: []
+      }
+      artifacts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          parent_artifact_id: string | null
+          source_message_id: string | null
+          thread_id: string
+          title: string | null
+          user_id: string
+          version: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind: string
+          parent_artifact_id?: string | null
+          source_message_id?: string | null
+          thread_id: string
+          title?: string | null
+          user_id: string
+          version?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          parent_artifact_id?: string | null
+          source_message_id?: string | null
+          thread_id?: string
+          title?: string | null
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifacts_parent_artifact_id_fkey"
+            columns: ["parent_artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifacts_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifacts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifacts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       beliefs: {
         Row: {
@@ -462,6 +727,73 @@ export type Database = {
             columns: ["target_id"]
             isOneToOne: false
             referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crisis_events: {
+        Row: {
+          created_at: string
+          crisis_level: string
+          flags: string[] | null
+          followup_completed_at: string | null
+          followup_due_at: string | null
+          followup_queued: boolean
+          id: string
+          message_id: string | null
+          region: string | null
+          resources_surfaced: boolean
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crisis_level: string
+          flags?: string[] | null
+          followup_completed_at?: string | null
+          followup_due_at?: string | null
+          followup_queued?: boolean
+          id?: string
+          message_id?: string | null
+          region?: string | null
+          resources_surfaced?: boolean
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crisis_level?: string
+          flags?: string[] | null
+          followup_completed_at?: string | null
+          followup_due_at?: string | null
+          followup_queued?: boolean
+          id?: string
+          message_id?: string | null
+          region?: string | null
+          resources_surfaced?: boolean
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crisis_events_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crisis_events_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crisis_events_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
@@ -1370,6 +1702,70 @@ export type Database = {
           },
         ]
       }
+      pending_revisions: {
+        Row: {
+          created_at: string
+          id: string
+          rationale: string | null
+          revision_type: string
+          source_message_id: string | null
+          status: string
+          surfaced_at: string | null
+          thread_id: string
+          user_id: string
+          what_to_say_now: string
+          what_was_said: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          revision_type: string
+          source_message_id?: string | null
+          status?: string
+          surfaced_at?: string | null
+          thread_id: string
+          user_id: string
+          what_to_say_now: string
+          what_was_said: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          revision_type?: string
+          source_message_id?: string | null
+          status?: string
+          surfaced_at?: string | null
+          thread_id?: string
+          user_id?: string
+          what_to_say_now?: string
+          what_was_said?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_revisions_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_revisions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_revisions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_chat_messages: {
         Row: {
           chat_id: string
@@ -1563,6 +1959,161 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      scheduled_tasks: {
+        Row: {
+          agent_id: string
+          created_at: string
+          delivery_mode: string
+          enabled: boolean
+          id: string
+          last_run_at: string | null
+          last_run_status: string | null
+          name: string
+          next_run_at: string | null
+          prompt: string
+          schedule_expr: string
+          target_thread_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          delivery_mode?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          name: string
+          next_run_at?: string | null
+          prompt: string
+          schedule_expr: string
+          target_thread_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          delivery_mode?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          name?: string
+          next_run_at?: string | null
+          prompt?: string
+          schedule_expr?: string
+          target_thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_tasks_target_thread_id_fkey"
+            columns: ["target_thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_tasks_target_thread_id_fkey"
+            columns: ["target_thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subagent_tasks: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          parent_message_id: string | null
+          parent_thread_id: string
+          progress: number
+          report_message_id: string | null
+          result: string | null
+          started_at: string | null
+          status: string
+          task_description: string
+          time_budget_seconds: number
+          tool_budget: number
+          tool_calls_used: number
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          parent_message_id?: string | null
+          parent_thread_id: string
+          progress?: number
+          report_message_id?: string | null
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          task_description: string
+          time_budget_seconds?: number
+          tool_budget?: number
+          tool_calls_used?: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          parent_message_id?: string | null
+          parent_thread_id?: string
+          progress?: number
+          report_message_id?: string | null
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          task_description?: string
+          time_budget_seconds?: number
+          tool_budget?: number
+          tool_calls_used?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subagent_tasks_parent_message_id_fkey"
+            columns: ["parent_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subagent_tasks_parent_thread_id_fkey"
+            columns: ["parent_thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subagent_tasks_parent_thread_id_fkey"
+            columns: ["parent_thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subagent_tasks_report_message_id_fkey"
+            columns: ["report_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       thought_initiations: {
         Row: {
@@ -1815,6 +2366,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      invoke_edge_function: {
+        Args: { function_name: string; payload?: Json }
+        Returns: number
       }
       mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
