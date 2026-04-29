@@ -147,7 +147,7 @@ Until those land, the frontend renders gracefully (the per-table 404s on remote 
 - L9: `1acff03`
 - L10: `3509f56`
 - L11: `cc2032b`
-- L12: pending below
+- L12: `980ad3a`
 
 **Verification signal:** `npm test` 20/20 passing across 6 files; `npm run build` clean; `deno check` on every modified edge function reports clean; vite on 127.0.0.1:8085 → /auth/login, /chat, /profile/identity, /profile/revisions all render with 0 new console errors after each commit.
 
