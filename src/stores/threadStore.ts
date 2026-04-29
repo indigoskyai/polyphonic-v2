@@ -89,8 +89,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // Realtime subscribe for inserts on the current thread. Catches messages
   // produced by background processes (subagent reports, scheduled-task
   // results, future tool-led inserts) without forcing a thread reload.
-  // Skips guardian/observer rows to mirror loadMessages, and de-dupes
-  // against streaming inserts that the chat function already added.
+  //
+  // Two de-dupe paths:
+  //   1. Same-id row already in state → drop (re-emit safety).
+  //   2. A local optimistic stub (added by ChatView's addMessage when a
+  //      stream finishes) with the same role + agent + content that
+  //      landed within the last 30 seconds → replace it with the canonical
+  //      DB row, so future updates can target by real UUID and we don't
+  //      render the same message twice.
   subscribeMessages: (threadId) => {
     const channel = supabase
       .channel(`thread-messages-${threadId}`)
@@ -103,6 +109,24 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           if (row.agent === 'guardian' || row.agent === 'observer') return;
           const existing = get().messages;
           if (existing.some((m) => m.id === row.id)) return;
+
+          const rowTime = new Date(row.created_at).getTime();
+          const stubIndex = existing.findIndex((m) => {
+            if (m.id === row.id) return false;
+            if (m.role !== row.role) return false;
+            if ((m.agent ?? null) !== (row.agent ?? null)) return false;
+            if (m.content !== row.content) return false;
+            const stubTime = new Date(m.created_at).getTime();
+            return Math.abs(rowTime - stubTime) < 30_000;
+          });
+
+          if (stubIndex >= 0) {
+            const next = existing.slice();
+            next[stubIndex] = row;
+            set({ messages: next });
+            return;
+          }
+
           set({ messages: [...existing, row] });
         },
       )
