@@ -15,6 +15,7 @@ import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
+import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
 const SUBAGENT_TURN_TIMEOUT_MS = 45_000;
@@ -139,6 +140,22 @@ serve(async (req) => {
           completed_at: new Date().toISOString(),
         })
         .eq("id", task.id);
+
+      await dispatchProactiveEngagement(supabase, url, serviceRole, {
+        userId: task.user_id,
+        source: "subagent_run",
+        severity: result.toolCallsUsed > 0 ? "notable" : "info",
+        title: "Subagent finished",
+        summary: result.text.slice(0, 200),
+        rationale: `A background subagent you dispatched finished its work on: "${task.task_description.slice(0, 200)}".`,
+        activityType: "subagent_completed",
+        content: {
+          subagent_task_id: task.id,
+          tool_calls_used: result.toolCallsUsed,
+          parent_thread_id: task.parent_thread_id,
+          report_message_id: reportMessageId,
+        },
+      });
 
       return json({ ok: true, task_id: task.id, status: "completed" }, 200, corsHeaders);
     } catch (err) {

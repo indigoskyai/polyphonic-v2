@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DrawerHeader,
@@ -80,6 +80,61 @@ function dayBucket(iso: string): 'today' | 'yesterday' | 'earlier' {
   y.setDate(now.getDate() - 1);
   if (d.toDateString() === y.toDateString()) return 'yesterday';
   return 'earlier';
+}
+
+function extractRationale(item: NormalItem): string | null {
+  if (item.kind === 'initiation') {
+    const init = item.raw as ThoughtInitiation;
+    return init.trigger_reason ? init.trigger_reason : null;
+  }
+  const activity = item.raw as ActivityEntry;
+  const content = activity.content as Record<string, unknown> | null;
+  if (!content) return null;
+  const r = content.rationale;
+  if (typeof r === 'string' && r.trim().length > 0) return r;
+  return null;
+}
+
+function RationaleToggle({ rationale }: { rationale: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-mono)',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+        aria-expanded={open}
+      >
+        {open ? 'hide reason' : 'why am I seeing this?'}
+      </button>
+      {open && (
+        <div
+          style={{
+            marginTop: 6,
+            padding: '8px 10px',
+            borderLeft: '1px solid var(--border-faint)',
+            color: 'var(--text-body)',
+            fontSize: 12,
+            lineHeight: 1.55,
+            background: 'var(--surface-raised)',
+            borderRadius: 6,
+          }}
+        >
+          {rationale}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NotifGlyph({ agent, permission }: { agent: string; permission: boolean }) {
@@ -230,6 +285,7 @@ export default function NotificationsDrawer() {
     const isPermission = item.category === 'permissions';
     const agent = agentFromSource(item.source);
     const isRead = readIds.has(item.id) || item.status === 'delivered';
+    const rationale = extractRationale(item);
 
     return (
       <article
@@ -247,6 +303,7 @@ export default function NotificationsDrawer() {
           </div>
           {item.snippet && <div className="notif-snippet">{item.snippet}</div>}
           {item.meta && <div className="notif-meta-row">{item.meta}</div>}
+          {rationale && <RationaleToggle rationale={rationale} />}
           {isPermission ? (
             <div className="notif-actions">
               <Pill variant="primary" size="xs">Approve</Pill>

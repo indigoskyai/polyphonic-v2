@@ -70,7 +70,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
 
 ### Wave 3 (last)
-- [ ] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
+- [x] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
 - [ ] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
 - [ ] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
 
@@ -92,6 +92,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 19:50 · phase L9 · widened `messages_kind_check` to admit `scheduled_task`, `scheduled_task_result`, and `subagent_report` · L8 already inserts the first two kinds via `scheduled-task-run` but the prior CHECK constraint silently rejected them; L9 adds the report kind, so this is the right migration to repair both at once.
 - 2026-04-28 19:51 · phase L9 · subagent runner uses Haiku 4.5 with web_search/read_url/workspace_file plus a `finish` sentinel rather than the full Luca toolset · per the handoff cost rule (background loops use cheap models), and excluding dispatch_subagent prevents recursion. Identity tools and artifacts stay parent-scope concerns.
 - 2026-04-28 19:52 · phase L9 · realtime sync hashes the task UUID into the existing `v1`/`v2`/`v3` family palette · the Phase 09 visualization keys per-family CSS variants; deriving deterministically keeps the murmur dot colors stable across realtime updates without inventing a new family enum.
+- 2026-04-28 19:54 · phase L10 · centralized proactive surfacing through `_shared/proactive-engagement.ts` (3/day, 1/hour notable cap; important bypasses) · the handoff lists five trigger sources but they all already touched `entity_activity_log`, so the gate logs the rationale once, then defers delivery to `luca-initiate`. Mnemos-consolidate insight wiring deferred — engine doesn't expose meaningful-pattern signals at the edge-function boundary, and forging that signal would lie about provenance. Pending-revision urgency also deferred (chat-side injection covers in-session; offline surfacing belongs to a later wake-up cycle).
+- 2026-04-28 19:54 · phase L10 · "why am I seeing this?" reads `entity_activity_log.content.rationale` for activities and `thought_initiations.trigger_reason` for initiations · activity rows already flowed through the gate so rationales are populated honestly; initiation rationale was already serialized into trigger_reason by anima-initiate and is preserved.
 
 
 ## Backend asks queue

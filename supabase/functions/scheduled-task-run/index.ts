@@ -4,6 +4,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import { formatAgentSkillsPrompt, loadRelevantAgentSkills } from "../_shared/agents/skills.ts";
+import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SCHEDULED_MODEL = "anthropic/claude-opus-4-7";
 
@@ -90,16 +91,21 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
     });
 
     if (task.delivery_mode !== "silent") {
-      await fetch(`${url}/functions/v1/luca-initiate`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${serviceRole}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: task.user_id,
-          severity: task.delivery_mode === "in_app" ? "info" : "notable",
-          title: task.name,
-          summary: response.slice(0, 240),
-        }),
-      }).catch(() => null);
+      const severity = task.delivery_mode === "in_app" ? "info" : "notable";
+      await dispatchProactiveEngagement(supabase, url, serviceRole, {
+        userId: task.user_id,
+        source: "scheduled_task",
+        severity,
+        title: task.name,
+        summary: response.slice(0, 240),
+        rationale: `Scheduled task "${task.name}" finished (cadence: ${task.schedule_expr}).`,
+        activityType: "scheduled_task_run",
+        content: {
+          scheduled_task_id: task.id,
+          thread_id: threadId,
+          delivery_mode: task.delivery_mode,
+        },
+      });
     }
 
     await supabase.from("scheduled_tasks").update({

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { logActivity } from "../_shared/activity-log.ts";
+import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 // Threshold for accumulated salience before the entity reaches out
 const INITIATION_THRESHOLD = 2.5;
@@ -212,30 +212,44 @@ Write ONLY the message. Nothing else.`;
     }
 
     // Store the initiation
+    const triggerReason = `salience=${Math.round(salienceTotal * 100) / 100}; sources=${sourceThoughts.slice(0, 3).join(" | ").slice(0, 400)}`;
     const { data: initiation } = await supabase
       .from("thought_initiations")
       .insert({
         user_id,
         message,
         status: "pending",
-        trigger_reason: `salience=${Math.round(salienceTotal * 100) / 100}; sources=${sourceThoughts.slice(0, 3).join(" | ").slice(0, 400)}`,
+        trigger_reason: triggerReason,
       })
       .select("id")
       .single();
 
-    await logActivity(supabase, user_id, {
-      type: "initiation",
+    const proactive = await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRoleKey, {
+      userId: user_id,
+      source: "anima_initiate",
+      severity: "notable",
       title: "Reached out to you",
-      summary: message.slice(0, 150),
-      content: { salience_total: Math.round(salienceTotal * 100) / 100 },
-      source: "autonomous",
+      summary: message.slice(0, 240),
+      rationale: `Salience accumulated to ${Math.round(salienceTotal * 100) / 100} from ${sourceThoughts.length} background signal${sourceThoughts.length === 1 ? "" : "s"}.`,
+      activityType: "initiation",
+      content: {
+        salience_total: Math.round(salienceTotal * 100) / 100,
+        initiation_id: initiation?.id,
+        sources: sourceThoughts.slice(0, 5),
+      },
     });
+
+    if (!proactive.allowed) {
+      console.log(`[anima-initiate] proactive engagement gated: ${proactive.reason}`);
+    }
 
     return new Response(JSON.stringify({
       should_initiate: true,
       initiation_id: initiation?.id,
       message,
       salience_total: Math.round(salienceTotal * 100) / 100,
+      gated: !proactive.allowed,
+      gating_reason: proactive.reason ?? null,
     }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
