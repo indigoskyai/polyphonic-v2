@@ -128,8 +128,26 @@ serve(async (req) => {
     const task = claimed;
     try {
       const result = await runSubagentLoop(supabase, url, serviceRole, task);
+
+      if (result.cancelled) {
+        await supabase
+          .from("subagent_tasks")
+          .update({
+            result: result.text.slice(0, 12000),
+            tool_calls_used: result.toolCallsUsed,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", task.id)
+          .eq("status", "cancelled");
+        return json({ ok: true, task_id: task.id, status: "cancelled" }, 200, corsHeaders);
+      }
+
       const reportMessageId = await postReport(supabase, task, result);
-      await supabase
+
+      // Conditional commit — if the user cancelled while we were running,
+      // their UPDATE flipped status to 'cancelled' and this no-ops, leaving
+      // the row honestly cancelled rather than overriding it as completed.
+      const { data: completed } = await supabase
         .from("subagent_tasks")
         .update({
           status: "completed",
@@ -139,7 +157,14 @@ serve(async (req) => {
           report_message_id: reportMessageId,
           completed_at: new Date().toISOString(),
         })
-        .eq("id", task.id);
+        .eq("id", task.id)
+        .eq("status", "running")
+        .select("id")
+        .maybeSingle();
+
+      if (!completed) {
+        return json({ ok: true, task_id: task.id, status: "cancelled_during_run" }, 200, corsHeaders);
+      }
 
       await dispatchProactiveEngagement(supabase, url, serviceRole, {
         userId: task.user_id,
@@ -186,6 +211,7 @@ serve(async (req) => {
 interface SubagentResult {
   text: string;
   toolCallsUsed: number;
+  cancelled?: boolean;
 }
 
 async function runSubagentLoop(
@@ -225,10 +251,17 @@ async function runSubagentLoop(
 
   let toolCallsUsed = 0;
   let finalText: string | null = null;
+  let cancelled = false;
 
   for (let turn = 0; turn < toolBudget + 1; turn++) {
     if (Date.now() > deadline) {
       finalText = `Subagent ran out of time after ${toolCallsUsed} tool calls. Returning partial findings.`;
+      break;
+    }
+
+    if (await wasCancelled(supabase, task.id)) {
+      cancelled = true;
+      finalText = `Subagent cancelled after ${toolCallsUsed} tool call${toolCallsUsed === 1 ? '' : 's'}. No report posted to the parent thread.`;
       break;
     }
 
@@ -325,7 +358,17 @@ async function runSubagentLoop(
   return {
     text: finalText,
     toolCallsUsed,
+    cancelled,
   };
+}
+
+async function wasCancelled(supabase: any, taskId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("subagent_tasks")
+    .select("status")
+    .eq("id", taskId)
+    .maybeSingle();
+  return data?.status === "cancelled";
 }
 
 async function callModel(apiKey: string, messages: any[], tools: any[]): Promise<any | null> {

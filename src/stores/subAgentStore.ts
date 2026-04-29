@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { supabase } from '@/integrations/supabase/client';
 
 export type SubAgentState = 'queued' | 'active' | 'complete' | 'failed';
 export type SubAgentFamily = 'v1' | 'v2' | 'v3';
@@ -145,9 +146,18 @@ export const useSubAgentStore = create<SubAgentStore>((set, get) => ({
         [id]: { ...existing, state: 'failed', endedAt: Date.now() },
       },
     }));
+
+    // Defer the DB cancel until the 3-second undo window expires — that way
+    // undoCancel can revert without leaving an already-cancelled row in the
+    // DB. If the user lets the toast time out, we commit the cancellation
+    // (remote tasks only; local DEV-mock tasks have no DB row).
     const timeoutId = window.setTimeout(() => {
       const cur = get().pendingCancel;
       if (cur && cur.agentId === id) {
+        if (existing.source === 'remote' && existing.id.startsWith('remote-')) {
+          const dbId = existing.id.slice('remote-'.length);
+          cancelRemoteSubagent(dbId).catch((err) => console.warn('[subagent] remote cancel failed:', err));
+        }
         set({ pendingCancel: null });
       }
     }, 3000);
@@ -209,6 +219,15 @@ export const useSubAgentStore = create<SubAgentStore>((set, get) => ({
     return changed ? { agents: filtered } : {};
   }),
 }));
+
+async function cancelRemoteSubagent(taskId: string): Promise<void> {
+  const { error } = await supabase
+    .from('subagent_tasks')
+    .update({ status: 'cancelled' })
+    .eq('id', taskId)
+    .in('status', ['pending', 'running']);
+  if (error) throw error;
+}
 
 function mapRemoteState(status: string): SubAgentState {
   if (status === 'completed') return 'complete';
