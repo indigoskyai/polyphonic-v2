@@ -31,6 +31,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { isInQuietHours } from "../_shared/quiet-hours.ts";
 
 interface InitiatePayload {
   user_id: string;
@@ -38,6 +39,19 @@ interface InitiatePayload {
   severity: "info" | "notable" | "important";
   title?: string;
   summary?: string;
+}
+
+// Local row shape so we don't depend on the Deno-flavored supabase-js
+// client typings (which collapse `data` into a union with GenericStringError
+// at the destructure site).
+interface ProfileRow {
+  user_id: string;
+  quiet_hours_start: number | null;
+  quiet_hours_end: number | null;
+  quiet_hours_tz: string | null;
+  push_subscription: unknown | null;
+  notification_prefs: Record<string, boolean> | null;
+  last_seen_activity_at: string | null;
 }
 
 serve(async (req) => {
@@ -74,7 +88,7 @@ serve(async (req) => {
     }
 
     // Load profile + most recent message for offline detection
-    const [{ data: profile }, { data: lastMsg }] = await Promise.all([
+    const [profileResult, lastMsgResult] = await Promise.all([
       supabase
         .from("profiles")
         .select(
@@ -93,16 +107,19 @@ serve(async (req) => {
         .maybeSingle(),
     ]);
 
+    const profile = (profileResult.data as ProfileRow | null) ?? null;
+    const lastMsg = (lastMsgResult.data as { created_at: string } | null) ?? null;
+
     const prefs = (profile?.notification_prefs ?? {}) as Record<string, boolean>;
     const inAppEnabled = prefs.in_app !== false; // default on
     const pushEnabled = prefs.push === true;
     const emailEnabled = prefs.email_digest === true;
 
-    const inQuietHours = isInQuietHours(
-      profile?.quiet_hours_start ?? null,
-      profile?.quiet_hours_end ?? null,
-      profile?.quiet_hours_tz ?? "UTC",
-    );
+    const inQuietHours = isInQuietHours({
+      start: profile?.quiet_hours_start ?? null,
+      end: profile?.quiet_hours_end ?? null,
+      tz: profile?.quiet_hours_tz ?? "UTC",
+    });
 
     const msSinceMessage = lastMsg?.created_at
       ? Date.now() - new Date(lastMsg.created_at).getTime()
@@ -157,32 +174,5 @@ serve(async (req) => {
   }
 });
 
-/**
- * Quiet hours check. Treats start/end as integer hours [0..23] in the user's tz.
- * If start or end is null, returns false (never quiet).
- * Handles wrap-around (e.g. 22→7).
- */
-function isInQuietHours(
-  start: number | null,
-  end: number | null,
-  tz: string,
-): boolean {
-  if (start === null || end === null) return false;
-  try {
-    // Get current hour in user's timezone
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      hour12: false,
-      timeZone: tz,
-    });
-    const hourStr = fmt.format(new Date());
-    const hour = parseInt(hourStr, 10);
-    if (Number.isNaN(hour)) return false;
-    if (start === end) return false;
-    if (start < end) return hour >= start && hour < end;
-    // wrap (e.g. 22→7)
-    return hour >= start || hour < end;
-  } catch {
-    return false;
-  }
-}
+// Quiet-hours logic moved to `_shared/quiet-hours.ts` so the proactive
+// engagement gate can apply the same rule before logging activity.

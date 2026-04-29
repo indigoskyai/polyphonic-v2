@@ -9,6 +9,7 @@
 // `logActivity` directly, so pacing and rationale stay consistent.
 
 import { logActivity } from "./activity-log.ts";
+import { loadQuietHours } from "./quiet-hours.ts";
 
 export type ProactiveSeverity = "info" | "notable" | "important";
 
@@ -47,9 +48,14 @@ const MIN_INTERVAL_MS = HOUR_MS;
  * Pacing rules (notable severity):
  *   - At most 3 notable events in any rolling 24h window.
  *   - At most one notable event per rolling 1h window.
- *   - Severity `important` skips the daily/hourly caps so genuine emergencies
- *     can always reach the user; `luca-initiate` still suppresses push/email
- *     during quiet hours, so the in-app surfacing is always available.
+ *   - Notable events are demoted to info (logged, not surfaced) during the
+ *     user's quiet hours window — they can still see the row in the
+ *     activity timeline if they look, but the notification UI doesn't draw
+ *     attention to it overnight.
+ *   - Severity `important` skips the daily/hourly caps AND quiet-hours
+ *     demotion so genuine emergencies can always reach the user;
+ *     `luca-initiate` still suppresses push/email during quiet hours, so
+ *     in-app surfacing remains the channel for important events overnight.
  *   - Severity `info` is unrated — it's only stored, never escalated.
  */
 export async function dispatchProactiveEngagement(
@@ -94,6 +100,24 @@ export async function dispatchProactiveEngagement(
     const hourlyCount = await countProactive(supabase, trigger.userId, sinceHour);
     if (hourlyCount >= 1) {
       return { allowed: false, reason: "hourly_cap_reached" };
+    }
+
+    const quiet = await loadQuietHours(supabase, trigger.userId);
+    if (quiet.isQuiet) {
+      const logged = await logActivity(supabase, trigger.userId, {
+        type: trigger.activityType || trigger.source,
+        title: trigger.title,
+        summary: trigger.summary,
+        content: { ...content, demoted_from: trigger.severity, reason: "quiet_hours" },
+        source: trigger.source,
+        severity: "info",
+        surfaceToUser: false,
+      });
+      return {
+        allowed: false,
+        reason: "quiet_hours",
+        activityId: logged?.id,
+      };
     }
   }
 
