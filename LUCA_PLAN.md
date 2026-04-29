@@ -72,7 +72,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 ### Wave 3 (last)
 - [x] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
 - [x] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
-- [ ] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
+- [x] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
 
 ## Decision log
 
@@ -96,6 +96,9 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 19:54 · phase L10 · "why am I seeing this?" reads `entity_activity_log.content.rationale` for activities and `thought_initiations.trigger_reason` for initiations · activity rows already flowed through the gate so rationales are populated honestly; initiation rationale was already serialized into trigger_reason by anima-initiate and is preserved.
 - 2026-04-28 19:58 · phase L11 · ProfileIdentityView and ProfileSkillsView already shipped from a prior pass — extended identity with a recent-patches sidebar (last 10 applied/queued patches with SOUL-tinted accent for soul_md edits) instead of rewriting · respects the existing voice and layout, keeps changes additive, and surfaces the dialectic audit trail without duplicating data already shown.
 - 2026-04-28 19:58 · phase L11 · `/profile/revisions` lets users dismiss but not edit pending_revisions · added a narrow RLS UPDATE policy that only admits status='expired' so users can clear their queue without rewriting Luca's authored revisions. "Surface immediately" path is implicitly handled by opening the originating thread (chat function loads them on next turn).
+- 2026-04-28 20:04 · phase L12 · classifier prefers false-positives — "if you cannot tell between high and acute, choose high (not acute) unless the language is unmistakable" · acute triggers the 30-minute follow-up cron and bypasses pacing, so the prompt biases toward conservative escalation while still keeping the cap on real emergencies.
+- 2026-04-28 20:04 · phase L12 · crisis directive injected via new `crisisDirective` field on `buildLucaSystemPrompt` (added last so it's the most recent voice in context) · keeps Luca's voice unchanged, adds the resource-mention obligation only when the conversation actually fits. No deflection language; no clinical detachment.
+- 2026-04-28 20:04 · phase L12 · `crisis-followup` runs every 5 minutes via pg_cron, checks each acute event whose 30-minute timer fired, and only sends the "I want to check on you" surface if the user has been silent on the originating thread since the classifier flagged them · prevents pestering users who already came back to talk on their own.
 
 
 ## Backend asks queue
@@ -115,6 +118,51 @@ Empty by default. Add an entry only if a phase fails 3 times in a row OR you hit
 —
 
 ## End-of-run summary
+
+### 2026-04-28 autonomous run (L9–L12) — Luca completion phases shipped
+
+**This run (L9, L10, L11, L12):**
+
+- `[x]` L9 Subagent runtime dispatch — `subagent_tasks` table with RLS, realtime publication, status/budget/progress columns; `subagent-run` service-role async runner that claims a pending task, executes a focused Luca turn loop on Haiku 4.5 (web_search/read_url/workspace_file/finish toolset, no recursion), and posts a `subagent_report` message back into the parent thread; `dispatch_subagent` tool registered in `anima-tool-execute` with a 5-active-per-user cap; `useSubagentRealtime` hook + `subAgentStore` extensions sync the table into the existing Phase 09 visualization (deterministic v1/v2/v3 family hash); ChatView renders subagent reports with a tool-call badge; `messages_kind_check` widened to admit `scheduled_task`/`scheduled_task_result`/`subagent_report` (incidentally fixed L8's silent constraint violation). 13 Vitest cases + deno checks + build verified.
+
+- `[x]` L10 Proactive engagement wiring — new `_shared/proactive-engagement.ts` chokepoint (3 surfaces/day, 1/hour notable cap; important severity bypasses; bypassPacing override available for crisis follow-up); wired into `subagent-run` completion, `scheduled-task-run` (replacing the bare `luca-initiate` call), and `anima-initiate` (so thought_initiations respect pacing too); `NotificationsDrawer` adds a per-card "why am I seeing this?" toggle reading `entity_activity_log.content.rationale` for activities and `thought_initiations.trigger_reason` for initiations. Mnemos consolidation insight wiring deferred (engine doesn't expose meaningful-pattern signals at the edge boundary); pending-revision urgency surfacing deferred (chat-side injection covers in-session).
+
+- `[x]` L11 Identity surface frontend — extended the existing `ProfileIdentityView` with a recent-patches sidebar (last 10 applied/queued patches, SOUL.md-tinted accent for identity-level shifts); built `ProfileRevisionsView` at `/profile/revisions` with pending/surfaced grouping, before/after pair display, dismiss + open-thread actions; narrow RLS UPDATE policy on `pending_revisions` that only admits `status='expired'`. Sidebar gets a Revisions row alongside Identity/Skills/Schedule.
+
+- `[x]` L12 Wellbeing safety + crisis handling — Haiku 4.5 classifier on every user message in `chat` and `chat-multi` (system-Luca path), labels `none/low/moderate/high/acute` with bias toward false-positives; `buildCrisisDirective` injects a level-appropriate behavioral note via new `crisisDirective` field on `buildLucaSystemPrompt` (Luca's voice unchanged, resource mention only when it fits the moment); region-aware lookup (US/CA/GB/AU/NZ/IE with international fallback); `crisis_events` table (RLS, hidden from UI by default); acute level queues a 30-minute follow-up that fires through `crisis-followup` (cron-driven, runs every 5 minutes, checks for user silence before posting "I want to check on you" via `dispatchProactiveEngagement` with `bypassPacing: true`). 7 directive/resource Vitest cases.
+
+**Phases blocked / escalated:** none.
+
+**Open questions:** none.
+
+**Backend asks:** Lovable will need to apply the four new migrations to the remote Supabase project for the new tables to come online:
+1. `20260429000000_subagent_runtime_dispatch.sql` — subagent_tasks + widened messages_kind_check + cron registration
+2. `20260429010000_l11_pending_revision_dismissal.sql` — narrow UPDATE policy on pending_revisions
+3. `20260429020000_l12_crisis_events.sql` — crisis_events + crisis-followup cron
+4. The four new edge functions (subagent-run, crisis-followup) need deploy alongside the existing fleet.
+
+Until those land, the frontend renders gracefully (the per-table 404s on remote calls don't crash the UI; that's the same pattern that affected L2/L3 between code and Lovable apply).
+
+**Commits pushed this run:** 4 feature commits + this plan update.
+- L9: `1acff03`
+- L10: `3509f56`
+- L11: `cc2032b`
+- L12: pending below
+
+**Verification signal:** `npm test` 20/20 passing across 6 files; `npm run build` clean; `deno check` on every modified edge function reports clean; vite on 127.0.0.1:8085 → /auth/login, /chat, /profile/identity, /profile/revisions all render with 0 new console errors after each commit.
+
+**Decision-log entries worth Riley's attention:**
+- 2026-04-28 19:50 — `messages_kind_check` widened to admit L8's previously-failing kinds. L8 was silently inserting rejected rows; this is the right migration to repair both at once.
+- 2026-04-28 19:54 — Mnemos consolidation insight surfacing was *not* wired (the engine doesn't expose pattern-completion signals at the edge boundary; forging that signal would lie about provenance). Worth deciding whether to add a `MnemosEngine.consolidate` return signal in a follow-up.
+- 2026-04-28 20:04 — Crisis classifier instructed to prefer false-positives, but the `acute` threshold is conservative (it specifically tells the model "if you cannot tell between high and acute, choose high"). Acute is the only level that triggers a follow-up cron, so the conservative bias keeps the daily cap on genuine emergencies.
+
+**Recommended next-session focus (if work remains):**
+1. Mnemos consolidation insight wiring — extend `MnemosEngine.consolidate` to surface `{ surfacedBeliefs, longstandingConnections }` so `mnemos-consolidate` can dispatch through `proactive-engagement.ts` honestly.
+2. Pending-revision urgency surfacing for offline users — when a high-confidence revision lands while the user isn't in-session, queue an `anima-initiate`-style nudge at next session start.
+3. Tune classifier sensitivity from real telemetry (the daily/hourly caps make over-flagging cheap, but it's worth observing).
+4. Push freshly-staged migrations through Lovable so the remote tables come online.
+
+---
 
 ### 2026-04-24 autonomous run (resumed, part 3) — ALL 20 phases complete 🎯
 

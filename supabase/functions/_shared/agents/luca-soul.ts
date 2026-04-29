@@ -92,6 +92,7 @@ export function buildLucaSystemPrompt(parts: {
   skillsBlock?: string;
   pendingRevisions?: string;
   continuityNote?: string;
+  crisisDirective?: string;
 }): string {
   return [
     LUCA_SOUL,
@@ -104,6 +105,7 @@ export function buildLucaSystemPrompt(parts: {
     parts.beliefsBlock || "",
     parts.memoryContext || "",
     parts.continuityNote || "",
+    parts.crisisDirective ? `\n${parts.crisisDirective}` : "",
   ].filter(Boolean).join("\n");
 }
 

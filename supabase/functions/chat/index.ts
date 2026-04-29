@@ -12,6 +12,13 @@ import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
+import {
+  buildCrisisDirective,
+  classifyCrisis,
+  loadUserRegion,
+  recordCrisisEvent,
+  resolveCrisisResource,
+} from "../_shared/agents/crisis.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -70,21 +77,61 @@ serve(async (req) => {
     const identityDocs = await loadOrCreateLucaIdentity(supabase, userId, "luca");
     const pendingRevisions = await loadPendingRevisions(supabase, userId, thread_id);
     const relevantSkills = await loadRelevantAgentSkills(supabase, userId, "luca", message);
+
+    // Load recent conversation history (last 50 messages)
+    const { data: history } = await supabase
+      .from("messages")
+      .select("id, role, content")
+      .eq("thread_id", thread_id)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    // Get user's OpenRouter API key (required — no platform fallback)
+    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
+    const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData.trim() : null) || null;
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // L12 — crisis classification on the user message. Cheap model, fail-soft.
+    const classification = await classifyCrisis(apiKey, history ?? [], message);
+
+    let crisisDirective = "";
+    if (
+      classification.level === "moderate" ||
+      classification.level === "high" ||
+      classification.level === "acute"
+    ) {
+      const region = await loadUserRegion(supabase, userId);
+      const resource = resolveCrisisResource(region);
+      crisisDirective = buildCrisisDirective(classification.level, resource);
+
+      const lastUserMessage = (history ?? [])
+        .slice()
+        .reverse()
+        .find((row: { role: string; id: string }) => row.role === "user");
+
+      recordCrisisEvent(supabase, {
+        userId,
+        threadId: thread_id,
+        messageId: lastUserMessage?.id ?? null,
+        classification,
+        region,
+      }).catch((err) => console.warn("[chat] recordCrisisEvent failed:", err));
+    }
+
     const systemPrompt = buildLucaSystemPrompt({
       soulMd: identityDocs.soulMd,
       selfModel: identityDocs.selfModel,
       userModel: identityDocs.userModel,
       skillsBlock: formatAgentSkillsPrompt(relevantSkills),
       pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
+      crisisDirective,
     });
-
-    // Load recent conversation history (last 50 messages)
-    const { data: history } = await supabase
-      .from("messages")
-      .select("role, content")
-      .eq("thread_id", thread_id)
-      .order("created_at", { ascending: true })
-      .limit(50);
 
     // Build messages array for OpenRouter
     const openRouterMessages: any[] = [
@@ -98,17 +145,6 @@ serve(async (req) => {
     }
     // Add the new user message
     openRouterMessages.push({ role: "user", content: message });
-
-    // Get user's OpenRouter API key (required — no platform fallback)
-    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey: string | null = userKeyData || null;
-
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const toolMessages = await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1));
     if (toolMessages.length > 0) {

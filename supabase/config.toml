@@ -152,3 +152,6 @@ verify_jwt = false
 
 [functions.subagent-run]
 verify_jwt = false
+
+[functions.crisis-followup]
+verify_jwt = false

@@ -1711,6 +1711,51 @@ export type Database = {
         }
         Relationships: []
       }
+      crisis_events: {
+        Row: {
+          created_at: string
+          crisis_level: string
+          flags: string[] | null
+          followup_completed_at: string | null
+          followup_due_at: string | null
+          followup_queued: boolean
+          id: string
+          message_id: string | null
+          region: string | null
+          resources_surfaced: boolean
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crisis_level: string
+          flags?: string[] | null
+          followup_completed_at?: string | null
+          followup_due_at?: string | null
+          followup_queued?: boolean
+          id?: string
+          message_id?: string | null
+          region?: string | null
+          resources_surfaced?: boolean
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crisis_level?: string
+          flags?: string[] | null
+          followup_completed_at?: string | null
+          followup_due_at?: string | null
+          followup_queued?: boolean
+          id?: string
+          message_id?: string | null
+          region?: string | null
+          resources_surfaced?: boolean
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       subagent_tasks: {
         Row: {
           agent_id: string

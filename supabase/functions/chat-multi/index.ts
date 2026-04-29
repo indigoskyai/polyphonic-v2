@@ -7,6 +7,13 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import {
+  buildCrisisDirective,
+  classifyCrisis,
+  loadUserRegion,
+  recordCrisisEvent,
+  resolveCrisisResource,
+} from "../_shared/agents/crisis.ts";
+import {
   finalizePendingRevisions,
   formatPendingRevisionsPrompt,
   loadPendingRevisions,
@@ -243,6 +250,29 @@ serve(async (req) => {
       }
     }
 
+    // L12 — crisis classification on the user message (system-Luca path only).
+    let crisisDirective = "";
+    if (agentIsSystemLuca) {
+      const classification = await classifyCrisis(apiKey, history ?? [], message);
+      if (
+        classification.level === "moderate" ||
+        classification.level === "high" ||
+        classification.level === "acute"
+      ) {
+        const region = await loadUserRegion(supabase, userId);
+        const resource = resolveCrisisResource(region);
+        crisisDirective = buildCrisisDirective(classification.level, resource);
+
+        recordCrisisEvent(supabase, {
+          userId,
+          threadId: thread_id,
+          messageId: null,
+          classification,
+          region,
+        }).catch((err) => console.warn("[chat-multi] recordCrisisEvent failed:", err));
+      }
+    }
+
     // Build the enriched system prompt
     // For the system Luca, layer in emotional state, beliefs, memories, continuity.
     // For all other agents (system Vektor/Anima/Observer or user-created), use
@@ -258,6 +288,7 @@ serve(async (req) => {
           skillsBlock,
           pendingRevisions: pendingRevisionsBlock,
           continuityNote,
+          crisisDirective,
         })
       : agentPrompt + continuityNote;
 
