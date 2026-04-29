@@ -67,7 +67,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **L6** Tools expansion — Browser automation, workspace files, MCP runtime, and identity self-edit tools.
 - [x] **L7** Canvas artifacts — Artifact creation tool, schema, chat cards, and canvas viewer.
 - [x] **L8** User-facing scheduler — Scheduled task schema, runner, and schedule management UI.
-- [ ] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
+- [x] **L9** Subagent runtime dispatch — Dispatch tool, async subagent runner, report-back messages, and realtime visualization wiring.
 
 ### Wave 3 (last)
 - [ ] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
@@ -89,6 +89,9 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 16:03 · phase L6 · shipped Browserbase as a bounded CDP page-inspection tool and MCP as a thin HTTP JSON-RPC client · the existing runtime has a planner/executor architecture, so this makes the tools callable now while avoiding invented browser progress or unsupported MCP transports.
 - 2026-04-28 16:53 · phase L7 · wired the existing tool planner into chat while adding `create_artifact` · artifacts, workspace, browser, MCP, and identity tools are only genuinely callable once chat supplies the planner's tool results to Luca's final response.
 - 2026-04-28 17:11 · phase L8 · implemented scheduled runs directly in `scheduled-task-run` rather than recursively invoking streaming chat · the scheduler is service-role/cron driven, so a non-streaming Opus call keeps runs auditable and avoids needing a user JWT at cron time.
+- 2026-04-28 19:50 · phase L9 · widened `messages_kind_check` to admit `scheduled_task`, `scheduled_task_result`, and `subagent_report` · L8 already inserts the first two kinds via `scheduled-task-run` but the prior CHECK constraint silently rejected them; L9 adds the report kind, so this is the right migration to repair both at once.
+- 2026-04-28 19:51 · phase L9 · subagent runner uses Haiku 4.5 with web_search/read_url/workspace_file plus a `finish` sentinel rather than the full Luca toolset · per the handoff cost rule (background loops use cheap models), and excluding dispatch_subagent prevents recursion. Identity tools and artifacts stay parent-scope concerns.
+- 2026-04-28 19:52 · phase L9 · realtime sync hashes the task UUID into the existing `v1`/`v2`/`v3` family palette · the Phase 09 visualization keys per-family CSS variants; deriving deterministically keeps the murmur dot colors stable across realtime updates without inventing a new family enum.
 
 
 ## Backend asks queue

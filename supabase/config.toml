@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.scheduled-task-run]
 verify_jwt = false
+
+[functions.subagent-run]
+verify_jwt = false

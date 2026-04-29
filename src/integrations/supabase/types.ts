@@ -1711,6 +1711,66 @@ export type Database = {
         }
         Relationships: []
       }
+      subagent_tasks: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          parent_message_id: string | null
+          parent_thread_id: string
+          progress: number
+          report_message_id: string | null
+          result: string | null
+          started_at: string | null
+          status: string
+          task_description: string
+          time_budget_seconds: number
+          tool_budget: number
+          tool_calls_used: number
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          parent_message_id?: string | null
+          parent_thread_id: string
+          progress?: number
+          report_message_id?: string | null
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          task_description: string
+          time_budget_seconds?: number
+          tool_budget?: number
+          tool_calls_used?: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          parent_message_id?: string | null
+          parent_thread_id?: string
+          progress?: number
+          report_message_id?: string | null
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          task_description?: string
+          time_budget_seconds?: number
+          tool_budget?: number
+          tool_calls_used?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       pending_revisions: {
         Row: {
           created_at: string

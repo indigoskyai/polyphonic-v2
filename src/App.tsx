@@ -46,6 +46,7 @@ import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
+import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
 import CanvasPanel from "./components/canvas/CanvasPanel";
@@ -113,6 +114,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
     const unsub = subscribeNotifications(user.id);
     return unsub;
   }, [user, loadNotifications, subscribeNotifications]);
+
+  useSubagentRealtime();
 
   return (
     <div

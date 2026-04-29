@@ -20,6 +20,7 @@ import ImagePreview from '@/components/attachments/ImagePreview';
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
+import SubAgentRow from '@/components/subagents/SubAgentRow';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -1071,6 +1072,10 @@ export default function ChatView() {
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
 
+          <div style={{ marginBottom: 16 }}>
+            <SubAgentRow parentAgent="luca" />
+          </div>
+
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
               assistant message that mirrors it, to avoid a duplicate flash. */}
           {messages.map((msg, i) => {
@@ -1123,6 +1128,50 @@ export default function ChatView() {
                       console.log('view logs', { messageId: msg.id });
                     }}
                   />
+                </div>
+              );
+            }
+
+            // L9 — subagent_report branch: badge + RichBody, no streaming
+            if (msg.kind === 'subagent_report') {
+              const md = (msg.metadata as any) || {};
+              const toolCalls = typeof md.tool_calls_used === 'number' ? md.tool_calls_used : null;
+              return (
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                  <div className="msg-sidehead">
+                    {showTimestamps && (
+                      <div className="msg-time">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </div>
+                    )}
+                    <div className="msg-author">
+                      {getAgentDisplayName(msg.agent, agentNameById)}
+                    </div>
+                  </div>
+                  <div className="msg-body">
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 10,
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        border: '1px solid var(--border-faint)',
+                        background: 'var(--surface-raised)',
+                        color: 'var(--text-tertiary)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: 'var(--track-mono)',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-tertiary)' }} aria-hidden="true" />
+                      Subagent report
+                      {toolCalls != null && <span>· {toolCalls} tool calls</span>}
+                    </div>
+                    <RichBody source={msg.content} />
+                  </div>
                 </div>
               );
             }

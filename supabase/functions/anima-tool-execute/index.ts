@@ -120,6 +120,23 @@ const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "dispatch_subagent",
+      description:
+        "Spawn a focused subagent to handle a parallel task in the background. Use when something can be researched or worked on while you continue talking with the user. The subagent inherits your identity and memory but runs in its own conversation context with its own tool budget. It will report back into this thread when finished.",
+      parameters: {
+        type: "object",
+        properties: {
+          task: { type: "string", description: "Concrete description of what the subagent should accomplish" },
+          tool_budget: { type: "integer", default: 20, description: "Max tool calls before the subagent must wrap up (1-50)" },
+          time_budget_seconds: { type: "integer", default: 300, description: "Wall-clock cap in seconds (30-900)" },
+        },
+        required: ["task"],
+      },
+    },
+  },
 ];
 
 function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
@@ -143,6 +160,7 @@ Rules:
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
 - If the user wants a webpage, component, diagram, visualization, or polished document they can inspect, use create_artifact.
+- If a sub-task can run in parallel without blocking the main conversation (background research, longer reads, scripted lookups), dispatch_subagent is the tool. Reserve it for genuinely parallelizable work — small lookups should still go through web_search or read_url directly.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing, etc.), respond with a brief text explanation of why no tools are needed.
 - You may call multiple tools if needed.
 - Be decisive and fast.`;
@@ -391,6 +409,23 @@ serve(async (req) => {
               input: args,
               output,
             };
+          } else if (fnName === "dispatch_subagent") {
+            clearTimeout(timeout);
+            const output = await executeDispatchSubagent(
+              supabase,
+              supabaseUrl,
+              serviceRoleKey,
+              userId,
+              typeof thread_id === "string" ? thread_id : null,
+              typeof source_message_id === "string" ? source_message_id : null,
+              args,
+            );
+            return {
+              tool_call_id: tc.id,
+              tool: fnName,
+              input: args,
+              output,
+            };
           } else if (mcpTool) {
             clearTimeout(timeout);
             const output = await callMcpTool(mcpTool, args);
@@ -556,6 +591,85 @@ async function executeIdentityPatch(
 
   if (updateError) return { error: updateError.message };
   return { ok: true, doc_type: docType, section: patch.section, operation: patch.operation };
+}
+
+async function executeDispatchSubagent(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string | null,
+  threadId: string | null,
+  sourceMessageId: string | null,
+  args: any,
+) {
+  if (!userId || !threadId) return { error: "Missing user or thread context" };
+
+  const taskRaw = String(args?.task || "").trim();
+  if (!taskRaw) return { error: "task description required" };
+  const taskDescription = taskRaw.length > 1500 ? taskRaw.slice(0, 1500) : taskRaw;
+
+  const toolBudget = clampInteger(args?.tool_budget, 1, 50, 20);
+  const timeBudget = clampInteger(args?.time_budget_seconds, 30, 900, 300);
+
+  const { data: activeRows } = await supabase
+    .from("subagent_tasks")
+    .select("id")
+    .eq("user_id", userId)
+    .in("status", ["pending", "running"])
+    .limit(6);
+
+  if (Array.isArray(activeRows) && activeRows.length >= 5) {
+    return {
+      error:
+        "subagent_limit_reached: 5 subagents are already running. Wait for one to finish before dispatching another.",
+    };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("subagent_tasks")
+    .insert({
+      user_id: userId,
+      agent_id: "luca",
+      parent_thread_id: threadId,
+      parent_message_id: sourceMessageId,
+      task_description: taskDescription,
+      tool_budget: toolBudget,
+      time_budget_seconds: timeBudget,
+      status: "pending",
+    })
+    .select("id, status, tool_budget, time_budget_seconds")
+    .single();
+
+  if (error || !inserted) {
+    return { error: error?.message || "Failed to register subagent task" };
+  }
+
+  fetch(`${supabaseUrl}/functions/v1/subagent-run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ task_id: inserted.id }),
+  }).catch((dispatchErr) => {
+    console.warn("subagent-run dispatch failed (non-fatal):", dispatchErr);
+  });
+
+  return {
+    ok: true,
+    subagent_id: inserted.id,
+    status: "dispatched",
+    tool_budget: inserted.tool_budget,
+    time_budget_seconds: inserted.time_budget_seconds,
+    note:
+      "Subagent dispatched. It runs in the background and will post a report back into this thread when finished.",
+  };
+}
+
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
 }
 
 async function executeCreateArtifact(
