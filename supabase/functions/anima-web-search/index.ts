@@ -1,142 +1,91 @@
+// Web search runs through Perplexity Sonar via OpenRouter.
+// See `_shared/perplexity.ts` for the engine; this function just resolves
+// auth, calls the helper, logs the activity row, and returns.
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { loadUserOpenRouterKey, perplexitySearch } from "../_shared/perplexity.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
 
   try {
-    // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "Unauthorized" }, 401, req);
     }
 
     const token = authHeader.replace("Bearer ", "");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-
-    // Accept service_role key for internal calls
-    let user_id: string;
-    if (token === serviceRoleKey) {
-      user_id = "system";
-    } else {
-      const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-
-      const { data: claimsData, error: authError } = await supabaseAuth.auth.getClaims(token);
-      if (authError || !claimsData?.claims) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
-      user_id = claimsData.claims.sub;
-    }
-
-    const { query } = await req.json();
-
-    if (!query || typeof query !== "string" || query.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "Query is required" }), {
-        status: 400,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    // Get user's API key
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    let openrouterKey = "";
-    if (user_id !== "system") {
-      const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
-      openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
-    }
-    if (!openrouterKey) {
-      return new Response(JSON.stringify({ error: "Web search not configured" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+
+    const body = await req.json().catch(() => ({}));
+    const query = typeof body?.query === "string" ? body.query.trim() : "";
+    if (!query) return jsonResp({ error: "Query is required" }, 400, req);
+
+    // Resolve effective user — JWT first, then explicit user_id from body for
+    // service-role callers (subagent-run, scheduled-task-run, etc.). Without
+    // this fallback, service-role calls couldn't fetch the user's API key.
+    const userId = await resolveUserId(supabaseUrl, serviceRoleKey, token, body);
+    if (!userId) return jsonResp({ error: "Unauthorized" }, 401, req);
+
+    const apiKey = await loadUserOpenRouterKey(supabase, userId);
+    if (!apiKey) {
+      return jsonResp({ error: "No OpenRouter key configured for this user" }, 400, req);
     }
 
     console.log("Web search query:", query.slice(0, 100));
 
-    const searchResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openrouterKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://polyphonic.chat",
-        "X-Title": "Polyphonic",
-      },
-      body: JSON.stringify({
-        model: "perplexity/sonar",
-        messages: [
-          {
-            role: "system",
-            content: "You are a web search assistant. Search for the query and provide a concise answer followed by the key sources. Format your response as JSON with this structure: { \"answer\": \"your synthesized answer\", \"results\": [{ \"title\": \"page title\", \"url\": \"source url\", \"snippet\": \"relevant excerpt\" }] }. Include 4-6 results. Return ONLY valid JSON, no markdown fences.",
-          },
-          { role: "user", content: query },
-        ],
-        temperature: 0.1,
-      }),
-    });
-
-    if (!searchResponse.ok) {
-      const text = await searchResponse.text();
-      console.error("Sonar search error:", searchResponse.status, text);
-      return new Response(JSON.stringify({ error: "Web search failed" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const searchData = await searchResponse.json();
-    const rawContent = searchData.choices?.[0]?.message?.content || "";
-
-    // Parse the JSON response from Sonar
-    let answer = "";
-    let results: Array<{ title: string; url: string; snippet: string }> = [];
+    let result;
     try {
-      const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      answer = parsed.answer || rawContent;
-      results = (parsed.results || []).map((r: any) => ({
-        title: r.title || "",
-        url: r.url || "",
-        snippet: r.snippet || r.content || "",
-      }));
-    } catch {
-      // If JSON parsing fails, use the raw response as the answer
-      answer = rawContent;
-      // Try to extract citations from Sonar's response if available
-      const citations = searchData.choices?.[0]?.message?.citations;
-      if (Array.isArray(citations)) {
-        results = citations.map((url: string) => ({ title: "", url, snippet: "" }));
-      }
+      result = await perplexitySearch(apiKey, query);
+    } catch (err) {
+      console.error("Perplexity search failed:", err);
+      return jsonResp({ error: "Web search failed" }, 502, req);
     }
 
-    // Log activity
-    const supabaseLog = createClient(supabaseUrl, serviceRoleKey);
-    await logActivity(supabaseLog, user_id, {
+    await logActivity(supabase, userId, {
       type: "browse",
-      title: `Web search: ${query}`,
-      summary: answer,
+      title: `Web search: ${query.slice(0, 80)}`,
+      summary: result.answer.slice(0, 240),
+      content: { citations: result.results.slice(0, 6) },
     });
 
-    return new Response(JSON.stringify({ answer, results }), {
-      status: 200,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
+    return jsonResp({ answer: result.answer, results: result.results }, 200, req);
   } catch (e) {
     console.error("anima-web-search error:", e);
-    return new Response(
-      JSON.stringify({ error: "An unexpected error occurred." }),
-      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-    );
+    return jsonResp({ error: "An unexpected error occurred." }, 500, req);
   }
 });
+
+async function resolveUserId(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  token: string,
+  body: any,
+): Promise<string | null> {
+  if (token === serviceRoleKey) {
+    const explicit = typeof body?.user_id === "string" ? body.user_id : null;
+    return explicit || null;
+  }
+
+  const supabaseAuth = createClient(
+    supabaseUrl,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } },
+  );
+  const { data, error } = await supabaseAuth.auth.getClaims(token);
+  if (error || !data?.claims) return null;
+  return (data.claims.sub as string) || null;
+}
+
+function jsonResp(body: unknown, status: number, req: Request): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  });
+}

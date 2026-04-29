@@ -423,11 +423,11 @@ async function runSubagentTool(
   const map: Record<string, { fn: string; body: any }> = {
     web_search: {
       fn: "anima-web-search",
-      body: { query: args?.query ?? "" },
+      body: { user_id: userId, query: args?.query ?? "" },
     },
     read_url: {
       fn: "anima-web-read",
-      body: { url: args?.url ?? "", focus: args?.focus },
+      body: { user_id: userId, url: args?.url ?? "", focus: args?.focus },
     },
     workspace_file: {
       fn: "anima-workspace-file",
