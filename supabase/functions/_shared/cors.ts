@@ -14,8 +14,13 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
 ];
 
+// Local dev: any port on localhost / 127.0.0.1 over http. Vite picks 8080,
+// 8081, 8082… depending on what's free, so a literal allowlist is brittle.
+const LOCAL_DEV_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
+
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (LOCAL_DEV_ORIGIN.test(origin)) return true;
   return false;
 }
 
