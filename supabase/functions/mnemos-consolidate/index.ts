@@ -2,6 +2,41 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import {
+  consolidationIsNoteworthy,
+  formatConsolidationSummary,
+  type ConsolidationCounts,
+} from "../_shared/mnemos/insight-surface.ts";
+
+async function maybeSurfaceConsolidation(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRole: string,
+  userId: string,
+  result: ConsolidationCounts | null | undefined,
+): Promise<void> {
+  if (!consolidationIsNoteworthy(result)) return;
+  try {
+    await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRole, {
+      userId,
+      source: "mnemos_consolidate",
+      severity: "notable",
+      title: "I noticed something while you were away",
+      summary: formatConsolidationSummary(result!),
+      rationale: "Consolidation surfaced a pattern worth flagging — promotions, new connections, or belief shifts crossed the noteworthy threshold.",
+      activityType: "mnemos_insight",
+      content: {
+        promotions: Number(result?.promotions ?? 0),
+        new_connections: Number(result?.new_connections ?? 0),
+        beliefs_updated: Number(result?.beliefs_updated ?? 0),
+        strengthened: Number(result?.strengthened ?? 0),
+      },
+    });
+  } catch (err) {
+    console.warn("[mnemos-consolidate] proactive surface failed:", err);
+  }
+}
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -30,6 +65,7 @@ serve(async (req) => {
         lookback_hours: body.lookback_hours || 24,
         openrouter_api_key: apiKey || undefined,
       });
+      await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, userId, result);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -54,10 +90,12 @@ serve(async (req) => {
         if (keyData) userApiKey = keyData;
 
         const engine = new MnemosEngine(supabase, uid);
-        results[uid] = await engine.consolidate({
+        const userResult = await engine.consolidate({
           lookback_hours: 24,
           openrouter_api_key: userApiKey || undefined,
         });
+        results[uid] = userResult;
+        await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, userResult);
       } catch (e) {
         results[uid] = { error: (e as Error).message };
       }
