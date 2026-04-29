@@ -16,6 +16,7 @@ import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import ProfileIdentityView from "./pages/ProfileIdentityView";
 import ProfileSkillsView from "./pages/ProfileSkillsView";
+import ProfileRevisionsView from "./pages/ProfileRevisionsView";
 import ProfileScheduleView from "./pages/ProfileScheduleView";
 import GroupSession from "./pages/GroupSession";
 import CheckpointsView from "./pages/CheckpointsView";
@@ -217,6 +218,7 @@ const App = () => (
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
+            <Route path="/profile/revisions" element={<ProtectedRoute><AppShell><ProfileRevisionsView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/schedule" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
             <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />

@@ -71,7 +71,7 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 ### Wave 3 (last)
 - [x] **L10** Proactive engagement wiring — Initiation triggers, rationale plumbing, quiet-hour pacing, and notification affordances.
-- [ ] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
+- [x] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
 - [ ] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
 
 ## Decision log
@@ -94,6 +94,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-04-28 19:52 · phase L9 · realtime sync hashes the task UUID into the existing `v1`/`v2`/`v3` family palette · the Phase 09 visualization keys per-family CSS variants; deriving deterministically keeps the murmur dot colors stable across realtime updates without inventing a new family enum.
 - 2026-04-28 19:54 · phase L10 · centralized proactive surfacing through `_shared/proactive-engagement.ts` (3/day, 1/hour notable cap; important bypasses) · the handoff lists five trigger sources but they all already touched `entity_activity_log`, so the gate logs the rationale once, then defers delivery to `luca-initiate`. Mnemos-consolidate insight wiring deferred — engine doesn't expose meaningful-pattern signals at the edge-function boundary, and forging that signal would lie about provenance. Pending-revision urgency also deferred (chat-side injection covers in-session; offline surfacing belongs to a later wake-up cycle).
 - 2026-04-28 19:54 · phase L10 · "why am I seeing this?" reads `entity_activity_log.content.rationale` for activities and `thought_initiations.trigger_reason` for initiations · activity rows already flowed through the gate so rationales are populated honestly; initiation rationale was already serialized into trigger_reason by anima-initiate and is preserved.
+- 2026-04-28 19:58 · phase L11 · ProfileIdentityView and ProfileSkillsView already shipped from a prior pass — extended identity with a recent-patches sidebar (last 10 applied/queued patches with SOUL-tinted accent for soul_md edits) instead of rewriting · respects the existing voice and layout, keeps changes additive, and surfaces the dialectic audit trail without duplicating data already shown.
+- 2026-04-28 19:58 · phase L11 · `/profile/revisions` lets users dismiss but not edit pending_revisions · added a narrow RLS UPDATE policy that only admits status='expired' so users can clear their queue without rewriting Luca's authored revisions. "Surface immediately" path is implicitly handled by opening the originating thread (chat function loads them on next turn).
 
 
 ## Backend asks queue

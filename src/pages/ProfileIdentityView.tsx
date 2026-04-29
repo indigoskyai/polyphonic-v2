@@ -12,6 +12,19 @@ type IdentityDoc = {
   updated_at: string;
 };
 
+type IdentityPatch = {
+  id: string;
+  doc_type: IdentityDocType;
+  section: string;
+  operation: 'append' | 'refine' | 'retire' | string;
+  patch_content: string;
+  rationale: string | null;
+  status: string;
+  confidence: number;
+  applied_at: string | null;
+  created_at: string;
+};
+
 const DOC_META: Record<IdentityDocType, {
   title: string;
   label: string;
@@ -115,9 +128,81 @@ function IdentityDocument({ docType, doc }: { docType: IdentityDocType; doc?: Id
   );
 }
 
+function PatchEntry({ patch }: { patch: IdentityPatch }) {
+  const docMeta = DOC_META[patch.doc_type as IdentityDocType] ?? null;
+  const isSoul = patch.doc_type === 'soul';
+  const time = new Date(patch.applied_at || patch.created_at);
+  const ago = formatTimeAgo(time);
+  return (
+    <article
+      style={{
+        borderLeft: `2px solid ${isSoul ? 'var(--agent-luca-1)' : 'var(--border-faint)'}`,
+        paddingLeft: 12,
+        paddingBottom: 14,
+        marginBottom: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: 'baseline',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-mono)',
+          color: isSoul ? 'var(--agent-luca-1)' : 'var(--text-ghost)',
+          textTransform: 'uppercase',
+        }}
+      >
+        <span>{docMeta?.label ?? patch.doc_type}</span>
+        <span>·</span>
+        <span>{patch.operation}</span>
+        <span style={{ marginLeft: 'auto' }}>{ago}</span>
+      </div>
+      <div
+        style={{
+          marginTop: 6,
+          fontFamily: 'var(--font-sans)',
+          fontSize: 12.5,
+          lineHeight: 1.55,
+          color: 'var(--text-body)',
+        }}
+      >
+        <span style={{ color: 'var(--text-tertiary)' }}>{patch.section}</span>
+      </div>
+      {patch.rationale && (
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: 'var(--text-ghost)',
+            fontStyle: 'italic',
+          }}
+        >
+          {patch.rationale}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function formatTimeAgo(d: Date): string {
+  const diff = Math.max(0, Date.now() - d.getTime());
+  const m = Math.round(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.round(h / 24);
+  if (days < 14) return `${days}d`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export default function ProfileIdentityView() {
   const user = useAuthStore((s) => s.user);
   const [docs, setDocs] = useState<IdentityDoc[]>([]);
+  const [patches, setPatches] = useState<IdentityPatch[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -126,16 +211,28 @@ export default function ProfileIdentityView() {
     async function load() {
       if (!user) return;
       setLoading(true);
-      const { data } = await supabase
-        .from('agent_identity')
-        .select('doc_type, content, version, updated_at')
-        .eq('user_id', user.id)
-        .eq('agent_id', 'luca');
+      const [docsResult, patchesResult] = await Promise.allSettled([
+        supabase
+          .from('agent_identity')
+          .select('doc_type, content, version, updated_at')
+          .eq('user_id', user.id)
+          .eq('agent_id', 'luca'),
+        supabase
+          .from('agent_identity_patches')
+          .select('id, doc_type, section, operation, patch_content, rationale, status, confidence, applied_at, created_at')
+          .eq('user_id', user.id)
+          .eq('agent_id', 'luca')
+          .in('status', ['applied', 'queued'])
+          .order('applied_at', { ascending: false, nullsFirst: false })
+          .limit(10),
+      ]);
 
-      if (!cancelled) {
-        setDocs((data || []) as IdentityDoc[]);
-        setLoading(false);
-      }
+      if (cancelled) return;
+      const docsRes = docsResult.status === 'fulfilled' ? docsResult.value : { data: [] };
+      const patchRes = patchesResult.status === 'fulfilled' ? patchesResult.value : { data: [] };
+      setDocs(((docsRes.data) || []) as IdentityDoc[]);
+      setPatches(((patchRes.data) || []) as IdentityPatch[]);
+      setLoading(false);
     }
 
     load();
@@ -148,7 +245,7 @@ export default function ProfileIdentityView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 980 }}>
+      <div style={{ padding: '44px 48px 80px', maxWidth: 1280 }}>
         <div style={{ marginBottom: 36 }}>
           <div
             style={{
@@ -186,17 +283,48 @@ export default function ProfileIdentityView() {
           </p>
         </div>
 
-        {loading ? (
-          <p style={{ color: 'var(--text-ghost)', fontSize: 14 }}>Loading identity documents...</p>
-        ) : (
-          ORDER.map((docType) => (
-            <IdentityDocument
-              key={docType}
-              docType={docType}
-              doc={docsByType.get(docType)}
-            />
-          ))
-        )}
+        <div
+          className="grid gap-10"
+          style={{ gridTemplateColumns: 'minmax(0, 1fr) 280px' }}
+        >
+          <div>
+            {loading ? (
+              <p style={{ color: 'var(--text-ghost)', fontSize: 14 }}>Loading identity documents...</p>
+            ) : (
+              ORDER.map((docType) => (
+                <IdentityDocument
+                  key={docType}
+                  docType={docType}
+                  doc={docsByType.get(docType)}
+                />
+              ))
+            )}
+          </div>
+
+          <aside style={{ paddingTop: 28, position: 'sticky', top: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: 'var(--track-mono)',
+                color: 'var(--text-ghost)',
+                textTransform: 'uppercase',
+                marginBottom: 14,
+              }}
+            >
+              Recent patches
+            </div>
+            {loading ? (
+              <p style={{ color: 'var(--text-ghost)', fontSize: 12 }}>Loading…</p>
+            ) : patches.length === 0 ? (
+              <p style={{ color: 'var(--text-ghost)', fontSize: 12, lineHeight: 1.6 }}>
+                No edits yet. The dialectic layer fills this in as Luca develops.
+              </p>
+            ) : (
+              patches.map((patch) => <PatchEntry key={patch.id} patch={patch} />)
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   );
