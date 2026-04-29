@@ -151,12 +151,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   addMessage: (msg) => {
+    const now = Date.now();
+    const existing = get().messages;
+
+    // If realtime already delivered the canonical row for this same reply
+    // (same role/agent/content within the last 30 seconds), skip the local
+    // stub. Without this, the optimistic add and the realtime push both
+    // land in state and the message renders twice.
+    const realtimeAlreadyHere = existing.some((m) => {
+      if (m.role !== msg.role) return false;
+      if ((m.agent ?? null) !== (msg.agent ?? null)) return false;
+      if (m.content !== msg.content) return false;
+      const mTime = new Date(m.created_at).getTime();
+      return Math.abs(now - mTime) < 30_000;
+    });
+    if (realtimeAlreadyHere) return;
+
     const message: Message = {
       ...msg,
       id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
-    set((s) => ({ messages: [...s.messages, message] }));
+    set({ messages: [...existing, message] });
   },
 
   setStreaming: (s) => set({ isStreaming: s }),
