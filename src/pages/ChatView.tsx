@@ -303,7 +303,7 @@ export default function ChatView() {
   const user = useAuthStore((s) => s.user);
   const {
     messages, currentThreadId, isStreaming, streamingContent, streamingThinking, threads,
-    loadMessages, setCurrentThread, createThread, addMessage,
+    loadMessages, subscribeMessages, setCurrentThread, createThread, addMessage,
     setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
   } = useThreadStore();
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
@@ -422,12 +422,13 @@ export default function ChatView() {
   }, [guardianMessages, guardianStreamingContent]);
 
   useEffect(() => {
-    if (threadId) {
-      setCurrentThread(threadId);
-      loadMessages(threadId);
-      loadArtifacts(threadId);
-    }
-  }, [threadId, loadMessages, loadArtifacts, setCurrentThread]);
+    if (!threadId) return;
+    setCurrentThread(threadId);
+    loadMessages(threadId);
+    loadArtifacts(threadId);
+    const unsub = subscribeMessages(threadId);
+    return unsub;
+  }, [threadId, loadMessages, loadArtifacts, setCurrentThread, subscribeMessages]);
 
   // Welcome back awareness + dynamic placeholder
   useEffect(() => {

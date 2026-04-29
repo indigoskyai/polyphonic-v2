@@ -45,6 +45,7 @@ interface ThreadState {
   loadThreads: () => Promise<void>;
   setCurrentThread: (id: string | null) => void;
   loadMessages: (threadId: string) => Promise<void>;
+  subscribeMessages: (threadId: string) => () => void;
   createThread: (userId: string, agentId?: string) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'>) => void;
   setStreaming: (s: boolean) => void;
@@ -83,6 +84,32 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       .or('agent.is.null,and(agent.neq.guardian,agent.neq.observer)')
       .order('created_at', { ascending: true });
     if (data) set({ messages: data as Message[] });
+  },
+
+  // Realtime subscribe for inserts on the current thread. Catches messages
+  // produced by background processes (subagent reports, scheduled-task
+  // results, future tool-led inserts) without forcing a thread reload.
+  // Skips guardian/observer rows to mirror loadMessages, and de-dupes
+  // against streaming inserts that the chat function already added.
+  subscribeMessages: (threadId) => {
+    const channel = supabase
+      .channel(`thread-messages-${threadId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${threadId}` },
+        (payload) => {
+          const row = payload.new as Message;
+          if (!row?.id) return;
+          if (row.agent === 'guardian' || row.agent === 'observer') return;
+          const existing = get().messages;
+          if (existing.some((m) => m.id === row.id)) return;
+          set({ messages: [...existing, row] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 
   createThread: async (userId, agentId = 'luca') => {
