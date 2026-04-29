@@ -36,8 +36,11 @@ const defaults: Settings = {
   show_timestamps: true,
   show_agent_colors: true,
   clockbar_visible: false,
-  // Multi-model defaults
-  multi_model_enabled: true,
+  // Multi-model defaults — ensemble is opt-in per Riley's preference; the
+  // single-Luca path with the L7 tool planner gives a coherent voice while
+  // the ensemble's three-voice synthesis adds latency and an editorialization
+  // risk on tool-heavy turns. Users can flip it back on in Settings.
+  multi_model_enabled: false,
   ensemble_models: [
     'anthropic/claude-opus-4-7',
     'openai/gpt-5.4',

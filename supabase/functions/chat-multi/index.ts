@@ -23,6 +23,7 @@ import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
+import { summarizeToolContext } from "../_shared/agents/tool-context.ts";
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -411,9 +412,11 @@ serve(async (req) => {
           variants.forEach((v, i) => {
             labelToModel[`Response ${labels[i]}`] = v.model;
           });
+          const toolContext = summarizeToolContext(toolMessages);
           const rankingPrompt = buildRankingPrompt(
             message,
             variants.map((v, i) => ({ label: labels[i], content: v.content })),
+            toolContext,
           );
 
           let aggregate: AggregateEntry[] = [];
@@ -466,11 +469,11 @@ serve(async (req) => {
           const synthesisMessages: Array<{ role: string; content: string }> = useChairman
             ? [
                 { role: "system", content: buildChairmanSystemPrompt(emotionalBlock, beliefsBlock) },
-                { role: "user", content: buildChairmanUserPrompt(message, variants, aggregate) },
+                { role: "user", content: buildChairmanUserPrompt(message, variants, aggregate, toolContext) },
               ]
             : [
                 { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
-                { role: "user", content: buildSynthesisUserPrompt(message, variants) },
+                { role: "user", content: buildSynthesisUserPrompt(message, variants, toolContext) },
               ];
 
           // Stream the synthesis
@@ -786,12 +789,17 @@ async function callModelNonStreaming(
 function buildSynthesisUserPrompt(
   userMessage: string,
   variants: Array<{ model: string; content: string }>,
+  toolContext = "",
 ): string {
-  const parts = [
+  const parts: string[] = [];
+  if (toolContext) {
+    parts.push(toolContext, "");
+  }
+  parts.push(
     `The user said: "${userMessage}"`,
     "",
     "Here are the three independent responses:",
-  ];
+  );
 
   for (const v of variants) {
     parts.push(`\n--- Response from ${v.model} ---`);
@@ -817,16 +825,19 @@ function makeLabels(n: number): string[] {
 function buildRankingPrompt(
   userMessage: string,
   labeledVariants: Array<{ label: string; content: string }>,
+  toolContext = "",
 ): string {
   const responsesText = labeledVariants
     .map((lv) => `Response ${lv.label}:\n${lv.content}`)
     .join("\n\n");
 
+  const toolBlock = toolContext ? `${toolContext}\n\n` : "";
+
   return `You are evaluating different responses to the following question:
 
 Question: ${userMessage}
 
-Here are the responses from different models (anonymized):
+${toolBlock}Here are the responses from different models (anonymized):
 
 ${responsesText}
 
@@ -920,6 +931,7 @@ function buildChairmanUserPrompt(
   userMessage: string,
   variants: Array<{ model: string; content: string }>,
   aggregate: AggregateEntry[],
+  toolContext = "",
 ): string {
   // Order variants by aggregate rank (best first); if a variant isn't in aggregate, append last.
   const rankByModel = new Map(aggregate.map((a) => [a.model, a.avg_rank]));
@@ -932,12 +944,14 @@ function buildChairmanUserPrompt(
   const favorite = ordered[0];
   const others = ordered.slice(1);
 
-  const parts = [
+  const parts: string[] = [];
+  if (toolContext) parts.push(toolContext, "");
+  parts.push(
     `The user said: "${userMessage}"`,
     "",
     `Council favorite (rank ${rankByModel.get(favorite.model)?.toFixed(1) ?? "—"}):`,
     favorite.content,
-  ];
+  );
 
   if (others.length > 0) {
     parts.push("", "Other voices:");
