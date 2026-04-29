@@ -17,6 +17,14 @@ import {
   type DialecticPatch,
   type DialecticRevision,
 } from "../_shared/mnemos/dialectic.ts";
+import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+
+// Threshold above which an out-of-session revision deserves a proactive
+// nudge (notable activity surface). Revisions below this still persist and
+// surface in-session via the chat function's prompt injection — this only
+// covers the "user isn't here, this thought wants to be remembered" case.
+const URGENT_REVISION_CONFIDENCE = 0.8;
+const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000;
 
 const DIALECTIC_MODEL = "google/gemini-2.5-flash";
 
@@ -141,17 +149,73 @@ serve(async (req) => {
     const patchCounts = await persistPatches(supabase, user.id, threadId, sourceMessageIds, result.patches);
     const revisionCount = await persistPendingRevisions(supabase, user.id, threadId, history, result.pending_revisions);
 
+    const urgentSurfaced = await maybeSurfaceOfflineRevision(
+      supabase,
+      supabaseUrl,
+      serviceKey,
+      user.id,
+      threadId,
+      lastUserMessage?.created_at ?? null,
+      result.pending_revisions,
+    );
+
     return json({
       ok: true,
       model: DIALECTIC_MODEL,
       patches: patchCounts,
       pending_revisions: revisionCount,
+      urgent_surface: urgentSurfaced,
     }, 200, corsHeaders);
   } catch (err) {
     console.error("mnemos-dialectic error:", err);
     return json({ error: "Internal error" }, 500, getCorsHeaders(req));
   }
 });
+
+async function maybeSurfaceOfflineRevision(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRole: string,
+  userId: string,
+  threadId: string,
+  lastUserMessageAt: string | null,
+  revisions: DialecticRevision[],
+): Promise<{ surfaced: boolean; reason?: string }> {
+  const urgent = revisions.filter((r) => (r.confidence ?? 0) >= URGENT_REVISION_CONFIDENCE);
+  if (urgent.length === 0) return { surfaced: false, reason: "no_urgent_revisions" };
+
+  const offlineFor = lastUserMessageAt
+    ? Date.now() - new Date(lastUserMessageAt).getTime()
+    : Infinity;
+  if (offlineFor < OFFLINE_THRESHOLD_MS) {
+    return { surfaced: false, reason: "user_active_in_session" };
+  }
+
+  const top = urgent[0];
+  const summary = `I've been thinking about something I said earlier. On reflection: ${top.what_to_say_now}`.slice(0, 240);
+  const rationale = `${urgent.length} high-confidence revision${urgent.length === 1 ? "" : "s"} landed while you were offline (>=${URGENT_REVISION_CONFIDENCE} confidence).`;
+
+  try {
+    const result = await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRole, {
+      userId,
+      source: "pending_revision_urgent",
+      severity: "notable",
+      title: "I've been reconsidering something",
+      summary,
+      rationale,
+      activityType: "pending_revision_urgent",
+      content: {
+        thread_id: threadId,
+        revisions_count: urgent.length,
+        sample_revision_type: top.revision_type,
+      },
+    });
+    return { surfaced: result.allowed, reason: result.reason };
+  } catch (err) {
+    console.warn("[mnemos-dialectic] urgent revision surface failed:", err);
+    return { surfaced: false, reason: "dispatch_error" };
+  }
+}
 
 async function loadRecentMemoryContext(supabase: any, userId: string, query: string): Promise<string> {
   if (!query.trim()) return "";
