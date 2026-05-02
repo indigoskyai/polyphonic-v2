@@ -1317,6 +1317,7 @@ export type Database = {
           created_at: string
           decay_rate: number
           dream_frequency: string
+          last_consolidated_at: string | null
           mnemos_enabled: boolean
           updated_at: string
           user_id: string
@@ -1326,6 +1327,7 @@ export type Database = {
           created_at?: string
           decay_rate?: number
           dream_frequency?: string
+          last_consolidated_at?: string | null
           mnemos_enabled?: boolean
           updated_at?: string
           user_id: string
@@ -1335,6 +1337,7 @@ export type Database = {
           created_at?: string
           decay_rate?: number
           dream_frequency?: string
+          last_consolidated_at?: string | null
           mnemos_enabled?: boolean
           updated_at?: string
           user_id?: string
