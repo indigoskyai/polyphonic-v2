@@ -50,6 +50,8 @@ export async function authenticateDeviceToken(
   return { device_id: device.id, user_id: device.user_id };
 }
 
+// CORS: openclaw endpoints are device-token authenticated and called by
+// external (non-browser) clients. Wildcard origin is intentional.
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
