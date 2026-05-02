@@ -177,3 +177,36 @@ Audited all 60 edge functions for in-code auth. Findings:
 4. Tiny admin "Background jobs" panel in Settings → Models.
 
 **Then Phase 4 — Data Integrity**: FK audits, indexes on hot paths, REPLICA IDENTITY FULL on realtime tables, pg_trgm extension move out of public.
+
+---
+
+## Phase 4 — Data Integrity  ✅ (2026-05-02)
+
+**Done — foreign-key sweep to `auth.users`**
+Added `ON DELETE CASCADE` FKs (using `NOT VALID` + `VALIDATE CONSTRAINT` for safety) on 32 tables that previously had a bare `user_id uuid` column with no referential integrity:
+`threads`, `messages`, `user_api_keys`, `user_settings`, `memory_settings`, `memories`, `memory_candidates`, `cognitive_state`, `observer_chat_messages`, `observer_notes`, `observer_logs`, `thought_stream`, `thought_initiations`, `emotional_history`, `emotional_state`, `daily_logs`, `daily_usage`, `idempotency_keys`, `dashboard_widgets`, `agent_config`, `agent_configs`, `agent_secrets`, `mcp_servers`, `memory_events`, `curiosity_questions`, `activity_events`, `entity_activity_log`, `checkpoints`, `chat_imports`, `profile_chats`, `profile_daily_pulse`, `psychological_profile`. Account deletion now cleanly cascades.
+
+**Done — hot-path indexes**
+- `idx_messages_thread_created (thread_id, created_at DESC)` — speeds up the primary chat-history fetch.
+- `idx_messages_user_created (user_id, created_at DESC)` — speeds up user-scoped feed queries.
+- (Pre-existing single-column `idx_messages_thread_id` and `idx_messages_created_at` retained for now; can be dropped in Phase 6 if confirmed redundant.)
+
+**Done — REPLICA IDENTITY FULL on realtime-published tables**
+Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`, `cognitive_state`, `memory_candidates`, `observer_chat_messages`, `observer_notes`, `subagent_tasks`, `thought_stream`). Updates and deletes now broadcast the full old row, so realtime subscribers see proper diffs. (`engrams` and `connections` were already FULL.)
+
+**Done — pg_trgm extension out of public**
+- Created `extensions` schema with USAGE granted to `postgres`/`authenticated`/`service_role`/`anon`.
+- `ALTER EXTENSION pg_trgm SET SCHEMA extensions` — clears the long-standing "extension in public" linter warning.
+- Updated `match_engrams` and `match_memories` `search_path` to `public, extensions` so similarity-based RPCs keep working.
+
+**Found**
+- 🟢 No orphan `user_id` rows existed prior to FK validation (validate step succeeded for every table).
+- 🟢 8 SECURITY DEFINER linter warnings persist — pre-existing/accepted set documented in Phase 2 (each is `auth.uid()`-scoped internally).
+- 🟢 1 RLS-no-policy info on `idempotency_keys` — intentional (service-role-only; no policies needed).
+- 🟡 Pre-existing single-column message indexes (`idx_messages_thread_id`, `idx_messages_created_at`) are now redundant with the new composites. Defer drop to Phase 6 (perf) so we can EXPLAIN-verify before removal.
+
+**Next (Phase 5 — Mnemos End-to-End)**
+1. Verify extraction → decay (respects `decay_rate`) end-to-end on a fresh user.
+2. Verify consolidation respects `dream_frequency` (no double-runs within window).
+3. Verify dialectic produces reasonable `belief.revision_history` entries.
+4. Smoke-test the lifecycle crons against `cron_health` after 24h of natural traffic.
