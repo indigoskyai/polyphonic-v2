@@ -161,6 +161,7 @@ serve(async (req) => {
       result.pending_revisions,
     );
 
+    await recordCronSuccess("mnemos-dialectic", Date.now() - __jobStart);
     return json({
       ok: true,
       model: DIALECTIC_MODEL,
@@ -169,8 +170,9 @@ serve(async (req) => {
       urgent_surface: urgentSurfaced,
     }, 200, corsHeaders);
   } catch (err) {
+    await recordCronFailure("mnemos-dialectic", Date.now() - __jobStart, err);
     console.error("mnemos-dialectic error:", err);
-    return json({ error: "Internal error" }, 500, getCorsHeaders(req));
+    return json({ error: "Internal error", code: "internal_error" }, 500, getCorsHeaders(req));
   }
 });
 
