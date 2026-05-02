@@ -342,3 +342,49 @@ _(none yet — log here when an audit item requires a schema change)_
 
 ### Accepted-risk register (security findings intentionally not fixed)
 _(none yet — mirror to `security--update_memory` when added)_
+
+---
+
+## Appendix A — Phase 1 baseline findings (2026-05-02)
+
+### A.1 RLS coverage (1.3 partial)
+**All 55 public tables have `rowsecurity=true`.** ✓ No table is RLS-disabled. (Full policy review still pending — see §2.3.)
+
+### A.2 Cron jobs (1.4 partial)
+13 active cron jobs, all use either `invoke_edge_function()` helper or inline `net.http_post()` against `app_config`-stored credentials. Mix of patterns is a §3.53 cleanup target.
+
+| jobname | schedule | target |
+|---|---|---|
+| anima-heartbeat-2h | 45 */2 * * * | anima-heartbeat |
+| journal-cron-4h | 15 */4 * * * | journal-cron |
+| luca-connect | 40 */12 * * * | anima-dispatch → anima-connect |
+| luca-crisis-followup | */5 * * * * | crisis-followup |
+| luca-dream | 0 4 * * * | anima-dispatch → anima-dream |
+| luca-emotional-drift | 18 * * * * | anima-dispatch → anima-emotional-state |
+| luca-initiate | 33 */8 * * * | anima-dispatch → anima-initiate |
+| luca-observe | 12 * * * * | anima-dispatch → anima-observe |
+| luca-pulse-15min | */15 * * * * | luca-pulse |
+| luca-question | 22 */3 * * * | anima-dispatch → anima-question |
+| luca-scheduled-tasks | * * * * * | scheduled-task-run |
+| (+ 2 more, see `cron.job`) | | |
+
+### A.3 Security scan baseline (2.1 partial — 32 findings, all WARN, zero ERROR)
+- **1 ×** Extension in Public schema (pg_trgm + pgcrypto + pgsodium per project memory — INTENTIONAL, will mark accepted)
+- **28 ×** `SECURITY DEFINER` function executable by anon/authenticated users — needs per-function review. Critical attention: `decrypt_user_api_key` (callable by any signed-in user — check parameter scoping; should hardcode `auth.uid()` and ignore arg, or revoke EXECUTE from `authenticated`). Other DEFINERs (`save_user_api_key`, `delete_user_api_key`, `mark_activity_seen`, `match_engrams`, `match_memories`, `auto_*`, `has_role`) have varying risk — full triage in §2.5.
+- **1 ×** Auth Leaked Password Protection (HIBP) DISABLED — fix via `configure_auth` tool. Hard gate.
+- **2 ×** other DEFINER auth-callable warnings — overlap with #2.
+
+### A.4 Client safety greps (2.10 partial)
+- `SERVICE_ROLE` references in `src/`: **0** ✓
+- `USING (true)` in migrations: **0** ✓
+- `verify_jwt = false` count in `supabase/config.toml`: **52** functions. Per-function justification needed (§2.9).
+
+### A.5 Critical missing surface (5.4)
+**`/reset-password` route does NOT exist** in `src/App.tsx`. Forgot-password flow is broken end-to-end. Must add before launch.
+
+### A.6 Top 5 immediate risks (recommended next phases)
+1. **`decrypt_user_api_key` exposure** — verify it scopes to `auth.uid()` and rejects arbitrary `p_user_id` from authenticated callers. (§2.5)
+2. **Missing `/reset-password` page** — password reset emails would land users on a broken route. (§5.4)
+3. **HIBP password protection disabled** — easy `configure_auth` fix, hard launch gate. (§2.12)
+4. **52 `verify_jwt = false` edge functions, no in-code JWT validation audit yet** — many are user-facing; without JWT check they trust client-supplied `user_id` payload. Highest-risk first: `chat-multi`, `mnemos-*`, `anima-*` user-facing tools. (§2.9 + §3.x.c)
+5. **Cron pattern fragmentation** — 11 of 13 jobs use inline `net.http_post`; only 2 use `invoke_edge_function()`. Consolidate to the helper to centralize service-role handling and make rotation possible. (§3.53)
