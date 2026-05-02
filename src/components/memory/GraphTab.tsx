@@ -133,6 +133,7 @@ export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
+  const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -143,6 +144,18 @@ export default function GraphTab() {
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [hasSettled, setHasSettled] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
+  // Inject / remove mock data when demo mode toggles
+  useEffect(() => {
+    if (demoMode) {
+      const uid = userId ?? 'demo-user';
+      const { engrams: mockE, connections: mockC } = generateMockGraph(uid, 140, 7);
+      useMemoryStore.setState({ engrams: mockE, connections: mockC });
+    } else if (userId) {
+      loadAll(userId);
+    }
+  }, [demoMode, userId, loadAll]);
 
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<GraphEdge[]>([]);
