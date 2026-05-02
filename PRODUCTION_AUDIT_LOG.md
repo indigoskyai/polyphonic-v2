@@ -116,3 +116,28 @@ Audited all 60 edge functions for in-code auth. Findings:
 3. Phase 3: backend reliability — error-handling wrappers, idempotency keys on chat, cron health surface.
 
 
+
+---
+
+## Phase 2.5 — Edge-Perimeter Hardening  ✅ (2026-05-02)
+
+**Done — CORS allowlist tightening**
+- `_shared/cors.ts`: localhost regex now gated behind `IS_PROD` check (`DENO_ENV`/`ENVIRONMENT` env). In production, only `polyphonic.chat`, `www.polyphonic.chat`, and the `*.lovableproject.com` preview origin are reflected; localhost is dropped.
+- Migrated 5 browser-facing functions off hardcoded `Access-Control-Allow-Origin: *` onto the shared allowlist:
+  - `anima-social-x`, `anima-social-moltbook` (use `getCorsHeaders(req)` per request).
+  - `checkpoint-restore`, `checkpoint-diff`, `agent-config-save` (module `let corsHeaders` reassigned per request — keeps existing `jsonResponse` helper signature intact).
+- Documented + retained wildcard CORS on `openclaw-pair` and `_shared/openclaw/auth.ts` — these are device-token authenticated endpoints called from non-browser clients; CORS is not the security boundary there.
+- Redeployed all 5 changed functions.
+
+**Done — Auth surface hardening**
+- `LoginPage.handleForgot`: no longer surfaces `resetPasswordForEmail` errors to UI (was leaking "user not found" → email enumeration). Now always shows the neutral "If that email exists…" message; errors logged to console only.
+
+**Found**
+- 🟡 Daily-quota logic (`generate-image` enforces 25/day; `chat`/`chat-multi` do not appear to enforce a daily cap at all). Inconsistent. Per `no-backend-rate-limiting` directive we will NOT add true rate limiting, but the free-tier user-message cap should be unified. Tracked for Phase 3.
+- 🟢 Audited remaining `Access-Control-Allow-Origin: *` occurrences — only openclaw remains (intentional, documented inline).
+
+**Next (Phase 3 — Backend Reliability)**
+1. Standardize error response shape `{ error: string, code?: string }` across edge functions.
+2. Surface cron health (last-success timestamp per job).
+3. Add idempotency keys to `chat`/`chat-multi` to dedupe accidental double-submits.
+4. Unify free-tier quota helper (`_shared/dailyQuota.ts`).
