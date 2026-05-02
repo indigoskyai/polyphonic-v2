@@ -19,6 +19,7 @@ import { useMemoryStore, type Engram, type Connection } from '@/stores/memorySto
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryRealtime } from '@/hooks/useMemoryRealtime';
+import { generateMockGraph } from '@/lib/mockGraphData';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
 const TYPE_TINTS: Record<string, [number, number, number]> = {
@@ -132,6 +133,7 @@ export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
+  const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -142,6 +144,18 @@ export default function GraphTab() {
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [hasSettled, setHasSettled] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
+  // Inject / remove mock data when demo mode toggles
+  useEffect(() => {
+    if (demoMode) {
+      const uid = userId ?? 'demo-user';
+      const { engrams: mockE, connections: mockC } = generateMockGraph(uid, 140, 7);
+      useMemoryStore.setState({ engrams: mockE, connections: mockC });
+    } else if (userId) {
+      loadAll(userId);
+    }
+  }, [demoMode, userId, loadAll]);
 
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<GraphEdge[]>([]);
@@ -696,6 +710,26 @@ export default function GraphTab() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setDemoMode((v) => !v)}
+              title="Toggle synthetic preview data (not saved)"
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: demoMode ? 'var(--ink)' : 'var(--text-soft)',
+                letterSpacing: 'var(--track-folio)',
+                textTransform: 'uppercase',
+                padding: '6px 12px',
+                marginLeft: 8,
+                border: '1px solid var(--hairline)',
+                borderRadius: 999,
+                background: demoMode ? 'var(--surface-2, rgba(255,255,255,0.04))' : 'transparent',
+                cursor: 'pointer',
+                transition: 'color 200ms var(--ease-out, ease-out), background 200ms var(--ease-out, ease-out)',
+              }}
+            >
+              {demoMode ? 'Demo · On' : 'Demo'}
+            </button>
           </div>
         </div>
 
