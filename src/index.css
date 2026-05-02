@@ -2124,6 +2124,137 @@ html {
 .thread-info-btn:hover { color: var(--text-primary); background: var(--overlay-hover); }
 
 /* ======================================================================
+   DRAWER — Title section, eyebrow, status pills, kv-list
+   (shared by ThreadDetailDrawer + MemoryDetailDrawer per uploaded artifact)
+   ====================================================================== */
+
+.drawer-title-section {
+  padding: 24px 24px 22px;
+  position: relative;
+  flex-shrink: 0;
+}
+.drawer-title-section::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 24px; right: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.drawer-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.drawer-eyebrow-num { color: var(--text-soft); font-weight: 450; }
+.drawer-eyebrow .sep { color: var(--text-whisper); }
+
+.drawer-title-section .drawer-title {
+  font-size: 22px;
+  font-weight: 450;
+  color: var(--text-primary);
+  letter-spacing: -0.008em;
+  line-height: 1.25;
+  margin: 0 0 14px;
+  font-feature-settings: "kern" 1, "liga" 1;
+  /* Clamp very long titles to keep header proportional */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.drawer-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: var(--track-body);
+  text-transform: lowercase;
+}
+.status-pill.primary {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-body);
+}
+.status-pill.primary.active {
+  background: rgba(74, 222, 128, 0.06);
+  border-color: rgba(74, 222, 128, 0.18);
+  color: rgba(183, 236, 204, 0.88);
+}
+.status-pill.secondary {
+  background: transparent;
+  border: 1px solid var(--border-faint);
+  color: var(--text-soft);
+}
+.status-pill .pill-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text-soft);
+}
+.status-pill.primary.active .pill-dot {
+  background: var(--green-accent);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+}
+
+/* KV-list — richer key/value pattern matching the thread-detail artifact */
+.kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kv-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 14px;
+  align-items: baseline;
+  line-height: 1.4;
+}
+.kv-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-whisper);
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+  font-weight: 400;
+}
+.kv-value {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-body);
+  letter-spacing: var(--track-body);
+  font-variant-numeric: tabular-nums;
+}
+.kv-value.ink { color: var(--text-primary); }
+.kv-value-rel {
+  color: var(--text-ghost);
+  font-size: 12px;
+  margin-left: 6px;
+}
+.kv-value-rel::before { content: '· '; color: var(--text-whisper); }
+
+/* Section label count — mono, soft, sits inline with the label */
+.drawer-section-label-text { color: var(--text-whisper); }
+.drawer-section-label-count { color: var(--text-soft); margin-left: 4px; }
+
+
+
+/* ======================================================================
    PHASE 08 — MEMORY DIGEST (candidate queue + Browse/Digest toggle)
    ====================================================================== */
 
