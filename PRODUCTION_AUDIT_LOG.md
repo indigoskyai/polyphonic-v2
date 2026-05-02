@@ -65,3 +65,20 @@ After **every phase** (or meaningful sub-step), append a new dated entry below d
 - …
 
 -->
+
+## Phase 2 — Security Hardening (initial pass)  ✅ (2026-05-02)
+
+**Done**
+- Hardened `decrypt_user_api_key`: raises unless caller is `service_role` or `auth.uid() = p_user_id`. Revoked PUBLIC/anon EXECUTE; granted only to `authenticated` and `service_role`. Background edge functions (cron, service-role JWT) keep working unchanged.
+- Added `/reset-password` public route + `ResetPasswordPage` (handles `PASSWORD_RECOVERY` event, validates length+match, calls `auth.updateUser`).
+- Wired "Forgot password?" toggle on `LoginPage` → `resetPasswordForEmail` with `redirectTo=/reset-password`.
+- Enabled HIBP leaked-password protection via `configure_auth` (signup + password change now reject pwned passwords).
+
+**Found**
+- 🟡 Linter still flags ~28 other SECURITY DEFINER fns as anon-executable (pre-existing, not introduced by this phase). Ticketed for Phase 2 follow-up: audit each, REVOKE from anon where not needed.
+- 🟡 `extension in public` warning persists (pg_trgm). Low risk; defer.
+
+**Next (Phase 2 continuation)**
+1. Sweep remaining SECURITY DEFINER fns; REVOKE from anon where not intentionally public.
+2. Per-edge-function JWT validation audit on the 52 `verify_jwt = false` functions — confirm each either calls `getClaims()` or is intentionally public (webhooks/cron).
+3. CORS allowlist review (`_shared/cors.ts`) — confirm prod origins only.
