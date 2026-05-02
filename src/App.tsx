@@ -12,6 +12,7 @@ import ChatView from "./pages/ChatView";
 import DashboardView from "./pages/DashboardView";
 import MemoryView from "./pages/MemoryView";
 import MindView from "./pages/MindView";
+import JournalView from "./pages/JournalView";
 import ImportView from "./pages/ImportView";
 import ProfileView from "./pages/ProfileView";
 import ProfileIdentityView from "./pages/ProfileIdentityView";
@@ -214,6 +215,7 @@ const App = () => (
             <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
             <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
             <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
+            <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
             <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
             <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />

@@ -6,6 +6,7 @@ import SidebarMind from './sidebar/SidebarMind';
 import SidebarProfile from './sidebar/SidebarProfile';
 import SidebarImport from './sidebar/SidebarImport';
 import SidebarSettings from './sidebar/SidebarSettings';
+import SidebarJournal from './sidebar/SidebarJournal';
 
 export default function Sidebar() {
   const visible = useSidebarStore((s) => s.visible);
@@ -14,6 +15,7 @@ export default function Sidebar() {
   const Content =
     path.startsWith('/memory') ? SidebarMemory
     : path.startsWith('/mind') ? SidebarMind
+    : path.startsWith('/journal') ? SidebarJournal
     : path.startsWith('/profile') ? SidebarProfile
     : path.startsWith('/import') ? SidebarImport
     : path.startsWith('/settings') ? SidebarSettings
