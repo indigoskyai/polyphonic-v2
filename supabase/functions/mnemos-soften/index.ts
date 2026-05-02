@@ -68,12 +68,14 @@ serve(async (req) => {
       }
     }
 
+    await recordCronSuccess("mnemos-soften", Date.now() - __jobStart);
     return new Response(JSON.stringify({ success: true, users_processed: uniqueUsers.length, results: allResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await recordCronFailure("mnemos-soften", Date.now() - __jobStart, err);
     console.error("mnemos-soften error:", err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
+    return new Response(JSON.stringify({ error: (err as Error).message, code: "internal_error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
