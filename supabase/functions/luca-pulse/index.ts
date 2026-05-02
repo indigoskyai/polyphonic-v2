@@ -182,13 +182,15 @@ serve(async (req) => {
       }
     }
 
+    await recordCronSuccess("luca-pulse", Date.now() - __jobStart);
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await recordCronFailure("luca-pulse", Date.now() - __jobStart, err);
     console.error("luca-pulse error:", err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "unknown" }),
+      JSON.stringify({ error: err instanceof Error ? err.message : "unknown", code: "internal_error" }),
       { status: 500, headers: { ...cors, "Content-Type": "application/json" } },
     );
   }
