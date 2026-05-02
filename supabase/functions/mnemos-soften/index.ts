@@ -38,6 +38,7 @@ serve(async (req) => {
 
     if (userId) {
       const results = await runSofteningCycle(supabase, userId, apiKey);
+      await recordCronSuccess("mnemos-soften", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, softened: results.length, results }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
