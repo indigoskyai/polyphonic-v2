@@ -89,6 +89,10 @@ interface MemoryState {
   loadBeliefs: (userId: string) => Promise<void>;
   loadMemories: (userId: string) => Promise<void>;
   loadAll: (userId: string) => Promise<void>;
+  upsertEngram: (e: Engram) => void;
+  removeEngram: (id: string) => void;
+  upsertConnection: (c: Connection) => void;
+  removeConnection: (id: string) => void;
 }
 
 export const useMemoryStore = create<MemoryState>((set, get) => ({
@@ -152,4 +156,27 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     ]);
     set({ loading: false });
   },
+
+  upsertEngram: (e) => {
+    const list = get().engrams;
+    const i = list.findIndex((x) => x.id === e.id);
+    if (i === -1) set({ engrams: [e, ...list] });
+    else {
+      const next = list.slice();
+      next[i] = { ...next[i], ...e };
+      set({ engrams: next });
+    }
+  },
+  removeEngram: (id) => set({ engrams: get().engrams.filter((e) => e.id !== id) }),
+  upsertConnection: (c) => {
+    const list = get().connections;
+    const i = list.findIndex((x) => x.id === c.id);
+    if (i === -1) set({ connections: [c, ...list] });
+    else {
+      const next = list.slice();
+      next[i] = { ...next[i], ...c };
+      set({ connections: next });
+    }
+  },
+  removeConnection: (id) => set({ connections: get().connections.filter((c) => c.id !== id) }),
 }));
