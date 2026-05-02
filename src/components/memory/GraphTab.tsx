@@ -322,40 +322,73 @@ export default function GraphTab() {
         </div>
       </div>
 
-      {/* Hero */}
+      {/* Hero — matches mockup: # 02 · LIVING MEMORY SUBSTRATE · N ACTIVE / "Mnemos" */}
       <div style={{ padding: '0 36px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-        <div className="s-hero" style={{ paddingBottom: 14 }}>
+        <div className="s-hero" style={{ paddingBottom: 18 }}>
           <div className="s-hero-eye">
-            <span className="num"># 04</span>
+            <span className="num"># 02</span>
             <span>·</span>
-            <span className="v">Mnemos</span>
+            <span className="v">Living Memory Substrate</span>
             <span>·</span>
-            <span className="stream">CONNECTION GRAPH</span>
+            <span className="stream">{stats.nodes} active</span>
           </div>
-          <h1 className="s-hero-title">Substrate</h1>
-          <p className="s-hero-sub">
-            {stats.nodes} engrams · {stats.edges} connections · density {stats.density.toFixed(3)}.
-            Drag to pan, scroll to zoom, click a node to inspect.
-          </p>
+          <h1 className="s-hero-title">Mnemos</h1>
         </div>
       </div>
 
-      {/* Canvas surface */}
+      {/* Canvas surface — flush, no border. In-canvas eyebrow row. */}
       <div
         ref={containerRef}
         style={{
           flex: 1, position: 'relative', minHeight: 0,
-          margin: '0 36px 36px',
+          margin: '0 36px 24px',
           maxWidth: 'calc(1280px - 72px)',
           width: 'auto',
           alignSelf: 'center',
           marginLeft: 'auto', marginRight: 'auto',
-          border: '1px solid var(--hairline)',
-          borderRadius: 10,
+          borderTop: '1px solid var(--hairline)',
           overflow: 'hidden',
-          background: 'rgba(255, 255, 255, 0.006)',
         }}
       >
+        {/* In-canvas eyebrow: MNEMOS GRAPH ··· ALL */}
+        <div
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 4px',
+            zIndex: 5,
+            pointerEvents: 'none',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10,
+              color: 'var(--text-whisper)',
+              letterSpacing: 'var(--track-folio)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Mnemos Graph
+          </span>
+          <button
+            type="button"
+            style={{
+              pointerEvents: 'auto',
+              fontFamily: 'var(--font-mono)', fontSize: 10,
+              color: 'var(--ink, var(--text-primary))',
+              letterSpacing: 'var(--track-folio)',
+              textTransform: 'uppercase',
+              padding: '6px 14px',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          >
+            All
+          </button>
+        </div>
+
         {stats.nodes === 0 ? (
           <div className="s-empty" style={{ height: '100%' }}>
             No engrams to visualize. Memories will form connections after conversations.
@@ -419,49 +452,23 @@ export default function GraphTab() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Legend (bottom-left) */}
-        <div style={{
-          position: 'absolute', bottom: 14, left: 14,
-          display: 'flex', gap: 16, alignItems: 'center',
-          padding: '8px 12px',
-          background: 'var(--surface-1)',
-          border: '1px solid var(--hairline)',
-          borderRadius: 999,
-        }}>
-          {Object.entries(TYPE_TINTS).map(([type, color]) => (
-            <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'transparent', border: `1px solid ${color}`,
-              }} />
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9,
-                color: 'var(--text-soft)', letterSpacing: 'var(--track-folio)',
-                textTransform: 'uppercase',
-              }}>
-                {type} <span style={{ color: 'var(--text-whisper)' }}>{stats.byType[type]}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Stats (top-right) */}
-        <div style={{
-          position: 'absolute', top: 14, right: 14,
-          display: 'flex', gap: 14,
-          padding: '8px 14px',
-          background: 'var(--surface-1)',
-          border: '1px solid var(--hairline)',
-          borderRadius: 999,
+      {/* Footer eyebrow — N engrams · N connections (matches mockup baseline) */}
+      <div
+        style={{
+          padding: '0 36px 22px',
+          maxWidth: 1280,
+          margin: '0 auto',
+          width: '100%',
           fontFamily: 'var(--font-mono)', fontSize: 10,
-          color: 'var(--text-soft)', letterSpacing: 'var(--track-tight)',
+          color: 'var(--text-whisper)',
+          letterSpacing: 'var(--track-folio)',
+          textTransform: 'uppercase',
           fontVariantNumeric: 'tabular-nums',
-        }}>
-          <span><span style={{ color: 'var(--text-whisper)' }}>nodes</span> {stats.nodes}</span>
-          <span><span style={{ color: 'var(--text-whisper)' }}>edges</span> {stats.edges}</span>
-          <span><span style={{ color: 'var(--text-whisper)' }}>density</span> {stats.density.toFixed(3)}</span>
-        </div>
+        }}
+      >
+        {stats.nodes} engrams · {stats.edges} connections
       </div>
     </div>
   );
