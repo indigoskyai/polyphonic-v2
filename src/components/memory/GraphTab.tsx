@@ -710,6 +710,26 @@ export default function GraphTab() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setDemoMode((v) => !v)}
+              title="Toggle synthetic preview data (not saved)"
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: demoMode ? 'var(--ink)' : 'var(--text-soft)',
+                letterSpacing: 'var(--track-folio)',
+                textTransform: 'uppercase',
+                padding: '6px 12px',
+                marginLeft: 8,
+                border: '1px solid var(--hairline)',
+                borderRadius: 999,
+                background: demoMode ? 'var(--surface-2, rgba(255,255,255,0.04))' : 'transparent',
+                cursor: 'pointer',
+                transition: 'color 200ms var(--ease-out, ease-out), background 200ms var(--ease-out, ease-out)',
+              }}
+            >
+              {demoMode ? 'Demo · On' : 'Demo'}
+            </button>
           </div>
         </div>
 
