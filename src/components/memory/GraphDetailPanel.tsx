@@ -1,82 +1,70 @@
 import { useMemo } from 'react';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
 
-const TYPE_COLORS: Record<string, string> = {
-  episodic: '#5b8aad',
-  semantic: '#c9a87c',
-  procedural: '#8ca89c',
-  belief: '#a88cc9',
-};
+function shortId(id: string) {
+  return id.replace(/-/g, '').slice(0, 6).toUpperCase();
+}
 
 function formatCreated(iso: string) {
   try {
     const d = new Date(iso);
-    return `created ${d.toLocaleString(undefined, { month: 'short', day: 'numeric' })}`;
+    const date = d.toLocaleString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${date} · ${time}`;
   } catch {
     return '';
   }
 }
 
-function TypeChip({ type }: { type: string }) {
-  const color = TYPE_COLORS[type] || 'var(--text-ghost)';
+function Bar({ label, value }: { label: string; value: number }) {
+  const pct = Math.max(0, Math.min(1, value)) * 100;
   return (
-    <span
-      style={{
-        fontSize: 9,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.10em',
-        padding: '2px 7px',
-        borderRadius: 3,
-        color,
-        border: `1px solid ${color}40`,
-        background: `${color}08`,
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      {type}
-    </span>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 9,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        color: 'var(--text-ghost)',
-        marginBottom: 8,
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      {children}
+    <div className="s-bar">
+      <span className="s-bar-label">{label}</span>
+      <div className="s-bar-track">
+        <div className="s-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="s-bar-val">{value.toFixed(2)}</span>
     </div>
   );
 }
 
-function KVRow({ k, v, mono = true }: { k: string; v: string | number; mono?: boolean }) {
+function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div
       className="flex items-center justify-between"
-      style={{
-        fontSize: 11,
-        padding: '3px 0',
-        gap: 12,
-      }}
+      style={{ padding: '6px 0', borderBottom: '1px solid var(--hairline)' }}
     >
-      <span style={{ color: 'var(--text-ghost)', textTransform: 'lowercase' }}>{k}</span>
       <span
         style={{
-          color: 'var(--text-secondary)',
-          fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-folio)',
+          textTransform: 'uppercase',
+          color: 'var(--text-whisper)',
+        }}
+      >
+        {k}
+      </span>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--text-soft)',
           fontVariantNumeric: 'tabular-nums',
         }}
       >
         {v}
       </span>
+    </div>
+  );
+}
+
+function PanelEye({ left, right }: { left: string; right?: string }) {
+  return (
+    <div className="s-panel-eye" style={{ marginBottom: 10 }}>
+      <span>{left}</span>
+      {right && <span className="right">{right}</span>}
     </div>
   );
 }
@@ -99,7 +87,6 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
     return engrams.filter((e) => ids.has(e.id));
   }, [engram.id, connections, engrams]);
 
-  // Pull encoding/source from source_context if available
   const ctx = (engram.source_context || {}) as Record<string, any>;
   const encodingDepth = ctx.encoding_depth ?? ctx.depth ?? null;
   const attention = ctx.attention ?? null;
@@ -107,71 +94,98 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
   const sourceConfidence = ctx.confidence ?? null;
 
   return (
-    <div
+    <aside
       style={{
-        width: 360,
-        borderLeft: '1px solid var(--border-subtle)',
-        background: 'var(--bg-elevated)',
+        width: 380,
+        flexShrink: 0,
+        borderLeft: '1px solid var(--hairline)',
+        background: 'var(--bg-surface, var(--bg-elevated))',
         overflow: 'auto',
-        animation: 'viewFadeIn 0.2s var(--ease-out) both',
         display: 'flex',
         flexDirection: 'column',
+        animation: 'viewFadeIn 0.2s var(--ease-out) both',
       }}
     >
-      {/* Header */}
+      {/* Folio-style header */}
       <div
-        className="flex items-start justify-between"
-        style={{ padding: '16px 18px 12px', borderBottom: '1px solid var(--border-subtle)' }}
+        style={{
+          padding: '14px 22px',
+          borderBottom: '1px solid var(--hairline)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-folio)',
+          textTransform: 'uppercase',
+          color: 'var(--text-whisper)',
+        }}
       >
-        <div className="flex flex-col gap-1.5">
-          <TypeChip type={engram.engram_type} />
-          <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
-            {formatCreated(engram.created_at)}
-          </span>
-        </div>
+        <span>ENGRAM · {shortId(engram.id)}</span>
         <button
           onClick={onClose}
           aria-label="Close detail"
           style={{
             background: 'none',
             border: 'none',
-            color: 'var(--text-ghost)',
+            color: 'var(--text-soft)',
             cursor: 'pointer',
-            fontSize: 16,
+            fontSize: 14,
             lineHeight: 1,
-            padding: 4,
+            padding: 2,
+            letterSpacing: 0,
           }}
         >
           ×
         </button>
       </div>
 
-      {/* Content */}
-      <div style={{ padding: '16px 18px' }}>
+      {/* Hero — type + timestamp + content */}
+      <div style={{ padding: '22px 22px 20px' }}>
+        <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
+          <span className="s-type-chip" data-state={engram.state}>
+            {engram.engram_type}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              letterSpacing: 'var(--track-folio)',
+              textTransform: 'uppercase',
+              color: 'var(--text-whisper)',
+            }}
+          >
+            {formatCreated(engram.created_at)}
+          </span>
+        </div>
+
         <div
           style={{
-            fontSize: 13,
-            lineHeight: 1.6,
-            color: 'var(--text-body)',
             fontFamily: 'var(--font-sans)',
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: 'var(--ink)',
+            letterSpacing: 'var(--track-tight)',
           }}
         >
           {engram.content}
         </div>
       </div>
 
-      {/* Metrics */}
-      <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
-        <SectionLabel>Metrics</SectionLabel>
-        <KVRow k="strength" v={engram.strength.toFixed(2)} />
-        <KVRow k="stability" v={engram.stability.toFixed(2)} />
-        <KVRow k="accessibility" v={engram.accessibility.toFixed(2)} />
+      {/* Metrics — three-bar ladder matching engram cards */}
+      <div style={{ padding: '18px 22px', borderTop: '1px solid var(--hairline)' }}>
+        <PanelEye left="// METRICS" right={`${engram.access_count}× accessed`} />
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Bar label="STR" value={engram.strength} />
+          <Bar label="STB" value={engram.stability} />
+          <Bar label="ACC" value={engram.accessibility} />
+        </div>
       </div>
 
       {/* Encoding */}
-      <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
-        <SectionLabel>Encoding</SectionLabel>
-        <KVRow
+      <div style={{ padding: '18px 22px', borderTop: '1px solid var(--hairline)' }}>
+        <PanelEye left="// ENCODING" />
+        <KV
           k="depth"
           v={
             encodingDepth != null
@@ -184,38 +198,29 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
               ? 'moderate'
               : 'shallow'
           }
-          mono={false}
         />
-        <KVRow k="surprise" v={engram.surprise_score.toFixed(2)} />
-        <KVRow k="attention" v={attention != null ? Number(attention).toFixed(2) : engram.accessibility.toFixed(2)} />
+        <KV k="surprise" v={engram.surprise_score.toFixed(2)} />
+        <KV
+          k="attention"
+          v={attention != null ? Number(attention).toFixed(2) : engram.accessibility.toFixed(2)}
+        />
       </div>
 
       {/* Source */}
-      <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
-        <SectionLabel>Source</SectionLabel>
-        <KVRow k="type" v={String(sourceType)} mono={false} />
-        {sourceConfidence != null && <KVRow k="confidence" v={Number(sourceConfidence).toFixed(2)} />}
-        <KVRow k="state" v={engram.state} mono={false} />
-        <KVRow k="accessed" v={`${engram.access_count}×`} />
+      <div style={{ padding: '18px 22px', borderTop: '1px solid var(--hairline)' }}>
+        <PanelEye left="// SOURCE" />
+        <KV k="type" v={String(sourceType)} />
+        {sourceConfidence != null && <KV k="confidence" v={Number(sourceConfidence).toFixed(2)} />}
+        <KV k="state" v={engram.state} />
       </div>
 
       {/* Tags */}
       {engram.tags && engram.tags.length > 0 && (
-        <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
-          <SectionLabel>Tags</SectionLabel>
-          <div className="flex flex-wrap gap-1">
+        <div style={{ padding: '18px 22px', borderTop: '1px solid var(--hairline)' }}>
+          <PanelEye left="// TAGS" right={`${engram.tags.length}`} />
+          <div className="flex flex-wrap gap-1.5">
             {engram.tags.map((t) => (
-              <span
-                key={t}
-                style={{
-                  fontSize: 9,
-                  padding: '2px 6px',
-                  borderRadius: 3,
-                  background: 'var(--bg-deep)',
-                  color: 'var(--text-ghost)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
+              <span key={t} className="s-type-chip">
                 {t}
               </span>
             ))}
@@ -224,39 +229,47 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
       )}
 
       {/* Connections */}
-      <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
-        <SectionLabel>
-          Connections ({connectedEngrams.length})
-        </SectionLabel>
+      <div style={{ padding: '18px 22px', borderTop: '1px solid var(--hairline)' }}>
+        <PanelEye left="// CONNECTIONS" right={`${connectedEngrams.length}`} />
         {connectedEngrams.length === 0 ? (
-          <div style={{ fontSize: 11, color: 'var(--text-whisper)' }}>No connections.</div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-whisper)',
+              padding: '8px 0',
+            }}
+          >
+            No outgoing or incoming links.
+          </div>
         ) : (
-          <div className="flex flex-col" style={{ gap: 1 }}>
+          <div className="flex flex-col">
             {connectedEngrams.map((e) => (
               <button
                 key={e.id}
                 onClick={() => onSelectEngram(e)}
-                className="text-left"
+                className="s-engram text-left"
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  borderTop: '1px solid var(--border-faint)',
-                  padding: '10px 0',
+                  borderTop: '1px solid var(--hairline)',
+                  padding: '12px 0',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 6,
+                  gap: 8,
                 }}
-                onMouseEnter={(ev) => (ev.currentTarget.style.background = 'var(--overlay-hover)')}
-                onMouseLeave={(ev) => (ev.currentTarget.style.background = 'transparent')}
               >
                 <div className="flex items-center justify-between">
-                  <TypeChip type={e.engram_type} />
+                  <span className="s-type-chip" data-state={e.state}>
+                    {e.engram_type}
+                  </span>
                   <span
                     style={{
-                      fontSize: 9,
-                      color: 'var(--text-whisper)',
                       fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--text-whisper)',
+                      fontVariantNumeric: 'tabular-nums',
                     }}
                   >
                     {e.strength.toFixed(2)}
@@ -264,9 +277,11 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
                 </div>
                 <div
                   style={{
-                    fontSize: 12,
-                    lineHeight: 1.45,
-                    color: 'var(--text-body)',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 12.5,
+                    lineHeight: 1.5,
+                    color: 'var(--text-soft)',
+                    letterSpacing: 'var(--track-tight)',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -280,6 +295,6 @@ export default function GraphDetailPanel({ engram, onClose, onSelectEngram }: Pr
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
