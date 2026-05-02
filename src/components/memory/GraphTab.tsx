@@ -9,6 +9,7 @@
  */
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { useMemoryStore, type Engram, type Connection } from '@/stores/memoryStore';
+import { useDrawerStore } from '@/stores/drawerStore';
 
 const TYPE_TINTS: Record<string, string> = {
   episodic:   'rgba(190, 200, 215, 1)',
@@ -46,6 +47,7 @@ export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
+  const openDrawer = useDrawerStore((s) => s.open);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
@@ -291,10 +293,11 @@ export default function GraphTab() {
     const node = getNodeAtPos(e.clientX, e.clientY);
     if (node) {
       setSelectedEngram(node.engram);
+      openDrawer('memory-detail', { engramId: node.engram.id });
     } else {
       dragRef.current = { dragging: true, lastX: e.clientX, lastY: e.clientY };
     }
-  }, [getNodeAtPos, setSelectedEngram]);
+  }, [getNodeAtPos, setSelectedEngram, openDrawer]);
 
   const handleMouseUp = useCallback(() => {
     dragRef.current.dragging = false;
