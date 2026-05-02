@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
+// CORS: openclaw endpoints are called by external devices via x-device-token,
+// not from browsers. Wildcard origin is intentional and acceptable here — the
+// security boundary is the device-token check, not the Origin header.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
