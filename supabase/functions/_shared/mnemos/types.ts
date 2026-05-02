@@ -151,6 +151,8 @@ export interface DecayOptions {
   min_hours_since_access?: number;
   /** If true, archive engrams that fall below the archive threshold. */
   archive_below_threshold?: boolean;
+  /** Multiplier on elapsed hours, derived from the user's decay-rate slider (default 1.0). */
+  rate_multiplier?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { getMemorySettings, isConsolidationDue } from "../_shared/mnemos/settings.ts";
 import {
   consolidationIsNoteworthy,
   formatConsolidationSummary,
@@ -50,22 +51,46 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const userId = body.user_id;
+    const force = !!body.force; // bypass cadence check (manual trigger from UI)
 
-    // Get OpenRouter API key for dreaming
-    let apiKey: string | null = null;
-    if (userId) {
-      const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-      if (userKeyData) apiKey = userKeyData;
-    }
-    // No platform fallback — user must have their own key
+    const runForUser = async (uid: string) => {
+      const settings = await getMemorySettings(supabase, uid);
+      if (!settings.mnemos_enabled) return { skipped: true, reason: "mnemos_disabled" };
+      if (!settings.consolidation_enabled) return { skipped: true, reason: "consolidation_disabled" };
 
-    if (userId) {
-      const engine = new MnemosEngine(supabase, userId);
-      const result = await engine.consolidate({
+      // Cadence gate (cron mode only — explicit calls with force bypass)
+      if (!force) {
+        const { data: lastRow } = await supabase
+          .from("memory_settings")
+          .select("last_consolidated_at")
+          .eq("user_id", uid)
+          .maybeSingle();
+        if (!isConsolidationDue(settings.dream_frequency, lastRow?.last_consolidated_at ?? null)) {
+          return { skipped: true, reason: "not_due", dream_frequency: settings.dream_frequency };
+        }
+      }
+
+      const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: uid });
+      const userApiKey = (keyData as string | null) ?? null;
+
+      const engine = new MnemosEngine(supabase, uid);
+      const userResult = await engine.consolidate({
         lookback_hours: body.lookback_hours || 24,
-        openrouter_api_key: apiKey || undefined,
+        openrouter_api_key: userApiKey || undefined,
       });
-      await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, userId, result);
+
+      // Stamp last-run for cadence tracking
+      await supabase
+        .from("memory_settings")
+        .update({ last_consolidated_at: new Date().toISOString() })
+        .eq("user_id", uid);
+
+      await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, userResult);
+      return userResult;
+    };
+
+    if (userId) {
+      const result = await runForUser(userId);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -84,18 +109,7 @@ serve(async (req) => {
 
     for (const uid of uniqueUsers) {
       try {
-        // Get user's API key for dreaming
-        let userApiKey = apiKey;
-        const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: uid });
-        if (keyData) userApiKey = keyData;
-
-        const engine = new MnemosEngine(supabase, uid);
-        const userResult = await engine.consolidate({
-          lookback_hours: 24,
-          openrouter_api_key: userApiKey || undefined,
-        });
-        results[uid] = userResult;
-        await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, userResult);
+        results[uid] = await runForUser(uid);
       } catch (e) {
         results[uid] = { error: (e as Error).message };
       }

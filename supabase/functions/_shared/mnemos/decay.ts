@@ -115,6 +115,7 @@ export async function runDecayCycle(
   const {
     min_hours_since_access = 1,
     archive_below_threshold = true,
+    rate_multiplier = 1,
   } = options;
 
   const now = new Date();
@@ -144,10 +145,11 @@ export async function runDecayCycle(
 
     for (const engram of engrams) {
       const lastAccessed = new Date(engram.last_accessed_at);
-      const elapsedHours = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60);
+      const elapsedHoursRaw = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60);
+      const elapsedHours = elapsedHoursRaw * rate_multiplier;
 
-      // Skip recently accessed engrams
-      if (elapsedHours < min_hours_since_access) continue;
+      // Skip recently accessed engrams (gate uses raw elapsed, not multiplier)
+      if (elapsedHoursRaw < min_hours_since_access) continue;
 
       const { strength, accessibility } = computeDecayedValues(engram, elapsedHours);
       const newState = determineState(strength, accessibility, engram.state, elapsedHours);

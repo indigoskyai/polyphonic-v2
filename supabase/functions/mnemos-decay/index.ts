@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { decayMultiplierFromRate, getMemorySettings } from "../_shared/mnemos/settings.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -13,19 +14,30 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user_id from request body or run for all users (cron mode)
     const body = await req.json().catch(() => ({}));
     const userId = body.user_id;
 
+    const runForUser = async (uid: string) => {
+      const settings = await getMemorySettings(supabase, uid);
+      if (!settings.mnemos_enabled) {
+        return { skipped: true, reason: "mnemos_disabled" };
+      }
+      const engine = new MnemosEngine(supabase, uid);
+      return engine.decay({
+        min_hours_since_access: 1,
+        archive_below_threshold: true,
+        rate_multiplier: decayMultiplierFromRate(settings.decay_rate),
+      });
+    };
+
     if (userId) {
-      const engine = new MnemosEngine(supabase, userId);
-      const result = await engine.decay({ min_hours_since_access: 1, archive_below_threshold: true });
+      const result = await runForUser(userId);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Cron mode: decay for all users with active engrams
+    // Cron mode
     const { data: users } = await supabase
       .from("engrams")
       .select("user_id")
@@ -37,8 +49,7 @@ serve(async (req) => {
 
     for (const uid of uniqueUsers) {
       try {
-        const engine = new MnemosEngine(supabase, uid);
-        results[uid] = await engine.decay({ min_hours_since_access: 1, archive_below_threshold: true });
+        results[uid] = await runForUser(uid);
       } catch (e) {
         results[uid] = { error: (e as Error).message };
       }
