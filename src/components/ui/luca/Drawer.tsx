@@ -61,12 +61,37 @@ export function Drawer({
       }
     };
     document.addEventListener('keydown', onKey);
+
+    // When there's no backdrop, close on outside click (mousedown anywhere
+    // outside the drawer container). With a backdrop, the backdrop already
+    // handles this.
+    let onDocPointer: ((e: MouseEvent) => void) | null = null;
+    if (!showBackdrop && closeOnBackdropClick) {
+      onDocPointer = (e: MouseEvent) => {
+        const node = containerRef.current;
+        if (!node) return;
+        if (node.contains(e.target as Node)) return;
+        onClose();
+      };
+      // Defer to avoid catching the click that opened the drawer
+      const id = window.setTimeout(() => {
+        document.addEventListener('mousedown', onDocPointer!);
+      }, 0);
+      return () => {
+        cancelAnimationFrame(t);
+        window.clearTimeout(id);
+        document.removeEventListener('keydown', onKey);
+        if (onDocPointer) document.removeEventListener('mousedown', onDocPointer);
+        previouslyFocused.current?.focus?.();
+      };
+    }
+
     return () => {
       cancelAnimationFrame(t);
       document.removeEventListener('keydown', onKey);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, closeOnEsc, onClose]);
+  }, [open, closeOnEsc, closeOnBackdropClick, showBackdrop, onClose]);
 
   return createPortal(
     <>
