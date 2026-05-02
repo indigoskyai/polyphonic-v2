@@ -10,18 +10,15 @@
  * MnemosOverview + GraphDetailPanel. To browse the full memories table the user
  * can use the Engrams tab (engrams ARE the substrate units of memory in Mnemos).
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
-import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
 import GraphTab from '@/components/memory/GraphTab';
 import EngramsTab from '@/components/memory/EngramsTab';
 import BeliefsTab from '@/components/memory/BeliefsTab';
+import ImportsTab from '@/components/memory/ImportsTab';
 import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
-import ImportDetailPanel from '@/components/ImportDetailPanel';
 import MnemosOverview from '@/components/memory/MnemosOverview';
 
 type ImportRecord = {
