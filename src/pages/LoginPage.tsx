@@ -30,8 +30,9 @@ export default function LoginPage() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) setError(error.message);
-    else setInfo('If that email exists, a reset link is on its way.');
+    // Avoid email-enumeration: never reveal whether the address is registered.
+    if (error) console.warn('[reset]', error.message);
+    setInfo('If that email exists, a reset link is on its way.');
   };
 
   return (
