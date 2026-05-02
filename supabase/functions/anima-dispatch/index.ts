@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 
 /**
  * anima-dispatch — fan-out wrapper for per-user autonomous functions.
@@ -28,6 +29,7 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  const __jobStart = Date.now();
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -60,6 +62,7 @@ serve(async (req) => {
     const userIds = [...new Set((rows ?? []).map((r: { user_id: string }) => r.user_id))];
 
     if (userIds.length === 0) {
+      await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
       return new Response(JSON.stringify({ skipped: true, reason: "no active users", target: targetFn }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -100,6 +103,7 @@ serve(async (req) => {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, userIds.length) }, () => worker()));
 
     const ok = results.filter((r) => r.ok).length;
+    await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
     return new Response(JSON.stringify({
       target: targetFn,
       users_dispatched: userIds.length,
@@ -108,8 +112,10 @@ serve(async (req) => {
       results: results.slice(0, 50),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
+    const targetForLog = (typeof e === "object" && e !== null && "target" in e) ? String((e as any).target) : "unknown";
+    await recordCronFailure(`anima-dispatch:${targetForLog}`, Date.now() - __jobStart, e);
     console.error("anima-dispatch fatal:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown" }), {
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown", code: "internal_error" }), {
       status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }

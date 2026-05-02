@@ -18,11 +18,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const cors = getCorsHeaders(req);
+  const __jobStart = Date.now();
 
   try {
     const url = Deno.env.get("SUPABASE_URL")!;
@@ -180,13 +182,15 @@ serve(async (req) => {
       }
     }
 
+    await recordCronSuccess("luca-pulse", Date.now() - __jobStart);
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await recordCronFailure("luca-pulse", Date.now() - __jobStart, err);
     console.error("luca-pulse error:", err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "unknown" }),
+      JSON.stringify({ error: err instanceof Error ? err.message : "unknown", code: "internal_error" }),
       { status: 500, headers: { ...cors, "Content-Type": "application/json" } },
     );
   }

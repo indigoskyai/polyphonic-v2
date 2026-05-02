@@ -798,6 +798,39 @@ export type Database = {
           },
         ]
       }
+      cron_health: {
+        Row: {
+          error_count: number
+          job_name: string
+          last_duration_ms: number | null
+          last_error: string | null
+          last_run_at: string | null
+          last_success_at: string | null
+          run_count: number
+          updated_at: string
+        }
+        Insert: {
+          error_count?: number
+          job_name: string
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_success_at?: string | null
+          run_count?: number
+          updated_at?: string
+        }
+        Update: {
+          error_count?: number
+          job_name?: string
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_success_at?: string | null
+          run_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       curiosity_questions: {
         Row: {
           context: string | null
@@ -854,6 +887,30 @@ export type Database = {
           id?: string
           log_date?: string | null
           log_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      daily_usage: {
+        Row: {
+          count: number
+          day: string
+          scope: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          day?: string
+          scope: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          scope?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -1094,6 +1151,30 @@ export type Database = {
           summary?: string | null
           surface_to_user?: boolean
           title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      idempotency_keys: {
+        Row: {
+          created_at: string
+          key: string
+          response: Json | null
+          scope: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          response?: Json | null
+          scope: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          response?: Json | null
+          scope?: string
           user_id?: string
         }
         Relationships: []
@@ -2390,6 +2471,8 @@ export type Database = {
     }
     Functions: {
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
+      cleanup_daily_usage: { Args: never; Returns: number }
+      cleanup_idempotency_keys: { Args: never; Returns: number }
       decrypt_user_api_key: { Args: { p_user_id: string }; Returns: string }
       delete_user_api_key: { Args: never; Returns: undefined }
       get_app_config: { Args: { config_key: string }; Returns: string }
@@ -2399,6 +2482,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_daily_usage: {
+        Args: { p_limit: number; p_scope: string; p_user_id: string }
+        Returns: {
+          allowed: boolean
+          current_count: number
+          day_limit: number
+        }[]
       }
       invoke_edge_function: {
         Args: { function_name: string; payload?: Json }
@@ -2447,6 +2538,15 @@ export type Database = {
       openclaw_verify_device_token: {
         Args: { p_device_id: string; p_token: string }
         Returns: boolean
+      }
+      record_cron_run: {
+        Args: {
+          p_duration_ms: number
+          p_error?: string
+          p_job_name: string
+          p_success: boolean
+        }
+        Returns: undefined
       }
       save_user_api_key: { Args: { p_key: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }

@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
@@ -32,6 +33,7 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  const __jobStart = Date.now();
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -159,6 +161,7 @@ serve(async (req) => {
       result.pending_revisions,
     );
 
+    await recordCronSuccess("mnemos-dialectic", Date.now() - __jobStart);
     return json({
       ok: true,
       model: DIALECTIC_MODEL,
@@ -167,8 +170,9 @@ serve(async (req) => {
       urgent_surface: urgentSurfaced,
     }, 200, corsHeaders);
   } catch (err) {
+    await recordCronFailure("mnemos-dialectic", Date.now() - __jobStart, err);
     console.error("mnemos-dialectic error:", err);
-    return json({ error: "Internal error" }, 500, getCorsHeaders(req));
+    return json({ error: "Internal error", code: "internal_error" }, 500, getCorsHeaders(req));
   }
 });
 

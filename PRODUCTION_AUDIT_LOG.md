@@ -136,8 +136,44 @@ Audited all 60 edge functions for in-code auth. Findings:
 - 🟡 Daily-quota logic (`generate-image` enforces 25/day; `chat`/`chat-multi` do not appear to enforce a daily cap at all). Inconsistent. Per `no-backend-rate-limiting` directive we will NOT add true rate limiting, but the free-tier user-message cap should be unified. Tracked for Phase 3.
 - 🟢 Audited remaining `Access-Control-Allow-Origin: *` occurrences — only openclaw remains (intentional, documented inline).
 
-**Next (Phase 3 — Backend Reliability)**
-1. Standardize error response shape `{ error: string, code?: string }` across edge functions.
-2. Surface cron health (last-success timestamp per job).
-3. Add idempotency keys to `chat`/`chat-multi` to dedupe accidental double-submits.
-4. Unify free-tier quota helper (`_shared/dailyQuota.ts`).
+**Next (Phase 3 — Backend Reliability)** — see entry below.
+
+---
+
+## Phase 3 — Backend Reliability  ✅ (2026-05-02)
+
+**Done — schema**
+- New tables: `cron_health` (per-job last-run/success/error/duration), `daily_usage` (per-user-per-scope-per-day counter), `idempotency_keys` (24h dedupe).
+- New service-role-only RPCs: `record_cron_run`, `increment_daily_usage` (atomic), `cleanup_idempotency_keys`, `cleanup_daily_usage`.
+- RLS: `cron_health` admin-readable; `daily_usage` user-readable own rows; `idempotency_keys` service-role only.
+
+**Done — shared modules**
+- `_shared/errors.ts` — typed `AppError` hierarchy + standardized `{ error, code, request_id }` envelope.
+- `_shared/cronHealth.ts` — `recordCronSuccess` / `recordCronFailure` / `trackCronJob`.
+- `_shared/dailyQuota.ts` — `checkAndIncrement`, scopes: `chat-message` (500/d), `image-generation` (25/d), `web-search` (100/d).
+- `_shared/openrouter.ts` — non-streaming wrapper with 1 retry on 429/502/503/504, throws `UpstreamUnavailableError`.
+- `_shared/idempotency.ts` — `getIdempotentResponse` / `recordIdempotentResponse`.
+- `_shared/safeDispatch.ts` — fire-and-forget POST that records `dispatch:<target>` cron-health rows.
+- Client: `src/lib/edgeError.ts` — parses envelope, friendly toast strings.
+
+**Done — wired cron-health into 9 cron-targeted functions**
+`memory-decay`, `journal-cron`, `mnemos-decay`, `mnemos-soften`, `mnemos-consolidate`, `mnemos-dialectic`, `observer-watch`, `luca-pulse`, `anima-dispatch` (per-target job name).
+
+**Done — chat critical path**
+- `chat`: accepts `Idempotency-Key` header → short-circuits duplicates within 24h and returns cached `{ok, model, tokens_used}`. Per-user 500/day soft cap returns `{ error, code: "quota_exceeded" }` 429 envelope.
+- All edited functions now emit standardized `code` field on errors.
+
+**Found**
+- 🟡 `luca-initiate` is event-driven (per-RPC), not a cron — intentionally NOT wrapped in cron_health.
+- 🟡 `memory-reflect`, `memory-synthesize`, `memory-extract` are user-triggered through chat fan-out; deferred (covered partially by `safeDispatch` wrapper, not yet wired into chat).
+- 🟢 OpenRouter retry wrapper authored but not yet wired into auxiliary callers (`extract-persona`, `skills-distill`, `autoTitleThread`, etc.) — Phase 3.5.
+- 🟢 Admin "Background jobs" UI in Settings → Models deferred (data is now collected; UI is read-only and small — Phase 3.5).
+- 🟢 Client-side `Idempotency-Key` generation in `chatStore.sendMessage` not yet added — header is opt-in, server is ready.
+
+**Next (Phase 3.5 — short follow-up)**
+1. Wire `safeDispatch` into `chat` fan-outs (observer-watch / mnemos-dialectic / skills-distill).
+2. Wire OpenRouter retry into all non-streaming callers.
+3. Client: generate per-send `Idempotency-Key` and pass to chat invoke.
+4. Tiny admin "Background jobs" panel in Settings → Models.
+
+**Then Phase 4 — Data Integrity**: FK audits, indexes on hot paths, REPLICA IDENTITY FULL on realtime tables, pg_trgm extension move out of public.

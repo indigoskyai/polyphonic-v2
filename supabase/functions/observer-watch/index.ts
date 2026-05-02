@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 
@@ -14,6 +15,7 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  const __jobStart = Date.now();
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -200,12 +202,14 @@ serve(async (req) => {
       await supabase.from("pending_revisions").insert(revisions);
     }
 
+    await recordCronSuccess("observer-watch", Date.now() - __jobStart);
     return new Response(JSON.stringify({ ok: true, inserted: insertions.length, revisions: revisions.length }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await recordCronFailure("observer-watch", Date.now() - __jobStart, err);
     console.error("observer-watch error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
+    return new Response(JSON.stringify({ error: "Internal error", code: "internal_error" }), {
       status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }

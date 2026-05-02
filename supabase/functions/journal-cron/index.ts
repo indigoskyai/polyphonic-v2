@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -10,6 +11,7 @@ serve(async (req) => {
   const unauthorized = requireServiceRole(req, corsHeaders);
   if (unauthorized) return unauthorized;
 
+  const __jobStart = Date.now();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -23,6 +25,7 @@ serve(async (req) => {
       .gte("updated_at", since);
 
     if (!activeConvos || activeConvos.length === 0) {
+      await recordCronSuccess("journal-cron", Date.now() - __jobStart);
       return new Response(JSON.stringify({ skipped: true, reason: "No active users" }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
@@ -128,6 +131,7 @@ serve(async (req) => {
       }
     }
 
+    await recordCronSuccess("journal-cron", Date.now() - __jobStart);
     return new Response(JSON.stringify({
       processed: results.length,
       results,
@@ -138,8 +142,9 @@ serve(async (req) => {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (e) {
+    await recordCronFailure("journal-cron", Date.now() - __jobStart, e);
     console.error("journal-cron error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error", code: "internal_error" }), {
       status: 500,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });

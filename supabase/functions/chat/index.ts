@@ -19,6 +19,8 @@ import {
   recordCrisisEvent,
   resolveCrisisResource,
 } from "../_shared/agents/crisis.ts";
+import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -57,7 +59,7 @@ serve(async (req) => {
     const { thread_id, message, model: modelOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), {
+      return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -65,6 +67,32 @@ serve(async (req) => {
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Idempotency — if client provided an Idempotency-Key, short-circuit on duplicate.
+    const idempotencyKey = req.headers.get("Idempotency-Key") || req.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const cached = await getIdempotentResponse(supabase, idempotencyKey, userId, "chat-send");
+      if (cached) {
+        return new Response(JSON.stringify({ duplicate: true, ...(cached as object) }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Idempotent-Replay": "true" },
+        });
+      }
+    }
+
+    // Daily quota — soft cap, returns 429 envelope if exceeded.
+    try {
+      await checkAndIncrement(userId, "chat-message");
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        return new Response(JSON.stringify({ error: qErr.message, code: "quota_exceeded" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw qErr;
+    }
 
     // Get user settings for default model
     const { data: settings } = await supabase
@@ -263,6 +291,13 @@ serve(async (req) => {
             .from("threads")
             .update({ updated_at: new Date().toISOString() })
             .eq("id", thread_id);
+
+          // Record idempotent response so an immediate retry returns the same outcome.
+          if (idempotencyKey) {
+            recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+              ok: true, model: usedModel, tokens_used: tokensUsed,
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
 
           // Auto-title if thread has no title (fire and forget)
           autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
