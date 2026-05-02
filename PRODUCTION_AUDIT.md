@@ -44,8 +44,8 @@ Outputs feed every later phase. Append findings inline under each item.
 
 - [x] **1.1 Route map** — every `<Route>` in `src/App.tsx`, every drawer in `drawerStore`, every modal. _(captured below)_
 - [ ] **1.2 Edge function map** — for each of ~57 functions: invoked-from (client / cron / function), `verify_jwt` posture, secrets used, idempotent y/n, request schema, response shape, last-5xx-in-7d count
-- [ ] **1.3 Table + RLS map** — query `information_schema.tables` + `pg_policies`; produce one row per table: RLS on/off, policy count, who-can-do-what summary
-- [ ] **1.4 Cron + pg_net map** — query `cron.job` + `cron.job_run_details`; one row per scheduled job: name, schedule, target function, last-24h success rate
+- [~] **1.3 Table + RLS map** — RLS confirmed enabled on all 55 public tables (Appendix A.1). Per-policy review still pending.
+- [~] **1.4 Cron + pg_net map** — 13 active cron jobs captured (Appendix A.2). Last-24h success rate still pending.
 - [ ] **1.5 Store dependency graph** — for each Zustand store, list (a) tables read, (b) tables written, (c) realtime channels subscribed
 - [ ] **1.6 Bundle + cold-load baseline** — `npm run build` size report, route-by-route initial JS payload, lighthouse perf on `/chat` and `/mind`
 - [ ] **1.7 Console-error baseline** — Playwright-walk every route logged-in, capture all errors/warnings; freeze as baseline (target = 0 NEW by end of audit)
