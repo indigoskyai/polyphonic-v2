@@ -3,8 +3,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { getMemorySettings, isConsolidationDue } from "../_shared/mnemos/settings.ts";
 import {
   consolidationIsNoteworthy,
+  formatConsolidationSummary,
+  type ConsolidationCounts,
+} from "../_shared/mnemos/insight-surface.ts";
   formatConsolidationSummary,
   type ConsolidationCounts,
 } from "../_shared/mnemos/insight-surface.ts";
