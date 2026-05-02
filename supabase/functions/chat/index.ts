@@ -59,7 +59,7 @@ serve(async (req) => {
     const { thread_id, message, model: modelOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), {
+      return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -67,6 +67,32 @@ serve(async (req) => {
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Idempotency — if client provided an Idempotency-Key, short-circuit on duplicate.
+    const idempotencyKey = req.headers.get("Idempotency-Key") || req.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const cached = await getIdempotentResponse(supabase, idempotencyKey, userId, "chat-send");
+      if (cached) {
+        return new Response(JSON.stringify({ duplicate: true, ...(cached as object) }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Idempotent-Replay": "true" },
+        });
+      }
+    }
+
+    // Daily quota — soft cap, returns 429 envelope if exceeded.
+    try {
+      await checkAndIncrement(userId, "chat-message");
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        return new Response(JSON.stringify({ error: qErr.message, code: "quota_exceeded" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw qErr;
+    }
 
     // Get user settings for default model
     const { data: settings } = await supabase
