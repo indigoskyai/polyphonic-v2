@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 
 /**
  * anima-dispatch — fan-out wrapper for per-user autonomous functions.
