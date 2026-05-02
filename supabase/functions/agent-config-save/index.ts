@@ -36,6 +36,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 Deno.serve(async (req) => {
+  corsHeaders = { ...getCorsHeaders(req), "Access-Control-Allow-Methods": "POST, OPTIONS" };
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
