@@ -2,125 +2,87 @@ import { useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useViewTabStore, MemoryTab } from '@/stores/viewTabStore';
-import SidebarHeader from './SidebarHeader';
-import SidebarRow from './SidebarRow';
+import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 
-const TYPE_LABELS: Record<string, string> = {
-  fact: 'Facts',
-  preference: 'Preferences',
-  principle: 'Principles',
-  commitment: 'Commitments',
-  goal: 'Goals',
-  context: 'Context',
-  decision: 'Decisions',
-  insight: 'Insights',
-  moment: 'Moments',
-  relationship: 'Relationships',
-  skill: 'Skills',
-};
-
-const TYPE_ORDER = ['fact', 'preference', 'principle', 'commitment', 'goal', 'context', 'decision', 'insight', 'moment', 'relationship', 'skill'];
-
-const SUBVIEWS: MemoryTab[] = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports', 'Settings'];
+interface NavItem { name: MemoryTab; meta: string; }
 
 export default function SidebarMemory() {
   const user = useAuthStore((s) => s.user);
   const memories = useMemoryStore((s) => s.memories);
+  const engrams = useMemoryStore((s) => s.engrams);
+  const beliefs = useMemoryStore((s) => s.beliefs);
+  const connections = useMemoryStore((s) => s.connections);
   const loadMemories = useMemoryStore((s) => s.loadMemories);
   const memoryTab = useViewTabStore((s) => s.memoryTab);
   const setMemoryTab = useViewTabStore((s) => s.setMemoryTab);
-  const typeFilter = useViewTabStore((s) => s.memoryTypeFilter);
-  const setTypeFilter = useViewTabStore((s) => s.setMemoryTypeFilter);
-  const pinnedOnly = useViewTabStore((s) => s.memoryPinnedOnly);
-  const setPinnedOnly = useViewTabStore((s) => s.setMemoryPinnedOnly);
+  const candidates = useMemoryCandidatesStore((s) => s.items);
 
   useEffect(() => {
     if (user && memories.length === 0) loadMemories(user.id);
   }, [user]);
 
   const counts = useMemo(() => {
-    const byType: Record<string, number> = {};
-    let pinned = 0;
-    for (const m of memories) {
-      byType[m.memory_type] = (byType[m.memory_type] || 0) + 1;
-      if (m.is_pinned) pinned++;
-    }
-    return { total: memories.length, byType, pinned };
-  }, [memories]);
+    const activeEngrams = engrams.filter((e) => e.state === 'active' || e.state === 'consolidating').length;
+    return {
+      memories: memories.length,
+      engrams: activeEngrams,
+      beliefs: beliefs.length,
+      graph: `${activeEngrams}·${connections.length}`,
+      candidates: candidates.length,
+    };
+  }, [memories, engrams, beliefs, connections, candidates]);
 
-  const typesPresent = TYPE_ORDER.filter((t) => counts.byType[t] > 0);
+  const items: NavItem[] = [
+    { name: 'Memories', meta: counts.candidates > 0 ? `${counts.candidates} new` : String(counts.memories) },
+    { name: 'Engrams',  meta: String(counts.engrams) },
+    { name: 'Beliefs',  meta: String(counts.beliefs) },
+    { name: 'Graph',    meta: counts.graph },
+    { name: 'Imports',  meta: '—' /* MOCK: import count not wired */ },
+    { name: 'Settings', meta: '·' },
+  ];
 
   return (
-    <>
-      <SidebarHeader folio="§ 02" title="Memory" />
-
-      {/* Sub-view nav */}
-      <div style={{ padding: '0 8px 8px' }}>
-        {SUBVIEWS.map((sv) => (
-          <SidebarRow
-            key={sv}
-            label={sv}
-            active={memoryTab === sv}
-            onClick={() => {
-              setMemoryTab(sv);
-              // When switching sub-views, clear the category filter so it doesn't carry over
-              if (sv !== 'Memories') {
-                setTypeFilter(null);
-                setPinnedOnly(false);
-              }
-            }}
-          />
-        ))}
+    <div className="r2-sidebar">
+      <div className="sidebar-head">
+        <div className="sidebar-eye">View · Mnemos</div>
+        <h2 className="sidebar-head-title">Memory</h2>
       </div>
 
-      {/* Category filters — only when viewing Memories */}
-      {memoryTab === 'Memories' && (
-        <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px 16px', scrollbarWidth: 'none' }}>
-          <SectionLabel>Filter</SectionLabel>
-          <SidebarRow
-            label="All"
-            active={!typeFilter && !pinnedOnly}
-            count={counts.total}
-            onClick={() => { setTypeFilter(null); setPinnedOnly(false); }}
-          />
-          {counts.pinned > 0 && (
-            <SidebarRow
-              label="Pinned"
-              active={pinnedOnly}
-              count={counts.pinned}
-              onClick={() => { setPinnedOnly(true); setTypeFilter(null); }}
-            />
-          )}
-          {typesPresent.length > 0 && <SectionLabel>By type</SectionLabel>}
-          {typesPresent.map((t) => (
-            <SidebarRow
-              key={t}
-              label={TYPE_LABELS[t] || t}
-              active={typeFilter === t && !pinnedOnly}
-              count={counts.byType[t]}
-              onClick={() => { setTypeFilter(t); setPinnedOnly(false); }}
-            />
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
+      <div className="sidebar-search">
+        <span className="sidebar-search-glyph">⌕</span>
+        <span className="sidebar-search-text">Search the substrate…</span>
+        <span className="sidebar-search-kbd">⌘K</span>
+      </div>
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="uppercase"
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9,
-        fontWeight: 500,
-        letterSpacing: 'var(--track-meta)',
-        color: 'var(--text-ghost)',
-        padding: '14px 8px 6px',
-      }}
-    >
-      {children}
+      <div className="sidebar-section-eye">
+        Sections <span className="count">{items.length}</span>
+      </div>
+
+      <div className="sidebar-list">
+        {items.map((it) => {
+          const active = memoryTab === it.name;
+          return (
+            <button
+              key={it.name}
+              type="button"
+              className={`sidebar-item${active ? ' active' : ''}`}
+              onClick={() => setMemoryTab(it.name)}
+            >
+              <span className="sidebar-item-name">
+                <span className="sidebar-item-glyph">·</span>{it.name}
+              </span>
+              <span className="sidebar-item-meta">{it.meta}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="sidebar-foot">
+        {/* MOCK: substrate health + last-decay timestamps until wired */}
+        <div className="sidebar-foot-row"><span>Substrate</span><span className="v">healthy</span></div>
+        <div className="sidebar-foot-row"><span>Last decay</span><span className="v">6h ago</span></div>
+        <div className="sidebar-foot-row"><span>Consolidating</span><span className="v">{engrams.filter(e => e.state === 'consolidating').length}</span></div>
+      </div>
     </div>
   );
 }
