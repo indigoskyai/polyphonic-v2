@@ -19,6 +19,8 @@ import {
   recordCrisisEvent,
   resolveCrisisResource,
 } from "../_shared/agents/crisis.ts";
+import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
