@@ -19,6 +19,7 @@ import { useMemoryStore, type Engram, type Connection } from '@/stores/memorySto
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryRealtime } from '@/hooks/useMemoryRealtime';
+import { generateMockGraph } from '@/lib/mockGraphData';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
 const TYPE_TINTS: Record<string, [number, number, number]> = {
