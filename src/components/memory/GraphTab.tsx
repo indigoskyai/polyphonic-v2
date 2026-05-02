@@ -1,29 +1,33 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+/**
+ * GraphTab — Round 2 force-directed graph for the Mnemos substrate.
+ *
+ * Surface chrome: folio strip + hero ("# 04 · MNEMOS · CONNECTION GRAPH") + canvas.
+ * Visual language: monochrome cream, hairline edges, tiny disc nodes with hover labels,
+ * cool-blue selection ring, footer legend & stats.
+ *
+ * Physics: spring-damper sim with center gravity. DPR-aware. Pan + zoom via mouse.
+ */
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { useMemoryStore, type Engram, type Connection } from '@/stores/memoryStore';
 
-// Monochrome palette — sharp + technical. Type conveyed via subtle tint only.
-const TYPE_COLORS: Record<string, string> = {
-  episodic:   'rgba(190, 200, 215, 1)',   // cool cream-blue
-  semantic:   'rgba(215, 205, 185, 1)',   // warm cream
-  procedural: 'rgba(195, 205, 200, 1)',   // neutral cream-green
-  belief:     'rgba(205, 195, 215, 1)',   // soft cream-violet
+const TYPE_TINTS: Record<string, string> = {
+  episodic:   'rgba(190, 200, 215, 1)',
+  semantic:   'rgba(215, 205, 185, 1)',
+  procedural: 'rgba(195, 205, 200, 1)',
+  belief:     'rgba(205, 195, 215, 1)',
 };
 
-// All edges render as hairline cream — type conveyed via panel, not color.
-const EDGE_BASE         = 'rgba(220, 219, 216, 0.10)';
-const EDGE_HIGHLIGHT    = 'rgba(220, 219, 216, 0.55)';
 const NODE_FILL_DIM     = 'rgba(220, 219, 216, 0.10)';
 const NODE_STROKE       = 'rgba(220, 219, 216, 0.55)';
-const NODE_STROKE_HOVER = 'rgba(244, 243, 240, 0.90)';
-const SELECT_RING       = 'rgba(140, 175, 210, 0.95)';  // cool blue selection ring
+const NODE_STROKE_HOVER = 'rgba(244, 243, 240, 0.95)';
+const SELECT_RING       = 'rgba(140, 175, 210, 0.95)';
 const SELECT_HALO       = 'rgba(140, 175, 210, 0.22)';
+const EDGE_HIGHLIGHT    = 'rgba(220, 219, 216, 0.55)';
 
 interface GraphNode {
   id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
+  x: number; y: number;
+  vx: number; vy: number;
   engram: Engram;
   radius: number;
 }
@@ -34,11 +38,16 @@ interface GraphEdge {
   connection: Connection;
 }
 
+function fmtClock(d = new Date()): string {
+  return d.toTimeString().slice(0, 5);
+}
+
 export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<GraphEdge[]>([]);
   const animRef = useRef<number>(0);
@@ -46,21 +55,42 @@ export default function GraphTab() {
   const dragRef = useRef<{ dragging: boolean; lastX: number; lastY: number }>({ dragging: false, lastX: 0, lastY: 0 });
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedEngram?.id ?? null;
+  const hoveredRef = useRef<string | null>(null);
+  hoveredRef.current = hoveredNode;
 
-  // Initialize nodes and edges from data
+  const activeEngrams = useMemo(
+    () => engrams.filter((e) => e.state === 'active' || e.state === 'consolidating'),
+    [engrams]
+  );
+
+  // Stats
+  const stats = useMemo(() => {
+    const byType: Record<string, number> = {};
+    for (const t of Object.keys(TYPE_TINTS)) byType[t] = 0;
+    for (const e of activeEngrams) {
+      if (byType[e.engram_type] !== undefined) byType[e.engram_type]++;
+    }
+    const validEdges = edgesRef.current.length;
+    const density = activeEngrams.length > 1
+      ? validEdges / (activeEngrams.length * (activeEngrams.length - 1) / 2)
+      : 0;
+    return { byType, nodes: activeEngrams.length, edges: validEdges, density };
+  }, [activeEngrams, connections]);
+
+  // Initialize nodes/edges when data changes
   useEffect(() => {
     const nodes = new Map<string, GraphNode>();
-    const activeEngrams = engrams.filter((e) => e.state === 'active' || e.state === 'consolidating');
-
     activeEngrams.forEach((engram, i) => {
       const angle = (i / activeEngrams.length) * Math.PI * 2;
       const radius = 150 + Math.random() * 100;
+      // Reuse position if node already exists to avoid jarring resets
+      const prev = nodesRef.current.get(engram.id);
       nodes.set(engram.id, {
         id: engram.id,
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        vx: 0,
-        vy: 0,
+        x: prev?.x ?? Math.cos(angle) * radius,
+        y: prev?.y ?? Math.sin(angle) * radius,
+        vx: prev?.vx ?? 0,
+        vy: prev?.vy ?? 0,
         engram,
         radius: 3.5 + engram.strength * 3.5,
       });
@@ -72,9 +102,9 @@ export default function GraphTab() {
 
     nodesRef.current = nodes;
     edgesRef.current = edges;
-  }, [engrams, connections]);
+  }, [activeEngrams, connections]);
 
-  // Physics simulation + render loop
+  // Physics + render loop
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -98,7 +128,7 @@ export default function GraphTab() {
       const edges = edgesRef.current;
       const dt = 0.3;
 
-      // Repulsion between nodes
+      // Pairwise repulsion
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const a = nodes[i], b = nodes[j];
@@ -111,7 +141,7 @@ export default function GraphTab() {
         }
       }
 
-      // Spring forces along edges
+      // Springs along edges
       for (const edge of edges) {
         const a = nodesRef.current.get(edge.source);
         const b = nodesRef.current.get(edge.target);
@@ -127,7 +157,7 @@ export default function GraphTab() {
         b.vx -= fx * dt; b.vy -= fy * dt;
       }
 
-      // Gravity toward center + damping
+      // Gravity + damping
       for (const node of nodes) {
         node.vx -= node.x * 0.001 * dt;
         node.vy -= node.y * 0.001 * dt;
@@ -144,29 +174,28 @@ export default function GraphTab() {
       const cam = cameraRef.current;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
-
       ctx.setTransform(cam.zoom * dpr, 0, 0, cam.zoom * dpr, w / 2 + cam.x * dpr, h / 2 + cam.y * dpr);
 
       const selectedId = selectedIdRef.current;
+      const hoveredId = hoveredRef.current;
 
-      // Sharper rendering — no anti-alias smudging on hairlines
       ctx.lineCap = 'butt';
       ctx.lineJoin = 'miter';
 
-      // Edges — hairline cream; highlighted when touching selected node
+      // Edges
       for (const edge of edgesRef.current) {
         const a = nodesRef.current.get(edge.source);
         const b = nodesRef.current.get(edge.target);
         if (!a || !b) continue;
         const isConnectedToSelected = selectedId && (edge.source === selectedId || edge.target === selectedId);
+        const isConnectedToHover = hoveredId && (edge.source === hoveredId || edge.target === hoveredId);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        if (isConnectedToSelected) {
+        if (isConnectedToSelected || isConnectedToHover) {
           ctx.strokeStyle = EDGE_HIGHLIGHT;
           ctx.lineWidth = 0.8 / cam.zoom;
         } else {
-          // Mild weight modulation but always hairline
           const baseAlpha = 0.06 + Math.min(0.12, edge.connection.weight * 0.10);
           ctx.strokeStyle = `rgba(220, 219, 216, ${baseAlpha.toFixed(3)})`;
           ctx.lineWidth = 0.5 / cam.zoom;
@@ -174,26 +203,25 @@ export default function GraphTab() {
         ctx.stroke();
       }
 
-      // Nodes — small filled disc + 1px ring, like technical graph plots
+      // Nodes
       const nodes = Array.from(nodesRef.current.values());
       for (const node of nodes) {
         const r = node.radius / cam.zoom;
-        const tint = TYPE_COLORS[node.engram.engram_type] || 'rgba(220,219,216,1)';
-        const isHovered = hoveredNode === node.id;
+        const tint = TYPE_TINTS[node.engram.engram_type] || 'rgba(220,219,216,1)';
+        const isHovered = hoveredId === node.id;
         const isSelected = selectedId === node.id;
 
-        // Filled disc — very faint, tint only barely visible
+        // Filled disc
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         if (isSelected || isHovered) {
-          // Slightly stronger tint when active
           ctx.fillStyle = tint.replace(/, 1\)$/, ', 0.35)');
         } else {
           ctx.fillStyle = NODE_FILL_DIM;
         }
         ctx.fill();
 
-        // Crisp 1px ring — base
+        // Crisp 1px ring
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         ctx.strokeStyle = isHovered ? NODE_STROKE_HOVER : NODE_STROKE;
@@ -201,7 +229,6 @@ export default function GraphTab() {
         ctx.stroke();
 
         if (isSelected) {
-          // Cool blue selection ring + soft halo
           ctx.beginPath();
           ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
           ctx.strokeStyle = SELECT_RING;
@@ -226,9 +253,8 @@ export default function GraphTab() {
       cancelAnimationFrame(animRef.current);
       resizeObserver.disconnect();
     };
-  }, [engrams, connections, hoveredNode]);
+  }, [activeEngrams, connections]);
 
-  // Mouse interaction
   const getNodeAtPos = useCallback((clientX: number, clientY: number): GraphNode | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -236,11 +262,9 @@ export default function GraphTab() {
     const cam = cameraRef.current;
     const x = (clientX - rect.left - rect.width / 2 - cam.x) / cam.zoom;
     const y = (clientY - rect.top - rect.height / 2 - cam.y) / cam.zoom;
-
     for (const node of nodesRef.current.values()) {
       const dx = node.x - x, dy = node.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < node.radius / cam.zoom + 5) return node;
+      if (Math.sqrt(dx * dx + dy * dy) < node.radius / cam.zoom + 5) return node;
     }
     return null;
   }, []);
@@ -255,6 +279,12 @@ export default function GraphTab() {
     }
     const node = getNodeAtPos(e.clientX, e.clientY);
     setHoveredNode(node?.id || null);
+    if (node) {
+      const rect = canvasRef.current!.getBoundingClientRect();
+      setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    } else {
+      setCursorPos(null);
+    }
   }, [getNodeAtPos]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -276,43 +306,162 @@ export default function GraphTab() {
     cameraRef.current.zoom = Math.max(0.2, Math.min(5, cameraRef.current.zoom * delta));
   }, []);
 
-  const nodeCount = engrams.filter((e) => e.state === 'active' || e.state === 'consolidating').length;
+  const hoveredEngram = hoveredNode ? nodesRef.current.get(hoveredNode)?.engram : null;
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 400 }}>
-      {nodeCount === 0 ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-ghost)', fontSize: 12 }}>
-          No engrams to visualize. Memories will appear here after conversations.
+    <div className="s-stream" style={{ height: '100%' }}>
+      {/* Folio strip */}
+      <div className="r2-folio">
+        <div className="r2-folio-left">
+          <span><span className="agent-dot" /> mnemos</span>
+          <span>session 001{/* MOCK */}</span>
         </div>
-      ) : (
-        <canvas
-          ref={canvasRef}
-          style={{ width: '100%', height: '100%', cursor: dragRef.current.dragging ? 'grabbing' : hoveredNode ? 'pointer' : 'grab' }}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-        />
-      )}
-
-      {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 14 }}>
-        {Object.entries(TYPE_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: 'transparent',
-              border: `1px solid ${color}`,
-            }} />
-            <span style={{ fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>{type}</span>
-          </div>
-        ))}
+        <div className="r2-folio-right">
+          <span>claude-sonnet-4.5</span>
+          <span>{fmtClock()}</span>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ position: 'absolute', top: 12, right: 12, fontSize: 10, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>
-        {nodeCount} nodes / {edgesRef.current.length} edges
+      {/* Hero */}
+      <div style={{ padding: '0 36px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+        <div className="s-hero" style={{ paddingBottom: 14 }}>
+          <div className="s-hero-eye">
+            <span className="num"># 04</span>
+            <span>·</span>
+            <span className="v">Mnemos</span>
+            <span>·</span>
+            <span className="stream">CONNECTION GRAPH</span>
+          </div>
+          <h1 className="s-hero-title">Substrate</h1>
+          <p className="s-hero-sub">
+            {stats.nodes} engrams · {stats.edges} connections · density {stats.density.toFixed(3)}.
+            Drag to pan, scroll to zoom, click a node to inspect.
+          </p>
+        </div>
+      </div>
+
+      {/* Canvas surface */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1, position: 'relative', minHeight: 0,
+          margin: '0 36px 36px',
+          maxWidth: 'calc(1280px - 72px)',
+          width: 'auto',
+          alignSelf: 'center',
+          marginLeft: 'auto', marginRight: 'auto',
+          border: '1px solid var(--hairline)',
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: 'rgba(255, 255, 255, 0.006)',
+        }}
+      >
+        {stats.nodes === 0 ? (
+          <div className="s-empty" style={{ height: '100%' }}>
+            No engrams to visualize. Memories will form connections after conversations.
+          </div>
+        ) : (
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: '100%', height: '100%',
+              cursor: dragRef.current.dragging ? 'grabbing' : hoveredNode ? 'pointer' : 'grab',
+              display: 'block',
+            }}
+            onMouseMove={handleMouseMove}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={() => { handleMouseUp(); setHoveredNode(null); setCursorPos(null); }}
+            onWheel={handleWheel}
+          />
+        )}
+
+        {/* Hover tooltip */}
+        {hoveredEngram && cursorPos && (
+          <div
+            style={{
+              position: 'absolute',
+              left: cursorPos.x + 14,
+              top: cursorPos.y + 14,
+              maxWidth: 280,
+              padding: '10px 12px',
+              background: 'var(--surface-3)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 6,
+              pointerEvents: 'none',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              zIndex: 10,
+            }}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+              fontFamily: 'var(--font-mono)', fontSize: 9,
+              color: 'var(--text-whisper)', letterSpacing: 'var(--track-folio)',
+              textTransform: 'uppercase',
+            }}>
+              <span style={{
+                display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                background: TYPE_TINTS[hoveredEngram.engram_type],
+              }} />
+              <span style={{ color: 'var(--text-soft)' }}>{hoveredEngram.engram_type}</span>
+              <span>·</span>
+              <span>{hoveredEngram.state}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--text-soft)' }}>
+                {hoveredEngram.strength.toFixed(2)}
+              </span>
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-sans)', fontSize: 12,
+              color: 'var(--text-primary)', lineHeight: 1.4,
+              display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {hoveredEngram.content}
+            </div>
+          </div>
+        )}
+
+        {/* Legend (bottom-left) */}
+        <div style={{
+          position: 'absolute', bottom: 14, left: 14,
+          display: 'flex', gap: 16, alignItems: 'center',
+          padding: '8px 12px',
+          background: 'var(--surface-1)',
+          border: '1px solid var(--hairline)',
+          borderRadius: 999,
+        }}>
+          {Object.entries(TYPE_TINTS).map(([type, color]) => (
+            <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: 'transparent', border: `1px solid ${color}`,
+              }} />
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9,
+                color: 'var(--text-soft)', letterSpacing: 'var(--track-folio)',
+                textTransform: 'uppercase',
+              }}>
+                {type} <span style={{ color: 'var(--text-whisper)' }}>{stats.byType[type]}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Stats (top-right) */}
+        <div style={{
+          position: 'absolute', top: 14, right: 14,
+          display: 'flex', gap: 14,
+          padding: '8px 14px',
+          background: 'var(--surface-1)',
+          border: '1px solid var(--hairline)',
+          borderRadius: 999,
+          fontFamily: 'var(--font-mono)', fontSize: 10,
+          color: 'var(--text-soft)', letterSpacing: 'var(--track-tight)',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          <span><span style={{ color: 'var(--text-whisper)' }}>nodes</span> {stats.nodes}</span>
+          <span><span style={{ color: 'var(--text-whisper)' }}>edges</span> {stats.edges}</span>
+          <span><span style={{ color: 'var(--text-whisper)' }}>density</span> {stats.density.toFixed(3)}</span>
+        </div>
       </div>
     </div>
   );
