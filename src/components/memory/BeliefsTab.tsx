@@ -1,67 +1,60 @@
-import { useMemo } from 'react';
+/**
+ * BeliefsTab (Mnemos) — Round 2.
+ * Mirrors Mind/Beliefs aesthetic: tier-grouped flat list with confidence bar
+ * + supporting/contradicting counts.
+ */
+import { useMemo, useState } from 'react';
 import { useMemoryStore, type Belief } from '@/stores/memoryStore';
+import MnemosStreamShell, { type StreamFilter } from './MnemosStreamShell';
 
 const TIER_ORDER = ['conviction', 'strong', 'moderate', 'tentative', 'uncertain'] as const;
-const TIER_COLORS: Record<string, string> = {
-  conviction: '#c9a87c',
-  strong: '#8ca89c',
-  moderate: 'var(--text-tertiary)',
-  tentative: 'var(--text-ghost)',
-  uncertain: 'var(--text-whisper)',
-};
 
-function getTier(confidence: number): string {
-  if (confidence >= 0.9) return 'conviction';
-  if (confidence >= 0.7) return 'strong';
-  if (confidence >= 0.5) return 'moderate';
-  if (confidence >= 0.3) return 'tentative';
+function getTier(c: number): string {
+  if (c >= 0.9) return 'conviction';
+  if (c >= 0.7) return 'strong';
+  if (c >= 0.5) return 'moderate';
+  if (c >= 0.3) return 'tentative';
   return 'uncertain';
 }
 
-function BeliefCard({ belief }: { belief: Belief }) {
+function timeAgo(iso?: string): string {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+function BeliefRow({ belief }: { belief: Belief }) {
   const tier = belief.confidence_tier || getTier(belief.confidence);
-
+  const fresh = belief.updated_at && Date.now() - new Date(belief.updated_at).getTime() < 24 * 60 * 60 * 1000;
   return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border-subtle)',
-      borderRadius: 'var(--radius-md)',
-      padding: '14px 16px',
-    }}>
-      <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        {belief.content}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div style={{ flex: 1, height: 3, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{
-            width: `${belief.confidence * 100}%`,
-            height: '100%',
-            background: TIER_COLORS[tier] || 'var(--text-ghost)',
-            borderRadius: 2,
-          }} />
-        </div>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-ghost)' }}>
-          {(belief.confidence * 100).toFixed(0)}%
+    <div className="s-belief">
+      <div className="s-belief-head">
+        <span className="s-belief-domain">
+          {belief.domain || 'general'} · {tier}
         </span>
+        <span className="s-belief-conf">{(belief.confidence * 100).toFixed(0)}%</span>
       </div>
-
-      <div className="flex items-center gap-3 mt-2">
+      <div className="s-belief-content">{belief.content}</div>
+      <div className="s-belief-foot">
+        <div className="s-belief-bar">
+          <div className="s-belief-bar-fill" style={{ width: `${belief.confidence * 100}%` }} />
+        </div>
         {belief.supporting_engram_ids?.length > 0 && (
-          <span style={{ fontSize: 10, color: 'var(--text-ghost)' }}>
-            {belief.supporting_engram_ids.length} supporting
-          </span>
+          <span className="s-belief-revised">{belief.supporting_engram_ids.length} support</span>
         )}
         {belief.contradicting_engram_ids?.length > 0 && (
-          <span style={{ fontSize: 10, color: '#ad5b5b' }}>
-            {belief.contradicting_engram_ids.length} contradicting
+          <span className="s-belief-revised" style={{ color: 'var(--red-accent, #c97c8a)' }}>
+            {belief.contradicting_engram_ids.length} contra
           </span>
         )}
-        {belief.domain && belief.domain !== 'general' && (
-          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-deep)', color: 'var(--text-ghost)' }}>
-            {belief.domain}
-          </span>
-        )}
+        <span className={`s-belief-revised${fresh ? ' fresh' : ''}`}>
+          {fresh ? 'revised' : 'stable'} · {timeAgo(belief.updated_at || belief.created_at)}
+        </span>
       </div>
     </div>
   );
@@ -69,59 +62,60 @@ function BeliefCard({ belief }: { belief: Belief }) {
 
 export default function BeliefsTab() {
   const { beliefs } = useMemoryStore();
+  const [filter, setFilter] = useState<StreamFilter>('all');
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    let list = beliefs;
+    if (filter === 'recent') {
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      list = list.filter((b) => new Date(b.updated_at || b.created_at).getTime() >= cutoff);
+    } else if (filter === 'salient') {
+      list = list.filter((b) => b.confidence >= 0.7);
+    }
+    if (query) {
+      const q = query.toLowerCase();
+      list = list.filter((b) => b.content.toLowerCase().includes(q));
+    }
+    return list;
+  }, [beliefs, filter, query]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, Belief[]> = {};
-    for (const tier of TIER_ORDER) groups[tier] = [];
-
-    for (const belief of beliefs) {
-      const tier = belief.confidence_tier || getTier(belief.confidence);
-      if (groups[tier]) groups[tier].push(belief);
-      else groups.uncertain.push(belief);
+    for (const t of TIER_ORDER) groups[t] = [];
+    for (const b of filtered) {
+      const tier = b.confidence_tier || getTier(b.confidence);
+      (groups[tier] || groups.uncertain).push(b);
     }
-
     return groups;
-  }, [beliefs]);
-
-  const totalBeliefs = beliefs.length;
+  }, [filtered]);
 
   return (
-    <div>
-      <div style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', marginBottom: 16 }}>
-        {totalBeliefs} beliefs
-      </div>
-
-      {totalBeliefs === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-ghost)', fontSize: 12 }}>
-          No beliefs formed yet. Beliefs emerge from patterns across multiple memories.
-        </div>
-      )}
-
+    <MnemosStreamShell
+      num="03"
+      streamLabel="BELIEFS STREAM"
+      title="Beliefs"
+      subtitle={`${filtered.length} belief${filtered.length === 1 ? '' : 's'} formed across the substrate. Patterns confidence-rated and grouped by tier.`}
+      searchPlaceholder="Search beliefs…"
+      filter={filter}
+      onFilterChange={setFilter}
+      query={query}
+      onQueryChange={setQuery}
+    >
+      {filtered.length === 0 && <div className="s-empty">No beliefs match.</div>}
       {TIER_ORDER.map((tier) => {
         const group = grouped[tier];
-        if (group.length === 0) return null;
-
+        if (!group || group.length === 0) return null;
         return (
-          <div key={tier} style={{ marginBottom: 24 }}>
-            <div className="flex items-center gap-2 mb-3">
-              <span style={{
-                fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
-                color: TIER_COLORS[tier],
-              }}>
-                {tier}
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
-                {group.length}
-              </span>
+          <section key={tier}>
+            <div className="s-tier-head">
+              <span className="s-tier-name">{tier}</span>
+              <span className="s-tier-count">{group.length}</span>
             </div>
-            <div className="flex flex-col gap-3">
-              {group.map((belief) => (
-                <BeliefCard key={belief.id} belief={belief} />
-              ))}
-            </div>
-          </div>
+            {group.map((b) => <BeliefRow key={b.id} belief={b} />)}
+          </section>
         );
       })}
-    </div>
+    </MnemosStreamShell>
   );
 }
