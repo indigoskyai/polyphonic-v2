@@ -6469,3 +6469,148 @@ html {
 
 /* Activity stream rows (uses m-activity-* but in a list) */
 .s-activity-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 24px; }
+
+/* ── Round-2 Mnemos surfaces (Memories / Engrams / Beliefs / Graph) ── */
+
+/* Type chip (episodic / semantic / procedural / belief / fact / preference / etc.) */
+.s-type-chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--hairline);
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-soft); letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+}
+.s-type-chip[data-state="active"]        { color: var(--text-primary); }
+.s-type-chip[data-state="consolidating"] { color: var(--amber-soft); }
+.s-type-chip[data-state="dormant"]       { color: var(--text-whisper); }
+
+/* Engram card — extends s-row with sub-bars */
+.s-engram { cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.s-engram:hover { background: rgba(255, 255, 255, 0.012); }
+.s-engram.selected { background: rgba(255, 255, 255, 0.025); }
+
+.s-bars { display: flex; align-items: center; gap: 14px; padding-top: 4px; }
+.s-bar { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.s-bar-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-whisper); letter-spacing: var(--track-folio);
+  text-transform: uppercase; min-width: 28px;
+}
+.s-bar-track {
+  flex: 1; height: 2px; background: var(--hairline);
+  border-radius: 1px; overflow: hidden;
+}
+.s-bar-fill { height: 100%; background: var(--text-soft); border-radius: 1px; }
+.s-bar-val {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-soft); font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-tight); min-width: 28px; text-align: right;
+}
+
+/* Mnemos overview hero stat strip */
+.s-stat-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 0; margin-bottom: 32px;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+.s-stat {
+  padding: 18px 20px;
+  border-right: 1px solid var(--hairline);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.s-stat:last-child { border-right: none; }
+.s-stat-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-whisper); letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+}
+.s-stat-value {
+  font-family: var(--font-sans); font-size: 26px; font-weight: 500;
+  color: var(--ink); letter-spacing: var(--track-tight);
+  line-height: 1; font-variant-numeric: tabular-nums;
+}
+.s-stat-delta {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-soft); font-variant-numeric: tabular-nums;
+}
+
+/* Sectioned panels on overview */
+.s-panel-grid {
+  display: grid; grid-template-columns: 1.4fr 1fr;
+  gap: 28px; margin-bottom: 32px;
+}
+.s-panel {
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.008);
+}
+.s-panel-eye {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-whisper); letter-spacing: var(--track-folio);
+  text-transform: uppercase; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.s-panel-eye .right { color: var(--text-soft); }
+.s-panel-title {
+  font-family: var(--font-sans); font-size: 18px; font-weight: 500;
+  color: var(--text-primary); letter-spacing: var(--track-tight);
+  margin-bottom: 4px;
+}
+
+/* Type distribution mini-bars */
+.s-dist-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.s-dist-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-soft); letter-spacing: var(--track-folio);
+  text-transform: uppercase; min-width: 90px;
+}
+.s-dist-bar {
+  flex: 1; height: 2px; background: var(--hairline);
+  border-radius: 1px; overflow: hidden;
+}
+.s-dist-bar-fill { height: 100%; background: var(--text-soft); border-radius: 1px; }
+.s-dist-count {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+  min-width: 32px; text-align: right;
+}
+
+/* Pending candidate row on overview */
+.s-cand-row {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 0; border-bottom: 1px solid var(--hairline);
+}
+.s-cand-row:last-child { border-bottom: none; }
+.s-cand-meta {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-whisper); letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+}
+.s-cand-meta .conf { margin-left: auto; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.s-cand-content {
+  font-family: var(--font-sans); font-size: 13px;
+  color: var(--text-primary); letter-spacing: var(--track-body);
+  line-height: 1.5;
+}
+
+/* Belief tier label headers (instead of card grids) */
+.s-tier-head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 22px 0 8px;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 4px;
+}
+.s-tier-head:first-child { padding-top: 4px; }
+.s-tier-name {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-primary); letter-spacing: var(--track-folio);
+  text-transform: uppercase; font-weight: 500;
+}
+.s-tier-count {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-whisper); font-variant-numeric: tabular-nums;
+}
