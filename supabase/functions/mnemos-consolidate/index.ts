@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { getMemorySettings, isConsolidationDue } from "../_shared/mnemos/settings.ts";
@@ -43,6 +44,8 @@ serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
   const corsHeaders = getCorsHeaders(req);
+  const unauthorized = requireServiceRole(req, corsHeaders);
+  if (unauthorized) return unauthorized;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

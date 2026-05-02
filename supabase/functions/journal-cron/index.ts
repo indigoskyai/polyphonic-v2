@@ -7,8 +7,8 @@ serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const unauthorized = requireServiceRole(req);
-  if (unauthorized) return new Response(unauthorized.body, { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const unauthorized = requireServiceRole(req, corsHeaders);
+  if (unauthorized) return unauthorized;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
