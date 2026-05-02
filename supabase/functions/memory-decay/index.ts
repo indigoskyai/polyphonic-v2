@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
+import { trackCronJob } from "../_shared/cronHealth.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -15,7 +16,13 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    const result = await trackCronJob("memory-decay", async () => {
     const { data, error } = await supabase.rpc("update_memory_decay");
+    if (error) throw new Error(error.message);
+    return data;
+    });
+    const data = result;
+    const error: { message: string } | null = null;
 
     if (error) {
       console.error("Decay RPC error:", error);
