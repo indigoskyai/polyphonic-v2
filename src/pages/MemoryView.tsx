@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
@@ -11,19 +11,7 @@ import GraphDetailPanel from '@/components/memory/GraphDetailPanel';
 import ImportDetailPanel from '@/components/ImportDetailPanel';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import AgentDot from '@/components/entry/AgentDot';
-import AgentName from '@/components/entry/AgentName';
-import TypeBadge from '@/components/entry/TypeBadge';
-import PinFlag from '@/components/entry/PinFlag';
-import ScoreChip from '@/components/entry/ScoreChip';
-import TimeAgoChip from '@/components/entry/TimeAgoChip';
-import MetaKV from '@/components/entry/MetaKV';
-import SectionLabel from '@/components/entry/SectionLabel';
-import Telemetry from '@/components/entry/Telemetry';
-import { formatDetailTime } from '@/lib/time';
-import MnemosModeToggle, { type MnemosMode } from '@/components/memory/MnemosModeToggle';
-import DigestView from '@/components/memory/DigestView';
-import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
+import MnemosOverview from '@/components/memory/MnemosOverview';
 
 const TABS = ['Memories', 'Engrams', 'Beliefs', 'Graph', 'Imports'] as const;
 type Tab = typeof TABS[number];
