@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type MemoryTab = 'Memories' | 'Engrams' | 'Beliefs' | 'Graph' | 'Imports' | 'Settings';
-export type MindTab = 'Overview' | 'Journal' | 'Thoughts' | 'Dreams' | 'Wanderings' | 'Insights' | 'Reflections';
+export type MindTab = 'Overview' | 'Thoughts' | 'Dreams' | 'Wanderings' | 'Insights' | 'Reflections' | 'Beliefs' | 'Activity';
 export type ProfileTab =
   | 'Portrait'
   | 'Personality'
