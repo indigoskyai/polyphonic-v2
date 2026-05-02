@@ -45,6 +45,7 @@ import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, Drawe
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
+import MemoryDetailDrawer from "./components/drawers/MemoryDetailDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
@@ -167,13 +168,23 @@ function DrawerRouter() {
     : active === 'observer' ? 'Observer'
     : '';
 
+  // Memory detail floats over the page (no backdrop blur) so the graph
+  // behind it remains visible. All other drawers keep the backdrop.
+  const showBackdrop = active !== 'memory-detail';
+
   return (
-    <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'}>
+    <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop}>
       {active === 'notifications' && <NotificationsDrawer />}
       {active === 'activity-timeline' && <ActivityTimelineDrawer />}
       {active === 'thread-detail' && <ThreadDetailDrawer />}
+      {active === 'memory-detail' && <MemoryDetailDrawer />}
       {active === 'observer' && <ObserverDrawer />}
-      {active !== null && active !== 'notifications' && active !== 'activity-timeline' && active !== 'thread-detail' && active !== 'observer' && (
+      {active !== null
+        && active !== 'notifications'
+        && active !== 'activity-timeline'
+        && active !== 'thread-detail'
+        && active !== 'memory-detail'
+        && active !== 'observer' && (
         <>
           <DrawerHeader>
             <DrawerTitle>{label}</DrawerTitle>

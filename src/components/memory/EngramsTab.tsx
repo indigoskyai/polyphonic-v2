@@ -5,6 +5,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
+import { useDrawerStore } from '@/stores/drawerStore';
 import MnemosStreamShell, { type StreamFilter } from './MnemosStreamShell';
 
 function timeAgo(iso: string): string {
@@ -67,6 +68,7 @@ function EngramRow({ engram, selected, onClick }: { engram: Engram; selected: bo
 
 export default function EngramsTab() {
   const { engrams, selectedEngram, setSelectedEngram } = useMemoryStore();
+  const openDrawer = useDrawerStore((s) => s.open);
   const [filter, setFilter] = useState<StreamFilter>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'recency' | 'strength' | 'stability' | 'access_count'>('recency');
@@ -155,7 +157,7 @@ export default function EngramsTab() {
             key={e.id}
             engram={e}
             selected={selectedEngram?.id === e.id}
-            onClick={() => setSelectedEngram(e)}
+            onClick={() => { setSelectedEngram(e); openDrawer('memory-detail', { engramId: e.id }); }}
           />
         ))}
       </div>

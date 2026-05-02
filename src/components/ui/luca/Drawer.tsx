@@ -8,6 +8,8 @@ interface DrawerProps {
   showEsc?: boolean;
   closeOnBackdropClick?: boolean;
   closeOnEsc?: boolean;
+  /** When false, no backdrop element is rendered (drawer floats over the page without dimming/blurring it). */
+  showBackdrop?: boolean;
   children: React.ReactNode;
   ariaLabel?: string;
 }
@@ -20,6 +22,7 @@ export function Drawer({
   width,
   closeOnBackdropClick = true,
   closeOnEsc = true,
+  showBackdrop = true,
   children,
   ariaLabel,
 }: DrawerProps) {
@@ -67,12 +70,14 @@ export function Drawer({
 
   return createPortal(
     <>
-      <div
-        className="drawer-backdrop"
-        data-open={open ? 'true' : undefined}
-        onClick={() => closeOnBackdropClick && onClose()}
-        aria-hidden="true"
-      />
+      {showBackdrop && (
+        <div
+          className="drawer-backdrop"
+          data-open={open ? 'true' : undefined}
+          onClick={() => closeOnBackdropClick && onClose()}
+          aria-hidden="true"
+        />
+      )}
       <div
         ref={containerRef}
         className="drawer"

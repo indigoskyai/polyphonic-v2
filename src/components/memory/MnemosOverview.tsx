@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
 import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
+import { useDrawerStore } from '@/stores/drawerStore';
 import MnemosStreamShell from './MnemosStreamShell';
 
 const ENGRAM_TYPES: Array<Engram['engram_type']> = ['episodic', 'semantic', 'procedural', 'belief'];
@@ -34,6 +35,7 @@ export default function MnemosOverview() {
   const beliefs = useMemoryStore((s) => s.beliefs);
   const connections = useMemoryStore((s) => s.connections);
   const setSelectedEngram = useMemoryStore((s) => s.setSelectedEngram);
+  const openDrawer = useDrawerStore((s) => s.open);
 
   const candidates = useMemoryCandidatesStore((s) => s.items);
   const loadCandidates = useMemoryCandidatesStore((s) => s.load);
@@ -213,7 +215,7 @@ export default function MnemosOverview() {
           <div
             key={e.id}
             className="s-row s-engram"
-            onClick={() => { setSelectedEngram(e); setMemoryTab('Engrams'); }}
+            onClick={() => { setSelectedEngram(e); openDrawer('memory-detail', { engramId: e.id }); }}
           >
             <div className="s-row-meta">
               <span className="dot" />
