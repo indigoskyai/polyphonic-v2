@@ -18,9 +18,15 @@ const ALLOWED_ORIGINS = [
 // 8081, 8082… depending on what's free, so a literal allowlist is brittle.
 const LOCAL_DEV_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
 
+// Treat anything other than explicit "production" as a non-prod environment so
+// preview/staging deploys keep working with localhost dev tools. In prod the
+// localhost regex is disabled entirely.
+const IS_PROD = (Deno.env.get("DENO_ENV") ?? Deno.env.get("ENVIRONMENT") ?? "")
+  .toLowerCase() === "production";
+
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
-  if (LOCAL_DEV_ORIGIN.test(origin)) return true;
+  if (!IS_PROD && LOCAL_DEV_ORIGIN.test(origin)) return true;
   return false;
 }
 
