@@ -47,7 +47,7 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   const unauthorized = requireServiceRole(req, corsHeaders);
   if (unauthorized) return unauthorized;
-
+  const __jobStart = Date.now();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
