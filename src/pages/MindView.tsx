@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
+import MindOverview from '@/components/mind/MindOverview';
 import AgentDot from '@/components/entry/AgentDot';
 import AgentName from '@/components/entry/AgentName';
 import TypeBadge from '@/components/entry/TypeBadge';
@@ -612,9 +613,9 @@ export default function MindView() {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
       {/* Content */}
       <div className="flex-1 overflow-y-auto" style={{
-        padding: activeTab === 'Thoughts' ? 0 : '24px 32px',
+        padding: activeTab === 'Thoughts' || activeTab === 'Overview' ? 0 : '24px 32px',
       }}>
-        {activeTab === 'Overview' && <OverviewTab />}
+        {activeTab === 'Overview' && <MindOverview />}
         {activeTab === 'Journal' && <JournalTab />}
         {activeTab === 'Thoughts' && <ThoughtsTab />}
         {activeTab === 'Dreams' && (
