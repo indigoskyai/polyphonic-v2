@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ChatView from "./pages/ChatView";
 import DashboardView from "./pages/DashboardView";
 import MemoryView from "./pages/MemoryView";
