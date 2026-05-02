@@ -103,6 +103,7 @@ serve(async (req) => {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, userIds.length) }, () => worker()));
 
     const ok = results.filter((r) => r.ok).length;
+    await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
     return new Response(JSON.stringify({
       target: targetFn,
       users_dispatched: userIds.length,
@@ -111,8 +112,10 @@ serve(async (req) => {
       results: results.slice(0, 50),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
+    const targetForLog = (typeof e === "object" && e !== null && "target" in e) ? String((e as any).target) : "unknown";
+    await recordCronFailure(`anima-dispatch:${targetForLog}`, Date.now() - __jobStart, e);
     console.error("anima-dispatch fatal:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown" }), {
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown", code: "internal_error" }), {
       status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
