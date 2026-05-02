@@ -1311,6 +1311,36 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_settings: {
+        Row: {
+          consolidation_enabled: boolean
+          created_at: string
+          decay_rate: number
+          dream_frequency: string
+          mnemos_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          consolidation_enabled?: boolean
+          created_at?: string
+          decay_rate?: number
+          dream_frequency?: string
+          mnemos_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          consolidation_enabled?: boolean
+          created_at?: string
+          decay_rate?: number
+          dream_frequency?: string
+          mnemos_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           agent: string | null
