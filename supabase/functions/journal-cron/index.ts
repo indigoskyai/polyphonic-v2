@@ -131,6 +131,7 @@ serve(async (req) => {
       }
     }
 
+    await recordCronSuccess("journal-cron", Date.now() - __jobStart);
     return new Response(JSON.stringify({
       processed: results.length,
       results,
@@ -141,8 +142,9 @@ serve(async (req) => {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (e) {
+    await recordCronFailure("journal-cron", Date.now() - __jobStart, e);
     console.error("journal-cron error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error", code: "internal_error" }), {
       status: 500,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
