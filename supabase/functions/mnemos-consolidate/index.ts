@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { getMemorySettings, isConsolidationDue } from "../_shared/mnemos/settings.ts";
