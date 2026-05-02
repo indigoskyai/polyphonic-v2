@@ -62,6 +62,7 @@ serve(async (req) => {
     const userIds = [...new Set((rows ?? []).map((r: { user_id: string }) => r.user_id))];
 
     if (userIds.length === 0) {
+      await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
       return new Response(JSON.stringify({ skipped: true, reason: "no active users", target: targetFn }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
