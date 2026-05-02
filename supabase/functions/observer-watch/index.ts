@@ -15,6 +15,7 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  const __jobStart = Date.now();
 
   try {
     const authHeader = req.headers.get("Authorization");
