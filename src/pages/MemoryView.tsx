@@ -21,20 +21,8 @@ import ImportsTab from '@/components/memory/ImportsTab';
 import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
 import MnemosOverview from '@/components/memory/MnemosOverview';
 
-type ImportRecord = {
-  id: string;
-  status: string;
-  pipeline_stage: string | null;
-  source_platform: string | null;
-  total_conversations: number | null;
-  processed_conversations: number | null;
-  memories_created: number | null;
-  questions_generated: number | null;
-  conflicts_detected: number | null;
-  file_size_bytes: number | null;
-  created_at: string;
-  completed_at: string | null;
-};
+
+
 
 export default function MemoryView() {
   const activeTab = useViewTabStore((s) => s.memoryTab);
