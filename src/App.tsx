@@ -171,9 +171,10 @@ function DrawerRouter() {
   // Memory detail floats over the page (no backdrop blur) so the graph
   // behind it remains visible. All other drawers keep the backdrop.
   const showBackdrop = active !== 'memory-detail';
+  const drawerWidth = active === 'memory-detail' ? 320 : undefined;
 
   return (
-    <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop}>
+    <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop} width={drawerWidth}>
       {active === 'notifications' && <NotificationsDrawer />}
       {active === 'activity-timeline' && <ActivityTimelineDrawer />}
       {active === 'thread-detail' && <ThreadDetailDrawer />}
