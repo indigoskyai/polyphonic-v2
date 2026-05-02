@@ -202,12 +202,14 @@ serve(async (req) => {
       await supabase.from("pending_revisions").insert(revisions);
     }
 
+    await recordCronSuccess("observer-watch", Date.now() - __jobStart);
     return new Response(JSON.stringify({ ok: true, inserted: insertions.length, revisions: revisions.length }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    await recordCronFailure("observer-watch", Date.now() - __jobStart, err);
     console.error("observer-watch error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
+    return new Response(JSON.stringify({ error: "Internal error", code: "internal_error" }), {
       status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
