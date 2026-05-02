@@ -9,9 +9,6 @@ import {
   formatConsolidationSummary,
   type ConsolidationCounts,
 } from "../_shared/mnemos/insight-surface.ts";
-  formatConsolidationSummary,
-  type ConsolidationCounts,
-} from "../_shared/mnemos/insight-surface.ts";
 
 async function maybeSurfaceConsolidation(
   supabase: any,
