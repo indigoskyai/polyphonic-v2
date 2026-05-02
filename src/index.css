@@ -6760,3 +6760,17 @@ html {
   font-family: var(--font-mono); font-size: 10px;
   color: var(--text-whisper); font-variant-numeric: tabular-nums;
 }
+
+/* ── Mnemos Graph animations ─────────────────────────────────────────── */
+@keyframes graphPulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.4); }
+}
+@keyframes graphTooltipIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes graphPulse { 0%, 100% { opacity: 0.5; transform: none; } }
+  @keyframes graphTooltipIn { from, to { opacity: 1; transform: none; } }
+}
