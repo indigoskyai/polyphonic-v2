@@ -89,6 +89,10 @@ interface MemoryState {
   loadBeliefs: (userId: string) => Promise<void>;
   loadMemories: (userId: string) => Promise<void>;
   loadAll: (userId: string) => Promise<void>;
+  upsertEngram: (e: Engram) => void;
+  removeEngram: (id: string) => void;
+  upsertConnection: (c: Connection) => void;
+  removeConnection: (id: string) => void;
 }
 
 export const useMemoryStore = create<MemoryState>((set, get) => ({
