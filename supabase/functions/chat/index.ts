@@ -292,6 +292,13 @@ serve(async (req) => {
             .update({ updated_at: new Date().toISOString() })
             .eq("id", thread_id);
 
+          // Record idempotent response so an immediate retry returns the same outcome.
+          if (idempotencyKey) {
+            recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+              ok: true, model: usedModel, tokens_used: tokensUsed,
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
+
           // Auto-title if thread has no title (fire and forget)
           autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
