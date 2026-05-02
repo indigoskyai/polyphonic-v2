@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
+import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { decayMultiplierFromRate, getMemorySettings } from "../_shared/mnemos/settings.ts";
 
@@ -12,6 +13,7 @@ serve(async (req) => {
   const unauthorized = requireServiceRole(req, corsHeaders);
   if (unauthorized) return unauthorized;
 
+  const __jobStart = Date.now();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
