@@ -1,9 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+// Per-request CORS, reassigned on each invocation. See _shared/cors.ts.
+let corsHeaders: Record<string, string> = {
+  ...getCorsHeaders(),
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -12,9 +12,9 @@ interface RestoreBody {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  corsHeaders = { ...getCorsHeaders(req), "Access-Control-Allow-Methods": "POST, OPTIONS" };
+  const preflight = handleCorsPreflightIfNeeded(req);
+  if (preflight) return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
