@@ -25,6 +25,7 @@ serve(async (req) => {
       .gte("updated_at", since);
 
     if (!activeConvos || activeConvos.length === 0) {
+      await recordCronSuccess("journal-cron", Date.now() - __jobStart);
       return new Response(JSON.stringify({ skipped: true, reason: "No active users" }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
