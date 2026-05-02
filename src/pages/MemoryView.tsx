@@ -21,7 +21,6 @@ import GraphTab from '@/components/memory/GraphTab';
 import EngramsTab from '@/components/memory/EngramsTab';
 import BeliefsTab from '@/components/memory/BeliefsTab';
 import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
-import GraphDetailPanel from '@/components/memory/GraphDetailPanel';
 import ImportDetailPanel from '@/components/ImportDetailPanel';
 import MnemosOverview from '@/components/memory/MnemosOverview';
 
@@ -43,7 +42,7 @@ type ImportRecord = {
 export default function MemoryView() {
   const activeTab = useViewTabStore((s) => s.memoryTab);
   const user = useAuthStore((s) => s.user);
-  const { loadAll, selectedEngram, setSelectedEngram } = useMemoryStore();
+  const loadAll = useMemoryStore((s) => s.loadAll);
 
   useEffect(() => {
     if (user) loadAll(user.id);
@@ -66,15 +65,7 @@ export default function MemoryView() {
           {activeTab === 'Imports' && <ImportsTab />}
           {activeTab === 'Settings' && <MemorySettingsPanel />}
         </div>
-
-        {/* Detail panel (when engram selected) — Engrams + Graph tabs */}
-        {selectedEngram && (activeTab === 'Engrams' || activeTab === 'Graph') && (
-          <GraphDetailPanel
-            engram={selectedEngram}
-            onClose={() => setSelectedEngram(null)}
-            onSelectEngram={(e) => setSelectedEngram(e)}
-          />
-        )}
+        {/* Engram details now open via the global drawer router (memory-detail). */}
       </div>
     </div>
   );
