@@ -79,6 +79,40 @@ After **every phase** (or meaningful sub-step), append a new dated entry below d
 - 🟡 `extension in public` warning persists (pg_trgm). Low risk; defer.
 
 **Next (Phase 2 continuation)**
-1. Sweep remaining SECURITY DEFINER fns; REVOKE from anon where not intentionally public.
-2. Per-edge-function JWT validation audit on the 52 `verify_jwt = false` functions — confirm each either calls `getClaims()` or is intentionally public (webhooks/cron).
+1. ~~Sweep remaining SECURITY DEFINER fns~~ ✅ done below.
+2. ~~Per-edge-function JWT validation audit~~ ✅ first sweep done below.
 3. CORS allowlist review (`_shared/cors.ts`) — confirm prod origins only.
+
+---
+
+## Phase 2 — Security Hardening (continuation)  ✅ (2026-05-02)
+
+**Done — SECURITY DEFINER lockdown**
+Revoked EXECUTE on all 14 user-defined SECURITY DEFINER functions in `public`:
+- **Trigger-only** (revoked from PUBLIC, anon, authenticated — only Postgres trigger context invokes them): `auto_assign_first_admin`, `handle_new_user`, `handle_new_user_agents`, `handle_new_user_memory_settings`, `handle_new_user_settings`.
+- **Cron / service-role only** (revoked from PUBLIC, anon, authenticated): `auto_commit_stale_memory_candidates`, `get_app_config`.
+- **User-callable, but never anon** (revoked PUBLIC + anon; authenticated retained — each uses `auth.uid()` internally): `save_user_api_key`, `delete_user_api_key`, `mark_activity_seen`, `match_engrams`, `match_memories`, `has_role`.
+- (`decrypt_user_api_key` already locked in initial pass; `invoke_edge_function`, `openclaw_verify_device_token` already service-role only.)
+
+Linter: 8 remaining "Signed-In Users Can Execute SECURITY DEFINER Function" warnings — these correspond to the user-callable set above and are **expected/accepted** (RLS-equivalent functions: `has_role` powers policies, `mark_activity_seen` / `save_user_api_key` / `delete_user_api_key` / `match_*` are intentional client RPCs, all internally scoped to `auth.uid()`).
+
+**Done — Edge function auth audit (sweep 1)**
+Audited all 60 edge functions for in-code auth. Findings:
+- **45/60** already validate via `getUser()`, `getClaims()`, `authenticateUser()`, or strict `service_role` bearer check. ✅
+- **6/60** were cron-targeted but accepted arbitrary `body.user_id` from any caller while running with service-role privileges → **PRIVILEGE ESCALATION RISK** (anon could trigger jobs against any user_id and trigger their `decrypt_user_api_key` calls).
+  - Fixed: `memory-decay`, `journal-cron`, `mnemos-decay`, `mnemos-soften`, `mnemos-consolidate` now require `Authorization: Bearer <service_role_key>` via shared `requireServiceRole()` guard.
+  - `anima-heartbeat` already had this guard.
+- New shared module `supabase/functions/_shared/serviceRoleGuard.ts` (10 LOC) for consistent enforcement.
+- New shared module `supabase/functions/_shared/cronAuth.ts` for future "cron-or-self" use cases (not yet wired).
+
+**Found**
+- 🟢 8 linter warnings on user-callable SECURITY DEFINER fns are acceptable (each is `auth.uid()`-scoped internally). Documenting as accepted.
+- 🟡 `extension in public` (pg_trgm) persists. Low risk; defer to Phase 4.
+- 🟡 ~9 "anima-*" worker functions (`anima-think`, `anima-dream`, etc.) accept body params but already validate via `authenticateUser` — verified. No changes needed.
+
+**Next (Phase 2.5 / Phase 3 prep)**
+1. CORS allowlist review — confirm `polyphonic.chat` only, audit local-dev regex on prod build.
+2. Rate limit on auth endpoints (`save_user_api_key`, `chat`, `chat-multi`).
+3. Phase 3: backend reliability — error-handling wrappers, idempotency keys on chat, cron health surface.
+
+
