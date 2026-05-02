@@ -95,6 +95,7 @@ serve(async (req) => {
 
     if (userId) {
       const result = await runForUser(userId);
+      await recordCronSuccess("mnemos-consolidate", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
