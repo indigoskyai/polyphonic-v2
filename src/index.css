@@ -4049,6 +4049,22 @@ html {
 .rich-body h2,
 .rich-body h3,
 .rich-body h4 { margin-top: 0; }
+
+/* Compact variant — used inside drawers (e.g. agent dialogue) so RichBody
+   renders at the same scale as adjacent inline drawer prose. */
+.rich-body--compact,
+.rich-body--compact p,
+.rich-body--compact li {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.rich-body--compact p { margin: 0 0 10px; }
+.rich-body--compact p:last-child { margin-bottom: 0; }
+.rich-body--compact h1,
+.rich-body--compact h2,
+.rich-body--compact h3,
+.rich-body--compact h4 { font-size: 13.5px; margin-top: 12px; }
 .rich-body h1 {
   font-size: 20px;
   font-weight: 500;
