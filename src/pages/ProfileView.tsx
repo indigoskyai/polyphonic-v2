@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
 import PortraitMind from '@/components/profile/PortraitMind';
+import CommunicationMind from '@/components/profile/CommunicationMind';
+import CognitionMind from '@/components/profile/CognitionMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
@@ -486,7 +488,7 @@ export default function ProfileView() {
         <div
           className="flex-1 overflow-y-auto"
           style={{
-            padding: activeTab === 'Portrait' ? 0 : '8px 24px 24px',
+            padding: ['Portrait', 'Communication', 'Cognition'].includes(activeTab) ? 0 : '8px 24px 24px',
             scrollbarWidth: 'thin',
             scrollbarColor: 'var(--border) transparent',
           }}
@@ -495,11 +497,25 @@ export default function ProfileView() {
             <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
           )}
           {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
-          {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
+          {activeTab === 'Communication' && (
+            <CommunicationMind
+              data={profile.communication_patterns}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
           {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} memoryStats={memoryStats} />}
           {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} memoryStats={memoryStats} />}
           {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
-          {activeTab === 'Cognition' && <CognitionTab data={profile.cognitive_tendencies} memoryStats={memoryStats} engramSummary={engramSummary} />}
+          {activeTab === 'Cognition' && (
+            <CognitionMind
+              data={profile.cognitive_tendencies}
+              byType={memoryStats?.byType}
+              engramTotal={engramSummary?.total}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
           {activeTab === 'Growth' && <GrowthTab data={profile.growth_edges} />}
           {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} memoryStats={memoryStats} valuesData={profile.values_hierarchy} />}
         </div>
