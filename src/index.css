@@ -4452,6 +4452,8 @@ html {
   .rich-body .code-block-stream .csd { animation: none; opacity: 0.6; }
 }
 
+/* ======================================================================
+   PHASE 16 — CHECKPOINTS + DIFF VIEWER
    ====================================================================== */
 
 .cp-page-header {
