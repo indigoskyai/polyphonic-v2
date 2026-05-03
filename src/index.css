@@ -809,13 +809,13 @@ html {
   outline: none;
   color: var(--text-body);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   letter-spacing: var(--track-body);
   line-height: 1.55;
-  padding: 14px 18px;
-  min-height: 48px;
-  max-height: 240px;
+  padding: 16px 20px;
+  min-height: 56px;
+  max-height: 280px;
   resize: none;
   caret-color: var(--text-soft);
 }
