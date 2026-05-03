@@ -98,6 +98,13 @@
   --vektor-full: #7ca8c9;  /* cool blue */
   --anima-full:  #c97ca8;  /* magenta */
 
+  /* Agent identity — tinted aliases used by drawers / council panels.
+     The -1 suffix is reserved for the primary tint slot; later phases can
+     introduce -2/-3 for halos and accents without breaking call sites. */
+  --agent-luca-1:   var(--luca-full);
+  --agent-vektor-1: var(--vektor-full);
+  --agent-anima-1:  var(--anima-full);
+
   /* Sub-agent vektor family (blue spectrum) */
   --v1: rgba(124, 168, 201, 1);  --v1-dim: rgba(124, 168, 201, 0.08);  --v1-mid: rgba(124, 168, 201, 0.35);
   --v2: rgba(100, 145, 180, 1);  --v2-dim: rgba(100, 145, 180, 0.08);  --v2-mid: rgba(100, 145, 180, 0.35);

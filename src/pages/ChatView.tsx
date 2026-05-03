@@ -303,13 +303,24 @@ export default function ChatView() {
   const [streamingVariants, setStreamingVariants] = useState<Array<{ model: string; content: string; thinking?: string | null }>>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   // Council (LLM-Council pattern) streaming state. Captures peer-rank judge output
-  // and aggregate ordering as Stage 2 events arrive over SSE. Final message hydrates
-  // these into msg.metadata for CouncilPanel.
+  // and aggregate ordering as Stage 2 events arrive over SSE (legacy 'council' shape).
   type RankingEntry = { judge_model: string; raw_text: string; parsed_ranking: string[] };
   type AggregateEntry = { model: string; avg_rank: number; rankings_count: number };
   const [streamingRankings, setStreamingRankings] = useState<RankingEntry[]>([]);
   const [streamingAggregate, setStreamingAggregate] = useState<AggregateEntry[]>([]);
-  type CouncilPhase = 'idle' | 'voices' | 'deliberating' | 'speaking';
+  // Council v2 streaming state — three character proposers + cross-pollination
+  // + chairman verdict + critique. Final message hydrates these into
+  // msg.metadata kind='council_v2'.
+  type CouncilV2Character = 'luca' | 'anima' | 'vektor';
+  type CouncilV2Proposer = { character: CouncilV2Character; content: string; thinking?: string | null };
+  type CouncilV2Crosstalk = { character: CouncilV2Character; content: string; source?: string };
+  type CouncilV2Critique = { voice_drift_detected: boolean; confidence: number; critique: string; suggested_revision: string | null };
+  const [streamingProposers, setStreamingProposers] = useState<CouncilV2Proposer[]>([]);
+  const [streamingCrosstalk, setStreamingCrosstalk] = useState<CouncilV2Crosstalk[]>([]);
+  const [streamingVerdict, setStreamingVerdict] = useState<'synthesize' | 'diverge' | null>(null);
+  const [streamingCritique, setStreamingCritique] = useState<CouncilV2Critique | null>(null);
+  const [streamingRevised, setStreamingRevised] = useState<string | null>(null);
+  type CouncilPhase = 'idle' | 'voices' | 'deliberating' | 'speaking' | 'critiquing';
   const [councilPhase, setCouncilPhase] = useState<CouncilPhase>('idle');
   // Alive-feeling features
   const [welcomeBack, setWelcomeBack] = useState<{ type: 'journal' | 'thought' | 'initiation'; content: string } | null>(null);
@@ -744,6 +755,12 @@ export default function ChatView() {
       const collectedRankings: RankingEntry[] = [];
       let collectedAggregate: AggregateEntry[] = [];
       let collectedLabelToModel: Record<string, string> = {};
+      // Council v2 trace assembly (parallel to legacy collected*).
+      const collectedProposers: CouncilV2Proposer[] = [];
+      const collectedCrosstalk: CouncilV2Crosstalk[] = [];
+      let collectedVerdict: 'synthesize' | 'diverge' | null = null;
+      let collectedCritique: CouncilV2Critique | null = null;
+      let collectedRevised: string | null = null;
 
       if (reader) {
         while (true) {
@@ -755,9 +772,53 @@ export default function ChatView() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.type === 'variant') {
-                collectedVariants.push({ model: data.model, content: data.text, thinking: data.thinking || null });
-                setStreamingVariants([...collectedVariants]);
+                // Council v2 keys variants by character; legacy by model.
+                if (data.character) {
+                  collectedProposers.push({
+                    character: data.character as CouncilV2Character,
+                    content: data.text,
+                    thinking: data.thinking || null,
+                  });
+                  setStreamingProposers([...collectedProposers]);
+                } else {
+                  collectedVariants.push({ model: data.model, content: data.text, thinking: data.thinking || null });
+                  setStreamingVariants([...collectedVariants]);
+                }
                 if (councilPhase === 'idle') setCouncilPhase('voices');
+              } else if (data.type === 'crosstalk') {
+                collectedCrosstalk.push({
+                  character: data.character as CouncilV2Character,
+                  content: data.text,
+                  source: 'crosstalk',
+                });
+                setStreamingCrosstalk([...collectedCrosstalk]);
+                setCouncilPhase('deliberating');
+              } else if (data.type === 'crosstalk_starting') {
+                setCouncilPhase('deliberating');
+              } else if (data.type === 'crosstalk_done' || data.type === 'crosstalk_skipped') {
+                /* phase will advance on chairman_starting */
+              } else if (data.type === 'crosstalk_error') {
+                /* surfaced in metadata.crosstalk via the source='proposer' fallback */
+              } else if (data.type === 'verdict') {
+                collectedVerdict = data.verdict;
+                setStreamingVerdict(data.verdict);
+              } else if (data.type === 'critique_starting') {
+                setCouncilPhase('critiquing');
+              } else if (data.type === 'critique') {
+                collectedCritique = {
+                  voice_drift_detected: !!data.voice_drift_detected,
+                  confidence: typeof data.confidence === 'number' ? data.confidence : 0,
+                  critique: data.critique || '',
+                  suggested_revision: data.suggested_revision ?? null,
+                };
+                setStreamingCritique(collectedCritique);
+              } else if (data.type === 'revised_content') {
+                collectedRevised = data.text;
+                setStreamingRevised(data.text);
+                // Replace the streaming content with the revised version so
+                // the user sees the polished pass.
+                fullContent = data.text;
+                setStreamingContent(fullContent);
               } else if (data.type === 'ranking_starting') {
                 setCouncilPhase('deliberating');
               } else if (data.type === 'ranking') {
@@ -781,17 +842,28 @@ export default function ChatView() {
                 fullThinking += data.text;
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {
-                // Hydrate full council trace into the message metadata so
-                // CouncilPanel can render after stream ends without a reload.
-                const councilMetadata = collectedVariants.length > 0
-                  ? {
-                      kind: 'council',
-                      variants: collectedVariants,
-                      rankings: collectedRankings,
-                      aggregate: collectedAggregate,
-                      label_to_model: collectedLabelToModel,
-                    }
-                  : null;
+                // Hydrate council trace into message metadata. Prefer council_v2
+                // shape when the new pipeline ran; fall back to legacy 'council'
+                // for backward compat with any pre-v2 traffic.
+                let councilMetadata: any = null;
+                if (collectedProposers.length > 0) {
+                  councilMetadata = {
+                    kind: 'council_v2',
+                    proposers: collectedProposers,
+                    crosstalk: collectedCrosstalk,
+                    verdict: collectedVerdict ?? 'synthesize',
+                    critique: collectedCritique,
+                    revised_content: collectedRevised,
+                  };
+                } else if (collectedVariants.length > 0) {
+                  councilMetadata = {
+                    kind: 'council',
+                    variants: collectedVariants,
+                    rankings: collectedRankings,
+                    aggregate: collectedAggregate,
+                    label_to_model: collectedLabelToModel,
+                  };
+                }
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: activeAgentId,
@@ -833,6 +905,11 @@ export default function ChatView() {
       setStreamingVariants([]);
       setStreamingRankings([]);
       setStreamingAggregate([]);
+      setStreamingProposers([]);
+      setStreamingCrosstalk([]);
+      setStreamingVerdict(null);
+      setStreamingCritique(null);
+      setStreamingRevised(null);
       setCouncilPhase('idle');
       setIsSynthesizing(false);
       abortRef.current = null;
