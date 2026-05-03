@@ -751,9 +751,11 @@ export default function ChatView() {
               } else if (data.type === 'error') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: data.text || 'Something went wrong.',
+                  content: data.text || 'The model stream failed mid-response.',
                   model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-                });
+                  kind: 'agent_error',
+                  metadata: { agent: activeAgentId, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
+                } as any);
               }
             } catch {}
           }
@@ -763,9 +765,11 @@ export default function ChatView() {
       if (e.name !== 'AbortError') {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
-          content: 'Something went wrong. Please try again.',
+          content: 'Connection lost while streaming.',
           model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-        });
+          kind: 'agent_error',
+          metadata: { agent: activeAgentId, message: 'Connection lost while streaming.', detail: String(e?.message || e) },
+        } as any);
       }
     } finally {
       setStreaming(false);
