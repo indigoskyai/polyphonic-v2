@@ -424,6 +424,9 @@ export async function encode(
     engram,
     connections_created: connectionsCreated,
     beliefs_updated: [], // Belief updates happen during consolidation (task-23)
+    skipped: false,
+    skip_reason: decision.reason,
+    salience: decision.score,
   };
 }
 
