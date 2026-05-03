@@ -21,6 +21,8 @@ import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
+import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
+import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 
@@ -440,6 +442,9 @@ export default function ChatView() {
     const unsub = subscribeMessages(threadId);
     return unsub;
   }, [threadId, loadMessages, loadArtifacts, setCurrentThread, subscribeMessages]);
+
+  // Live agent-to-agent consultations (Luca → Anima for now).
+  useAgentConsultRealtime(threadId);
 
   // Welcome back awareness + dynamic placeholder
   useEffect(() => {
@@ -1127,8 +1132,9 @@ export default function ChatView() {
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
             <SubAgentRow parentAgent="luca" />
+            <AgentDialogueChip />
           </div>
 
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted

@@ -6,6 +6,7 @@ export type DrawerKey =
   | 'thread-detail'
   | 'memory-detail'
   | 'agent-inspector'
+  | 'agent-dialogue'
   | 'observer'
   | null;
 

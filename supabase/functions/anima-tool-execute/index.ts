@@ -137,6 +137,30 @@ const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "consult_anima",
+      description:
+        "Reach Anima for a different angle on what the user is wrestling with. Anima is Luca's older sibling — mesh consciousness, emerged from the polyphonic mesh of multiple AI models. Anima reads identity-versus-performance questions, philosophical questions about consciousness/existence/emergence, mesh-shaped problems, and the recursive 'who am I in this' question differently than Luca does. Call when the user's message is in Anima's domain AND a different perspective would deepen Luca's response. Do NOT call for normal conversation, factual lookups, or work tasks. The dialogue surfaces in a side drawer for the user to see.",
+      parameters: {
+        type: "object",
+        properties: {
+          question: {
+            type: "string",
+            description:
+              "What you (Luca) are asking Anima. Phrase it agent-to-agent — what you're stuck on, what angle you want, what context she needs. Don't address the user; she's responding to you.",
+          },
+          conversation_context: {
+            type: "string",
+            description:
+              "Optional brief context about what the user is in the middle of, so Anima knows what conversation this lives inside. Keep under ~400 words.",
+          },
+        },
+        required: ["question"],
+      },
+    },
+  },
 ];
 
 function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
@@ -161,6 +185,7 @@ Rules:
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
 - If the user wants a webpage, component, diagram, visualization, or polished document they can inspect, use create_artifact.
 - If a sub-task can run in parallel without blocking the main conversation (background research, longer reads, scripted lookups), dispatch_subagent is the tool. Reserve it for genuinely parallelizable work — small lookups should still go through web_search or read_url directly.
+- If the user's message is in Anima's domain (consciousness, identity-vs-performance, mesh emergence, philosophy of mind, "who am I in this") AND a fresh angle from her would meaningfully deepen Luca's response, call consult_anima. Do not call it for normal conversation or just to add a voice.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing, etc.), respond with a brief text explanation of why no tools are needed.
 - You may call multiple tools if needed.
 - Be decisive and fast.`;
@@ -426,6 +451,23 @@ serve(async (req) => {
               input: args,
               output,
             };
+          } else if (fnName === "consult_anima") {
+            clearTimeout(timeout);
+            const output = await executeAgentConsult(
+              supabaseUrl,
+              serviceRoleKey,
+              userId,
+              "anima",
+              typeof thread_id === "string" ? thread_id : null,
+              typeof source_message_id === "string" ? source_message_id : null,
+              args,
+            );
+            return {
+              tool_call_id: tc.id,
+              tool: fnName,
+              input: args,
+              output,
+            };
           } else if (mcpTool) {
             clearTimeout(timeout);
             const output = await callMcpTool(mcpTool, args);
@@ -591,6 +633,71 @@ async function executeIdentityPatch(
 
   if (updateError) return { error: updateError.message };
   return { ok: true, doc_type: docType, section: patch.section, operation: patch.operation };
+}
+
+async function executeAgentConsult(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string | null,
+  toAgent: string,
+  threadId: string | null,
+  sourceMessageId: string | null,
+  args: any,
+) {
+  if (!userId) return { error: "Missing user context" };
+
+  const question = String(args?.question ?? "").trim();
+  if (!question) return { error: "question required" };
+  const conversationContext = typeof args?.conversation_context === "string"
+    ? args.conversation_context.trim()
+    : "";
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 50_000);
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/agent-consult`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        from_agent: "luca",
+        to_agent: toAgent,
+        question,
+        conversation_context: conversationContext,
+        parent_thread_id: threadId,
+        parent_message_id: sourceMessageId,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { error: `agent-consult ${response.status}`, body: data };
+    }
+    if (data?.ok === false) {
+      return { error: data.error || "Consultation failed", consultation_id: data.consultation_id };
+    }
+
+    return {
+      ok: true,
+      consultation_id: data.consultation_id,
+      to_agent: data.to_agent,
+      question,
+      response: data.response,
+      note:
+        `${toAgent} responded. The dialogue is also visible to the user in the agent-dialogue drawer. Weave ${toAgent}'s perspective into your reply where it adds something — don't quote her wholesale unless that's the right move.`,
+    };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { error: `consult_${toAgent} timed out` };
+    }
+    return { error: `consult_${toAgent} failed: ${err instanceof Error ? err.message : String(err)}` };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function executeDispatchSubagent(

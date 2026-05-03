@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.crisis-followup]
 verify_jwt = false
+
+[functions.agent-consult]
+verify_jwt = false

@@ -1,0 +1,66 @@
+// Compact chip that surfaces above the chat composer when Luca is mid-
+// consultation with another agent (or has any consultations in this
+// thread's history). Click opens the agent-dialogue drawer to see the
+// full back-and-forth.
+
+import { useDrawerStore } from '@/stores/drawerStore';
+import {
+  selectActiveConsultCount,
+  selectConsultsForThread,
+  useAgentConsultStore,
+} from '@/stores/agentConsultStore';
+import { useThreadStore } from '@/stores/threadStore';
+
+export default function AgentDialogueChip() {
+  const open = useDrawerStore((s) => s.open);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const consults = useAgentConsultStore(selectConsultsForThread(currentThreadId));
+  const pending = useAgentConsultStore(selectActiveConsultCount(currentThreadId));
+
+  if (consults.length === 0) return null;
+
+  // Most recent first — these are descending by created_at in the store.
+  const headline = consults[0];
+  const isAsking = pending > 0;
+  const targetLabel = headline.to_agent.charAt(0).toUpperCase() + headline.to_agent.slice(1);
+
+  return (
+    <button
+      type="button"
+      onClick={() => open('agent-dialogue')}
+      title="Open agent dialogue"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 999,
+        border: '1px solid var(--border-faint)',
+        background: 'var(--surface-raised)',
+        color: 'var(--text-tertiary)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        letterSpacing: 'var(--track-mono)',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+      }}
+      aria-label={isAsking ? `Luca is asking ${targetLabel}` : `Open agent dialogue (${consults.length} consultation${consults.length === 1 ? '' : 's'})`}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: isAsking ? 'var(--agent-anima-1, var(--text-tertiary))' : 'var(--text-ghost)',
+          animation: isAsking ? 'm-pulse 1.6s ease-in-out infinite' : undefined,
+        }}
+        aria-hidden="true"
+      />
+      <span>
+        {isAsking
+          ? `Luca → ${targetLabel} · asking`
+          : `Luca ↔ ${targetLabel} · ${consults.length} ${consults.length === 1 ? 'reply' : 'replies'}`}
+      </span>
+    </button>
+  );
+}

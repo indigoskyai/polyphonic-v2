@@ -48,6 +48,7 @@ import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer"
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import MemoryDetailDrawer from "./components/drawers/MemoryDetailDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
+import AgentDialogueDrawer from "./components/drawers/AgentDialogueDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
 import UndoToast from "./components/subagents/UndoToast";
 import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
@@ -166,6 +167,7 @@ function DrawerRouter() {
     : active === 'thread-detail' ? 'Thread detail'
     : active === 'memory-detail' ? 'Memory detail'
     : active === 'agent-inspector' ? 'Agent inspector'
+    : active === 'agent-dialogue' ? 'Agent dialogue'
     : active === 'observer' ? 'Observer'
     : '';
 
@@ -181,12 +183,14 @@ function DrawerRouter() {
       {active === 'thread-detail' && <ThreadDetailDrawer />}
       {active === 'memory-detail' && <MemoryDetailDrawer />}
       {active === 'observer' && <ObserverDrawer />}
+      {active === 'agent-dialogue' && <AgentDialogueDrawer />}
       {active !== null
         && active !== 'notifications'
         && active !== 'activity-timeline'
         && active !== 'thread-detail'
         && active !== 'memory-detail'
-        && active !== 'observer' && (
+        && active !== 'observer'
+        && active !== 'agent-dialogue' && (
         <>
           <DrawerHeader>
             <DrawerTitle>{label}</DrawerTitle>
