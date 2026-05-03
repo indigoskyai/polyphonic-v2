@@ -51,7 +51,8 @@ async function getHighlighter(): Promise<HighlighterCore | null> {
           themes: ['github-dark-dimmed'],
           langs: ['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'bash', 'python', 'markdown'],
         });
-        (highlighterPromise as any)._sync = hl;
+        (globalThis as any).__shikiHl = hl;
+        ['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'bash', 'python', 'markdown'].forEach((l) => loadedLangs.add(l));
         notify();
         return hl;
       } catch (e) {
