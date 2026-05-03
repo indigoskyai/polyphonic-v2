@@ -152,13 +152,13 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
             {agentLabel(consult.to_agent)} {consult.status === 'pending' ? 'is thinking' : 'said'}
           </div>
           {consult.response ? (
-            <RichBody source={consult.response} />
+            <RichBody source={consult.response} className="rich-body--compact" />
           ) : consult.status === 'failed' ? (
-            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.6 }}>
+            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13.5, lineHeight: 1.6 }}>
               {consult.error || 'No response captured.'}
             </p>
           ) : (
-            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.6, fontStyle: 'italic' }}>
+            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13.5, lineHeight: 1.6, fontStyle: 'italic' }}>
               waiting for {agentLabel(consult.to_agent)}…
             </p>
           )}
