@@ -120,6 +120,15 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
               </button>
               <button
                 type="button"
+                className="code-icon-btn"
+                onClick={() => setFullscreen(true)}
+                title="Expand"
+                aria-label="Expand to fullscreen"
+              >
+                <Maximize2 size={13} />
+              </button>
+              <button
+                type="button"
                 className="code-icon-btn code-copy"
                 onClick={copy}
                 title={copied ? 'Copied' : 'Copy'}
