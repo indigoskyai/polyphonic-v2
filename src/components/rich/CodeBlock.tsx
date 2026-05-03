@@ -163,5 +163,60 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
         </div>
       )}
     </div>
+
+    {fullscreen && typeof document !== 'undefined' ? createPortal(
+      <div
+        className="code-fullscreen-overlay"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => { if (e.target === e.currentTarget) setFullscreen(false); }}
+      >
+        <div className="code-fullscreen-shell">
+          <div className="code-block-header">
+            <div className="code-block-title">
+              <span className="code-block-dot" aria-hidden />
+              <span className="code-block-lang">{headerLabel}</span>
+              <span className="code-block-lang" style={{ opacity: 0.5, marginLeft: 8 }}>· {lineCount} lines</span>
+            </div>
+            <div className="code-block-actions">
+              {!isArt && (
+                <button
+                  type="button"
+                  className={`code-icon-btn${wrap ? ' is-on' : ''}`}
+                  onClick={() => setWrap((v) => !v)}
+                  title={wrap ? 'Disable word wrap' : 'Word wrap'}
+                  aria-label="Toggle word wrap"
+                >
+                  <WrapText size={13} />
+                </button>
+              )}
+              <button type="button" className="code-icon-btn" onClick={download} title="Download" aria-label="Download">
+                <Download size={13} />
+              </button>
+              <button type="button" className="code-icon-btn code-copy" onClick={copy} title={copied ? 'Copied' : 'Copy'} aria-label="Copy">
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+                <span className="code-copy-label">{copied ? 'copied' : 'copy'}</span>
+              </button>
+              <button type="button" className="code-icon-btn" onClick={() => setFullscreen(false)} title="Close (Esc)" aria-label="Close fullscreen">
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+          <div className="code-fullscreen-body">
+            {isArt ? (
+              <pre className="code-art-pre"><code>{source}</code></pre>
+            ) : html ? (
+              <pre className={`code-pre${wrap ? ' is-wrap' : ''}`}>
+                <code dangerouslySetInnerHTML={{ __html: html }} />
+              </pre>
+            ) : (
+              <pre className={`code-pre${wrap ? ' is-wrap' : ''}`}><code>{source}</code></pre>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    ) : null}
+    </>
   );
 }
