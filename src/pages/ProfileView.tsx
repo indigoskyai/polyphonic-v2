@@ -506,8 +506,23 @@ export default function ProfileView() {
               version={profile.version}
             />
           )}
-          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} memoryStats={memoryStats} />}
-          {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} memoryStats={memoryStats} />}
+          {activeTab === 'Emotions' && (
+            <EmotionsMind
+              data={profile.emotional_landscape}
+              emotionalSeries={emotionalSeries}
+              memoryStats={memoryStats}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
+          {activeTab === 'Values' && (
+            <ValuesMind
+              data={profile.values_hierarchy}
+              memoryStats={memoryStats}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
           {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
           {activeTab === 'Cognition' && (
             <CognitionMind
