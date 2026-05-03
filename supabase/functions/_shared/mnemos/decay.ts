@@ -1,88 +1,124 @@
 /**
- * Mnemos Memory System — Decay
+ * Mnemos Memory System — Decay (dual-trace, reference-aligned)
  *
- * Time-based decay of engram strength and accessibility.
- * Accessibility decays faster than strength (per dual-trace theory).
- * Stability acts as a decay buffer — well-rehearsed memories resist forgetting.
- *
- * State transitions:
- *   active -> dormant   (accessibility < 0.1 AND strength < DORMANT_THRESHOLD)
- *   dormant -> archived (strength < ARCHIVE_THRESHOLD AND 30+ days since access)
+ * Models a human-feeling forgetting curve:
+ *   - Accessibility decays exponentially with elapsed time, modulated by
+ *     stability: effective_rate = base * exp(-k * stability).
+ *   - Connection-rich engrams resist decay (well-embedded memories last).
+ *   - Strength decays at 10% of accessibility's rate (durable storage trace).
+ *   - Engrams with ≥ STABILITY_CONNECTION_THRESHOLD connections gain a small
+ *     amount of stability per cycle — graph topology drives persistence.
+ *   - Recently-created or "foundational" / "active_project" engrams have
+ *     accessibility floors so the agent doesn't forget what's right in front
+ *     of it.
+ *   - State transitions: active → dormant when accessibility drops below
+ *     DORMANT_ACCESSIBILITY_THRESHOLD; dormant → archived only after
+ *     ARCHIVE_DORMANT_DAYS of no access AND strength below ARCHIVE_THRESHOLD.
  */
 
 import type { DecayOptions, DecayResult, Engram, EngramArchive } from "./types.ts";
 import {
-  STRENGTH_DECAY_RATE,
   ACCESSIBILITY_DECAY_RATE,
-  DORMANT_THRESHOLD,
+  STRENGTH_DECAY_FACTOR,
+  STABILITY_DECAY_FACTOR,
+  STABILITY_CONNECTION_THRESHOLD,
+  STABILITY_GROWTH_RATE,
+  STABILITY_GROWTH_CAP,
+  DORMANT_ACCESSIBILITY_THRESHOLD,
   ARCHIVE_THRESHOLD,
+  ARCHIVE_DORMANT_DAYS,
+  RECENT_ACCESSIBILITY_FLOOR,
 } from "./constants.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
 
-/** How many engrams to process per batch to avoid timeouts. */
 const BATCH_SIZE = 100;
 
-/** Days a dormant engram must be untouched before archiving. */
-const ARCHIVE_DORMANT_DAYS = 30;
-
-/** Accessibility threshold below which an engram qualifies for dormancy. */
-const DORMANT_ACCESSIBILITY_THRESHOLD = 0.1;
-
 // ---------------------------------------------------------------------------
-// Core Decay Math
+// Pure math (exported for tests)
 // ---------------------------------------------------------------------------
 
-/**
- * Compute the effective decay rate, modulated by stability.
- * Higher stability slows decay: effective_rate = base_rate / (1 + stability)
- */
-function effectiveDecayRate(baseRate: number, stability: number): number {
-  return baseRate / (1 + stability);
+export interface DecayInputs {
+  strength: number;
+  stability: number;
+  accessibility: number;
+  /** Number of connections this engram participates in. */
+  connections: number;
+  /** Hours since last access. */
+  elapsedHours: number;
+  /** Hours since the engram was created (for the recency floor). */
+  ageHours: number;
+  /** Tags can pin floors (foundational, active_project). */
+  tags?: readonly string[];
+}
+
+export interface DecayOutputs {
+  strength: number;
+  stability: number;
+  accessibility: number;
 }
 
 /**
- * Apply exponential decay to a value.
- * new_value = value * exp(-rate * elapsed_hours)
+ * Compute the new dual-trace values after a decay interval. Pure function —
+ * no I/O, fully testable. Mirrors mnemos/consolidation/decay.py.
  */
-function applyDecay(value: number, rate: number, elapsedHours: number): number {
-  return value * Math.exp(-rate * elapsedHours);
-}
+export function computeDecayedValues(input: DecayInputs): DecayOutputs {
+  const { strength, stability, accessibility, connections, elapsedHours, ageHours, tags } = input;
 
-/**
- * Calculate decayed strength and accessibility for an engram.
- * Accessibility decays at the full rate; strength decays at 0.3x the rate
- * (strength is more durable than accessibility in dual-trace theory).
- */
-export function computeDecayedValues(
-  engram: Pick<Engram, "strength" | "accessibility" | "stability">,
-  elapsedHours: number
-): { strength: number; accessibility: number } {
-  const strengthRate = effectiveDecayRate(STRENGTH_DECAY_RATE, engram.stability);
-  const accessibilityRate = effectiveDecayRate(ACCESSIBILITY_DECAY_RATE, engram.stability);
+  // Effective accessibility decay rate, modulated by stability.
+  let effective = ACCESSIBILITY_DECAY_RATE * Math.exp(-STABILITY_DECAY_FACTOR * stability);
+
+  // Connection resistance: well-connected memories decay slower (multiplicative).
+  if (connections > 0) {
+    const connectionFactor = Math.min(1, 0.2 + 0.2 * Math.log1p(connections));
+    effective *= 1 - connectionFactor * 0.5;
+  }
+
+  // Connection-driven stability growth.
+  let nextStability = stability;
+  if (connections >= STABILITY_CONNECTION_THRESHOLD) {
+    const growth = Math.min(STABILITY_GROWTH_CAP, STABILITY_GROWTH_RATE * Math.log1p(connections));
+    nextStability = Math.min(1, +(stability + growth).toFixed(4));
+  }
+
+  // Exponential decay of accessibility.
+  let nextAccessibility = accessibility * Math.exp(-effective * elapsedHours);
+  nextAccessibility = Math.max(0, Math.min(1, nextAccessibility));
+
+  // Strength decays 10× slower than accessibility's effective rate.
+  const strengthLoss = strength * (1 - Math.exp(-effective * STRENGTH_DECAY_FACTOR * elapsedHours));
+  let nextStrength = Math.max(0, strength - strengthLoss);
+
+  // Floors.
+  const tagSet = new Set(tags ?? []);
+  if (tagSet.has("foundational")) {
+    nextAccessibility = Math.max(0.5, nextAccessibility);
+    nextStrength = Math.max(0.5, nextStrength);
+  }
+  if (tagSet.has("active_project")) {
+    nextAccessibility = Math.max(0.6, nextAccessibility);
+  }
+  if (ageHours < 72) {
+    nextAccessibility = Math.max(RECENT_ACCESSIBILITY_FLOOR, nextAccessibility);
+  }
 
   return {
-    // Strength decays at 0.3x the rate — more durable trace
-    strength: applyDecay(engram.strength, strengthRate * 0.3, elapsedHours),
-    // Accessibility decays at the full rate — fades faster
-    accessibility: applyDecay(engram.accessibility, accessibilityRate, elapsedHours),
+    strength: +nextStrength.toFixed(4),
+    stability: +nextStability.toFixed(4),
+    accessibility: +nextAccessibility.toFixed(4),
   };
 }
 
-/**
- * Determine the new state for an engram based on its decayed values.
- */
+/** Determine the lifecycle state after decay. */
 export function determineState(
   strength: number,
   accessibility: number,
   currentState: Engram["state"],
   hoursSinceAccess: number
 ): Engram["state"] {
-  // Already archived — no further transitions
   if (currentState === "archived") return "archived";
 
-  // Dormant -> archived: below archive threshold and untouched for 30+ days
   if (
     currentState === "dormant" &&
     strength < ARCHIVE_THRESHOLD &&
@@ -91,32 +127,56 @@ export function determineState(
     return "archived";
   }
 
-  // Active/consolidating -> dormant: both traces have faded significantly
-  if (accessibility < DORMANT_ACCESSIBILITY_THRESHOLD && strength < DORMANT_THRESHOLD) {
+  if (accessibility < DORMANT_ACCESSIBILITY_THRESHOLD) {
     return "dormant";
+  }
+
+  // Recover from dormant if accessibility climbed back up (shouldn't happen
+  // during pure decay, but is safe under reconsolidation).
+  if (currentState === "dormant" && accessibility >= DORMANT_ACCESSIBILITY_THRESHOLD) {
+    return "active";
   }
 
   return currentState;
 }
 
 // ---------------------------------------------------------------------------
-// Batch Decay Execution
+// Batch decay execution
 // ---------------------------------------------------------------------------
 
-/**
- * Run a full decay cycle across all active/consolidating/dormant engrams
- * for a given user. Returns counts of decayed and archived engrams.
- */
+async function countConnections(
+  supabase: SupabaseClient,
+  engramIds: string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (engramIds.length === 0) return counts;
+
+  // Two queries (source side / target side) — cheaper than a giant OR.
+  const { data: sourceRows } = await supabase
+    .from("connections")
+    .select("source_id")
+    .in("source_id", engramIds);
+
+  const { data: targetRows } = await supabase
+    .from("connections")
+    .select("target_id")
+    .in("target_id", engramIds);
+
+  for (const r of (sourceRows ?? []) as Array<{ source_id: string }>) {
+    counts.set(r.source_id, (counts.get(r.source_id) ?? 0) + 1);
+  }
+  for (const r of (targetRows ?? []) as Array<{ target_id: string }>) {
+    counts.set(r.target_id, (counts.get(r.target_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export async function runDecayCycle(
   supabase: SupabaseClient,
   userId: string,
   options: DecayOptions = {}
 ): Promise<DecayResult> {
-  const {
-    min_hours_since_access = 1,
-    archive_below_threshold = true,
-    rate_multiplier = 1,
-  } = options;
+  const { min_hours_since_access = 1, archive_below_threshold = true, rate_multiplier = 1 } = options;
 
   const now = new Date();
   let totalProcessed = 0;
@@ -124,43 +184,59 @@ export async function runDecayCycle(
   let totalArchived = 0;
   let offset = 0;
 
-  // Process in batches to avoid edge function timeouts
   while (true) {
     const { data: engrams, error } = await supabase
       .from("engrams")
-      .select("id, strength, stability, accessibility, state, last_accessed_at, content, engram_type, tags, source_context, created_at")
+      .select(
+        "id, strength, stability, accessibility, state, last_accessed_at, content, engram_type, tags, source_context, created_at"
+      )
       .eq("user_id", userId)
       .in("state", ["active", "consolidating", "dormant"])
       .order("last_accessed_at", { ascending: true })
       .range(offset, offset + BATCH_SIZE - 1);
 
-    if (error) {
-      throw new Error(`Decay: failed to fetch engrams — ${error.message}`);
-    }
-
+    if (error) throw new Error(`Decay: failed to fetch engrams — ${error.message}`);
     if (!engrams || engrams.length === 0) break;
 
-    const toUpdate: Array<{ id: string; strength: number; accessibility: number; state: Engram["state"] }> = [];
-    const toArchive: Array<EngramArchive> = [];
+    const ids = (engrams as Array<{ id: string }>).map((e) => e.id);
+    const connectionCounts = await countConnections(supabase, ids);
 
-    for (const engram of engrams) {
+    const toUpdate: Array<{
+      id: string;
+      strength: number;
+      stability: number;
+      accessibility: number;
+      state: Engram["state"];
+    }> = [];
+    const toArchive: EngramArchive[] = [];
+
+    for (const engram of engrams as Engram[]) {
       const lastAccessed = new Date(engram.last_accessed_at);
-      const elapsedHoursRaw = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60);
+      const created = new Date(engram.created_at);
+      const elapsedHoursRaw = (now.getTime() - lastAccessed.getTime()) / 3_600_000;
+      const ageHours = (now.getTime() - created.getTime()) / 3_600_000;
       const elapsedHours = elapsedHoursRaw * rate_multiplier;
 
-      // Skip recently accessed engrams (gate uses raw elapsed, not multiplier)
       if (elapsedHoursRaw < min_hours_since_access) continue;
 
-      const { strength, accessibility } = computeDecayedValues(engram, elapsedHours);
-      const newState = determineState(strength, accessibility, engram.state, elapsedHours);
+      const decayed = computeDecayedValues({
+        strength: engram.strength,
+        stability: engram.stability,
+        accessibility: engram.accessibility,
+        connections: connectionCounts.get(engram.id) ?? 0,
+        elapsedHours,
+        ageHours,
+        tags: engram.tags ?? [],
+      });
 
-      // Only update if values actually changed meaningfully
-      const strengthDelta = Math.abs(engram.strength - strength);
-      const accessibilityDelta = Math.abs(engram.accessibility - accessibility);
+      const newState = determineState(decayed.strength, decayed.accessibility, engram.state, elapsedHoursRaw);
 
-      if (strengthDelta < 0.001 && accessibilityDelta < 0.001 && newState === engram.state) {
-        continue;
-      }
+      const noChange =
+        Math.abs(decayed.strength - engram.strength) < 0.001 &&
+        Math.abs(decayed.accessibility - engram.accessibility) < 0.001 &&
+        Math.abs(decayed.stability - engram.stability) < 0.0005 &&
+        newState === engram.state;
+      if (noChange) continue;
 
       if (newState === "archived" && archive_below_threshold) {
         toArchive.push({
@@ -176,53 +252,40 @@ export async function runDecayCycle(
           original_created_at: engram.created_at,
         });
       } else {
-        toUpdate.push({ id: engram.id, strength, accessibility, state: newState });
+        toUpdate.push({ id: engram.id, ...decayed, state: newState });
       }
     }
 
-    // Batch update decayed engrams
-    for (const update of toUpdate) {
-      const { error: updateError } = await supabase
+    for (const u of toUpdate) {
+      const { error: e } = await supabase
         .from("engrams")
         .update({
-          strength: update.strength,
-          accessibility: update.accessibility,
-          state: update.state,
+          strength: u.strength,
+          stability: u.stability,
+          accessibility: u.accessibility,
+          state: u.state,
           updated_at: now.toISOString(),
         })
-        .eq("id", update.id);
-
-      if (updateError) {
-        console.error(`Decay: failed to update engram ${update.id} — ${updateError.message}`);
+        .eq("id", u.id);
+      if (e) {
+        console.error(`Decay: failed to update engram ${u.id} — ${e.message}`);
         continue;
       }
       totalDecayed++;
     }
 
-    // Archive engrams below threshold
     if (toArchive.length > 0) {
-      // Insert into archive table
-      const { error: archiveInsertError } = await supabase
-        .from("engram_archive")
-        .insert(toArchive);
-
-      if (archiveInsertError) {
-        console.error(`Decay: failed to insert archive batch — ${archiveInsertError.message}`);
+      const { error: aErr } = await supabase.from("engram_archive").insert(toArchive);
+      if (aErr) {
+        console.error(`Decay: failed to insert archive batch — ${aErr.message}`);
       } else {
-        // Delete archived engrams from the main table
         const archivedIds = toArchive.map((a) => a.id);
-        const { error: deleteError } = await supabase
-          .from("engrams")
-          .delete()
-          .in("id", archivedIds);
-
-        if (deleteError) {
-          console.error(`Decay: failed to delete archived engrams — ${deleteError.message}`);
+        const { error: dErr } = await supabase.from("engrams").delete().in("id", archivedIds);
+        if (dErr) {
+          console.error(`Decay: failed to delete archived engrams — ${dErr.message}`);
         } else {
           totalArchived += toArchive.length;
         }
-
-        // Clean up orphaned connections for archived engrams
         for (const id of archivedIds) {
           await supabase
             .from("connections")
@@ -233,8 +296,6 @@ export async function runDecayCycle(
     }
 
     totalProcessed += engrams.length;
-
-    // If we got fewer than a full batch, we're done
     if (engrams.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }

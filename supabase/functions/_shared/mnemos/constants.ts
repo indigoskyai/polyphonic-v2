@@ -8,25 +8,55 @@
 
 // ---------------------------------------------------------------------------
 // Dual-Trace Decay
+//
+// Calibrated to match the reference Mnemos implementation. Strength is the
+// long-lived storage trace and decays ~10× slower than accessibility. Stability
+// modulates the effective decay exponentially: a fully consolidated engram
+// (stability ≈ 1) decays ~e^-3 ≈ 5% as fast as a fresh one. The intent is a
+// human-feeling forgetting curve, not aggressive pruning.
 // ---------------------------------------------------------------------------
 
-/** Base decay rate for strength (per hour). Higher = faster forgetting. */
-export const STRENGTH_DECAY_RATE = 0.05;
+/** Base decay rate for accessibility (per hour). Reference: 0.01. */
+export const ACCESSIBILITY_DECAY_RATE = 0.01;
 
-/** Base decay rate for accessibility (per hour). */
-export const ACCESSIBILITY_DECAY_RATE = 0.03;
+/** Strength decays at this fraction of the accessibility rate (10× slower). */
+export const STRENGTH_DECAY_FACTOR = 0.1;
 
-/** Stability growth factor per successful retrieval. */
-export const STABILITY_GROWTH_FACTOR = 0.1;
+/** Legacy alias kept for any callers still importing it. */
+export const STRENGTH_DECAY_RATE = ACCESSIBILITY_DECAY_RATE * STRENGTH_DECAY_FACTOR;
+
+/** Exponential modulation of decay by stability: rate *= exp(-k * stability). */
+export const STABILITY_DECAY_FACTOR = 3.0;
+
+/** Connection count at/above which an engram begins gaining stability per cycle. */
+export const STABILITY_CONNECTION_THRESHOLD = 3;
+
+/** Per-cycle stability growth (multiplied by log1p(connections)). */
+export const STABILITY_GROWTH_RATE = 0.002;
+
+/** Maximum stability gained per consolidation cycle. */
+export const STABILITY_GROWTH_CAP = 0.005;
+
+/** Stability growth per successful retrieval. */
+export const STABILITY_GROWTH_FACTOR = 0.05;
 
 /** Maximum stability value (asymptotic ceiling). */
 export const MAX_STABILITY = 1.0;
 
-/** Strength threshold below which an engram becomes dormant. */
-export const DORMANT_THRESHOLD = 0.15;
+/** Accessibility floor for engrams created within the last 72 hours. */
+export const RECENT_ACCESSIBILITY_FLOOR = 0.4;
 
-/** Strength threshold below which a dormant engram gets archived. */
-export const ARCHIVE_THRESHOLD = 0.05;
+/** Accessibility threshold below which an active engram becomes dormant. */
+export const DORMANT_ACCESSIBILITY_THRESHOLD = 0.1;
+
+/** Strength threshold below which a dormant engram is eligible for archive. */
+export const ARCHIVE_THRESHOLD = 0.01;
+
+/** Legacy alias for older callers checking strength dormancy. */
+export const DORMANT_THRESHOLD = 0.05;
+
+/** Days a dormant engram must be untouched before archive. */
+export const ARCHIVE_DORMANT_DAYS = 30;
 
 // ---------------------------------------------------------------------------
 // Activation & Retrieval
@@ -129,3 +159,47 @@ export const DIALECTIC_SOUL_APPLY_THRESHOLD = 0.8;
 
 /** SOUL.md patches at or above this confidence queue for corroborating cycles. */
 export const DIALECTIC_SOUL_QUEUE_THRESHOLD = 0.6;
+
+// ---------------------------------------------------------------------------
+// Encoding Salience Gate
+//
+// Not every chat exchange should become an engram. Reference Mnemos treats
+// encoding as costly: only events that are surprising, emotionally charged,
+// novel relative to existing memory, or explicitly tagged should leave a
+// trace. The defaults below are tuned so a steady-state conversation creates
+// roughly one engram every several turns rather than one per turn.
+// ---------------------------------------------------------------------------
+
+/** Minimum salience score required to encode a candidate engram. */
+export const ENCODING_SALIENCE_THRESHOLD = 0.55;
+
+/** Salience contribution from raw surprise (1 - max similarity). */
+export const SALIENCE_SURPRISE_WEIGHT = 0.55;
+
+/** Salience contribution from absolute emotional arousal. */
+export const SALIENCE_AROUSAL_WEIGHT = 0.25;
+
+/** Salience contribution from absolute emotional valence. */
+export const SALIENCE_VALENCE_WEIGHT = 0.15;
+
+/** Bonus added when an explicit tag (e.g. "preference") signals importance. */
+export const SALIENCE_EXPLICIT_TAG_BONUS = 0.4;
+
+/** Tags that always force encoding regardless of computed salience. */
+export const SALIENCE_FORCING_TAGS: readonly string[] = [
+  "preference",
+  "decision",
+  "identity",
+  "milestone",
+  "promise",
+  "boundary",
+  "goal",
+  "value",
+  "manual",
+];
+
+/** Bootstrap window: while user has < N engrams, lower the gate to seed identity. */
+export const BOOTSTRAP_ENGRAM_THRESHOLD = 25;
+
+/** Salience gate while in bootstrap window. */
+export const BOOTSTRAP_SALIENCE_THRESHOLD = 0.3;

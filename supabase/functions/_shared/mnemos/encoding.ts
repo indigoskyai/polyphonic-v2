@@ -26,6 +26,8 @@ import {
   EMOTIONAL_STATE_WINDOW,
 } from "./constants.ts";
 
+import { computeEncodingSalience } from "./salience.ts";
+
 import type { MnemosEngine } from "./engine.ts";
 
 // ---------------------------------------------------------------------------
@@ -308,8 +310,44 @@ export async function encode(
   const emotionalValence = context.emotional_valence ?? extracted.valence;
   const emotionalArousal = context.emotional_arousal ?? extracted.arousal;
 
+  // 2a. Salience gate — skip encoding for low-signal exchanges so the agent's
+  // memory looks human rather than a transcript log. Bootstrap window loosens
+  // the gate so a brand-new user still seeds identity.
+  const sourceType = (context.source_context as { type?: string } | undefined)?.type ?? "";
+  const forceEncode =
+    sourceType === "manual" ||
+    sourceType === "memory_extraction" ||
+    sourceType === "import";
+
+  const { count: existingEngramCount } = await client
+    .from("engrams")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("state", ["active", "consolidating"]);
+
+  const decision = computeEncodingSalience({
+    surprise: surpriseScore,
+    emotionalArousal,
+    emotionalValence,
+    tags: context.tags ?? [],
+    existingEngramCount: existingEngramCount ?? 0,
+    forceEncode,
+  });
+
+  if (!decision.encode) {
+    return {
+      engram: null,
+      connections_created: [],
+      beliefs_updated: [],
+      skipped: true,
+      skip_reason: decision.reason,
+      salience: decision.score,
+    };
+  }
+
   // 3. Dual-trace initial values
   const traces = computeInitialTraces(surpriseScore, emotionalArousal);
+
 
   // 4. Insert engram
   const engramRow = {
@@ -386,6 +424,9 @@ export async function encode(
     engram,
     connections_created: connectionsCreated,
     beliefs_updated: [], // Belief updates happen during consolidation (task-23)
+    skipped: false,
+    skip_reason: decision.reason,
+    salience: decision.score,
   };
 }
 

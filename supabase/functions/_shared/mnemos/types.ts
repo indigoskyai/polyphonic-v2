@@ -161,9 +161,15 @@ export interface DecayOptions {
 
 /** Result of encoding a new memory. */
 export interface EncodingResult {
-  engram: Engram;
+  engram: Engram | null;
   connections_created: Connection[];
   beliefs_updated: Belief[];
+  /** True when the salience gate suppressed the encoding. */
+  skipped?: boolean;
+  /** Reason for skipping (debug/inspection). */
+  skip_reason?: string;
+  /** Computed salience score for observability. */
+  salience?: number;
 }
 
 /** A single engram with its computed activation score from retrieval. */
