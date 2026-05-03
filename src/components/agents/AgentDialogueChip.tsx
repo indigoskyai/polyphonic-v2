@@ -3,19 +3,19 @@
 // thread's history). Click opens the agent-dialogue drawer to see the
 // full back-and-forth.
 
+import { useMemo } from 'react';
 import { useDrawerStore } from '@/stores/drawerStore';
-import {
-  selectActiveConsultCount,
-  selectConsultsForThread,
-  useAgentConsultStore,
-} from '@/stores/agentConsultStore';
+import { selectByThread, useAgentConsultStore } from '@/stores/agentConsultStore';
 import { useThreadStore } from '@/stores/threadStore';
 
 export default function AgentDialogueChip() {
   const open = useDrawerStore((s) => s.open);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
-  const consults = useAgentConsultStore(selectConsultsForThread(currentThreadId));
-  const pending = useAgentConsultStore(selectActiveConsultCount(currentThreadId));
+  const consults = useAgentConsultStore(selectByThread(currentThreadId));
+  const pending = useMemo(
+    () => consults.filter((c) => c.status === 'pending').length,
+    [consults],
+  );
 
   if (consults.length === 0) return null;
 

@@ -18,7 +18,7 @@ import { useDrawerStore } from '@/stores/drawerStore';
 import { useThreadStore } from '@/stores/threadStore';
 import {
   useAgentConsultStore,
-  selectConsultsForThread,
+  selectByThread,
   type AgentConsultation,
 } from '@/stores/agentConsultStore';
 import RichBody from '@/components/rich/RichBody';
@@ -171,7 +171,7 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
 export default function AgentDialogueDrawer() {
   const close = useDrawerStore((s) => s.close);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
-  const consultations = useAgentConsultStore(selectConsultsForThread(currentThreadId));
+  const consultations = useAgentConsultStore(selectByThread(currentThreadId));
 
   const counts = useMemo(() => {
     const total = consultations.length;

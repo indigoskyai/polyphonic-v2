@@ -1,7 +1,6 @@
 import { describe, beforeEach, expect, it } from 'vitest';
 import {
-  selectActiveConsultCount,
-  selectConsultsForThread,
+  selectByThread,
   useAgentConsultStore,
   type AgentConsultation,
 } from '@/stores/agentConsultStore';
@@ -63,18 +62,20 @@ describe('agentConsultStore', () => {
     expect(stored[0].id).toBe('c-34');
   });
 
-  it('counts pending consultations per thread', () => {
-    const upsert = useAgentConsultStore.getState().upsert;
-    upsert(consult({ id: 'a', status: 'pending' }));
-    upsert(consult({ id: 'b', status: 'completed' }));
-    upsert(consult({ id: 'c', status: 'pending' }));
-    expect(selectActiveConsultCount('thread-1')(useAgentConsultStore.getState())).toBe(2);
-    expect(selectActiveConsultCount('other-thread')(useAgentConsultStore.getState())).toBe(0);
+  it('selectByThread returns the empty list for unknown / null thread', () => {
+    const state = useAgentConsultStore.getState();
+    expect(selectByThread('missing')(state)).toEqual([]);
+    expect(selectByThread(null)(state)).toEqual([]);
+    expect(selectByThread(undefined)(state)).toEqual([]);
   });
 
-  it('selectConsultsForThread returns empty for unknown thread', () => {
-    expect(selectConsultsForThread('missing')(useAgentConsultStore.getState())).toEqual([]);
-    expect(selectConsultsForThread(null)(useAgentConsultStore.getState())).toEqual([]);
+  it('selectByThread returns the same reference across calls when nothing changed (no-realloc)', () => {
+    // The frozen empty array must be reused or React's useSyncExternalStore
+    // detects a "new" snapshot every render and infinite-loops the consumer.
+    const state = useAgentConsultStore.getState();
+    const a = selectByThread('missing')(state);
+    const b = selectByThread('missing')(state);
+    expect(a).toBe(b);
   });
 
   it('skips upsert when parent_thread_id is null', () => {

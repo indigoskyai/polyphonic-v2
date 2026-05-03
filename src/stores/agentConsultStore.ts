@@ -66,16 +66,26 @@ export const useAgentConsultStore = create<ConsultStoreState>((set) => ({
     }),
 }));
 
-export function selectConsultsForThread(threadId: string | null | undefined) {
-  return (state: ConsultStoreState): AgentConsultation[] => {
-    if (!threadId) return [];
-    return state.byThread[threadId] ?? [];
-  };
-}
+/**
+ * Stable empty array — returned by `selectByThread` when a thread has no
+ * consultations yet. Reusing the same reference avoids the infinite-loop
+ * trap where a curried selector allocates `[]` per render and Zustand's
+ * useSyncExternalStore detects it as a state change.
+ */
+const EMPTY_CONSULTS: AgentConsultation[] = Object.freeze([]) as AgentConsultation[];
 
-export function selectActiveConsultCount(threadId: string | null | undefined) {
-  return (state: ConsultStoreState): number => {
-    if (!threadId) return 0;
-    return (state.byThread[threadId] ?? []).filter((c) => c.status === 'pending').length;
+/**
+ * Hook-friendly selector: returns the consultation list for a thread, or
+ * a stable empty array. Use with `useAgentConsultStore`:
+ *
+ *   const list = useAgentConsultStore(selectByThread(threadId));
+ *
+ * Derive `pending count` etc. in the component with `useMemo` so the
+ * subscription stays referentially stable.
+ */
+export function selectByThread(threadId: string | null | undefined) {
+  return (state: ConsultStoreState): AgentConsultation[] => {
+    if (!threadId) return EMPTY_CONSULTS;
+    return state.byThread[threadId] ?? EMPTY_CONSULTS;
   };
 }
