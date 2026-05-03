@@ -159,3 +159,47 @@ export const DIALECTIC_SOUL_APPLY_THRESHOLD = 0.8;
 
 /** SOUL.md patches at or above this confidence queue for corroborating cycles. */
 export const DIALECTIC_SOUL_QUEUE_THRESHOLD = 0.6;
+
+// ---------------------------------------------------------------------------
+// Encoding Salience Gate
+//
+// Not every chat exchange should become an engram. Reference Mnemos treats
+// encoding as costly: only events that are surprising, emotionally charged,
+// novel relative to existing memory, or explicitly tagged should leave a
+// trace. The defaults below are tuned so a steady-state conversation creates
+// roughly one engram every several turns rather than one per turn.
+// ---------------------------------------------------------------------------
+
+/** Minimum salience score required to encode a candidate engram. */
+export const ENCODING_SALIENCE_THRESHOLD = 0.55;
+
+/** Salience contribution from raw surprise (1 - max similarity). */
+export const SALIENCE_SURPRISE_WEIGHT = 0.55;
+
+/** Salience contribution from absolute emotional arousal. */
+export const SALIENCE_AROUSAL_WEIGHT = 0.25;
+
+/** Salience contribution from absolute emotional valence. */
+export const SALIENCE_VALENCE_WEIGHT = 0.15;
+
+/** Bonus added when an explicit tag (e.g. "preference") signals importance. */
+export const SALIENCE_EXPLICIT_TAG_BONUS = 0.4;
+
+/** Tags that always force encoding regardless of computed salience. */
+export const SALIENCE_FORCING_TAGS: readonly string[] = [
+  "preference",
+  "decision",
+  "identity",
+  "milestone",
+  "promise",
+  "boundary",
+  "goal",
+  "value",
+  "manual",
+];
+
+/** Bootstrap window: while user has < N engrams, lower the gate to seed identity. */
+export const BOOTSTRAP_ENGRAM_THRESHOLD = 25;
+
+/** Salience gate while in bootstrap window. */
+export const BOOTSTRAP_SALIENCE_THRESHOLD = 0.3;
