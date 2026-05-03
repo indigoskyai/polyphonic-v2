@@ -1059,11 +1059,15 @@ export type Database = {
           accessibility: number
           content: string
           created_at: string | null
+          digest_id: string | null
           emotional_arousal: number | null
           emotional_valence: number | null
           engram_type: string
           id: string
           last_accessed_at: string | null
+          review_decision: string | null
+          review_note: string | null
+          reviewed_at: string | null
           source_context: Json | null
           stability: number
           state: string
@@ -1078,11 +1082,15 @@ export type Database = {
           accessibility?: number
           content: string
           created_at?: string | null
+          digest_id?: string | null
           emotional_arousal?: number | null
           emotional_valence?: number | null
           engram_type: string
           id?: string
           last_accessed_at?: string | null
+          review_decision?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
           source_context?: Json | null
           stability?: number
           state?: string
@@ -1097,11 +1105,15 @@ export type Database = {
           accessibility?: number
           content?: string
           created_at?: string | null
+          digest_id?: string | null
           emotional_arousal?: number | null
           emotional_valence?: number | null
           engram_type?: string
           id?: string
           last_accessed_at?: string | null
+          review_decision?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
           source_context?: Json | null
           stability?: number
           state?: string
@@ -1490,6 +1502,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mnemos_digests: {
+        Row: {
+          created_at: string
+          digest_date: string
+          engram_count: number
+          finalized_at: string | null
+          generated_at: string
+          id: string
+          reviewed_count: number
+          status: string
+          summary: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          digest_date: string
+          engram_count?: number
+          finalized_at?: string | null
+          generated_at?: string
+          id?: string
+          reviewed_count?: number
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          digest_date?: string
+          engram_count?: number
+          finalized_at?: string | null
+          generated_at?: string
+          id?: string
+          reviewed_count?: number
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       mnemos_emotional_state: {
         Row: {
