@@ -849,7 +849,33 @@ export default function ChatView() {
     </svg>
   );
 
-  const stopStreaming = () => abortRef.current?.abort();
+  const stopStreaming = useCallback(async () => {
+    abortRef.current?.abort();
+    // Persist partial content so cancellation survives reload.
+    const partial = streamingContent;
+    const partialThinking = streamingThinking;
+    if (currentThreadId && user && (partial || partialThinking)) {
+      const md = { canceled: true, canceled_at: new Date().toISOString() };
+      addMessage({
+        thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+        content: partial || '_(canceled before any content)_',
+        model: null, agent: activeAgentId,
+        thinking_content: partialThinking || null,
+        tokens_used: null, bookmarked: false,
+        metadata: md as any,
+      } as any);
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        await supabase.from('messages').insert({
+          thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+          content: partial || '_(canceled before any content)_',
+          agent: activeAgentId,
+          thinking_content: partialThinking || null,
+          metadata: md as any,
+        });
+      } catch (e) { console.warn('persist canceled stream failed', e); }
+    }
+  }, [streamingContent, streamingThinking, currentThreadId, user, activeAgentId, addMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
