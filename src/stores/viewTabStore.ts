@@ -13,15 +13,19 @@ export type ProfileTab =
   | 'Growth'
   | 'Shadow';
 
+export type MnemosMode = 'browse' | 'digest';
+
 interface ViewTabState {
   memoryTab: MemoryTab;
   memoryTypeFilter: string | null;
   memoryPinnedOnly: boolean;
+  mnemosMode: MnemosMode;
   mindTab: MindTab;
   profileTab: ProfileTab;
   setMemoryTab: (v: MemoryTab) => void;
   setMemoryTypeFilter: (v: string | null) => void;
   setMemoryPinnedOnly: (v: boolean) => void;
+  setMnemosMode: (v: MnemosMode) => void;
   setMindTab: (v: MindTab) => void;
   setProfileTab: (v: ProfileTab) => void;
 }
@@ -30,11 +34,13 @@ export const useViewTabStore = create<ViewTabState>((set) => ({
   memoryTab: 'Memories',
   memoryTypeFilter: null,
   memoryPinnedOnly: false,
+  mnemosMode: 'browse',
   mindTab: 'Overview',
   profileTab: 'Portrait',
   setMemoryTab: (v) => set({ memoryTab: v }),
   setMemoryTypeFilter: (v) => set({ memoryTypeFilter: v }),
   setMemoryPinnedOnly: (v) => set({ memoryPinnedOnly: v }),
+  setMnemosMode: (v) => set({ mnemosMode: v }),
   setMindTab: (v) => set({ mindTab: v }),
   setProfileTab: (v) => set({ profileTab: v }),
 }));
