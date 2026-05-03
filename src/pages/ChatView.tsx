@@ -356,6 +356,55 @@ export default function ChatView() {
     }
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
+  // Reload-mid-stream recovery — persist in-progress streamed content to
+  // localStorage so a refresh during streaming surfaces the partial reply
+  // as a recovered assistant message instead of vanishing.
+  const STREAM_KEY = currentThreadId ? `luca:stream:${currentThreadId}` : null;
+  useEffect(() => {
+    if (!STREAM_KEY) return;
+    if (isStreaming && streamingContent) {
+      try {
+        localStorage.setItem(STREAM_KEY, JSON.stringify({
+          content: streamingContent,
+          thinking: streamingThinking,
+          agent: activeAgentId,
+          updated_at: Date.now(),
+        }));
+      } catch { /* quota */ }
+    } else if (!isStreaming) {
+      try { localStorage.removeItem(STREAM_KEY); } catch { /* */ }
+    }
+  }, [STREAM_KEY, isStreaming, streamingContent, streamingThinking, activeAgentId]);
+
+  // On thread mount: if there's a stale in-progress snapshot from a prior
+  // session, recover it as an assistant message tagged metadata.recovered.
+  useEffect(() => {
+    if (!currentThreadId || !user) return;
+    const key = `luca:stream:${currentThreadId}`;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(key); } catch { /* */ }
+    if (!raw) return;
+    try {
+      const snap = JSON.parse(raw);
+      if (!snap?.content) { localStorage.removeItem(key); return; }
+      // Only recover if it's >5s old (otherwise our own active stream wrote it)
+      if (Date.now() - (snap.updated_at || 0) < 5000) return;
+      // Avoid duplicate recovery if a matching message exists
+      const exists = messages.some((m) => m.role === 'assistant' && m.content === snap.content);
+      if (exists) { localStorage.removeItem(key); return; }
+      addMessage({
+        thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+        content: snap.content,
+        model: null, agent: snap.agent || 'luca',
+        thinking_content: snap.thinking || null,
+        tokens_used: null, bookmarked: false,
+        metadata: { recovered: true } as any,
+      } as any);
+      localStorage.removeItem(key);
+    } catch { try { localStorage.removeItem(key); } catch { /* */ } }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentThreadId, user?.id]);
+
 
   // Load guardian messages when alcove opens or thread changes.
   // Skip while streaming so we don't clobber an in-flight reply with stale DB state.
