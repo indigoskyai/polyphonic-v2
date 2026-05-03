@@ -1,101 +1,137 @@
-## Batch 2 — Emotions & Values in the Mind language
+# Luca Messaging — Audit, Hardening, and Visual-Quality Pass
 
-Goal: Port the next two profile tabs to the same `ProfileMindShell` + `mindViz` system established in Batch 1, while introducing two small new primitives that the remaining tabs (Batch 3) can also reuse.
+Goal: bring **Luca-only** messaging (send, stream, render, persist) to a state we'd ship publicly — on par with ChatGPT/Claude/Gemini for: code blocks, artifacts (HTML/React/SVG/Mermaid), diagrams, and ASCII / letter art.
 
----
-
-### Data sources (already loaded by ProfileView)
-
-- **Emotions** — `profile.emotional_landscape` (JSONB: `baseline_mood`, `emotional_range`, `regulation_style`, `granularity`, `triggers[]`, `coping_mechanisms[]`) + `emotionalSeries.current` and `emotionalSeries.history` (mnemos_emotional_state: `valence`, `arousal`, `dominance`, `certainty`, `social`, `temporal`) + `memoryStats.affectiveTrajectory` (per-memory valence over time).
-- **Values** — `profile.values_hierarchy` (JSONB: `ranked_values[]`, `stated_vs_revealed`, `decision_framework`, `temporal_orientation`) + `memoryStats.byTagNorm` for stated-vs-revealed scoring.
-
-Routing wiring already exists in `ProfileView.tsx`; we just swap the components and add the two new tabs to the full-bleed allow-list.
+Other agents (Vektor, Anima, Mnemos, group, council, observer) are explicitly **out of scope** for this round, except where they can break Luca.
 
 ---
 
-### New shared primitives in `mindViz.tsx`
+## Phase 0 — Reproduction & baseline
 
-1. **`Sparkbar`** — compact 90-cell horizontal heat row (one bar per day). Used by Emotions for the 6-axis affective heatmap; also useful for Growth (Batch 3).
-   - Input: `values: (number|null)[]`, value range `-1..1` or `0..1` auto-detected.
-   - Cells use `var(--hairline)` background, fill via `rgba(244,243,240, 0.15..0.7)` opacity ramp.
+- Reproduce the live error first: `{"error":"No API key configured…"}` returned from `chat-multi`. Console shows it firing on every send.
+- Decide root cause path:
+  - User has no OpenRouter key saved → expected, but the UX should route them to Settings cleanly, not throw a raw 400.
+  - Or `decrypt_user_api_key` RPC is failing → fix server-side.
+- Use `supabase--read_query` against `user_api_keys` for the current user, plus `supabase--curl_edge_functions` to hit `chat-multi` with a known-good payload, and `supabase--edge_function_logs` to capture the failing branch.
+- Capture a clean baseline screenshot of `/chat/<thread>` via `browser--navigate_to_sandbox` so later passes can diff.
 
-2. **`DivergenceRow`** — two-track hairline bar (stated vs revealed) sharing one label column.
-   - Input: `{ label, stated: 0..1, revealed: 0..1 }`.
-   - Top track value is solid mono fill; bottom track is hatched/dashed `var(--hairline-strong)` to read as "evidence". Mono delta value at right.
-
-Both follow the same grid/typography system as `TraitBar` and `MagnitudeRow` — no new tokens.
-
----
-
-### `EmotionsMind.tsx` layout
-
-`ProfileMindShell` num=`08`, eyebrow=`Emotions`, title=`How you feel`, sub = current dominant axis label + qualitative.
-
-Panel grid (12-col):
-
-- **i — Affective signature** (span 5): `RadarMini` with 6 axes (Valence/Arousal/Dominance/Certainty/Social/Temporal) from `emotionalSeries.current`, normalized to 0..1. Right side `m-state-readout` lists each axis numeric value + dominant-axis whisper line. If no current state → `Empty note="Affective state forming."`.
-- **ii — 90-day weather** (span 7): six stacked `Sparkbar` rows, one per axis, fed from `emotionalSeries.history` (last 90 entries, left-padded with nulls). Header aside shows `n=<history.length>`.
-- **iii — Valence trajectory** (span 12): minimal SVG scatter of `memoryStats.affectiveTrajectory` (x=time, y=valence) with a hairline mean line. Reuses Mind tokens (`md-grid`, `md-fill`, `md-vertex`); circle radius encodes intensity. Empty → `Empty note="No memory affect recorded."`.
-- **iv — Landscape prose** (span 7): `QuoteCard` stack — Baseline (lead), Range, Regulation, Granularity. Skip any field that is empty.
-- **v — Triggers & coping** (span 5): two stacked `TagCloud` mini-sections ("Triggers", "Coping"). Counts only if items have `count`; otherwise uniform.
+Exit gate: I can produce or block the 400 deterministically and know which branch fires it.
 
 ---
 
-### `ValuesMind.tsx` layout
+## Phase 1 — Send / receive correctness (Luca only)
 
-`ProfileMindShell` num=`09`, eyebrow=`Values`, title=`What you hold`, sub = top value + ranked count.
+Audit the full path: `ChatView.handleSend` → `chat-multi` (Luca branch) → SSE stream → `threadStore` realtime → render.
 
-Panel grid:
+Targets:
+1. **API-key UX**: replace the raw 400 with an inline assistant-style message + a "Open Settings" pill. Never let a missing key surface as a runtime error toast.
+2. **Optimistic user message**: confirm it appears instantly, with no double-render when the realtime row arrives (the existing 30s de-dupe in `threadStore.subscribeMessages` covers this — verify under fast-send conditions).
+3. **Streaming lifecycle**: `isStreaming`, `streamingContent`, `streamingThinking` reset cleanly on success, error, and abort. No "stuck thinking…" state if the SSE pipe drops.
+4. **Abort/cancel**: stop button must actually close the SSE reader and persist whatever was streamed so far.
+5. **Thread creation**: first message in a brand-new thread creates the row, navigates, and streams in a single flow without losing the user's text.
+6. **Reload persistence**: refresh mid-stream → message reappears via `loadMessages` without duplication; refresh after stream → identical content.
+7. **Realtime**: second tab open on same thread sees Luca's reply land via the existing postgres_changes channel.
+8. **Long messages**: 8k+ token responses don't truncate, don't freeze the UI, scroll stays pinned to bottom while streaming and unpins when user scrolls up.
+9. **Rapid send**: 3 messages back-to-back queue correctly; no interleaved streams into wrong rows.
+10. **Errors from upstream** (`upstream_unavailable`, `quota_exceeded`, `validation_error` from `lib/edgeError.ts`) render as inline assistant-error cards with friendly copy + retry, not toasts.
 
-- **i — Hierarchy** (span 7): mono-numbered ranked list (01., 02., …) with each value rendered as `QuoteCard`-style left-rule blocks (eyebrow=value name, body=evidence). If no `ranked_values` → `Empty`.
-- **ii — Stated vs revealed** (span 5): `DivergenceRow` for top 3 values (stated derived from rank position, revealed from `tagMatchScore` against `memoryStats.byTagNorm`). Aside shows mean delta. Empty when `memoryStats` absent.
-- **iii — Decision architecture** (span 12): three `QuoteCard`s for `stated_vs_revealed`, `decision_framework`, `temporal_orientation`. Each gets its own panel-eye column; skip empty.
-
----
-
-### Wiring in `ProfileView.tsx`
-
-```ts
-// Add to full-bleed allow-list:
-['Portrait', 'Communication', 'Cognition', 'Emotions', 'Values'].includes(activeTab)
-
-// Replace tab renders:
-{activeTab === 'Emotions' && <EmotionsMind data={profile.emotional_landscape}
-  emotionalSeries={emotionalSeries} memoryStats={memoryStats}
-  updatedAt={profile.updated_at} version={profile.version} />}
-{activeTab === 'Values' && <ValuesMind data={profile.values_hierarchy}
-  memoryStats={memoryStats} updatedAt={profile.updated_at} version={profile.version} />}
-```
-
-Old `EmotionsTab` / `ValuesTab` functions stay in the file for now (deleted with all legacy tabs at end of Batch 3, per earlier decision).
+Each item gets a checklist entry; bugs found get fixed in the same pass and re-verified with `browser--navigate_to_sandbox` + `browser--observe`/`act`.
 
 ---
 
-### Empty-state behavior (per earlier decision)
+## Phase 2 — Rich content rendering quality
 
-Quiet `Empty note="…"` ghost text per panel. The whole tab still renders the shell so the folio + hero stay visible even on a fresh profile.
+Make `RichBody` (the markdown renderer used inside `MessageRow`) feel premium.
+
+1. **Code blocks**:
+   - Verify the language-tag header renders for all languages in `syntaxHighlight.ts` (js, ts, tsx, json, sh, css, html, sql) and gracefully degrades for unknown langs.
+   - Add a **Copy** button to every fenced block (top-right of the header), with success state.
+   - Add a **horizontal scroll** with subtle gradient mask for overflow lines.
+   - Confirm inline `code` styling is distinct from block code.
+   - Test diff/markdown/yaml/python by aliasing them to closest highlighter.
+2. **ASCII / letter art**:
+   - Force monospace + preserved whitespace for any fenced block AND for content inside `<pre>`.
+   - Add a `text-art` heuristic: if a fenced block is unlabeled and contains box-drawing/ASCII glyphs (`╭ ╮ ╰ ╯ ─ │ █ ░ ▒ ▓` etc.), drop the lang header, drop syntax coloring, give it generous letter-spacing 0, line-height 1.0, and a soft surface so it reads as art, not code.
+3. **Tables, lists, blockquotes, headings**: audit spacing rhythm against the rest of the Luca-Mind aesthetic; tighten where needed.
+4. **Links**: open external in new tab + `rel="noopener"`; internal app links route via React Router.
+5. **Math** (light pass): if `$$…$$` appears, render as preformatted; full KaTeX is out-of-scope but flag for later.
 
 ---
 
-### Files
+## Phase 3 — Artifacts pipeline (HTML / React / SVG / Mermaid / Markdown)
 
-**Created**
-- `src/components/profile/EmotionsMind.tsx`
-- `src/components/profile/ValuesMind.tsx`
+Today, `artifactStore` reads rows from an `artifacts` table, and `ChatView` already renders `ArtifactCard` per message. The gap to verify/build:
 
-**Edited**
-- `src/components/profile/mindViz.tsx` — add `Sparkbar`, `DivergenceRow`.
-- `src/pages/ProfileView.tsx` — swap tab renders, extend full-bleed allow-list.
+1. **Detection**: confirm whether `chat-multi` extracts artifacts from Luca's output (search for any artifact-extraction logic; if absent, add one). Heuristic:
+   - Fenced ```` ```html ````, ```` ```svg ````, ```` ```mermaid ````, ```` ```jsx ```` / ```` ```tsx ```` over a length threshold → promote to artifact.
+   - Explicit `<artifact title="…" kind="…">…</artifact>` tag in Luca's output → authoritative.
+2. **Persistence**: writes go to `artifacts` table with `source_message_id` set, versioned via `parent_artifact_id`.
+3. **Rendering**:
+   - `ArtifactRenderer` must safely render HTML in a sandboxed iframe (`sandbox="allow-scripts"` only, no `allow-same-origin`).
+   - React/JSX artifacts compile via in-browser Babel + render in iframe.
+   - SVG renders inline with size guard.
+   - Mermaid renders via dynamic import.
+   - Markdown renders via the same `RichBody`.
+4. **Canvas panel**: clicking an artifact opens `CanvasPanel` (right-rail) for full-size view, with copy / download / open-in-new-tab.
+5. **Streaming**: artifact placeholder shows during stream, swaps to live preview when the fenced block closes.
 
-No backend changes. No new tokens.
+System-prompt nudges: append a short "When you produce a runnable HTML page, a React component, an SVG diagram, or a Mermaid graph, wrap it in a fenced block with the proper language tag so the UI can render it as an artifact." to Luca's system prompt only.
 
 ---
 
-### Verification
+## Phase 4 — Diagrams & visualizations
 
-- `/profile` → Emotions: radar renders, sparkbars show 90 cells, valence scatter plots affect events, prose collapses cleanly when empty.
-- `/profile` → Values: ranked list with mono numerals, divergence rows for top 3 with revealed signal from tag tallies.
-- Both tabs match the folio + hero rhythm of Portrait / Communication / Cognition.
-- Reduced-motion: no animations introduced.
+1. **Mermaid**: dynamic import + theme tuned to dark Luca palette; error state shows the raw source as a code block instead of a red error.
+2. **SVG**: ensure inline SVG inside markdown survives the markdown sanitizer (currently `RichBody` uses `react-markdown` which drops raw HTML by default — verify and, if needed, allow `svg`/`mermaid` blocks via a controlled component allowlist, NOT `rehype-raw` blanket).
+3. **Charts**: out-of-scope for autonomous build; flag for later.
 
-After approval I'll implement and ping back, then we move to Batch 3 (Relationships, Growth, Shadow).
+---
+
+## Phase 5 — Quality, accessibility, performance
+
+- Keyboard: Enter sends, Shift+Enter newline, ESC cancels stream, ⌘K palette unaffected.
+- ARIA: each message is an `article` with role + agent labels (already present); streaming cursor announces nothing (decorative).
+- `prefers-reduced-motion`: streaming cursor + msg-enter animation collapse.
+- Performance: long threads (200+ messages) don't jank; consider windowing only if measured frame drops occur.
+- Console must end the round with **zero new errors**.
+
+---
+
+## Phase 6 — Automated coverage
+
+Add minimal Vitest coverage for the highest-leverage logic (no UI snapshot churn):
+- `threadStore.addMessage` realtime de-dupe.
+- `lib/edgeError.parseEdgeError` + `friendlyMessage` matrix.
+- A small `RichBody` render test for: fenced code, ASCII art heuristic, link target.
+- (Optional) one Deno test for `chat-multi`'s artifact-extraction helper if I add it.
+
+---
+
+## Phase 7 — Verification loop (per fix and at the end)
+
+For each bug fixed:
+1. `browser--navigate_to_sandbox` → `/chat/<thread>`
+2. Drive the scenario via `browser--act`
+3. `browser--screenshot` + `browser--read_console_logs` (level: error)
+4. If regression, fix in the same commit; re-run.
+
+Final gate: a single end-to-end script that exercises (a) plain reply, (b) code block w/ copy, (c) ASCII art, (d) HTML artifact, (e) Mermaid diagram, (f) abort mid-stream, (g) reload persistence, (h) missing-key UX. All must pass before this round closes.
+
+---
+
+## Out of scope (called out so it stays out)
+
+- Vektor / Anima / Mnemos / Observer / Group session message UX.
+- Voice, attachments beyond what already works, mobile shell.
+- New visual redesign of the chat surface — only fixes + quality polish on what exists.
+- KaTeX / advanced math.
+- Full virtualization of the message list (only if Phase 5 measurements demand it).
+
+---
+
+## Deliverables
+
+1. A short `MESSAGING_AUDIT.md` at repo root summarizing every issue found, the fix, and the verification screenshot path.
+2. All bugs fixed on `main`-equivalent state with green console.
+3. Vitest suite green.
+4. End-of-round summary in chat with the checklist + before/after screenshots for the 8 end-to-end scenarios.

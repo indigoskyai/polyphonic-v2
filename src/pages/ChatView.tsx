@@ -699,9 +699,22 @@ export default function ChatView() {
       if (!resp.ok) {
         const errText = await resp.text();
         console.error('Chat function error:', resp.status, errText);
+        let friendly = 'Something went wrong. Please try again.';
+        let isMissingKey = false;
+        try {
+          const parsed = JSON.parse(errText);
+          if (typeof parsed?.error === 'string') {
+            friendly = parsed.error;
+            if (/api key/i.test(parsed.error)) isMissingKey = true;
+          }
+        } catch { /* keep default */ }
+        if (resp.status === 401) friendly = 'Session expired — please refresh.';
+        const content = isMissingKey
+          ? `${friendly}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
+          : friendly;
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
-          content: resp.status === 401 ? 'Session expired — please refresh.' : 'Something went wrong. Please try again.',
+          content,
           model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         });
         return;
