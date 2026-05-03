@@ -3123,7 +3123,7 @@ html {
 }
 .mc-role {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
@@ -3137,8 +3137,8 @@ html {
 .mc-row[data-role="system"] .mc-role { color: var(--text-whisper); }
 
 .mc-body {
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.7;
   font-weight: 400;
   color: var(--text-primary);
   letter-spacing: var(--track-body);
