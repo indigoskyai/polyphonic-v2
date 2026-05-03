@@ -21,6 +21,7 @@ import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
+import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
