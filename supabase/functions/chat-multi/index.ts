@@ -159,10 +159,8 @@ serve(async (req) => {
     const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData : null) || null;
 
     if (!apiKey) {
-      console.warn("[chat-multi] No API key for user", userId, "rpcReturned:", JSON.stringify(userKeyData), "err:", userKeyErr?.message);
       return new Response(JSON.stringify({
         error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic.",
-        debug: { rpcReturned: userKeyData === null ? "null" : typeof userKeyData, err: userKeyErr?.message ?? null },
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
