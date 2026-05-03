@@ -42,8 +42,8 @@ describe("mnemos salience gate", () => {
 
   it("loosens during the bootstrap window", () => {
     const beat = {
-      surprise: 0.4,
-      emotionalArousal: 0,
+      surprise: 0.55,
+      emotionalArousal: 0.1,
       emotionalValence: 0,
       tags: [],
     };
