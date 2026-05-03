@@ -7,7 +7,7 @@ import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
-import ReactMarkdown from 'react-markdown';
+
 import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
@@ -91,23 +91,6 @@ function useSmoothTypewriter(target: string, active = true) {
   return displayed;
 }
 
-/* ─── Markdown components (shared between streaming & static) ─── */
-const markdownComponents = {
-  p: ({ children }: any) => <p style={{ marginBottom: 16 }}>{children}</p>,
-  strong: ({ children }: any) => <strong style={{ fontWeight: 550 }}>{children}</strong>,
-  em: ({ children }: any) => <em style={{ color: 'var(--text-secondary)' }}>{children}</em>,
-  code: ({ children, className: cn }: any) => {
-    if (cn) {
-      return (
-        <pre style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px 20px', margin: '16px 0', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
-          <code>{children}</code>
-        </pre>
-      );
-    }
-    return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, background: 'var(--bg-surface)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-primary)' }}>{children}</code>;
-  },
-  a: ({ href, children }: any) => <a href={href} style={{ color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2 }}>{children}</a>,
-};
 
 /* ─── Smooth streaming text component ───
  * Holds the cursor through the typewriter catch-up phase, then fades it out
