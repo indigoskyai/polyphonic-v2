@@ -658,26 +658,26 @@ export default function ChatView() {
       });
 
       if (!resp.ok) {
-        const errText = await resp.text();
-        console.error('Chat function error:', resp.status, errText);
-        let friendly = 'Something went wrong. Please try again.';
-        let isMissingKey = false;
-        try {
-          const parsed = JSON.parse(errText);
-          if (typeof parsed?.error === 'string') {
-            friendly = parsed.error;
-            if (/api key/i.test(parsed.error)) isMissingKey = true;
-          }
-        } catch { /* keep default */ }
-        if (resp.status === 401) friendly = 'Session expired — please refresh.';
-        const content = isMissingKey
-          ? `${friendly}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
+        const err = await parseEdgeError(resp.clone()).catch(() => ({ message: `Request failed (${resp.status})` } as any));
+        const friendly = friendlyMessage(err);
+        const isMissingKey = /api key/i.test(err.message || '') || err.code === 'unauthorized';
+        const message = isMissingKey
+          ? 'No model API key configured.'
           : friendly;
+        const detail = [
+          err.code ? `code: ${err.code}` : null,
+          err.requestId ? `request_id: ${err.requestId}` : null,
+          `status: ${resp.status}`,
+        ].filter(Boolean).join('  •  ');
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
-          content,
+          content: isMissingKey
+            ? `${message}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
+            : message,
           model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-        });
+          kind: 'agent_error',
+          metadata: { agent: activeAgentId, message, detail, code: err.code, request_id: err.requestId },
+        } as any);
         return;
       }
 
