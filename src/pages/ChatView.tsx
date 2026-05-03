@@ -151,7 +151,7 @@ function StreamingText({
 
   // Memoize the parsed markdown tree so it doesn't reparse on every keystroke unnecessarily
   const tree = useMemo(
-    () => <ReactMarkdown components={markdownComponents}>{displayed}</ReactMarkdown>,
+    () => <RichBody source={displayed} streaming />,
     [displayed]
   );
 
