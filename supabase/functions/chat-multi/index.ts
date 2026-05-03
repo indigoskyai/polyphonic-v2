@@ -29,19 +29,30 @@ import {
   buildCrosstalkInputs,
   decidePathFromProposers,
   reconcileCrosstalkOutcomes,
+  decideCritiqueAction,
+  VerdictStreamProcessor,
   COUNCIL_CHARACTERS,
   type ProposerOutcome,
   type CrosstalkOutcome,
   type CharacterSystemParts,
 } from "../_shared/agents/council-pipeline.ts";
 import {
+  buildChairmanCouncilPrompt,
+  buildCritiquePrompt,
+  buildDivergeBody,
+  parseVoiceCritique,
   type CouncilCharacter,
 } from "../_shared/agents/council-prompts.ts";
+import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
+import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
 const COUNCIL_PROPOSER_MODEL = "anthropic/claude-opus-4-7";
 const CROSSTALK_TIMEOUT_MS = 25_000;
+/** Voice-fidelity critique runs on Haiku — small fast judge, not a generative model. */
+const CRITIQUE_MODEL = "anthropic/claude-haiku-4.5";
+const CRITIQUE_TIMEOUT_MS = 10_000;
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -553,28 +564,32 @@ serve(async (req) => {
             });
           }
 
-          // ─── Stage 3 (transitional, commit 2): legacy synthesis stream ───
-          // Commit 3 swaps this for the verdict-allowed chairman + critique pass.
-          // For now we adapt revisedDrafts to the legacy `variants` shape and
-          // route through the existing buildSynthesisSystemPrompt path so the
-          // pipeline still produces output during the staged rollout.
-          send({ type: "synthesizing" });
+          // ─── Stage 3: chairman synthesis with verdict tag ───
+          // The chairman opens with <verdict>synthesize</verdict> or
+          // <verdict>diverge</verdict>. On synthesize, we stream the rest as
+          // content. On diverge, we cancel the stream and assemble the
+          // diverge body from the three drafts.
+          send({ type: "chairman_starting" });
 
+          const refusalEnabled = (Deno.env.get("COUNCIL_REFUSAL_ENABLED") || "").toLowerCase() === "true";
+          const chairmanPrompt = buildChairmanCouncilPrompt({
+            userMessage: message,
+            drafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
+            toolContext,
+            refusalEnabled,
+          });
+
+          // Variants (legacy shape) — fall-through fields for older readers.
           const variants: Array<{ model: string; content: string; thinking: string | null }> = revisedDrafts.map((d) => ({
             model: d.character, // legacy field repurposed: holds character name in council v2
             content: d.content,
             thinking: null,
           }));
-
-          // Empty placeholders so the existing save path stays type-correct.
-          // Real council_v2 trace is built below.
           const rankings: Array<{ judge_model: string; raw_text: string; parsed_ranking: string[] }> = [];
           const aggregate: AggregateEntry[] = [];
           const labelToModel: Record<string, string> = {};
 
-          // Build the council_v2 trace metadata that gets persisted alongside
-          // the assistant message. Frontend (commit 4) reads this to render the
-          // CouncilPanel.
+          // Council v2 trace — extended after critique below.
           const councilV2Trace = {
             kind: "council_v2" as const,
             proposers: proposerDrafts.map((d) => ({
@@ -587,17 +602,16 @@ serve(async (req) => {
               content: d.content,
               source: d.source,
             })),
-            verdict: null as null | "synthesize" | "diverge", // populated in commit 3
+            verdict: null as null | "synthesize" | "diverge",
             critique: null as null | unknown,
             revised_content: null as null | string,
           };
 
           const synthesisMessages: Array<{ role: string; content: string }> = [
-            { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
-            { role: "user", content: buildSynthesisUserPrompt(message, variants, toolContext) },
+            { role: "system", content: chairmanPrompt.system },
+            { role: "user", content: chairmanPrompt.user },
           ];
 
-          // Stream the synthesis
           const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -611,80 +625,34 @@ serve(async (req) => {
               messages: synthesisMessages,
               stream: true,
               max_tokens: 4096,
-              // No reasoning params for synthesis — it's merging outputs, not reasoning from scratch
             }),
           });
 
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
-            console.error("Synthesis error:", orResponse.status, errBody);
-
-            // Retry synthesis without any special params (plain request)
-            const retryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://polyphonic.chat",
-                "X-Title": "Polyphonic",
-              },
-              body: JSON.stringify({
-                model: synthesisModel,
-                messages: synthesisMessages,
-                stream: false,
-                max_tokens: 4096,
-              }),
-            });
-
-            if (retryResponse.ok) {
-              // deno-lint-ignore no-explicit-any
-              const retryData: any = await retryResponse.json();
-              const retryContent = retryData?.choices?.[0]?.message?.content || "";
-              if (retryContent) {
-                send({ type: "content", text: retryContent });
-                await saveAssistantMessage(
-                  supabase, thread_id, userId, retryContent, "synthesis-retry",
-                  variants, null, agentId,
-                  { rankings, aggregate, label_to_model: labelToModel },
-                  councilV2Trace,
-                );
-                finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], retryContent).catch(
-                  (e) => console.warn("pending revision finalization failed:", e)
-                );
-                await autoTitleThread(supabase, thread_id, message, retryContent, apiKey!);
-                encodeMnemosMemory(supabase, userId, message, retryContent).catch(
-                  (e) => console.warn("Mnemos encode failed (non-fatal):", e)
-                );
-                fireObserverWatch(thread_id, agentId, authHeader);
-                fireMnemosDialectic(thread_id, agentId, authHeader);
-                fireSkillsDistill(thread_id, agentId, authHeader);
-                send({ type: "done", model: "synthesis", tokens_used: null });
-                controller.close();
-                clearInterval(heartbeat);
-                return;
-              }
-            }
-
-            // Final fallback: use first variant but notify the user
-            const best = variants[0];
-            send({ type: "content", text: best.content });
+            console.error("Chairman error:", orResponse.status, errBody);
+            // Fall back: surface the strongest crosstalk draft (luca first) directly.
+            const fallbackContent = (revisedDrafts.find((d) => d.character === "luca") || revisedDrafts[0])?.content || "(empty)";
+            send({ type: "verdict", verdict: "synthesize" });
+            send({ type: "content", text: fallbackContent });
+            councilV2Trace.verdict = "synthesize";
             await saveAssistantMessage(
-              supabase, thread_id, userId, best.content, "fallback",
+              supabase, thread_id, userId, fallbackContent, "chairman-fallback",
               variants, null, agentId,
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
             );
-            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], best.content).catch(
+            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], fallbackContent).catch(
               (e) => console.warn("pending revision finalization failed:", e)
             );
-            await autoTitleThread(supabase, thread_id, message, best.content, apiKey!);
-            encodeMnemosMemory(supabase, userId, message, best.content).catch(
+            await autoTitleThread(supabase, thread_id, message, fallbackContent, apiKey!);
+            encodeMnemosMemory(supabase, userId, message, fallbackContent).catch(
               (e) => console.warn("Mnemos encode failed (non-fatal):", e)
             );
             fireObserverWatch(thread_id, agentId, authHeader);
             fireMnemosDialectic(thread_id, agentId, authHeader);
             fireSkillsDistill(thread_id, agentId, authHeader);
-            send({ type: "done", model: "fallback", tokens_used: null });
+            send({ type: "done", model: "chairman-fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -692,7 +660,7 @@ serve(async (req) => {
 
           const reader = orResponse.body?.getReader();
           if (!reader) {
-            send({ type: "error", text: "No synthesis stream" });
+            send({ type: "error", text: "No chairman stream" });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -704,7 +672,11 @@ serve(async (req) => {
           let buffer = "";
           let tokensUsed: number | null = null;
 
-          while (true) {
+          const verdictProc = new VerdictStreamProcessor();
+          let verdictEmitted = false;
+          let stopRequested = false;
+
+          while (!stopRequested) {
             const { done, value } = await reader.read();
             if (done) break;
 
@@ -722,7 +694,6 @@ serve(async (req) => {
                 const delta = chunk.choices?.[0]?.delta;
                 if (!delta) continue;
 
-                // Handle thinking/reasoning from synthesis model
                 if (delta.reasoning || delta.reasoning_content) {
                   const thinkText = delta.reasoning || delta.reasoning_content || "";
                   synthesisThinking += thinkText;
@@ -730,8 +701,24 @@ serve(async (req) => {
                 }
 
                 if (delta.content) {
-                  synthesizedContent += delta.content;
-                  send({ type: "content", text: delta.content });
+                  const action = verdictProc.ingest(delta.content);
+                  if (action.verdictDecided && !verdictEmitted) {
+                    send({ type: "verdict", verdict: action.verdict });
+                    verdictEmitted = true;
+                    councilV2Trace.verdict = action.verdict;
+                    if (action.verdict === "synthesize") {
+                      send({ type: "synthesizing" });
+                    }
+                  }
+                  if (action.contentToEmit) {
+                    synthesizedContent += action.contentToEmit;
+                    send({ type: "content", text: action.contentToEmit });
+                  }
+                  if (action.shouldStop) {
+                    stopRequested = true;
+                    try { await reader.cancel(); } catch { /* ignore */ }
+                    break;
+                  }
                 }
 
                 if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
@@ -741,7 +728,92 @@ serve(async (req) => {
             }
           }
 
-          // Save the synthesized message (thinking separate from variants)
+          // Drain — handles the rare case where the stream ended mid-tag.
+          if (!verdictEmitted) {
+            const drained = verdictProc.drain();
+            send({ type: "verdict", verdict: drained.verdict });
+            councilV2Trace.verdict = drained.verdict;
+            if (drained.carry) {
+              synthesizedContent += drained.carry;
+              send({ type: "content", text: drained.carry });
+            }
+          }
+
+          // ─── Stage 3 (diverge): assemble body from drafts ───
+          if (councilV2Trace.verdict === "diverge") {
+            const divergeBody = buildDivergeBody({
+              framing: synthesizedContent.trim() || "the three of us see this differently. surfacing all three.",
+              drafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
+            });
+            // Replace the streamed framing with the assembled body for persistence.
+            // We don't re-emit the body as content (the framing already streamed
+            // for synthesize, and diverge stops the stream before any framing
+            // emits). The frontend reads the metadata to render the panel.
+            synthesizedContent = divergeBody;
+            send({ type: "content", text: divergeBody });
+          }
+
+          // ─── Stage 4: voice-fidelity critique ───
+          // Skipped on diverge (nothing to critique — the drafts speak for themselves).
+          if (councilV2Trace.verdict === "synthesize" && synthesizedContent.trim().length > 0) {
+            send({ type: "critique_starting" });
+            try {
+              const critiquePromptStr = buildCritiquePrompt({
+                synthesized: synthesizedContent,
+                drafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
+                lucaSoul: LUCA_SOUL,
+                animaSoul: ANIMA_SOUL,
+                vektorSoul: VEKTOR_SOUL,
+              });
+              const critiqueResp = await Promise.race([
+                callModelNonStreaming(
+                  [{ role: "user", content: critiquePromptStr }],
+                  CRITIQUE_MODEL,
+                  apiKey!,
+                  "low",
+                ),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), CRITIQUE_TIMEOUT_MS)),
+              ]);
+              const critiqueResult = critiqueResp ? parseVoiceCritique(critiqueResp.content) : null;
+              if (critiqueResult) {
+                councilV2Trace.critique = critiqueResult;
+                send({ type: "critique", ...critiqueResult });
+
+                const action = decideCritiqueAction(critiqueResult, refusalEnabled);
+                if (action.kind === "revise") {
+                  send({ type: "critique_revision_starting" });
+                  // Ask the chairman to revise once based on the critique note.
+                  const revisionPromptUser =
+                    `Here was your synthesized reply:\n\n${synthesizedContent}\n\n` +
+                    `A voice-fidelity critic flagged the following:\n${action.reason}\n\n` +
+                    `Revise the reply to address this. Stay in character. Keep what was working. ` +
+                    `Return only the revised reply — no preamble, no postscript, no verdict tag this time.`;
+                  try {
+                    const revised = await callModelNonStreaming(
+                      [
+                        { role: "system", content: chairmanPrompt.system },
+                        { role: "user", content: revisionPromptUser },
+                      ],
+                      synthesisModel,
+                      apiKey!,
+                      "medium",
+                    );
+                    if (revised && revised.content && revised.content.trim().length > 0) {
+                      councilV2Trace.revised_content = revised.content;
+                      synthesizedContent = revised.content;
+                      send({ type: "revised_content", text: revised.content });
+                    }
+                  } catch (rerr) {
+                    console.warn("[council] critique revision failed (non-fatal):", rerr);
+                  }
+                }
+              }
+            } catch (cerr) {
+              console.warn("[council] critique pass failed (non-fatal):", cerr);
+            }
+          }
+
+          // Save the synthesized message
           await saveAssistantMessage(
             supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis",
             variants, synthesisThinking || null, agentId,

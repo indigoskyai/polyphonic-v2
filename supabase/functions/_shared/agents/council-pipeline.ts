@@ -9,7 +9,10 @@
 import {
   buildProposerWrapper,
   buildCrosstalkPrompt,
+  parseVerdictTag,
+  type ChairmanVerdict,
   type CouncilCharacter,
+  type VoiceCritiqueResult,
 } from "./council-prompts.ts";
 import { buildLucaSystemPrompt } from "./luca-soul.ts";
 import { ANIMA_SOUL } from "./anima-soul.ts";
@@ -179,6 +182,134 @@ export function buildCrosstalkInputs(args: {
  * failed in crosstalk falls back to its proposer draft so the chairman
  * always has the most-recent useful draft per character.
  */
+// ---------------------------------------------------------------------------
+// Verdict-tag streaming state machine
+// ---------------------------------------------------------------------------
+
+/**
+ * The chairman streams `<verdict>synthesize</verdict>` or
+ * `<verdict>diverge</verdict>` as the first token group. We have to buffer
+ * until we've seen the closing tag (or hit a safety budget) before deciding
+ * how to route subsequent stream content. This processor encodes that
+ * decision logic as a pure state machine so it's testable.
+ */
+export interface VerdictIngestResult {
+  /** True the moment the verdict has been decided (this call or earlier). */
+  verdictDecided: boolean;
+  /** The verdict, once decided. */
+  verdict: ChairmanVerdict | null;
+  /** Content the caller should emit to the client this tick (if any). */
+  contentToEmit: string;
+  /** True iff the stream should be cancelled (diverge verdict). */
+  shouldStop: boolean;
+}
+
+export class VerdictStreamProcessor {
+  /** Hard cap on pre-tag buffering. After this many chars without a closing
+   *  tag we fall back to "synthesize" and treat the buffer as content. */
+  static readonly BUFFER_BUDGET = 200;
+
+  private buffer = "";
+  private verdict: ChairmanVerdict | null = null;
+  private decided = false;
+
+  /**
+   * Feed a stream chunk. Returns an action plan: emit any content, cancel
+   * the stream if diverge.
+   */
+  ingest(chunk: string): VerdictIngestResult {
+    if (this.decided) {
+      // Already decided — pass content through if synthesize, ignore if
+      // diverge (caller should have stopped already).
+      if (this.verdict === "synthesize") {
+        return { verdictDecided: true, verdict: this.verdict, contentToEmit: chunk, shouldStop: false };
+      }
+      return { verdictDecided: true, verdict: this.verdict, contentToEmit: "", shouldStop: true };
+    }
+
+    this.buffer += chunk;
+
+    // Look for a complete verdict tag inside the buffer.
+    const closingIdx = this.buffer.indexOf("</verdict>");
+    if (closingIdx >= 0) {
+      const tagEnd = closingIdx + "</verdict>".length;
+      const fullPrefix = this.buffer.slice(0, tagEnd);
+      const trailing = this.buffer.slice(tagEnd);
+      const { verdict, rest: prefixRest } = parseVerdictTag(fullPrefix);
+      this.verdict = verdict;
+      this.decided = true;
+
+      const carry = (prefixRest + trailing).replace(/^\s*\n+/, "");
+      if (verdict === "diverge") {
+        // We discard the carried prose — the diverge body will be assembled
+        // separately from the framing + drafts, not from the chairman's
+        // mid-stream prose.
+        return { verdictDecided: true, verdict, contentToEmit: "", shouldStop: true };
+      }
+      return { verdictDecided: true, verdict, contentToEmit: carry, shouldStop: false };
+    }
+
+    // No tag yet. If the buffer has grown past the safety cap, give up on
+    // the tag and treat everything we've buffered as plain content (with
+    // synthesize as the implicit verdict).
+    if (this.buffer.length > VerdictStreamProcessor.BUFFER_BUDGET) {
+      this.verdict = "synthesize";
+      this.decided = true;
+      const carry = this.buffer;
+      this.buffer = "";
+      return { verdictDecided: true, verdict: "synthesize", contentToEmit: carry, shouldStop: false };
+    }
+
+    // Still buffering — wait for more chunks.
+    return { verdictDecided: false, verdict: null, contentToEmit: "", shouldStop: false };
+  }
+
+  /**
+   * Called when the upstream has ended without ever yielding a verdict tag
+   * (rare, but possible if chairman returned an empty stream). Treats the
+   * buffer as synthesized content.
+   */
+  drain(): { verdict: ChairmanVerdict; carry: string } {
+    if (this.decided) return { verdict: this.verdict ?? "synthesize", carry: "" };
+    this.decided = true;
+    this.verdict = "synthesize";
+    const carry = this.buffer;
+    this.buffer = "";
+    return { verdict: "synthesize", carry };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Critique action logic
+// ---------------------------------------------------------------------------
+
+export type CritiqueAction =
+  | { kind: "passthrough" }
+  | { kind: "revise"; reason: string };
+
+/**
+ * Decide whether to trigger a revision based on the critique result and the
+ * env flag. Voice drift only triggers revision when:
+ *   - voice_drift_detected is true
+ *   - confidence ≥ 0.7
+ *   - COUNCIL_REFUSAL_ENABLED env flag is on (refusalEnabled === true)
+ *   - the critic returned a non-empty suggested_revision
+ * Otherwise we pass the synthesized content through unchanged.
+ */
+export function decideCritiqueAction(
+  critique: VoiceCritiqueResult | null,
+  refusalEnabled: boolean,
+): CritiqueAction {
+  if (!critique) return { kind: "passthrough" };
+  if (!critique.voice_drift_detected) return { kind: "passthrough" };
+  if (critique.confidence < 0.7) return { kind: "passthrough" };
+  if (!refusalEnabled) return { kind: "passthrough" };
+  if (!critique.suggested_revision || critique.suggested_revision.trim().length === 0) {
+    return { kind: "passthrough" };
+  }
+  return { kind: "revise", reason: critique.suggested_revision.trim() };
+}
+
 export function reconcileCrosstalkOutcomes(args: {
   proposerDrafts: Array<{ character: CouncilCharacter; content: string }>;
   crosstalkOutcomes: CrosstalkOutcome[];
