@@ -1,138 +1,147 @@
-# Phase 3 — Backend Reliability
+# Mnemos Round-2: Browse / Digest
 
-**Goal**: Eliminate silent failures, accidental double-charges, and invisible cron drift across the ~60 edge functions and 13 cron jobs. Make every failure observable and every retry safe.
-
-Phase 3 is purely backend hardening — no UI changes beyond a tiny cron-health badge in Settings → Models. Targeted at "things that break in production but never throw".
+Aligns the `/memory` surface with `luca-round2-mind-mnemos-3.html` (Surface 02 / 02b / 02c) and adds a real backend pipeline that builds a once-per-day digest of the day's actual engram formations for the user to confirm, reject, or edit.
 
 ---
 
-## 1. Standardized error envelope
+## 1. Conceptual model — important to lock first
 
-**Problem**: Edge functions return inconsistent shapes — some `{ error: "msg" }`, some `{ message }`, some plain strings, some 200-with-error-in-body. Client can't reliably surface them.
+Today's substrate has two separate concepts that the mockup collapses into one "review queue":
 
-**Action**:
-- New `supabase/functions/_shared/errors.ts` exporting:
-  - `errorResponse(code, message, status, corsHeaders, extra?)` → `{ error, code, request_id }`
-  - `wrapHandler(fn)` — catches throws, logs with `request_id`, returns 500 envelope.
-  - `ValidationError`, `AuthError`, `RateLimitError`, `UpstreamError` typed classes.
-- Migrate the 8 highest-traffic functions first:
-  - `chat`, `chat-multi`, `chat-guardian`
-  - `anima-tool-execute`, `anima-think`, `anima-dispatch`
-  - `memory-extract`, `mnemos-dialectic`
-- Client: small util in `src/lib/edgeError.ts` to parse `{ error, code }` for toasts.
+- **engrams** — auto-encoded substrate units (salience-gated). Already form silently from real conversation. These are the AI's experiential memory.
+- **memory_candidates** — pending items written by `anima-consolidate` (nightly LLM pass). These are the things currently surfaced in the existing Digest.
 
-## 2. Idempotency on chat send
+User intent ("daily feed of the engrams from that day … the user can review them, confirm, reject, or edit") points at **engrams**, not the existing candidate stream. The right move is:
 
-**Problem**: A double-tap on Send (or a network retry) currently inserts two user messages and bills two model calls. No dedupe.
+> The Digest becomes a **daily review of the day's engram formations** (and beliefs / connections derived from them), not the legacy memory_candidates queue. We keep memory_candidates internally as the dialectic / pin-promotion channel, but the user-facing Digest is engram-centric.
 
-**Action**:
-- New table `public.idempotency_keys (key text pk, user_id uuid, scope text, response_hash text, created_at timestamptz default now())` with TTL of 24h via cron cleanup.
-- `chat` and `chat-multi` accept optional `Idempotency-Key` header (client generates `crypto.randomUUID()` per send). If key exists for `(user_id, scope='chat-send')` within TTL → return cached `{ message_id }` short-circuit, no model call.
-- Client: `chatStore.sendMessage` generates and passes the key; retries reuse it.
-
-## 3. Cron health surface
-
-**Problem**: 13 pg_cron jobs fire into edge functions; no record of "did the last run succeed". A silently failing decay/dialectic/consolidate job degrades the product invisibly.
-
-**Action**:
-- New table `public.cron_health (job_name text pk, last_run_at timestamptz, last_success_at timestamptz, last_error text, last_duration_ms int, run_count int default 0, error_count int default 0)`.
-- Shared helper `_shared/cronHealth.ts` exporting `recordCronStart(jobName)` / `recordCronSuccess(jobName, ms)` / `recordCronFailure(jobName, error)`.
-- Wire into the 13 cron-targeted functions:
-  - `memory-decay`, `memory-reflect`, `memory-synthesize`, `memory-extract`
-  - `journal-cron`
-  - `mnemos-decay`, `mnemos-soften`, `mnemos-consolidate`, `mnemos-dialectic`
-  - `anima-dispatch` (per-target)
-  - `luca-pulse`, `luca-initiate`, `observer-watch`
-- New page section: Settings → Models → "Background jobs" subsection lists job name, last success, last error (admin only via `has_role('admin')`).
-
-## 4. Unified daily quota helper
-
-**Problem**: Found in Phase 2.5 — `generate-image` enforces 25/day, but `chat`/`chat-multi` enforce nothing. Per project rule we don't add request-rate limiting, but per-user **daily** caps for cost control are in scope.
-
-**Action**:
-- New `_shared/dailyQuota.ts` exporting `checkAndIncrement(supabase, userId, scope, limit)` backed by table `public.daily_usage (user_id uuid, scope text, day date, count int, primary key (user_id, scope, day))`.
-- Apply scopes:
-  - `chat-message`: 500/day (BYOK users) — soft cap, returns 429 with envelope.
-  - `image-generation`: 25/day (replaces inline `generate-image` logic).
-  - `web-search`: 100/day on `anima-web-search`.
-- Single nightly cron prunes rows older than 30 days.
-
-## 5. Upstream resilience (OpenRouter)
-
-**Problem**: OpenRouter 5xx/timeouts surface as raw "Model error (502)" with no retry. A single hiccup kills a streaming reply mid-token.
-
-**Action**:
-- `_shared/openrouter.ts` — wrap fetch with:
-  - 1 retry on `429`/`502`/`503`/`504` with 500ms jitter (only for non-streaming calls; streaming retries are unsafe mid-stream).
-  - Surface `code: "upstream_unavailable"` via the new error envelope.
-- Apply to all non-streaming OpenRouter calls: `autoTitleThread`, `extract-persona`, `memory-extract`, `mnemos-dialectic`, `skills-distill`, `crisis classification`.
-- Streaming endpoints (`chat`, `chat-multi`) keep their fail-fast behavior but emit a structured `{ type: "error", code: "upstream_unavailable" }` SSE event instead of generic text.
-
-## 6. Webhook/realtime resilience
-
-**Problem**: `chat/index.ts` fires `observer-watch`, `mnemos-dialectic`, `skills-distill` as fire-and-forget; if any throws synchronously before the `fetch`, no record exists.
-
-**Action**:
-- Wrap each fan-out in `_shared/safeDispatch.ts` — guarantees logging + cron_health entry under a synthetic `dispatch:<target>` job name.
+Engrams retain the human-realistic "form silently, decay naturally" behavior. Review is **opt-in curation**, not a gate — declining to review never blocks encoding. Confirming boosts `stability` (+ marks reviewed). Rejecting archives the engram (state → `archived`, no hard delete, decay handles cleanup). Editing rewrites `content` and re-runs the connection pass.
 
 ---
 
-## Files to create
+## 2. Frontend — Browse / Digest toggle
 
-- `supabase/functions/_shared/errors.ts`
-- `supabase/functions/_shared/cronHealth.ts`
-- `supabase/functions/_shared/dailyQuota.ts`
-- `supabase/functions/_shared/openrouter.ts`
-- `supabase/functions/_shared/safeDispatch.ts`
-- `src/lib/edgeError.ts`
-- Migration: `cron_health`, `daily_usage`, `idempotency_keys` tables (+ cleanup cron).
+**Mockup parity** (HTML ref §2772, §3523, §3981):
+- Header gains a pill toggle `BROWSE | DIGEST` aligned right of the existing tab row (`Graph / Engrams / Beliefs / Files`).
+- `BROWSE` = current behavior (Memories overview / Engrams / Beliefs / Graph / Imports / Settings).
+- `DIGEST` = new dedicated daily-review surface, full-width, no tab switching.
+- Toggle persists in `viewTabStore` (new `mnemosMode: 'browse' | 'digest'`). Existing `MnemosModeToggle.tsx` component is reused / restyled to mockup `mn-mode` styling.
 
-## Edge functions edited (in priority order)
+**Files touched**
+- `src/stores/viewTabStore.ts` — add `mnemosMode` + setter
+- `src/pages/MemoryView.tsx` — route between Browse tabs and `<DailyDigest />` based on mode
+- `src/components/memory/MnemosModeToggle.tsx` — restyle to mockup `mn-mode` pill (already exists, needs class names + count badge)
+- `src/components/memory/DailyDigest.tsx` (new) — replaces the legacy `DigestView` for the user-facing flow
+- `src/components/memory/DigestEngramCard.tsx` (new) — mirrors `.mn-cand` card (agent dot, type chip, confidence, content, rationale, action row: Confirm / Modify / Discard)
+- `src/index.css` — add `mn-mode`, `mn-digest*`, `mn-cand*`, `mn-action*` rules from the mockup (lines 1009-1030, 1734-1886)
 
-**Tier 1 — chat critical path**
-1. `chat`
-2. `chat-multi`
-3. `chat-guardian`
-4. `anima-tool-execute`
+**Where the toggle lives**: in the Mnemos header chrome above tabs, not inside `MnemosStreamShell`. When mode = `digest`, hide the tab row entirely and render only the digest surface.
 
-**Tier 2 — cron-targeted (cron_health wiring)**
-5. `memory-decay`
-6. `memory-reflect`
-7. `memory-synthesize`
-8. `memory-extract`
-9. `journal-cron`
-10. `mnemos-decay`
-11. `mnemos-soften`
-12. `mnemos-consolidate`
-13. `mnemos-dialectic`
-14. `luca-pulse`
-15. `luca-initiate`
-16. `observer-watch`
-17. `anima-dispatch`
+**Empty / loading states**: "Inbox zero" for an unreviewed-empty day. When the digest has been generated but none formed today: "Quiet day. No engrams crossed the salience threshold."
 
-**Tier 3 — quota-bearing**
-18. `generate-image`
-19. `anima-web-search`
-20. `anima-image-create`
+---
 
-**Tier 4 — auxiliary OpenRouter consumers**
-21. `extract-persona`
-22. `skills-distill`
-23. `anima-think`, `anima-reflect`, `anima-dream` (error envelope only)
+## 3. Backend — daily digest pipeline
 
-## Out of scope (explicitly deferred)
+### 3a. Schema additions (one migration)
 
-- True request-rate limiting (per project rules).
-- pg_trgm in public schema (Phase 4 data integrity).
-- Re-architecting cron to use queues instead of HTTP fan-out.
-- Client-side retry UI for failed sends (will land in Phase 7 observability).
+```text
+ALTER TABLE engrams
+  ADD COLUMN reviewed_at        timestamptz,
+  ADD COLUMN review_decision    text       -- 'confirmed' | 'rejected' | 'edited' | null
+  ADD COLUMN review_note        text,      -- optional
+  ADD COLUMN digest_id          uuid;      -- back-pointer to the digest run
 
-## Verification
+CREATE TABLE mnemos_digests (
+  id              uuid pk default gen_random_uuid(),
+  user_id         uuid references auth.users(id) on delete cascade,
+  digest_date     date not null,           -- user-local day (UTC for v1)
+  generated_at    timestamptz default now(),
+  engram_count    int default 0,
+  reviewed_count  int default 0,
+  status          text default 'open',     -- 'open' | 'finalized' | 'auto_finalized'
+  summary         text,                    -- one-line LLM summary of the day
+  unique (user_id, digest_date)
+);
 
-- Manual: double-click Send → one message inserted, one model call.
-- Manual: kill OpenRouter via bad model id → structured `{ error, code: "upstream_unavailable" }` reaches client.
-- SQL spot-check `select * from cron_health order by last_run_at desc` after 1 hour → all 13 jobs have entries.
-- Linter: no new warnings.
-- Audit log: append Phase 3 entry to `PRODUCTION_AUDIT_LOG.md` with what shipped + findings + Phase 4 prep.
+-- engram state already supports 'archived'; reuse for rejections.
+```
 
-**Estimated**: 1 migration, 5 new shared modules, ~20 edge function edits, 1 small admin UI section. ~2-3 hours of focused work.
+Add `reviewed` / `unreviewed` indexes for fast digest queries.
+
+### 3b. New edge function: `mnemos-digest-build`
+
+- Trigger: pg_cron at 03:00 UTC + on-demand from UI ("Refresh digest").
+- For each user with ≥1 engram created in the last 24h:
+  1. Select all `engrams` where `created_at::date = target_date AND user_id = uid AND reviewed_at IS NULL`.
+  2. Optionally call OpenRouter for a one-line `summary` ("Today: 4 preferences, 1 surprise about your grandfather, 2 contextual notes.").
+  3. Upsert `mnemos_digests` row with `engram_count`.
+  4. Backfill `engrams.digest_id` for those rows.
+- Skips users with `mnemos_enabled = false` in `memory_settings`.
+- Wrapped in `recordCronSuccess` / `recordCronFailure` (Phase 3 health system).
+
+### 3c. New edge function: `mnemos-digest-action`
+
+Authenticated user-scoped. Body: `{ engram_id, action: 'confirm' | 'reject' | 'edit', patch?: { content?: string, tags?: string[] } }`.
+
+- `confirm` → `state='active'`, `stability += 0.15` (cap 1), `reviewed_at=now()`, `review_decision='confirmed'`. Emits `activity_log` event.
+- `reject` → `state='archived'`, `accessibility=0`, `reviewed_at=now()`, `review_decision='rejected'`. Cascades nothing — connections naturally weaken via decay.
+- `edit` → updates `content`, re-runs `findConnections` from `_shared/mnemos/encoding.ts` to refresh edges, recomputes embedding-equivalent (trigram) similarity surprise, `review_decision='edited'`.
+
+After every action, increments `mnemos_digests.reviewed_count`. When all engrams in the digest are reviewed → `status='finalized'`.
+
+### 3d. Auto-finalization
+
+- `mnemos-digest-build` cron also marks digests older than 48h as `status='auto_finalized'` and leaves engrams as-is (silent acceptance — matches the human-realistic principle: not reviewing ≠ rejection).
+
+### 3e. Realtime
+
+- Already covered: `engrams` is in `supabase_realtime` publication, `REPLICA IDENTITY FULL` set in Phase 4. UI subscribes to engrams filtered by `digest_id = current_digest.id`.
+
+---
+
+## 4. Frontend ↔ backend wiring
+
+- New `src/stores/digestStore.ts` (Zustand): holds `currentDigest`, `engrams[]`, `loading`, with `load(userId)`, `subscribe(userId, digestId)`, `confirm/reject/edit(engramId)`. Each action calls `mnemos-digest-action` and optimistically removes/updates the row.
+- `DailyDigest.tsx` calls `digestStore.load` on mount, renders summary header (`generated 18:24 · today` style), then groups engrams by `engram_type` (Episodic / Semantic / Procedural / Belief) using `mn-digest-section-eye`. Each row is a `DigestEngramCard`.
+- Footer: `5 engrams · 48h auto-finalize` left, `Confirm all defaults` + `Done for now` right (matches mockup §4224).
+
+---
+
+## 5. Tuning notes (per "realistic experiential system" goal)
+
+- Salience gate stays at `0.55` from Phase 5. We are NOT lowering it to fill the digest — quiet days should look quiet.
+- Confirming gives a stability boost but does NOT immediately graduate to a `belief`. Belief promotion still requires the existing `mnemos-consolidate` pathway (multiple co-firing engrams over time).
+- Rejecting is soft (`archived`), not hard delete, so accidental rejections don't permanently break referential structure.
+- Cap digest at 30 engrams/day. If more form, surface the 30 highest-`surprise` first; remainder are still encoded but skipped from review (auto-finalize).
+- Existing `memory_candidates` flow continues to feed pin/dialectic decisions in the background — it's no longer the user-facing review queue, just an internal channel for `Pin` proposals (which we can later resurface as a small "Pin proposals" subsection in the digest if desired).
+
+---
+
+## 6. Out of scope (explicit)
+
+- Per-day calendar navigation (will only show today's open digest in v1; previous days viewable via Engrams tab Browse mode, filtered by date).
+- Per-engram revision history.
+- Mobile layout for the digest.
+- Translating `memory_candidates` cards to engrams retroactively (legacy candidates remain in their own internal flow).
+
+---
+
+## 7. One clarification before I build
+
+The mockup also shows "PIN candidates · worth keeping across all agents" as a section above the standard digest (§4108). Two options:
+
+- **A — Pure engram digest** (recommended): the user-facing digest is 100% the day's engrams. Pin proposals stay internal, surfaced separately in Settings or a future inbox.
+- **B — Hybrid**: top section shows the day's high-salience `memory_candidates` (`candidate_type='pin'`) for cross-agent pinning; bottom sections show the day's engrams for personal review.
+
+I'll default to **A** unless you say otherwise — it keeps the model conceptually clean ("this is your memory of today") and avoids mixing two different lifecycle systems in one card stack.
+
+---
+
+## Acceptance gates
+
+1. Toggle visibly switches between Browse (existing tabs) and Digest (new surface) without route change.
+2. A fresh test user → one chat → wait for `mnemos-digest-build` (or hit "Refresh") → digest shows the actual encoded engrams, grouped by type, with rationale derived from `source_context`.
+3. Confirm bumps `stability`; Reject sets `state='archived'`; Edit rewrites `content` and refreshes connections — all visible via `useMemoryRealtime`.
+4. Cron health row exists for `mnemos-digest-build` after first run.
+5. Unreviewed digest auto-finalizes after 48h with no data loss.

@@ -1,37 +1,29 @@
-import React from 'react';
+import { useViewTabStore, type MnemosMode } from '@/stores/viewTabStore';
+import { useDigestStore } from '@/stores/digestStore';
 
-export type MnemosMode = 'browse' | 'digest';
+export default function MnemosModeToggle() {
+  const mode = useViewTabStore((s) => s.mnemosMode);
+  const setMode = useViewTabStore((s) => s.setMnemosMode);
+  const pending = useDigestStore((s) => s.engrams.filter((e) => !e.reviewed_at).length);
 
-interface Props {
-  mode: MnemosMode;
-  onChange: (m: MnemosMode) => void;
-  pendingCount?: number;
-}
-
-export default function MnemosModeToggle({ mode, onChange, pendingCount = 0 }: Props) {
+  const opts: MnemosMode[] = ['browse', 'digest'];
   return (
-    <div className="mnemos-mode-toggle" role="tablist" aria-label="Memory view mode">
-      <button
-        type="button"
-        role="tab"
-        className="mnemos-mode-btn"
-        data-active={mode === 'browse' ? 'true' : undefined}
-        onClick={() => onChange('browse')}
-      >
-        Browse
-      </button>
-      <button
-        type="button"
-        role="tab"
-        className="mnemos-mode-btn"
-        data-active={mode === 'digest' ? 'true' : undefined}
-        onClick={() => onChange('digest')}
-      >
-        Digest
-        {pendingCount > 0 && (
-          <span className="mnemos-mode-dot" aria-hidden="true" />
-        )}
-      </button>
+    <div className="mn-mode" role="tablist" aria-label="Memory view mode">
+      {opts.map((m) => (
+        <button
+          key={m}
+          type="button"
+          role="tab"
+          aria-selected={mode === m}
+          className={`mn-mode-btn${mode === m ? ' active' : ''}`}
+          onClick={() => setMode(m)}
+        >
+          {m}
+          {m === 'digest' && pending > 0 && (
+            <span className="mn-mode-dot" aria-hidden="true" style={{ marginLeft: 6 }}>{pending}</span>
+          )}
+        </button>
+      ))}
     </div>
   );
 }
