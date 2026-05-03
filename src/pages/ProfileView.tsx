@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import PortraitMind from '@/components/profile/PortraitMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
@@ -482,8 +483,17 @@ export default function ProfileView() {
         </div>
 
         {/* Content (tabs now handled by sidebar) */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: '8px 24px 24px', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
-          {activeTab === 'Portrait' && <PortraitTab profile={profile} memoryStats={memoryStats} />}
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{
+            padding: activeTab === 'Portrait' ? 0 : '8px 24px 24px',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'var(--border) transparent',
+          }}
+        >
+          {activeTab === 'Portrait' && (
+            <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
+          )}
           {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
           {activeTab === 'Communication' && <CommunicationTab data={profile.communication_patterns} />}
           {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} memoryStats={memoryStats} />}
