@@ -152,11 +152,18 @@ serve(async (req) => {
     const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
 
     // Get user's OpenRouter API key (required — no platform fallback)
-    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey: string | null = userKeyData || null;
+    const { data: userKeyData, error: userKeyErr } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
+    if (userKeyErr) {
+      console.error("[chat-multi] decrypt_user_api_key error:", userKeyErr);
+    }
+    const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData : null) || null;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic." }), {
+      console.warn("[chat-multi] No API key for user", userId, "rpcReturned:", JSON.stringify(userKeyData), "err:", userKeyErr?.message);
+      return new Response(JSON.stringify({
+        error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic.",
+        debug: { rpcReturned: userKeyData === null ? "null" : typeof userKeyData, err: userKeyErr?.message ?? null },
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
