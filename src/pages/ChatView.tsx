@@ -163,32 +163,9 @@ function StreamingText({
   );
 }
 
-/* ─── Markdown renderer (static messages) ─── */
+/* ─── Static message renderer (delegates to RichBody for unified styling) ─── */
 function MessageContent({ content }: { content: string }) {
-  return (
-    <div style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}>
-      <ReactMarkdown
-        components={{
-          p: ({ children }) => <p style={{ marginBottom: 16 }}>{children}</p>,
-          strong: ({ children }) => <strong style={{ fontWeight: 550 }}>{children}</strong>,
-          em: ({ children }) => <em style={{ color: 'var(--text-secondary)' }}>{children}</em>,
-          code: ({ children, className: cn }) => {
-            if (cn) {
-              return (
-                <pre style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px 20px', margin: '16px 0', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
-                  <code>{children}</code>
-                </pre>
-              );
-            }
-            return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, background: 'var(--bg-surface)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-primary)' }}>{children}</code>;
-          },
-          a: ({ href, children }) => <a href={href} style={{ color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2 }}>{children}</a>,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  );
+  return <RichBody source={content} />;
 }
 
 function getAgentDisplayName(agentId: string | null | undefined, names: Map<string, string>) {
