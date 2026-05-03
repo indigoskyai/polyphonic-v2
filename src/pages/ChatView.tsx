@@ -1220,7 +1220,21 @@ export default function ChatView() {
                 )}
 
                 {threadArtifacts
-                  .filter((artifact) => artifact.source_message_id === msg.id)
+                  .filter((artifact) => {
+                    if (artifact.source_message_id === msg.id) return true;
+                    // Orphan artifact (no source_message_id): attach to the
+                    // most recent message at-or-before its created_at so it
+                    // renders inline in the thread instead of pinned to the
+                    // bottom.
+                    if (artifact.source_message_id) return false;
+                    const aT = new Date(artifact.created_at).getTime();
+                    const mT = new Date(msg.created_at).getTime();
+                    if (mT > aT) return false;
+                    // find next message after msg; if it's also <= aT, skip here
+                    const next = messages[i + 1];
+                    if (next && new Date(next.created_at).getTime() <= aT) return false;
+                    return true;
+                  })
                   .map((artifact) => (
                     <ArtifactCard key={artifact.id} artifact={artifact} />
                   ))}
@@ -1229,8 +1243,14 @@ export default function ChatView() {
             );
           })}
 
+          {/* Orphan artifacts created before any message (rare) — render at top-equivalent fallback */}
           {threadArtifacts
-            .filter((artifact) => !artifact.source_message_id)
+            .filter((artifact) => {
+              if (artifact.source_message_id) return false;
+              if (messages.length === 0) return true;
+              const firstT = new Date(messages[0].created_at).getTime();
+              return new Date(artifact.created_at).getTime() < firstT;
+            })
             .map((artifact) => (
               <div key={artifact.id} className="msg-row" style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}>
                 <div className="msg-sidehead">
