@@ -85,6 +85,7 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const headerLabel = isArt ? 'art' : (normalized || 'text');
 
   return (
+    <>
     <div className={`code-block${isArt ? ' is-art' : ''}${wrap ? ' is-wrap' : ''}${expanded ? ' is-expanded' : ''}${streaming ? ' is-streaming' : ''}`}>
       <div className="code-block-header">
         <div className="code-block-title">
