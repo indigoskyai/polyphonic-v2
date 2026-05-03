@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import ProfileChatPanel from '@/components/ProfileChatPanel';
+import PortraitMind from '@/components/profile/PortraitMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
