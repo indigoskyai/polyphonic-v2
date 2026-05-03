@@ -78,6 +78,7 @@ function CodeBlock({ lang, source }: { lang: string | null; source: string }) {
 }
 
 export default function RichBody({ source, className }: RichBodyProps) {
+  const navigate = useNavigate();
   return (
     <div className={`rich-body${className ? ` ${className}` : ''}`}>
       <ReactMarkdown
