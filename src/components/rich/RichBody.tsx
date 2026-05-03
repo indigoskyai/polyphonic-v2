@@ -86,11 +86,13 @@ export default function RichBody({ source, className }: RichBodyProps) {
         components={{
           a({ href, children, ...props }) {
             const isExternal = href && /^https?:\/\//i.test(href);
+            const isInternal = href && href.startsWith('/');
             return (
               <a
                 href={href}
                 target={isExternal ? '_blank' : undefined}
                 rel={isExternal ? 'noopener noreferrer' : undefined}
+                onClick={isInternal ? (e) => { e.preventDefault(); navigate(href!); } : undefined}
                 {...props}
               >
                 {children}
