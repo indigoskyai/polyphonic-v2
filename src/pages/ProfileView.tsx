@@ -490,7 +490,7 @@ export default function ProfileView() {
         <div
           className="flex-1 overflow-y-auto"
           style={{
-            padding: ['Portrait', 'Communication', 'Cognition'].includes(activeTab) ? 0 : '8px 24px 24px',
+            padding: ['Portrait', 'Communication', 'Cognition', 'Emotions', 'Values'].includes(activeTab) ? 0 : '8px 24px 24px',
             scrollbarWidth: 'thin',
             scrollbarColor: 'var(--border) transparent',
           }}
