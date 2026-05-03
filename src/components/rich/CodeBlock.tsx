@@ -25,7 +25,18 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [hlVersion, setHlVersion] = useState(0);
+
+  // Lock body scroll + ESC to close while fullscreen
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [fullscreen]);
 
   // Re-render when shiki finishes loading (or a new lang gets loaded)
   useEffect(() => onHighlighterReady(() => setHlVersion((n) => n + 1)), []);
