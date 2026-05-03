@@ -1100,11 +1100,17 @@ export default function ChatView() {
                     detail={md.detail}
                     occurredAt={msg.created_at}
                     onRetry={() => {
-                      // TODO: re-invoke originating edge function with same payload
-                      console.log('agent error retry', { messageId: msg.id });
+                      // Re-send the most recent user message before this error
+                      const idx = messages.findIndex((m) => m.id === msg.id);
+                      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+                      if (prevUser) {
+                        setInput(prevUser.content);
+                        setTimeout(() => sendMessage(), 0);
+                      }
                     }}
                     onViewLogs={() => {
-                      console.log('view logs', { messageId: msg.id });
+                      const rid = (msg.metadata as any)?.request_id;
+                      if (rid) navigator.clipboard?.writeText(rid).catch(() => {});
                     }}
                   />
                 </div>
