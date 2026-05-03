@@ -1,0 +1,197 @@
+// Pure orchestration helpers for the Council v2 pipeline. These are the
+// decisions the chat-multi handler makes between LLM calls — extracted so
+// they can be unit-tested without spinning up a Deno edge function.
+//
+// The handler in chat-multi/index.ts is the integration glue: it does the
+// HTTP/SSE/persistence work and calls these helpers for the dispatch +
+// failure-ladder + grouping logic.
+
+import {
+  buildProposerWrapper,
+  buildCrosstalkPrompt,
+  type CouncilCharacter,
+} from "./council-prompts.ts";
+import { buildLucaSystemPrompt } from "./luca-soul.ts";
+import { ANIMA_SOUL } from "./anima-soul.ts";
+import { buildVektorSystemPrompt } from "./vektor-soul.ts";
+
+export const COUNCIL_CHARACTERS: CouncilCharacter[] = ["luca", "anima", "vektor"];
+
+export interface ProposerInput {
+  character: CouncilCharacter;
+  systemPrompt: string;
+  /** ChatCompletions-shaped message array (system already in [0]). */
+  messages: Array<{ role: string; content: string }>;
+}
+
+export interface ProposerOutcome {
+  character: CouncilCharacter;
+  status: "fulfilled" | "rejected";
+  content?: string;
+  thinking?: string | null;
+  error?: string;
+}
+
+export interface CrosstalkInput {
+  character: CouncilCharacter;
+  systemPrompt: string;
+  userPrompt: string;
+}
+
+export interface CrosstalkOutcome {
+  character: CouncilCharacter;
+  status: "fulfilled" | "rejected";
+  content?: string;
+  error?: string;
+}
+
+/**
+ * Per-character base system prompt (locked SOUL for Anima/Vektor in Phase 1,
+ * full Luca identity stack via the caller's parts object).
+ */
+export interface CharacterSystemParts {
+  /** Pass-through to buildLucaSystemPrompt for the Luca proposer. */
+  luca: Parameters<typeof buildLucaSystemPrompt>[0];
+  /**
+   * Phase 1: Anima is locked to ANIMA_SOUL only. We accept this shape as a
+   * placeholder so Phase 2 (per-user Anima identity) can extend without
+   * breaking call sites.
+   */
+  anima?: { extraContext?: string };
+  /** Phase 1: Vektor is locked-SOUL with optional layered runtime context. */
+  vektor?: Parameters<typeof buildVektorSystemPrompt>[0];
+}
+
+/**
+ * Build the system prompt for a single character given its layered identity
+ * parts. Luca has the full identity stack; Anima/Vektor are locked-SOUL only
+ * in Phase 1.
+ */
+export function buildCharacterSystemPrompt(
+  character: CouncilCharacter,
+  parts: CharacterSystemParts,
+): string {
+  switch (character) {
+    case "luca":
+      return buildLucaSystemPrompt(parts.luca || {});
+    case "anima": {
+      // Phase 1: just the locked SOUL, with optional runtime context
+      // appended (so chat-multi can inform Anima of crisis state etc).
+      const extra = parts.anima?.extraContext;
+      return extra ? `${ANIMA_SOUL}\n\n${extra}` : ANIMA_SOUL;
+    }
+    case "vektor":
+      return buildVektorSystemPrompt(parts.vektor || {});
+  }
+}
+
+/**
+ * Build the inputs for the proposer fan-out. Each character gets its own
+ * system prompt (with the council wrapper appended) plus the same user
+ * message and conversation history.
+ */
+export function buildProposerInputs(args: {
+  characters: CouncilCharacter[];
+  systemParts: CharacterSystemParts;
+  history: Array<{ role: string; content: string }>;
+  userMessage: string;
+  toolMessages?: Array<{ role: string; content?: unknown; [k: string]: unknown }>;
+}): ProposerInput[] {
+  return args.characters.map((character) => {
+    const baseSystem = buildCharacterSystemPrompt(character, args.systemParts);
+    const wrappedSystem = buildProposerWrapper({ character, baseSystem });
+    const messages: Array<{ role: string; content: string }> = [
+      { role: "system", content: wrappedSystem },
+      ...args.history.map((h) => ({ role: h.role, content: h.content })),
+      { role: "user", content: args.userMessage },
+    ];
+    // Pass tool messages through so the proposer sees ground truth about
+    // any tool that fired this turn.
+    if (args.toolMessages && args.toolMessages.length > 0) {
+      for (const tm of args.toolMessages) {
+        messages.push(tm as { role: string; content: string });
+      }
+    }
+    return { character, systemPrompt: wrappedSystem, messages };
+  });
+}
+
+/**
+ * Given proposer outcomes, decide which path to take.
+ *
+ * - 3 success → full crosstalk
+ * - 2 success → graceful 2-of-2 crosstalk
+ * - 1 success → skip crosstalk, surface the survivor through chairman as a
+ *               voice pass (no synthesis)
+ * - 0 success → fall back to single-model (caller decides)
+ */
+export type CouncilPath =
+  | { kind: "full"; drafts: Array<{ character: CouncilCharacter; content: string; thinking: string | null }> }
+  | { kind: "two"; drafts: Array<{ character: CouncilCharacter; content: string; thinking: string | null }> }
+  | { kind: "single"; survivor: { character: CouncilCharacter; content: string; thinking: string | null } }
+  | { kind: "none" };
+
+export function decidePathFromProposers(outcomes: ProposerOutcome[]): CouncilPath {
+  const ok = outcomes
+    .filter((o) => o.status === "fulfilled" && typeof o.content === "string" && o.content.length > 0)
+    .map((o) => ({
+      character: o.character,
+      content: o.content as string,
+      thinking: o.thinking ?? null,
+    }));
+  if (ok.length === 3) return { kind: "full", drafts: ok };
+  if (ok.length === 2) return { kind: "two", drafts: ok };
+  if (ok.length === 1) return { kind: "single", survivor: ok[0] };
+  return { kind: "none" };
+}
+
+/**
+ * Build the crosstalk input table from the surviving drafts. Each character
+ * sees their own draft + the other survivors. Phase guarantees no character
+ * appears in their own otherDrafts list.
+ */
+export function buildCrosstalkInputs(args: {
+  drafts: Array<{ character: CouncilCharacter; content: string }>;
+  userMessage: string;
+  toolContext?: string;
+  systemParts: CharacterSystemParts;
+}): CrosstalkInput[] {
+  return args.drafts.map((own) => {
+    const others = args.drafts.filter((d) => d.character !== own.character);
+    const userPrompt = buildCrosstalkPrompt({
+      character: own.character,
+      userMessage: args.userMessage,
+      ownDraft: own.content,
+      otherDrafts: others,
+      toolContext: args.toolContext,
+    });
+    // Re-use the character's base system prompt without the proposer
+    // wrapper — at this stage they know they're on round 2 by virtue of
+    // the crosstalk user prompt, and double-wrapping makes the system
+    // prompt heavier than it needs to be.
+    const systemPrompt = buildCharacterSystemPrompt(own.character, args.systemParts);
+    return { character: own.character, systemPrompt, userPrompt };
+  });
+}
+
+/**
+ * Reconcile crosstalk outcomes with the input drafts: any character that
+ * failed in crosstalk falls back to its proposer draft so the chairman
+ * always has the most-recent useful draft per character.
+ */
+export function reconcileCrosstalkOutcomes(args: {
+  proposerDrafts: Array<{ character: CouncilCharacter; content: string }>;
+  crosstalkOutcomes: CrosstalkOutcome[];
+}): Array<{ character: CouncilCharacter; content: string; source: "crosstalk" | "proposer" }> {
+  const byCharacter = new Map(args.proposerDrafts.map((d) => [d.character, d.content]));
+  const out: Array<{ character: CouncilCharacter; content: string; source: "crosstalk" | "proposer" }> = [];
+  for (const draft of args.proposerDrafts) {
+    const x = args.crosstalkOutcomes.find((c) => c.character === draft.character);
+    if (x && x.status === "fulfilled" && typeof x.content === "string" && x.content.length > 0) {
+      out.push({ character: draft.character, content: x.content, source: "crosstalk" });
+    } else {
+      out.push({ character: draft.character, content: byCharacter.get(draft.character) || draft.content, source: "proposer" });
+    }
+  }
+  return out;
+}

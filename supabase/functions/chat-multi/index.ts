@@ -24,6 +24,24 @@ import {
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
 import { summarizeToolContext } from "../_shared/agents/tool-context.ts";
+import {
+  buildProposerInputs,
+  buildCrosstalkInputs,
+  decidePathFromProposers,
+  reconcileCrosstalkOutcomes,
+  COUNCIL_CHARACTERS,
+  type ProposerOutcome,
+  type CrosstalkOutcome,
+  type CharacterSystemParts,
+} from "../_shared/agents/council-pipeline.ts";
+import {
+  type CouncilCharacter,
+} from "../_shared/agents/council-prompts.ts";
+
+/** Council v2 — all proposers run on the same model so voice diversity comes from
+ *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
+const COUNCIL_PROPOSER_MODEL = "anthropic/claude-opus-4-7";
+const CROSSTALK_TIMEOUT_MS = 25_000;
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
@@ -355,132 +373,229 @@ serve(async (req) => {
         }, 5000);
 
         try {
-          // Fan out to all ensemble models in parallel (non-streaming, with reasoning)
-          const variantPromises = ensembleModels.map((model) =>
-            callModelNonStreaming(baseMessages, model, apiKey!, reasoningEffort)
-          );
+          // ────────────────────────────────────────────────────────────────
+          // Council v2 — three character proposers (Luca / Anima / Vektor),
+          // named cross-pollination, then chairman synthesis. All proposers
+          // share the same Opus 4.7 model — voice diversity comes from
+          // SOULs, not models (Self-MoA finding).
+          //
+          // Commit 2 (this revision): Stages 1 + 2 implemented.
+          // Stage 3 (chairman with verdict + critique pass) lands in commit 3.
+          // For now Stage 3 routes to the legacy synthesis stream so the pipeline
+          // produces an end-to-end output during this transitional state.
+          // ────────────────────────────────────────────────────────────────
 
-          const variantResults = await Promise.allSettled(variantPromises);
-
-          // Collect successful responses (now includes thinking)
-          const variants: Array<{ model: string; content: string; thinking: string | null }> = [];
-          for (let i = 0; i < variantResults.length; i++) {
-            const result = variantResults[i];
-            const model = ensembleModels[i];
-            if (result.status === "fulfilled" && result.value) {
-              const { content, thinking } = result.value;
-              variants.push({ model: shortModelName(model), content, thinking });
-              send({ type: "variant", model: shortModelName(model), text: content, thinking });
-            } else {
-              const reason = result.status === "rejected" ? result.reason?.message || "unknown" : "empty";
-              console.error(`Model ${model} failed:`, reason);
-              send({ type: "variant_error", model: shortModelName(model), error: reason });
-            }
-          }
-
-          if (variants.length === 0) {
-            send({ type: "error", text: "All models failed to respond." });
-            controller.close();
-            clearInterval(heartbeat);
-            return;
-          }
-
-          // If only one model succeeded, use its response directly
-          if (variants.length === 1) {
-            if (variants[0].thinking) {
-              send({ type: "thinking", text: variants[0].thinking });
-            }
-            send({ type: "content", text: variants[0].content });
-            await saveAssistantMessage(supabase, thread_id, userId, variants[0].content, "synthesis", variants, variants[0].thinking, agentId);
-            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], variants[0].content).catch(
-              (e) => console.warn("pending revision finalization failed:", e)
-            );
-            await autoTitleThread(supabase, thread_id, message, variants[0].content, apiKey!);
-            encodeMnemosMemory(supabase, userId, message, variants[0].content).catch(
-              (e) => console.warn("Mnemos encode failed (non-fatal):", e)
-            );
-            fireObserverWatch(thread_id, agentId, authHeader);
-            fireMnemosDialectic(thread_id, agentId, authHeader);
-            fireSkillsDistill(thread_id, agentId, authHeader);
-            send({ type: "done", model: "synthesis", tokens_used: null });
-            controller.close();
-            clearInterval(heartbeat);
-            return;
-          }
-
-          // ─── Stage 2: peer-review ranking (single-judge variant) ───
-          // Anonymize variants as Response A/B/C, ask the judge to rank them,
-          // parse the FINAL RANKING block, compute aggregate. Falls back to
-          // legacy synthesis if the judge fails or times out (>STAGE2_TIMEOUT_MS).
-          send({ type: "ranking_starting" });
-          const labels = makeLabels(variants.length);
-          const labelToModel: Record<string, string> = {};
-          variants.forEach((v, i) => {
-            labelToModel[`Response ${labels[i]}`] = v.model;
-          });
           const toolContext = summarizeToolContext(toolMessages);
-          const rankingPrompt = buildRankingPrompt(
-            message,
-            variants.map((v, i) => ({ label: labels[i], content: v.content })),
-            toolContext,
+
+          // Build per-character identity parts. Luca gets the full identity stack
+          // (soul/convictions/self-model/user-model + runtime state). Anima/Vektor
+          // are locked-SOUL only in Phase 1 with optional context layered on.
+          const systemParts: CharacterSystemParts = {
+            luca: {
+              emotionalBlock,
+              beliefsBlock,
+              memoryContext,
+              soulMd: identityDocs?.soulMd,
+              selfModel: identityDocs?.selfModel,
+              userModel: identityDocs?.userModel,
+              convictions: identityDocs?.convictions,
+              skillsBlock,
+              pendingRevisions: pendingRevisionsBlock,
+              continuityNote,
+              crisisDirective,
+            },
+            anima: {
+              extraContext: crisisDirective || undefined,
+            },
+            vektor: {
+              userModel: identityDocs?.userModel,
+              continuityNote,
+            },
+          };
+
+          // ─── Stage 1: three character proposers in parallel ───
+          send({ type: "council_starting" });
+          const proposerInputs = buildProposerInputs({
+            characters: [...COUNCIL_CHARACTERS],
+            systemParts,
+            history: history || [],
+            userMessage: message,
+            toolMessages,
+          });
+          for (const inp of proposerInputs) {
+            send({ type: "proposer_starting", character: inp.character });
+          }
+
+          const proposerSettled = await Promise.allSettled(
+            proposerInputs.map((inp) =>
+              callModelNonStreaming(inp.messages, COUNCIL_PROPOSER_MODEL, apiKey!, reasoningEffort)
+            ),
           );
 
-          let aggregate: AggregateEntry[] = [];
-          const rankings: Array<{
-            judge_model: string;
-            raw_text: string;
-            parsed_ranking: string[];
-          }> = [];
-
-          try {
-            const judgeResult = await Promise.race([
-              callModelNonStreaming(
-                [{ role: "user", content: rankingPrompt }],
-                DEFAULT_RANKING_MODEL,
-                apiKey!,
-                "low",
-              ),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), STAGE2_TIMEOUT_MS)),
-            ]);
-
-            if (judgeResult && judgeResult.content) {
-              const parsed = parseRankingFromText(judgeResult.content);
-              const entry = {
-                judge_model: DEFAULT_RANKING_MODEL,
-                raw_text: judgeResult.content,
-                parsed_ranking: parsed,
+          const proposerOutcomes: ProposerOutcome[] = proposerSettled.map((res, i) => {
+            const character = proposerInputs[i].character;
+            if (res.status === "fulfilled" && res.value && typeof res.value.content === "string") {
+              return {
+                character,
+                status: "fulfilled",
+                content: res.value.content,
+                thinking: res.value.thinking,
               };
-              rankings.push(entry);
+            }
+            const errMsg = res.status === "rejected"
+              ? (res.reason?.message || String(res.reason))
+              : "empty content";
+            console.error(`[council] proposer ${character} failed:`, errMsg);
+            return { character, status: "rejected", error: errMsg };
+          });
+
+          for (const outcome of proposerOutcomes) {
+            if (outcome.status === "fulfilled") {
+              if (outcome.thinking) {
+                send({ type: "proposer_thinking", character: outcome.character, text: outcome.thinking });
+              }
               send({
-                type: "ranking",
-                judge_model: shortModelName(DEFAULT_RANKING_MODEL),
-                raw_text: judgeResult.content,
-                parsed_ranking: parsed,
+                type: "variant",
+                character: outcome.character,
+                text: outcome.content,
+                thinking: outcome.thinking,
               });
-              aggregate = aggregateRankings(rankings, labelToModel);
-              if (aggregate.length > 0) {
-                send({ type: "aggregate_ranking", ordering: aggregate });
+              send({ type: "proposer_done", character: outcome.character });
+            } else {
+              send({ type: "variant_error", character: outcome.character, error: outcome.error });
+            }
+          }
+
+          const path = decidePathFromProposers(proposerOutcomes);
+
+          if (path.kind === "none") {
+            send({ type: "error", text: "All council proposers failed." });
+            controller.close();
+            clearInterval(heartbeat);
+            return;
+          }
+
+          // The drafts the council carries forward (proposer outputs that succeeded).
+          const proposerDrafts = (path.kind === "single"
+            ? [{
+                character: path.survivor.character,
+                content: path.survivor.content,
+                thinking: path.survivor.thinking,
+              }]
+            : path.drafts);
+
+          // ─── Stage 2: cross-pollination ───
+          // Each character revises their draft after seeing the others. Single
+          // round only (per multi-agent debate failure-mode research). Skipped
+          // when only one proposer survived (nothing to cross-pollinate).
+          let crosstalkOutcomes: CrosstalkOutcome[] = [];
+          let revisedDrafts: Array<{ character: CouncilCharacter; content: string; source: "crosstalk" | "proposer" }>;
+
+          if (path.kind === "single") {
+            revisedDrafts = [{
+              character: proposerDrafts[0].character,
+              content: proposerDrafts[0].content,
+              source: "proposer",
+            }];
+            send({ type: "crosstalk_skipped", reason: "single_survivor" });
+          } else {
+            send({ type: "crosstalk_starting" });
+            const crosstalkInputs = buildCrosstalkInputs({
+              drafts: proposerDrafts.map((d) => ({ character: d.character, content: d.content })),
+              userMessage: message,
+              toolContext,
+              systemParts,
+            });
+
+            const crosstalkSettled = await Promise.allSettled(
+              crosstalkInputs.map((inp) =>
+                Promise.race([
+                  callModelNonStreaming(
+                    [
+                      { role: "system", content: inp.systemPrompt },
+                      { role: "user", content: inp.userPrompt },
+                    ],
+                    COUNCIL_PROPOSER_MODEL,
+                    apiKey!,
+                    reasoningEffort,
+                  ),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error("crosstalk timeout")), CROSSTALK_TIMEOUT_MS)
+                  ),
+                ])
+              ),
+            );
+
+            crosstalkOutcomes = crosstalkSettled.map((res, i) => {
+              const character = crosstalkInputs[i].character;
+              if (res.status === "fulfilled" && res.value && typeof res.value.content === "string") {
+                return { character, status: "fulfilled", content: res.value.content };
+              }
+              const errMsg = res.status === "rejected"
+                ? (res.reason?.message || String(res.reason))
+                : "empty content";
+              console.warn(`[council] crosstalk ${character} failed (non-fatal, falling back to proposer draft):`, errMsg);
+              return { character, status: "rejected", error: errMsg };
+            });
+
+            for (const outcome of crosstalkOutcomes) {
+              if (outcome.status === "fulfilled") {
+                send({ type: "crosstalk", character: outcome.character, text: outcome.content });
+              } else {
+                send({ type: "crosstalk_error", character: outcome.character, error: outcome.error });
               }
             }
-          } catch (rerr) {
-            console.warn("Stage 2 ranking failed (non-fatal):", rerr);
+            send({ type: "crosstalk_done" });
+
+            revisedDrafts = reconcileCrosstalkOutcomes({
+              proposerDrafts: proposerDrafts.map((d) => ({ character: d.character, content: d.content })),
+              crosstalkOutcomes,
+            });
           }
 
-          // Pick prompt path: chairman (rank-aware) if aggregate has entries,
-          // otherwise legacy synthesis prompt.
-          const useChairman = aggregate.length > 0;
-          send({ type: useChairman ? "chairman_starting" : "synthesizing" });
+          // ─── Stage 3 (transitional, commit 2): legacy synthesis stream ───
+          // Commit 3 swaps this for the verdict-allowed chairman + critique pass.
+          // For now we adapt revisedDrafts to the legacy `variants` shape and
+          // route through the existing buildSynthesisSystemPrompt path so the
+          // pipeline still produces output during the staged rollout.
+          send({ type: "synthesizing" });
 
-          // Build prompt with all variant responses
-          const synthesisMessages: Array<{ role: string; content: string }> = useChairman
-            ? [
-                { role: "system", content: buildChairmanSystemPrompt(emotionalBlock, beliefsBlock) },
-                { role: "user", content: buildChairmanUserPrompt(message, variants, aggregate, toolContext) },
-              ]
-            : [
-                { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
-                { role: "user", content: buildSynthesisUserPrompt(message, variants, toolContext) },
-              ];
+          const variants: Array<{ model: string; content: string; thinking: string | null }> = revisedDrafts.map((d) => ({
+            model: d.character, // legacy field repurposed: holds character name in council v2
+            content: d.content,
+            thinking: null,
+          }));
+
+          // Empty placeholders so the existing save path stays type-correct.
+          // Real council_v2 trace is built below.
+          const rankings: Array<{ judge_model: string; raw_text: string; parsed_ranking: string[] }> = [];
+          const aggregate: AggregateEntry[] = [];
+          const labelToModel: Record<string, string> = {};
+
+          // Build the council_v2 trace metadata that gets persisted alongside
+          // the assistant message. Frontend (commit 4) reads this to render the
+          // CouncilPanel.
+          const councilV2Trace = {
+            kind: "council_v2" as const,
+            proposers: proposerDrafts.map((d) => ({
+              character: d.character,
+              content: d.content,
+              thinking: d.thinking ?? null,
+            })),
+            crosstalk: revisedDrafts.map((d) => ({
+              character: d.character,
+              content: d.content,
+              source: d.source,
+            })),
+            verdict: null as null | "synthesize" | "diverge", // populated in commit 3
+            critique: null as null | unknown,
+            revised_content: null as null | string,
+          };
+
+          const synthesisMessages: Array<{ role: string; content: string }> = [
+            { role: "system", content: buildSynthesisSystemPrompt(emotionalBlock, beliefsBlock) },
+            { role: "user", content: buildSynthesisUserPrompt(message, variants, toolContext) },
+          ];
 
           // Stream the synthesis
           const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -527,7 +642,12 @@ serve(async (req) => {
               const retryContent = retryData?.choices?.[0]?.message?.content || "";
               if (retryContent) {
                 send({ type: "content", text: retryContent });
-                await saveAssistantMessage(supabase, thread_id, userId, retryContent, "synthesis-retry", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+                await saveAssistantMessage(
+                  supabase, thread_id, userId, retryContent, "synthesis-retry",
+                  variants, null, agentId,
+                  { rankings, aggregate, label_to_model: labelToModel },
+                  councilV2Trace,
+                );
                 finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], retryContent).catch(
                   (e) => console.warn("pending revision finalization failed:", e)
                 );
@@ -548,7 +668,12 @@ serve(async (req) => {
             // Final fallback: use first variant but notify the user
             const best = variants[0];
             send({ type: "content", text: best.content });
-            await saveAssistantMessage(supabase, thread_id, userId, best.content, "fallback", variants, null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+            await saveAssistantMessage(
+              supabase, thread_id, userId, best.content, "fallback",
+              variants, null, agentId,
+              { rankings, aggregate, label_to_model: labelToModel },
+              councilV2Trace,
+            );
             finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], best.content).catch(
               (e) => console.warn("pending revision finalization failed:", e)
             );
@@ -617,7 +742,12 @@ serve(async (req) => {
           }
 
           // Save the synthesized message (thinking separate from variants)
-          await saveAssistantMessage(supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis", variants, synthesisThinking || null, agentId, { rankings, aggregate, label_to_model: labelToModel });
+          await saveAssistantMessage(
+            supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis",
+            variants, synthesisThinking || null, agentId,
+            { rankings, aggregate, label_to_model: labelToModel },
+            councilV2Trace,
+          );
           finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], synthesizedContent).catch(
             (e) => console.warn("pending revision finalization failed:", e)
           );
@@ -1004,21 +1134,40 @@ async function saveAssistantMessage(
     aggregate: AggregateEntry[];
     label_to_model: Record<string, string>;
   } | null = null,
+  councilV2: {
+    proposers: Array<{ character: string; content: string; thinking: string | null }>;
+    crosstalk: Array<{ character: string; content: string; source: string }>;
+    verdict: "synthesize" | "diverge" | null;
+    critique: unknown | null;
+    revised_content: string | null;
+  } | null = null,
 ) {
-  // Build metadata payload — only when we have something worth storing.
-  const metadata = variants.length > 0
-    ? {
-        kind: "council",
-        variants: variants.map((v) => ({
-          model: v.model,
-          content: v.content,
-          thinking: v.thinking ?? null,
-        })),
-        rankings: trace?.rankings ?? [],
-        aggregate: trace?.aggregate ?? [],
-        label_to_model: trace?.label_to_model ?? {},
-      }
-    : null;
+  // Build metadata payload — when council v2 trace is provided, prefer that
+  // shape (kind='council_v2'). Falls back to legacy council shape for any
+  // remaining call sites.
+  let metadata: Record<string, unknown> | null = null;
+  if (councilV2) {
+    metadata = {
+      kind: "council_v2",
+      proposers: councilV2.proposers,
+      crosstalk: councilV2.crosstalk,
+      verdict: councilV2.verdict,
+      critique: councilV2.critique,
+      revised_content: councilV2.revised_content,
+    };
+  } else if (variants.length > 0) {
+    metadata = {
+      kind: "council",
+      variants: variants.map((v) => ({
+        model: v.model,
+        content: v.content,
+        thinking: v.thinking ?? null,
+      })),
+      rankings: trace?.rankings ?? [],
+      aggregate: trace?.aggregate ?? [],
+      label_to_model: trace?.label_to_model ?? {},
+    };
+  }
 
   await supabase.from("messages").insert({
     thread_id: threadId,
