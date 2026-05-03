@@ -158,57 +158,6 @@ export type Database = {
           },
         ]
       }
-      agent_consultations: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          error: string | null
-          from_agent: string
-          id: string
-          model_used: string | null
-          parent_message_id: string | null
-          parent_thread_id: string | null
-          question: string
-          response: string | null
-          status: string
-          to_agent: string
-          tokens_used: number | null
-          user_id: string
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          from_agent?: string
-          id?: string
-          model_used?: string | null
-          parent_message_id?: string | null
-          parent_thread_id?: string | null
-          question: string
-          response?: string | null
-          status?: string
-          to_agent: string
-          tokens_used?: number | null
-          user_id: string
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          from_agent?: string
-          id?: string
-          model_used?: string | null
-          parent_message_id?: string | null
-          parent_thread_id?: string | null
-          question?: string
-          response?: string | null
-          status?: string
-          to_agent?: string
-          tokens_used?: number | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       agent_identity: {
         Row: {
           agent_id: string
