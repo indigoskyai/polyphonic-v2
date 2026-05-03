@@ -24,10 +24,10 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [, force] = useState(0);
+  const [hlVersion, setHlVersion] = useState(0);
 
   // Re-render when shiki finishes loading (or a new lang gets loaded)
-  useEffect(() => onHighlighterReady(() => force((n) => n + 1)), []);
+  useEffect(() => onHighlighterReady(() => setHlVersion((n) => n + 1)), []);
 
   const isArt = !lang && looksLikeArt(source);
   const normalized = lang ? normalizeLang(lang) : '';
@@ -37,7 +37,7 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const html = useMemo(() => {
     if (isArt || !lang) return null;
     return highlightSync(source, normalized);
-  }, [source, lang, normalized, isArt]);
+  }, [source, lang, normalized, isArt, hlVersion]);
 
   const copy = async () => {
     try {
