@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, WrapText, Download } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, Copy, WrapText, Download, Maximize2, X } from 'lucide-react';
 import { highlightSync, normalizeLang, onHighlighterReady } from './highlighter';
 
 const ART_GLYPHS = /[╭╮╰╯─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋█▀▄▌▐░▒▓◆◇○●◐◑▲▼◀▶★☆✦✧⬢⬡]/;
