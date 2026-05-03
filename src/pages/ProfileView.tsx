@@ -8,6 +8,9 @@ import CommunicationMind from '@/components/profile/CommunicationMind';
 import CognitionMind from '@/components/profile/CognitionMind';
 import EmotionsMind from '@/components/profile/EmotionsMind';
 import ValuesMind from '@/components/profile/ValuesMind';
+import RelationshipsMind from '@/components/profile/RelationshipsMind';
+import GrowthMind from '@/components/profile/GrowthMind';
+import ShadowMind from '@/components/profile/ShadowMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
@@ -490,7 +493,7 @@ export default function ProfileView() {
         <div
           className="flex-1 overflow-y-auto"
           style={{
-            padding: ['Portrait', 'Communication', 'Cognition', 'Emotions', 'Values'].includes(activeTab) ? 0 : '8px 24px 24px',
+            padding: ['Portrait', 'Communication', 'Cognition', 'Emotions', 'Values', 'Relationships', 'Growth', 'Shadow'].includes(activeTab) ? 0 : '8px 24px 24px',
             scrollbarWidth: 'thin',
             scrollbarColor: 'var(--border) transparent',
           }}
@@ -523,7 +526,13 @@ export default function ProfileView() {
               version={profile.version}
             />
           )}
-          {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
+          {activeTab === 'Relationships' && (
+            <RelationshipsMind
+              data={profile.relational_dynamics}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
           {activeTab === 'Cognition' && (
             <CognitionMind
               data={profile.cognitive_tendencies}
@@ -533,8 +542,21 @@ export default function ProfileView() {
               version={profile.version}
             />
           )}
-          {activeTab === 'Growth' && <GrowthTab data={profile.growth_edges} />}
-          {activeTab === 'Shadow' && <ShadowTab data={profile.shadow_patterns} memoryStats={memoryStats} valuesData={profile.values_hierarchy} />}
+          {activeTab === 'Growth' && (
+            <GrowthMind
+              data={profile.growth_edges}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
+          {activeTab === 'Shadow' && (
+            <ShadowMind
+              data={profile.shadow_patterns}
+              memoryStats={memoryStats}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
         </div>
       </div>
 
