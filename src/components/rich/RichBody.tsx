@@ -1,84 +1,42 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { highlight } from './syntaxHighlight';
+import CodeBlock from './CodeBlock';
 
 interface RichBodyProps {
   source: string;
   className?: string;
+  streaming?: boolean;
 }
 
-// Detect ASCII / box-drawing / letter-art so we render it as art, not code.
-const ART_GLYPHS = /[╭╮╰╯─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋█▀▄▌▐░▒▓◆◇○●◐◑▲▼◀▶★☆✦✧⬢⬡]/;
-function looksLikeArt(text: string): boolean {
-  if (!text) return false;
-  const lines = text.split('\n');
-  if (lines.length < 2) return false;
-  if (ART_GLYPHS.test(text)) return true;
-  // Heuristic: many lines with same length & lots of non-alphanumeric runs
-  const nonAlnum = text.replace(/[A-Za-z0-9\s]/g, '').length;
-  return nonAlnum > text.length * 0.25 && lines.length >= 3;
-}
-
-function CodeBlock({ lang, source }: { lang: string | null; source: string }) {
-  const [copied, setCopied] = useState(false);
-  const isArt = !lang && looksLikeArt(source);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(source);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
-    } catch {
-      /* no-op */
-    }
-  };
-  if (isArt) {
-    return (
-      <div className="code-with-header text-art-block">
-        <div className="code-header-row">
-          <div className="code-lang-tag">art</div>
-          <button type="button" className="code-copy-btn" onClick={copy} aria-label="Copy">
-            {copied ? 'copied' : 'copy'}
-          </button>
-        </div>
-        <pre className="text-art-pre">
-          <code>{source}</code>
-        </pre>
-      </div>
-    );
+/**
+ * If we're mid-stream and the source has an odd number of ``` fences,
+ * append a virtual closer so react-markdown parses the trailing partial
+ * block as a real code block (instead of plain prose). We mark the open
+ * block via context so CodeBlock can show a streaming indicator.
+ */
+function autoCloseFence(src: string): { text: string; openBlockIndex: number | null } {
+  const fences = src.match(/^```/gm);
+  const count = fences ? fences.length : 0;
+  if (count % 2 === 1) {
+    // index of the *current* unfinished block among all fenced blocks
+    const blockIdx = Math.floor(count / 2);
+    return { text: src + '\n```', openBlockIndex: blockIdx };
   }
-  if (!lang) {
-    return (
-      <div className="code-with-header">
-        <div className="code-header-row">
-          <div className="code-lang-tag">text</div>
-          <button type="button" className="code-copy-btn" onClick={copy} aria-label="Copy">
-            {copied ? 'copied' : 'copy'}
-          </button>
-        </div>
-        <pre><code>{source}</code></pre>
-      </div>
-    );
-  }
-  const html = highlight(source, lang);
-  return (
-    <div className="code-with-header">
-      <div className="code-header-row">
-        <div className="code-lang-tag">{lang}</div>
-        <button type="button" className="code-copy-btn" onClick={copy} aria-label="Copy">
-          {copied ? 'copied' : 'copy'}
-        </button>
-      </div>
-      <pre>
-        <code dangerouslySetInnerHTML={{ __html: html }} />
-      </pre>
-    </div>
-  );
+  return { text: src, openBlockIndex: null };
 }
 
-export default function RichBody({ source, className }: RichBodyProps) {
+export default function RichBody({ source, className, streaming = false }: RichBodyProps) {
   const navigate = useNavigate();
+  const { text, openBlockIndex } = streaming
+    ? autoCloseFence(source)
+    : { text: source, openBlockIndex: null as number | null };
+
+  // Track which fenced block we're rendering so we can flag the open one.
+  const blockCounterRef = React.useRef(0);
+  blockCounterRef.current = 0;
+
   return (
     <div className={`rich-body${className ? ` ${className}` : ''}`}>
       <ReactMarkdown
@@ -109,7 +67,9 @@ export default function RichBody({ source, className }: RichBodyProps) {
             if (inline) {
               return <code {...props}>{children}</code>;
             }
-            return <CodeBlock lang={lang} source={text} />;
+            const myIndex = blockCounterRef.current++;
+            const isOpenStreamingBlock = streaming && openBlockIndex !== null && myIndex === openBlockIndex;
+            return <CodeBlock lang={lang} source={text} streaming={isOpenStreamingBlock} />;
           },
           img({ src, alt }) {
             if (!src) {
@@ -134,7 +94,7 @@ export default function RichBody({ source, className }: RichBodyProps) {
           },
         }}
       >
-        {source}
+        {text}
       </ReactMarkdown>
     </div>
   );
