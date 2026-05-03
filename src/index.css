@@ -809,13 +809,13 @@ html {
   outline: none;
   color: var(--text-body);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   letter-spacing: var(--track-body);
   line-height: 1.55;
-  padding: 14px 18px;
-  min-height: 48px;
-  max-height: 240px;
+  padding: 16px 20px;
+  min-height: 56px;
+  max-height: 280px;
   resize: none;
   caret-color: var(--text-soft);
 }
@@ -3109,9 +3109,9 @@ html {
 
 .mc-row {
   display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 16px;
-  padding: 12px 0;
+  grid-template-columns: 80px 1fr;
+  gap: 18px;
+  padding: 14px 0;
   align-items: start;
 }
 .mc-sidehead {
@@ -3123,7 +3123,7 @@ html {
 }
 .mc-role {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
@@ -3137,8 +3137,8 @@ html {
 .mc-row[data-role="system"] .mc-role { color: var(--text-whisper); }
 
 .mc-body {
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.7;
   font-weight: 400;
   color: var(--text-primary);
   letter-spacing: var(--track-body);
