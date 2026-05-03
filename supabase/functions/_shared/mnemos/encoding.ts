@@ -26,6 +26,8 @@ import {
   EMOTIONAL_STATE_WINDOW,
 } from "./constants.ts";
 
+import { computeEncodingSalience } from "./salience.ts";
+
 import type { MnemosEngine } from "./engine.ts";
 
 // ---------------------------------------------------------------------------
