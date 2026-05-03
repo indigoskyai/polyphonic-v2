@@ -22,6 +22,7 @@ import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
+import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -1390,6 +1391,11 @@ export default function ChatView() {
                   onSettled={() => setLingeringStream(null)}
                 />
               )}
+              {/* Live artifacts extracted from in-progress stream */}
+              {(streamingContent || lingeringStream) && currentThreadId && user &&
+                extractStreamingArtifacts(streamingContent || lingeringStream || '', { threadId: currentThreadId, userId: user.id }).map((art) => (
+                  <ArtifactCard key={art.id} artifact={art} />
+                ))}
               </div>
             </div>
           )}
