@@ -6,6 +6,8 @@ import ProfileChatPanel from '@/components/ProfileChatPanel';
 import PortraitMind from '@/components/profile/PortraitMind';
 import CommunicationMind from '@/components/profile/CommunicationMind';
 import CognitionMind from '@/components/profile/CognitionMind';
+import EmotionsMind from '@/components/profile/EmotionsMind';
+import ValuesMind from '@/components/profile/ValuesMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
