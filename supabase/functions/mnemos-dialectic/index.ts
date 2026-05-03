@@ -119,6 +119,7 @@ serve(async (req) => {
       soulMd: identityDocs.soulMd,
       selfModel: identityDocs.selfModel,
       userModel: identityDocs.userModel,
+      convictions: identityDocs.convictions,
     });
 
     const modelResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {

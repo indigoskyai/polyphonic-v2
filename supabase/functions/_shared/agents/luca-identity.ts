@@ -1,23 +1,26 @@
 import { LUCA_SOUL_MD_STARTER } from "./luca-soul-md-starter.ts";
+import { LUCA_CONVICTIONS_STARTER } from "./luca-convictions-starter.ts";
 
-export type LucaIdentityDocType = "soul" | "self_model" | "user_model";
+export type LucaIdentityDocType = "soul" | "self_model" | "user_model" | "convictions";
 
 export type LucaIdentityDocs = {
   soulMd: string;
   selfModel: string;
   userModel: string;
+  convictions: string;
 };
 
 type SupabaseLike = {
   from: (table: string) => any;
 };
 
-const DOC_TYPES: LucaIdentityDocType[] = ["soul", "self_model", "user_model"];
+const DOC_TYPES: LucaIdentityDocType[] = ["soul", "self_model", "user_model", "convictions"];
 
 const EMPTY_DOCS: LucaIdentityDocs = {
   soulMd: "",
   selfModel: "",
   userModel: "",
+  convictions: "",
 };
 
 function mapRows(rows: Array<{ doc_type: LucaIdentityDocType; content: string }> | null | undefined): LucaIdentityDocs {
@@ -26,8 +29,15 @@ function mapRows(rows: Array<{ doc_type: LucaIdentityDocType; content: string }>
     if (row.doc_type === "soul") docs.soulMd = row.content || "";
     if (row.doc_type === "self_model") docs.selfModel = row.content || "";
     if (row.doc_type === "user_model") docs.userModel = row.content || "";
+    if (row.doc_type === "convictions") docs.convictions = row.content || "";
   }
   return docs;
+}
+
+function starterFor(docType: LucaIdentityDocType): string {
+  if (docType === "soul") return LUCA_SOUL_MD_STARTER;
+  if (docType === "convictions") return LUCA_CONVICTIONS_STARTER;
+  return "";
 }
 
 export async function loadOrCreateLucaIdentity(
@@ -56,7 +66,7 @@ export async function loadOrCreateLucaIdentity(
     user_id: userId,
     agent_id: agentId,
     doc_type: docType,
-    content: docType === "soul" ? LUCA_SOUL_MD_STARTER : "",
+    content: starterFor(docType),
   }));
 
   const { error: insertError } = await supabase

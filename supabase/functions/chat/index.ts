@@ -156,6 +156,7 @@ serve(async (req) => {
       soulMd: identityDocs.soulMd,
       selfModel: identityDocs.selfModel,
       userModel: identityDocs.userModel,
+      convictions: identityDocs.convictions,
       skillsBlock: formatAgentSkillsPrompt(relevantSkills),
       pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
       crisisDirective,

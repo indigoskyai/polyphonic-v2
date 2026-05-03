@@ -137,6 +137,7 @@ async function callLuca(supabase: any, userId: string, threadId: string, prompt:
     soulMd: identityDocs.soulMd,
     selfModel: identityDocs.selfModel,
     userModel: identityDocs.userModel,
+    convictions: identityDocs.convictions,
     skillsBlock: formatAgentSkillsPrompt(skills),
     continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
   });

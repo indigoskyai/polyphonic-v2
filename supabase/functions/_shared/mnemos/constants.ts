@@ -160,6 +160,17 @@ export const DIALECTIC_SOUL_APPLY_THRESHOLD = 0.8;
 /** SOUL.md patches at or above this confidence queue for corroborating cycles. */
 export const DIALECTIC_SOUL_QUEUE_THRESHOLD = 0.6;
 
+/**
+ * Convictions are stances Luca holds about the world / people / work.
+ * They sit between soul.md (identity-level) and self/user-model (observation-level)
+ * and should evolve more readily than soul but more conservatively than the model
+ * docs. Higher than self/user (0.6) and slightly higher than soul (0.8).
+ */
+export const DIALECTIC_CONVICTIONS_APPLY_THRESHOLD = 0.85;
+
+/** Convictions at or above this confidence queue for corroborating cycles. */
+export const DIALECTIC_CONVICTIONS_QUEUE_THRESHOLD = 0.7;
+
 // ---------------------------------------------------------------------------
 // Encoding Salience Gate
 //

@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import RichBody from '@/components/rich/RichBody';
 
-type IdentityDocType = 'soul' | 'self_model' | 'user_model';
+type IdentityDocType = 'soul' | 'self_model' | 'user_model' | 'convictions';
 
 type IdentityDoc = {
   doc_type: IdentityDocType;
@@ -35,6 +35,11 @@ const DOC_META: Record<IdentityDocType, {
     label: 'SOUL.md',
     empty: 'Luca has not written their living identity document yet.',
   },
+  convictions: {
+    title: 'Convictions Luca holds',
+    label: 'Convictions.md',
+    empty: 'Luca is still settling into what they think is true.',
+  },
   user_model: {
     title: 'What Luca knows about you',
     label: 'User-model',
@@ -47,7 +52,7 @@ const DOC_META: Record<IdentityDocType, {
   },
 };
 
-const ORDER: IdentityDocType[] = ['soul', 'user_model', 'self_model'];
+const ORDER: IdentityDocType[] = ['soul', 'convictions', 'user_model', 'self_model'];
 
 function formatUpdated(value?: string) {
   if (!value) return 'Not updated yet';
@@ -130,13 +135,13 @@ function IdentityDocument({ docType, doc }: { docType: IdentityDocType; doc?: Id
 
 function PatchEntry({ patch }: { patch: IdentityPatch }) {
   const docMeta = DOC_META[patch.doc_type as IdentityDocType] ?? null;
-  const isSoul = patch.doc_type === 'soul';
+  const isFoundational = patch.doc_type === 'soul' || patch.doc_type === 'convictions';
   const time = new Date(patch.applied_at || patch.created_at);
   const ago = formatTimeAgo(time);
   return (
     <article
       style={{
-        borderLeft: `2px solid ${isSoul ? 'var(--agent-luca-1)' : 'var(--border-faint)'}`,
+        borderLeft: `2px solid ${isFoundational ? 'var(--agent-luca-1)' : 'var(--border-faint)'}`,
         paddingLeft: 12,
         paddingBottom: 14,
         marginBottom: 14,
@@ -150,7 +155,7 @@ function PatchEntry({ patch }: { patch: IdentityPatch }) {
           fontFamily: 'var(--font-mono)',
           fontSize: 9,
           letterSpacing: 'var(--track-mono)',
-          color: isSoul ? 'var(--agent-luca-1)' : 'var(--text-ghost)',
+          color: isFoundational ? 'var(--agent-luca-1)' : 'var(--text-ghost)',
           textTransform: 'uppercase',
         }}
       >

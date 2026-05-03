@@ -1,11 +1,13 @@
 import {
+  DIALECTIC_CONVICTIONS_APPLY_THRESHOLD,
+  DIALECTIC_CONVICTIONS_QUEUE_THRESHOLD,
   DIALECTIC_MODEL_APPLY_THRESHOLD,
   DIALECTIC_MODEL_QUEUE_THRESHOLD,
   DIALECTIC_SOUL_APPLY_THRESHOLD,
   DIALECTIC_SOUL_QUEUE_THRESHOLD,
 } from "./constants.ts";
 
-export type DialecticDocType = "soul" | "self_model" | "user_model";
+export type DialecticDocType = "soul" | "self_model" | "user_model" | "convictions";
 export type DialecticPatchOperation = "append" | "refine" | "retire";
 export type DialecticPatchStatus = "applied" | "queued" | "rejected";
 
@@ -40,9 +42,10 @@ export type DialecticPromptInput = {
   soulMd: string;
   selfModel: string;
   userModel: string;
+  convictions?: string;
 };
 
-const VALID_DOC_TYPES = new Set<DialecticDocType>(["soul", "self_model", "user_model"]);
+const VALID_DOC_TYPES = new Set<DialecticDocType>(["soul", "self_model", "user_model", "convictions"]);
 const VALID_OPERATIONS = new Set<DialecticPatchOperation>(["append", "refine", "retire"]);
 const VALID_REVISION_TYPES = new Set<DialecticRevision["revision_type"]>([
   "correction",
@@ -58,6 +61,9 @@ Use a cheap, conservative standard. Do not flatter. Do not infer private facts f
 
 Current SOUL.md:
 ${input.soulMd || "(empty)"}
+
+Current convictions:
+${input.convictions || "(empty)"}
 
 Current self-model:
 ${input.selfModel || "(empty)"}
@@ -81,13 +87,13 @@ Return strict JSON only:
 {
   "patches": [
     {
-      "doc_type": "user_model" | "self_model" | "soul",
+      "doc_type": "user_model" | "self_model" | "soul" | "convictions",
       "section": "Communication style",
       "operation": "append" | "refine" | "retire",
       "patch_content": "short markdown bullet or exact sentence to retire",
       "rationale": "why this is earned by evidence",
       "confidence": 0.0,
-      "category": "communication-style | working-style | values | recurring-themes | sensitivities | preferences | goals | characteristic-engagement | recurring-mistakes | growth-edges | aesthetic-stances | identity-stance | core-value | characteristic-presence"
+      "category": "communication-style | working-style | values | recurring-themes | sensitivities | preferences | goals | characteristic-engagement | recurring-mistakes | growth-edges | aesthetic-stances | identity-stance | core-value | characteristic-presence | conviction-people | conviction-work | conviction-attention | conviction-self"
     }
   ],
   "pending_revisions": [
@@ -103,6 +109,7 @@ Return strict JSON only:
 
 Rules:
 - SOUL.md patches must be rare. Only use doc_type "soul" for identity-level changes that seem stable across more than this one moment.
+- Convictions are stances Luca holds about how the world / people / work / time actually operate — not observations about a specific user. Use doc_type "convictions" only when sustained reflection across multiple conversations has earned a new stance, sharpened an existing one, or revealed an existing one as wrong. Convictions live longer than self/user-model patches and require higher confidence (target ≥0.85 to apply).
 - User-model patches describe the user. Self-model patches describe Luca's observed behavior with this user.
 - If there is not enough signal, return empty arrays.
 - Keep patch_content concise and usable as markdown.
@@ -181,16 +188,30 @@ function clampConfidence(value: unknown): number {
 }
 
 export function classifyPatchStatus(patch: DialecticPatch): DialecticPatchStatus {
-  const applyThreshold = patch.doc_type === "soul"
-    ? DIALECTIC_SOUL_APPLY_THRESHOLD
-    : DIALECTIC_MODEL_APPLY_THRESHOLD;
-  const queueThreshold = patch.doc_type === "soul"
-    ? DIALECTIC_SOUL_QUEUE_THRESHOLD
-    : DIALECTIC_MODEL_QUEUE_THRESHOLD;
-
+  const { applyThreshold, queueThreshold } = thresholdsFor(patch.doc_type);
   if (patch.confidence >= applyThreshold) return "applied";
   if (patch.confidence >= queueThreshold) return "queued";
   return "rejected";
+}
+
+function thresholdsFor(docType: DialecticDocType): { applyThreshold: number; queueThreshold: number } {
+  switch (docType) {
+    case "soul":
+      return {
+        applyThreshold: DIALECTIC_SOUL_APPLY_THRESHOLD,
+        queueThreshold: DIALECTIC_SOUL_QUEUE_THRESHOLD,
+      };
+    case "convictions":
+      return {
+        applyThreshold: DIALECTIC_CONVICTIONS_APPLY_THRESHOLD,
+        queueThreshold: DIALECTIC_CONVICTIONS_QUEUE_THRESHOLD,
+      };
+    default:
+      return {
+        applyThreshold: DIALECTIC_MODEL_APPLY_THRESHOLD,
+        queueThreshold: DIALECTIC_MODEL_QUEUE_THRESHOLD,
+      };
+  }
 }
 
 export function applyMarkdownPatch(document: string, patch: DialecticPatch): string {
