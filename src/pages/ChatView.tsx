@@ -21,6 +21,8 @@ import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
+import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
+import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -354,6 +356,55 @@ export default function ChatView() {
     }
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
+  // Reload-mid-stream recovery — persist in-progress streamed content to
+  // localStorage so a refresh during streaming surfaces the partial reply
+  // as a recovered assistant message instead of vanishing.
+  const STREAM_KEY = currentThreadId ? `luca:stream:${currentThreadId}` : null;
+  useEffect(() => {
+    if (!STREAM_KEY) return;
+    if (isStreaming && streamingContent) {
+      try {
+        localStorage.setItem(STREAM_KEY, JSON.stringify({
+          content: streamingContent,
+          thinking: streamingThinking,
+          agent: activeAgentId,
+          updated_at: Date.now(),
+        }));
+      } catch { /* quota */ }
+    } else if (!isStreaming) {
+      try { localStorage.removeItem(STREAM_KEY); } catch { /* */ }
+    }
+  }, [STREAM_KEY, isStreaming, streamingContent, streamingThinking, activeAgentId]);
+
+  // On thread mount: if there's a stale in-progress snapshot from a prior
+  // session, recover it as an assistant message tagged metadata.recovered.
+  useEffect(() => {
+    if (!currentThreadId || !user) return;
+    const key = `luca:stream:${currentThreadId}`;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(key); } catch { /* */ }
+    if (!raw) return;
+    try {
+      const snap = JSON.parse(raw);
+      if (!snap?.content) { localStorage.removeItem(key); return; }
+      // Only recover if it's >5s old (otherwise our own active stream wrote it)
+      if (Date.now() - (snap.updated_at || 0) < 5000) return;
+      // Avoid duplicate recovery if a matching message exists
+      const exists = messages.some((m) => m.role === 'assistant' && m.content === snap.content);
+      if (exists) { localStorage.removeItem(key); return; }
+      addMessage({
+        thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+        content: snap.content,
+        model: null, agent: snap.agent || 'luca',
+        thinking_content: snap.thinking || null,
+        tokens_used: null, bookmarked: false,
+        metadata: { recovered: true } as any,
+      } as any);
+      localStorage.removeItem(key);
+    } catch { try { localStorage.removeItem(key); } catch { /* */ } }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentThreadId, user?.id]);
+
 
   // Load guardian messages when alcove opens or thread changes.
   // Skip while streaming so we don't clobber an in-flight reply with stale DB state.
@@ -657,26 +708,26 @@ export default function ChatView() {
       });
 
       if (!resp.ok) {
-        const errText = await resp.text();
-        console.error('Chat function error:', resp.status, errText);
-        let friendly = 'Something went wrong. Please try again.';
-        let isMissingKey = false;
-        try {
-          const parsed = JSON.parse(errText);
-          if (typeof parsed?.error === 'string') {
-            friendly = parsed.error;
-            if (/api key/i.test(parsed.error)) isMissingKey = true;
-          }
-        } catch { /* keep default */ }
-        if (resp.status === 401) friendly = 'Session expired — please refresh.';
-        const content = isMissingKey
-          ? `${friendly}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
+        const err = await parseEdgeError(resp.clone()).catch(() => ({ message: `Request failed (${resp.status})` } as any));
+        const friendly = friendlyMessage(err);
+        const isMissingKey = /api key/i.test(err.message || '') || err.code === 'unauthorized';
+        const message = isMissingKey
+          ? 'No model API key configured.'
           : friendly;
+        const detail = [
+          err.code ? `code: ${err.code}` : null,
+          err.requestId ? `request_id: ${err.requestId}` : null,
+          `status: ${resp.status}`,
+        ].filter(Boolean).join('  •  ');
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
-          content,
+          content: isMissingKey
+            ? `${message}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
+            : message,
           model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-        });
+          kind: 'agent_error',
+          metadata: { agent: activeAgentId, message, detail, code: err.code, request_id: err.requestId },
+        } as any);
         return;
       }
 
@@ -750,9 +801,11 @@ export default function ChatView() {
               } else if (data.type === 'error') {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: data.text || 'Something went wrong.',
+                  content: data.text || 'The model stream failed mid-response.',
                   model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-                });
+                  kind: 'agent_error',
+                  metadata: { agent: activeAgentId, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
+                } as any);
               }
             } catch {}
           }
@@ -762,9 +815,11 @@ export default function ChatView() {
       if (e.name !== 'AbortError') {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
-          content: 'Something went wrong. Please try again.',
+          content: 'Connection lost while streaming.',
           model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-        });
+          kind: 'agent_error',
+          metadata: { agent: activeAgentId, message: 'Connection lost while streaming.', detail: String(e?.message || e) },
+        } as any);
       }
     } finally {
       setStreaming(false);
@@ -844,7 +899,33 @@ export default function ChatView() {
     </svg>
   );
 
-  const stopStreaming = () => abortRef.current?.abort();
+  const stopStreaming = useCallback(async () => {
+    abortRef.current?.abort();
+    // Persist partial content so cancellation survives reload.
+    const partial = streamingContent;
+    const partialThinking = streamingThinking;
+    if (currentThreadId && user && (partial || partialThinking)) {
+      const md = { canceled: true, canceled_at: new Date().toISOString() };
+      addMessage({
+        thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+        content: partial || '_(canceled before any content)_',
+        model: null, agent: activeAgentId,
+        thinking_content: partialThinking || null,
+        tokens_used: null, bookmarked: false,
+        metadata: md as any,
+      } as any);
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        await supabase.from('messages').insert({
+          thread_id: currentThreadId, user_id: user.id, role: 'assistant',
+          content: partial || '_(canceled before any content)_',
+          agent: activeAgentId,
+          thinking_content: partialThinking || null,
+          metadata: md as any,
+        });
+      } catch (e) { console.warn('persist canceled stream failed', e); }
+    }
+  }, [streamingContent, streamingThinking, currentThreadId, user, activeAgentId, addMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1095,11 +1176,17 @@ export default function ChatView() {
                     detail={md.detail}
                     occurredAt={msg.created_at}
                     onRetry={() => {
-                      // TODO: re-invoke originating edge function with same payload
-                      console.log('agent error retry', { messageId: msg.id });
+                      // Re-send the most recent user message before this error
+                      const idx = messages.findIndex((m) => m.id === msg.id);
+                      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+                      if (prevUser) {
+                        setInput(prevUser.content);
+                        setTimeout(() => sendMessage(), 0);
+                      }
                     }}
                     onViewLogs={() => {
-                      console.log('view logs', { messageId: msg.id });
+                      const rid = (msg.metadata as any)?.request_id;
+                      if (rid) navigator.clipboard?.writeText(rid).catch(() => {});
                     }}
                   />
                 </div>
@@ -1353,6 +1440,11 @@ export default function ChatView() {
                   onSettled={() => setLingeringStream(null)}
                 />
               )}
+              {/* Live artifacts extracted from in-progress stream */}
+              {(streamingContent || lingeringStream) && currentThreadId && user &&
+                extractStreamingArtifacts(streamingContent || lingeringStream || '', { threadId: currentThreadId, userId: user.id }).map((art) => (
+                  <ArtifactCard key={art.id} artifact={art} />
+                ))}
               </div>
             </div>
           )}
