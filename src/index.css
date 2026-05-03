@@ -3137,13 +3137,22 @@ html {
 .mc-row[data-role="system"] .mc-role { color: var(--text-whisper); }
 
 .mc-body {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.7;
   font-weight: 400;
   color: var(--text-primary);
   letter-spacing: var(--track-body);
   min-width: 0;
 }
+.mc-body .rich-body,
+.mc-body .rich-body p,
+.mc-body .rich-body li,
+.mc-body .rich-body blockquote {
+  font-size: 17px;
+  line-height: 1.7;
+}
+.mc-body .rich-body p { margin: 0 0 14px; }
+.mc-body .rich-body p:last-child { margin-bottom: 0; }
 
 /* Inline @mention pill */
 .input-mention {
