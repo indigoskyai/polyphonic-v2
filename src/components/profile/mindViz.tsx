@@ -172,6 +172,85 @@ export function RadarMini({
   );
 }
 
+/* ─── Sparkbar ─── compact horizontal heat row, one cell per entry */
+export function Sparkbar({
+  values,
+  height = 18,
+  cellGap = 1,
+}: {
+  values: Array<number | null>;
+  height?: number;
+  cellGap?: number;
+}) {
+  // Auto-detect range: if any value < 0, treat as -1..1; else 0..1.
+  const nums = values.filter((v): v is number => typeof v === 'number');
+  const signed = nums.some(v => v < 0);
+  const norm = (v: number) => signed ? (v + 1) / 2 : Math.max(0, Math.min(1, v));
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${values.length}, 1fr)`,
+      gap: cellGap,
+      height,
+      width: '100%',
+    }}>
+      {values.map((v, i) => {
+        if (v === null || v === undefined) {
+          return <div key={i} style={{ background: 'var(--hairline)', opacity: 0.35, borderRadius: 1 }} />;
+        }
+        const n = norm(v);
+        const intensity = 0.15 + n * 0.55;
+        return (
+          <div key={i} style={{
+            background: `rgba(244, 243, 240, ${intensity.toFixed(3)})`,
+            borderRadius: 1,
+          }} />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── DivergenceRow ─── stated vs revealed paired hairline tracks */
+export function DivergenceRow({
+  label, stated, revealed,
+}: {
+  label: string; stated: number; revealed: number;
+}) {
+  const sPct = Math.max(0, Math.min(1, stated)) * 100;
+  const rPct = Math.max(0, Math.min(1, revealed)) * 100;
+  const delta = revealed - stated;
+  const deltaSign = delta >= 0 ? '+' : '−';
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 56px', alignItems: 'center', gap: 14, padding: '7px 0' }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)', fontSize: 10,
+        color: 'var(--text-soft)', letterSpacing: 'var(--track-meta)',
+        textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-whisper)', letterSpacing: 'var(--track-meta)', textTransform: 'uppercase' }}>stated</span>
+          <div style={{ position: 'relative', height: 3, background: 'var(--hairline)', borderRadius: 2 }}>
+            <div style={{ position: 'absolute', inset: 0, width: `${sPct}%`, background: 'rgba(244, 243, 240, 0.55)', borderRadius: 2 }} />
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-whisper)', letterSpacing: 'var(--track-meta)', textTransform: 'uppercase' }}>revealed</span>
+          <div style={{ position: 'relative', height: 3, background: 'var(--hairline)', borderRadius: 2 }}>
+            <div style={{ position: 'absolute', inset: 0, width: `${rPct}%`, background: 'rgba(244, 243, 240, 0.32)', borderRadius: 2, borderTop: '1px dashed rgba(244, 243, 240, 0.5)' }} />
+          </div>
+        </div>
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-mono)', fontSize: 10,
+        color: 'var(--text-primary)', textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums',
+      }}>{deltaSign}{Math.abs(delta).toFixed(2)}</div>
+    </div>
+  );
+}
+
 /* ─── PanelHead ─── thin convenience wrapper */
 export function PanelHead({ num, label, aside }: { num: string; label: string; aside?: ReactNode }) {
   return (

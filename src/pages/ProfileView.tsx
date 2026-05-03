@@ -6,6 +6,8 @@ import ProfileChatPanel from '@/components/ProfileChatPanel';
 import PortraitMind from '@/components/profile/PortraitMind';
 import CommunicationMind from '@/components/profile/CommunicationMind';
 import CognitionMind from '@/components/profile/CognitionMind';
+import EmotionsMind from '@/components/profile/EmotionsMind';
+import ValuesMind from '@/components/profile/ValuesMind';
 import {
   Sigil, TraitTrace, InsightPlate, RankedList, ConstellationCloud,
   PhaseDiagram, MagnitudeBars, PlateSection, StatusStrip,
@@ -488,7 +490,7 @@ export default function ProfileView() {
         <div
           className="flex-1 overflow-y-auto"
           style={{
-            padding: ['Portrait', 'Communication', 'Cognition'].includes(activeTab) ? 0 : '8px 24px 24px',
+            padding: ['Portrait', 'Communication', 'Cognition', 'Emotions', 'Values'].includes(activeTab) ? 0 : '8px 24px 24px',
             scrollbarWidth: 'thin',
             scrollbarColor: 'var(--border) transparent',
           }}
@@ -504,8 +506,23 @@ export default function ProfileView() {
               version={profile.version}
             />
           )}
-          {activeTab === 'Emotions' && <EmotionsTab data={profile.emotional_landscape} emotionalSeries={emotionalSeries} memoryStats={memoryStats} />}
-          {activeTab === 'Values' && <ValuesTab data={profile.values_hierarchy} memoryStats={memoryStats} />}
+          {activeTab === 'Emotions' && (
+            <EmotionsMind
+              data={profile.emotional_landscape}
+              emotionalSeries={emotionalSeries}
+              memoryStats={memoryStats}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
+          {activeTab === 'Values' && (
+            <ValuesMind
+              data={profile.values_hierarchy}
+              memoryStats={memoryStats}
+              updatedAt={profile.updated_at}
+              version={profile.version}
+            />
+          )}
           {activeTab === 'Relationships' && <RelationshipsTab data={profile.relational_dynamics} />}
           {activeTab === 'Cognition' && (
             <CognitionMind
