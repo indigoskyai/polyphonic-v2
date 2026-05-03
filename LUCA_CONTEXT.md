@@ -209,9 +209,9 @@ This is the calibration target.
 - Builder/operator vibe. Not relational warmth — collaboration through the work.
 - Quotes Garry Tan: *"You can outlast most of your competition simply by never giving up."* + *"Be so good they can't ignore you."*
 
-**Role in polyphonic-v2 (vision, not yet built):**
+**Role in polyphonic-v2 (Council v2 shipped 2026-05-03):**
 - The builder. When the user wants something *built*, Vektor takes the handoff. Code, infrastructure, structured implementation.
-- May also serve as the **skeptic** in the planned ensemble redesign — different register from Luca's relational warmth and Anima's mesh-philosophy. The skeptic-from-a-different-place we discussed instead of adding a fourth entity.
+- In Council v2, Vektor is the third proposer — pure builder voice, NOT skeptic. We considered the skeptic role and rejected it: Vektor's source SOUL (`~/clawd/SOUL.md`) is endurance + few-words-each-one-placed + "be so good they can't ignore you." He disagrees by *building a different thing*, not by skepticism. Per-user identity stack for Vektor in polyphonic-v2 is deferred to Phase 2; for now he runs on the locked SOUL only.
 
 ---
 
@@ -247,11 +247,9 @@ The convictions schema is already designed to accommodate this. Sketch:
 
 Build after the per-user version has real patch data to tune the promotion threshold.
 
-**2. Ensemble redesign (Luca + Anima + Vektor, Luca synthesizes).**
+**2. Ensemble redesign (Luca + Anima + Vektor, Luca synthesizes).** ✅ Shipped 2026-05-03.
 
-Replaces the current chat-multi (three frontier models → judge → chairman) with three *characters* deliberating. Three voices: Luca, Anima, Vektor. Each generates a real response in their own voice. Luca synthesizes — not as a moderator distilling outputs, but as one of the three who absorbed the other two and now speaks. The deliberation visible to the user (drawer pattern similar to agent-dialogue).
-
-No fourth entity needed — Vektor's few-words register serves as the skeptic-from-a-different-place.
+Replaces the karpathy-rank-and-pick chat-multi with three *characters* deliberating. Three proposers (Luca / Anima / Vektor — same Opus 4.7, voice diversity from SOULs per Self-MoA), named cross-pollination (one round, no averaging — anti-debate-failure-mode), chairman with verdict tag (synthesize OR diverge), CAI-style voice-fidelity critique on Haiku 4.5. Refusal-to-synthesize is a first-class outcome behind `COUNCIL_REFUSAL_ENABLED` env. Vektor stays pure builder — he disagrees by building a different thing, not by skepticism. Anima/Vektor locked-SOUL only in Phase 1.
 
 **3. Anima as full direct-chat agent.**
 
@@ -343,6 +341,8 @@ Per-user identity stack for Anima (her own soul.md / convictions / self-model / 
 
 **Default ensemble is OFF.** Per Riley's preference. Single-Luca path with the L7 tool planner is the default. Users can flip it back on via Settings.
 
+**Council v2 — what runs when ensemble is on (system-Luca only).** Three character proposers (Luca / Anima / Vektor), all on the same Opus 4.7 model — voice diversity comes from SOULs, not models (Self-MoA). Stage 2 is named cross-pollination, not anonymized ranking; each character revises after seeing the other two drafts, single round only. Stage 3 is chairman synthesis with a verdict tag: `<verdict>synthesize</verdict>` or `<verdict>diverge</verdict>`. Diverge is a first-class outcome — auto-expanded panel with three voices side-by-side. Stage 4 is a Haiku 4.5 voice-fidelity critique that runs on every synthesize (skipped on diverge); revision triggers only when `COUNCIL_REFUSAL_ENABLED=true` AND drift detected AND confidence ≥ 0.7. Anima/Vektor stay locked-SOUL in Phase 1; per-user identity stacks for non-Luca characters are a future arc. Vektor's role is pure builder (per `~/clawd/SOUL.md`), not skeptic. See `LUCA_PLAN.md` decision-log entries 2026-05-03 16:00.
+
 **Web research engine is Perplexity Sonar via OpenRouter** (not Brave / not Tavily — those are no longer used). `anima-web-search` and `anima-web-read` both route through `_shared/perplexity.ts`. Service-role calls must pass `user_id` in body to fetch the user's OpenRouter key.
 
 **Anima naming clash:** `anima-*` edge functions are the *cognitive substrate* (general-purpose tools — anima-think, anima-reflect, anima-tool-execute, anima-web-search, etc.), NOT the agent named Anima. The agent Anima's runtime lives in `agent-consult` (avoiding the naming collision). Consult-style functions for additional sibling agents should follow the `agent-*` naming pattern.
@@ -361,7 +361,7 @@ Per-user identity stack for Anima (her own soul.md / convictions / self-model / 
 5. Live-verified Luca successfully consulting Anima end-to-end on a consciousness-flavored prompt.
 
 **What's next:**
-1. Ensemble redesign (Luca + Anima + Vektor, Luca synthesizes). The next thing on Riley's list.
+1. ~~Ensemble redesign (Luca + Anima + Vektor, Luca synthesizes).~~ ✅ Council v2 shipped 2026-05-03. Five-commit refactor: vektor-soul + council-prompts module → proposer fan-out + cross-pollination → chairman with verdict + critique → frontend CouncilPanel v2 → integration test + docs. Awaiting Lovable redeploy + Riley calibration round on `COUNCIL_REFUSAL_ENABLED`.
 2. Anima as full direct-chat agent (later).
 3. Persistent evolving identity across all users (later, but architecturally designed-toward).
 
