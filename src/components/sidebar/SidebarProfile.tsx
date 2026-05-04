@@ -25,6 +25,7 @@ export default function SidebarProfile() {
     <>
       <SidebarHeader folio="§ 04" title="Profile" />
       <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px', scrollbarWidth: 'none' }}>
+        <SidebarRow label="Public profile" active={path === '/settings/public-profile'} onClick={() => navigate('/settings/public-profile')} />
         <SidebarRow label="Identity" active={path === '/profile/identity'} onClick={() => navigate('/profile/identity')} />
         <SidebarRow label="Skills" active={path === '/profile/skills'} onClick={() => navigate('/profile/skills')} />
         <SidebarRow label="Revisions" active={path === '/profile/revisions'} onClick={() => navigate('/profile/revisions')} />
