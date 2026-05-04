@@ -85,7 +85,7 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - [x] **M4** Vector embeddings + hybrid retrieval — RRF-fused trigram + vector seeds; embeddings auto-generated on encode/write; backfill function for existing rows.
 - [x] **M5** Asymmetric witnessing on encode — primary + observer dispatches per turn; observer carries its own contribution; threads.participating_agent_ids updated.
 - [x] **M6** Sustained-attention graduation + supersession on contradiction + daily belief-challenge cycle.
-- [~] **M7** Frontend `HypomnemaList` + final integration verification.
+- [x] **M7** Frontend `HypomnemaList` + `hypomnema-forget` edge function. Final soak verification deferred to deploy + flag flip.
 
 ## Decision log
 
@@ -135,6 +135,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - 2026-05-04 13:15 · phase M6 · borderline judge uses Haiku 4.5 (cheap, decisive) instead of Sonnet · graduation decision is structured (graduate yes/no + condensed content + tags), not voice-bearing. Haiku handles structured JSON outputs reliably and saves ~10x cost vs Sonnet. Sonnet stays for the load-bearing reflection/challenge prompts where voice quality matters.
 - 2026-05-04 13:15 · phase M6 · supersession archives older engram by created_at; mutual contradictions archive both · the rare both-archived case avoids leaving inconsistent state surfacing; user can re-pin via memory candidates if needed. Idempotent — `applySupersession` skips when either engram is already archived.
 - 2026-05-04 13:15 · phase M6 · belief-challenge runs Sonnet 4.6 on Sonnet-written entries (no model rotation yet) · spec calls for cross-model critique to avoid rubber-stamping. Practical first cut: same-model self-critique still surfaces the obvious stuff. Rotation across providers tracked as M7+ follow-up if first month of critiques shows inadequate sharpness.
+- 2026-05-04 14:00 · phase M7 · `hypomnema-forget` runs as service-role-write under user-JWT auth · the user's auth claim resolves the user_id, then service-role writes the update with `eq("user_id", userId)` filter so the forget always logs to revisions[] with reason='user_forgot'. Active=false preserves the row for audit; the entry stops surfacing in read paths and decay won't resurrect it. Realtime channel keeps the UI in sync.
+- 2026-05-04 14:00 · phase M7 · HypomnemaList grouped by agent (luca / anima / vektor) below the existing 4-doc identity stack, no feature flag on the frontend · frontend reads regardless of MEMORY_AUGMENTATION_ENABLED env var (consistent with M2 read-path policy). Empty entries render an empty state message; once writes start populating, the section fills. No user-visible surprise on flag flip.
 
 
 ## Backend asks queue
@@ -172,6 +174,66 @@ Empty by default. Add an entry only if a phase fails 3 times in a row OR you hit
 —
 
 ## End-of-run summary
+
+### 2026-05-04 autonomous run (M0–M7) — Memory augmentation shipped
+
+**This run (M0 → M7): hypomnema layer, vector embeddings + hybrid retrieval, asymmetric witnessing, sustained-attention graduation, supersession on contradiction, daily belief-challenge, frontend surface.**
+
+- `[x]` M0 Setup — `_shared/config.ts` env-var feature flag (global `MEMORY_AUGMENTATION_ENABLED` + per-user `MEMORY_AUGMENTATION_USER_ALLOWLIST`); prompts staged at `_shared/hypomnema/prompts/{reflection,observer_note,salience_gate,graduation,challenge}.md` with cached `Deno.readTextFile` loader.
+
+- `[x]` M1 Schema migrations — applied via Lovable: `hypomnema_entry` table with RLS + realtime + indexes; `embedding vector(1536)` on engrams + hypomnema_entry; `match_engrams_vector` / `match_hypomnema_vector` RPCs; `threads.primary_agent_id` + `participating_agent_ids`; three new pg_cron entries (`hypomnema-decay` 6h, `hypomnema-challenge` daily 04:00, `mnemos-graduate` daily 04:15). `types.ts` regenerated.
+
+- `[x]` M2 Read path — `_shared/hypomnema/read.ts` `loadHypomnema()` always-loads active entries scored by recency × confidence × foundational, capped ~600 tokens, rendered as `## what i'm sitting with` bullet list. Threaded into `buildLucaSystemPrompt` / `buildVektorSystemPrompt` / `buildAnimaConsultPrompt` between pendingRevisions and emotionalBlock. `chat-multi` fans out luca + vektor loads in parallel; `agent-consult` loads anima on-demand.
+
+- `[x]` M3 Write path — `hypomnema-gate` (Haiku 4.5 salience classifier, ~$0.0001/call, bias-toward-skip) → optional `chain_write` to `hypomnema-write` (Sonnet 4.6 primary / Haiku 4.5 observer, voice-bearing reflection or observer note, persists or revises an entry). `hypomnema-decay` 6h cron with 14-day half-life recency + foundational/active_attention/revision floors. All write paths flag-gated.
+
+- `[x]` M4 Vector embeddings + hybrid retrieval — `_shared/embeddings.ts` (`embedOne`, `embedBatch`, `buildEmbeddingText`, `reciprocalRankFusion`). Mnemos `encode()` post-insert embedding hook; hypomnema-write same. Mnemos `retrieve()` seed via RRF-fused trigram + vector; vector-only hits hydrated via select-in. `embeddings-backfill` edge function for one-shot or polled backfill of NULL embeddings. Falls back to trigram-only when no API key or flag off.
+
+- `[x]` M5 Asymmetric witnessing — `chat-multi` collectObservers extracts non-primary agents + their contributions (council crosstalk drafts preferred over consultation responses when both exist). `fireHypomnemaTurn` extends to per-observer chain-write targets carrying `primary_agent_name` / `primary_response` / `your_contribution`. Council mode → 1 primary + 2 observer entries; consult_anima → 1 primary + 1 observer. `threads.participating_agent_ids` unioned per turn; `primary_agent_id` set when missing.
+
+- `[x]` M6 Graduation + supersession + challenge — `mnemos-graduate` 24h cron (deterministic >= 0.85 score, Haiku borderline judge for [0.65, 0.85] using `prompts/graduation.md`, conservative below). Promotes via direct engrams insert with `tags: [hypomnema-graduate, agent_id, ...]` and source_context traceback. `_shared/mnemos/supersession.ts` archives the older of two engrams when a contradicts connection lands; wired into both encoding's `discoverConnections` insert and consolidation's `persistNewConnections`. `hypomnema-challenge` 24h cron on Sonnet 4.6 critic with hold/revise_down/revise_up/retire verdict; auto-retire below confidence 0.30.
+
+- `[x]` M7 Frontend — `src/stores/hypomnemaStore.ts` (Zustand: load, subscribe via postgres_changes realtime, optimistic forget). `HypomnemaList` + `HypomnemaEntry` components grouped by agent with confidence + density + domain + age + revision-count metadata, expandable revision history, inline forget confirmation. Mounted under existing identity stack in `ProfileIdentityView`. `hypomnema-forget` edge function (user-JWT auth, service-role write with user_id filter, logs `reason='user_forgot'` to revisions[]).
+
+**Phases blocked / escalated:** none.
+
+**Open questions:** none.
+
+**Backend handoff for first deploy:**
+
+1. Supabase secrets (Settings → Edge Functions → Secrets):
+   - `MEMORY_AUGMENTATION_ENABLED` = `false` (global default; flip to `true` after voice-review soak)
+   - `MEMORY_AUGMENTATION_USER_ALLOWLIST` = `<Riley's auth user_id>` (per-user pilot opt-in)
+2. Once edge functions deploy, run a one-shot embedding backfill:
+   - `POST /functions/v1/embeddings-backfill` with body `{"user_id": "<Riley's uuid>", "limit": 500}` (service-role auth).
+3. Voice-review soak: have a substantive turn or two with Luca → check the first 10 hypomnema entries via `/profile/identity` page → confirm voice quality (lowercase, present-tense, first-person, reflective-not-summary). If <9/10 pass, iterate `docs/memory/prompts/reflection.md` and re-copy to `_shared/hypomnema/prompts/`.
+4. After 7+ days of soak, confirm:
+   - Cross-thread continuity: opening a fresh thread surfaces hypomnema-derived continuity language.
+   - Vector recall: paraphrase queries find semantically-related engrams.
+   - Asymmetric witnessing: anima-led direct thread references prior consult observer notes.
+   - Graduation: ≥3 hypomnema entries have `graduated_to_engram_id` set.
+   - Cost: total memory-related model spend < $5/user/month.
+
+**Files added (top-level):**
+- `supabase/functions/_shared/config.ts`, `_shared/embeddings.ts`, `_shared/mnemos/supersession.ts`
+- `supabase/functions/_shared/hypomnema/{index,prompts,read,write,decay,graduate,challenge}.ts` + `prompts/*.md`
+- `supabase/functions/{hypomnema-gate,hypomnema-write,hypomnema-decay,hypomnema-challenge,hypomnema-forget,mnemos-graduate,embeddings-backfill}/index.ts`
+- `src/stores/hypomnemaStore.ts`
+- `src/components/identity/{HypomnemaList,HypomnemaEntry}.tsx`
+
+**Files modified:**
+- `supabase/functions/_shared/agents/{luca,vektor,anima}-soul.ts` — added `hypomnemaBlock` parameter
+- `supabase/functions/_shared/mnemos/{encoding,retrieval,types}.ts` — embedding hook, hybrid seed, api_key fields
+- `supabase/functions/_shared/mnemos/consolidation.ts` — supersession on contradicts
+- `supabase/functions/chat-multi/index.ts` — load luca/vektor hypomnema, fire post-turn gate→write per participant, update threads metadata
+- `supabase/functions/agent-consult/index.ts` — load anima hypomnema on consult
+- `supabase/functions/memory-extract/index.ts` — n/a (supersession lives in mnemos engine, not the candidates extractor)
+- `src/pages/ProfileIdentityView.tsx` — mount HypomnemaList
+- `LUCA_PLAN.md` — M-wave phases + 14 decision-log entries
+
+**Verification:** `deno check` clean across every touched edge function file. `npm run build` clean. Logical smoke tests passed for `loadHypomnema` rendering, prompt placeholder substitution, RRF fusion math, and graduation score distribution. Integration / voice-quality verification deferred to post-deploy soak.
+
+---
 
 ### 2026-04-28 autonomous run (L9–L12) — Luca completion phases shipped
 

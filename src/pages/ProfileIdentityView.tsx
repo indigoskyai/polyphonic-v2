@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import RichBody from '@/components/rich/RichBody';
+import HypomnemaList from '@/components/identity/HypomnemaList';
 
 type IdentityDocType = 'soul' | 'self_model' | 'user_model' | 'convictions';
 
@@ -330,6 +331,8 @@ export default function ProfileIdentityView() {
             )}
           </aside>
         </div>
+
+        <HypomnemaList />
       </div>
     </div>
   );
