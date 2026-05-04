@@ -544,6 +544,12 @@ export default function ChatView() {
 
   useEffect(() => {
     if (!threadId) return;
+    // Wipe the per-block syntax-highlight cache so a long session doesn't
+    // accumulate completed snippets across every thread the user opens.
+    clearHighlightCache();
+    // Reset scroll-pin so a new thread auto-scrolls to bottom.
+    userPinnedRef.current = true;
+    setShowScrollDown(false);
     setCurrentThread(threadId);
     loadMessages(threadId);
     loadArtifacts(threadId);
