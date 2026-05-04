@@ -32,6 +32,7 @@ const IS_PROD = (Deno.env.get("DENO_ENV") ?? Deno.env.get("ENVIRONMENT") ?? "")
 
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (LOVABLE_PREVIEW_ORIGIN.test(origin)) return true;
   if (!IS_PROD && LOCAL_DEV_ORIGIN.test(origin)) return true;
   return false;
 }
