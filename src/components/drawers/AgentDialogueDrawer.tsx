@@ -29,18 +29,14 @@ const AGENT_LABEL: Record<string, string> = {
   vektor: 'Vektor',
 };
 
-const AGENT_TINT: Record<string, string> = {
-  luca: 'var(--agent-luca-1, var(--text-tertiary))',
-  anima: 'var(--agent-anima-1, var(--text-tertiary))',
-  vektor: 'var(--agent-vektor-1, var(--text-tertiary))',
-};
+// Monochrome treatment matches the council panel and the wider chat
+// aesthetic. Per-character chrome color is reserved for higher-order
+// surfaces (sub-agent visualization, agent profile cards) where identity
+// is the topic, not an observability detail.
+const NEUTRAL_TINT = 'var(--text-tertiary)';
 
 function agentLabel(agent: string): string {
   return AGENT_LABEL[agent.toLowerCase()] ?? agent.charAt(0).toUpperCase() + agent.slice(1);
-}
-
-function agentTint(agent: string): string {
-  return AGENT_TINT[agent.toLowerCase()] ?? 'var(--text-tertiary)';
 }
 
 function formatTime(iso: string): string {
@@ -77,9 +73,6 @@ function StatusPill({ status }: { status: AgentConsultation['status'] }) {
 }
 
 function ConsultationItem({ consult }: { consult: AgentConsultation }) {
-  const fromTint = agentTint(consult.from_agent);
-  const toTint = agentTint(consult.to_agent);
-
   return (
     <article
       style={{
@@ -100,9 +93,9 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
         }}
       >
         <span>
-          <span style={{ color: fromTint }}>{agentLabel(consult.from_agent)}</span>
+          <span style={{ color: NEUTRAL_TINT }}>{agentLabel(consult.from_agent)}</span>
           {' → '}
-          <span style={{ color: toTint }}>{agentLabel(consult.to_agent)}</span>
+          <span style={{ color: NEUTRAL_TINT }}>{agentLabel(consult.to_agent)}</span>
           {' · '}
           {formatTime(consult.created_at)}
         </span>
@@ -112,7 +105,7 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div
           style={{
-            borderLeft: `2px solid ${fromTint}`,
+            borderLeft: '2px solid var(--border-subtle)',
             paddingLeft: 12,
           }}
         >
@@ -135,7 +128,7 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
 
         <div
           style={{
-            borderLeft: `2px solid ${toTint}`,
+            borderLeft: '2px solid var(--border-subtle)',
             paddingLeft: 12,
           }}
         >

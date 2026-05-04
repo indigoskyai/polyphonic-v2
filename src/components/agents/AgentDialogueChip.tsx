@@ -47,11 +47,13 @@ export default function AgentDialogueChip() {
       aria-label={isAsking ? `Luca is asking ${targetLabel}` : `Open agent dialogue (${consults.length} consultation${consults.length === 1 ? '' : 's'})`}
     >
       <span
+        // Monochrome dot — pulses when a consultation is in flight.
+        // The signal is the pulse + the "asking" label, not chrome color.
         style={{
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: isAsking ? 'var(--agent-anima-1, var(--text-tertiary))' : 'var(--text-ghost)',
+          background: isAsking ? 'var(--text-secondary)' : 'var(--text-ghost)',
           animation: isAsking ? 'm-pulse 1.6s ease-in-out infinite' : undefined,
         }}
         aria-hidden="true"
