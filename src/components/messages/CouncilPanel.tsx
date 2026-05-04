@@ -663,10 +663,11 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
         <span
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.06em',
+            fontSize: 9,
+            letterSpacing: '0.08em',
             color: 'var(--text-ghost)',
             marginLeft: 4,
+            fontWeight: 400,
           }}
         >
           {subtitle}

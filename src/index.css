@@ -173,6 +173,70 @@
   --track-meta:     0.08em;
   --track-folio:    0.14em;
 
+  /* ─── Canonical type scale ─────────────────────────────────────────────
+     Seven roles cover the chat experience. Each role pairs a size with the
+     correct family, weight, line-height and tracking so call sites only need
+     to pick the role — variance across surfaces drops, polish goes up.
+
+     Use composite custom properties (--font + size hint + everything bundled
+     into a `font` shorthand isn't possible because we need different
+     line-heights. So consumers pick from the size + family pair below and
+     read the matching weight/line-height/tracking individually.) */
+
+  /* Display — page heading (only one per surface, sparingly used) */
+  --type-display-size:        22px;
+  --type-display-weight:      450;
+  --type-display-line:        1.25;
+  --type-display-track:       var(--track-display);
+
+  /* Emphasis — composer input, top-level prompts */
+  --type-emphasis-size:       16px;
+  --type-emphasis-weight:     400;
+  --type-emphasis-line:       1.55;
+  --type-emphasis-track:      var(--track-body);
+
+  /* Body — chat message body, drawer body. The default reading surface. */
+  --type-body-size:           14.5px;
+  --type-body-weight:         400;
+  --type-body-line:           1.65;
+  --type-body-track:          var(--track-body);
+
+  /* Body-compact — card/sub-section body. Slightly smaller for nested context. */
+  --type-body-compact-size:   13px;
+  --type-body-compact-weight: 400;
+  --type-body-compact-line:   1.6;
+  --type-body-compact-track:  var(--track-body);
+
+  /* Meta — captions, tertiary descriptions, secondary body */
+  --type-meta-size:           12px;
+  --type-meta-weight:         420;
+  --type-meta-line:           1.5;
+  --type-meta-track:          var(--track-body);
+
+  /* Mono-eyebrow — section labels, "COUNCIL", "VOICES", category caps */
+  --type-mono-eyebrow-size:   11px;
+  --type-mono-eyebrow-weight: 500;
+  --type-mono-eyebrow-line:   1.2;
+  --type-mono-eyebrow-track:  var(--track-meta);
+
+  /* Mono-caption — peek-window content, timestamps, fine mono detail */
+  --type-mono-caption-size:   11.5px;
+  --type-mono-caption-weight: 400;
+  --type-mono-caption-line:   1.55;
+  --type-mono-caption-track:  var(--track-mono);
+
+  /* Mono-pill — pill / chip text inside buttons (verdict pill, agent pills) */
+  --type-mono-pill-size:      9px;
+  --type-mono-pill-weight:    500;
+  --type-mono-pill-line:      1.2;
+  --type-mono-pill-track:     0.16em;
+
+  /* Mono-micro — finest sigils ("· initial", "· revised", thread dot labels) */
+  --type-mono-micro-size:     8px;
+  --type-mono-micro-weight:   500;
+  --type-mono-micro-line:     1.2;
+  --type-mono-micro-track:    0.18em;
+
   /* Motion — easing + duration */
   --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
