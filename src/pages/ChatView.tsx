@@ -1355,12 +1355,22 @@ export default function ChatView() {
                   ? <MessageContent content={msg.content} />
                   : <RichBody source={msg.content} />}
 
-                {/* Council deliberation viewer (variants + rankings + aggregate).
-                    Hydrates from msg.metadata.kind === "council" (post-reload) or
-                    msg.variants (live from streaming). Falls back to legacy
-                    multi-model thinking_content payload from older messages. */}
+                {/* Council deliberation viewer.
+                    Hydrates from msg.metadata in two shapes:
+                      kind === "council_v2" → three character proposers + crosstalk
+                                              + verdict + critique (CouncilV2Panel)
+                      kind === "council"    → legacy karpathy rank trace
+                                              (CouncilLegacyPanel)
+                    Falls back to live-stream variants / legacy multi-model
+                    thinking_content payload for messages from before the
+                    metadata column existed. */}
                 {(() => {
                   const md = (msg as any).metadata;
+                  if (md && md.kind === 'council_v2'
+                      && (Array.isArray(md.proposers) && md.proposers.length > 0
+                          || Array.isArray(md.crosstalk) && md.crosstalk.length > 0)) {
+                    return <CouncilPanel trace={md} />;
+                  }
                   if (md && md.kind === 'council' && Array.isArray(md.variants) && md.variants.length > 0) {
                     return <CouncilPanel trace={md} />;
                   }
@@ -1445,23 +1455,24 @@ export default function ChatView() {
 
               <div className="msg-body">
 
-              {/* Thinking block — always visible during streaming, 4-state lifecycle */}
-              {isStreaming && showThinking && !streamingContent && (
+              {/* Thinking block — single mount across the full streaming lifecycle.
+                  Transitions through states instead of unmount/remount at content
+                  boundary, so reasoning content stays legible whether it arrives
+                  before, during, or after content tokens.
+                  Hidden once content has started without any reasoning ever showing
+                  up (model didn't emit reasoning) — so we don't sit in 'waiting'
+                  state forever showing dots over nothing. */}
+              {isStreaming && showThinking && (!streamingContent || streamingThinking) && (
                 <ThinkingBlock
                   content={streamingThinking || ''}
                   state={
-                    streamingThinking ? 'streaming'
-                    : isSynthesizing ? 'waiting'
+                    // Content + thinking both present → settling (peek stays visible).
+                    streamingContent && streamingThinking ? 'settling'
+                    // Reasoning arriving, no content yet → streaming (peek visible).
+                    : streamingThinking ? 'streaming'
+                    // Pre-content, no reasoning yet → waiting (dots animate, no peek).
                     : 'waiting'
                   }
-                />
-              )}
-
-              {/* Thinking block settling — visible when content starts but thinking existed */}
-              {isStreaming && showThinking && streamingContent && streamingThinking && (
-                <ThinkingBlock
-                  content={streamingThinking}
-                  state="settling"
                 />
               )}
 
@@ -1514,12 +1525,14 @@ export default function ChatView() {
                 </div>
               )}
 
-              {/* Streaming content with typewriter — keep rendering through the catch-up phase */}
+              {/* Streaming content with typewriter — keep rendering through the catch-up phase.
+                  Color uses --text-body (matching .msg-body persisted color) to avoid the
+                  bright-white flash when stream completes and the persisted message takes over. */}
               {(streamingContent || lingeringStream) && (
                 <StreamingText
                   content={streamingContent || lingeringStream || ''}
                   isStreaming={isStreaming}
-                  style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-primary)' }}
+                  style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-body)' }}
                   onSettled={() => setLingeringStream(null)}
                 />
               )}
