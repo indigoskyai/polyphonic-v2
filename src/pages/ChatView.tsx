@@ -323,11 +323,26 @@ export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const {
-    messages, currentThreadId, isStreaming, streamingContent, streamingThinking, threads,
-    loadMessages, subscribeMessages, setCurrentThread, createThread, addMessage,
-    setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
-  } = useThreadStore();
+  // Narrow selectors — the parent renders the *list shell* and the
+  // streaming bubble. Individual messages are handled by <MessageItem>,
+  // which subscribes to its own row. This split is what makes per-token
+  // streaming stop re-rendering the whole thread.
+  const messages = useThreadStore((s) => s.messages);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const isStreaming = useThreadStore((s) => s.isStreaming);
+  const streamingContent = useThreadStore((s) => s.streamingContent);
+  const streamingThinking = useThreadStore((s) => s.streamingThinking);
+  const threads = useThreadStore((s) => s.threads);
+  const loadMessages = useThreadStore((s) => s.loadMessages);
+  const subscribeMessages = useThreadStore((s) => s.subscribeMessages);
+  const setCurrentThread = useThreadStore((s) => s.setCurrentThread);
+  const createThread = useThreadStore((s) => s.createThread);
+  const addMessage = useThreadStore((s) => s.addMessage);
+  const setStreaming = useThreadStore((s) => s.setStreaming);
+  const setStreamingContent = useThreadStore((s) => s.setStreamingContent);
+  const setStreamingThinking = useThreadStore((s) => s.setStreamingThinking);
+  const loadThreads = useThreadStore((s) => s.loadThreads);
+  const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
   const threadArtifacts = useMemo(
