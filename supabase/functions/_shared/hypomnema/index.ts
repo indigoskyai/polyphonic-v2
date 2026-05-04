@@ -27,3 +27,5 @@ export {
   type WriteResult,
 } from "./write.ts";
 export { decayAllActiveEntries, computeDecayedSalience, type DecayResult } from "./decay.ts";
+export { graduateAllEligible, computeGraduationScore, type GraduationResult } from "./graduate.ts";
+export { challengeAllStaleEntries, type ChallengeResult } from "./challenge.ts";

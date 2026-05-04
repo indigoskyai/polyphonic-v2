@@ -33,6 +33,7 @@ import {
   CONFIDENCE_TIERS,
   BELIEF_UPDATE_THRESHOLD,
 } from "./constants.ts";
+import { applySupersession } from "./supersession.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -483,7 +484,13 @@ async function persistNewConnections(
         weight: conn.weight,
       });
 
-    if (!error) created++;
+    if (!error) {
+      created++;
+      // Supersession (M6): contradicting connections archive the older engram.
+      if (conn.connectionType === "contradicts") {
+        await applySupersession(supabase, conn.sourceId, conn.targetId, "contradicts").catch(() => {});
+      }
+    }
   }
 
   return created;

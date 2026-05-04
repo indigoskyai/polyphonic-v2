@@ -20,6 +20,7 @@ import type {
 } from "./types.ts";
 import { buildEmbeddingText, embedOne } from "../embeddings.ts";
 import { isMemoryAugmentationEnabled } from "../config.ts";
+import { applySupersession } from "./supersession.ts";
 
 import {
   SURPRISE_ENCODING_BONUS,
@@ -431,6 +432,11 @@ export async function encode(
 
     if (!connError && insertedConn) {
       connectionsCreated.push(insertedConn as Connection);
+      // Supersession (M6): contradicting connections archive the older engram
+      // so retrieval doesn't surface both. Best-effort, non-fatal.
+      if (disc.connectionType === "contradicts") {
+        applySupersession(client, engram.id, disc.targetId, "contradicts").catch(() => {});
+      }
     }
     // Non-fatal: if a connection insert fails (e.g. duplicate), continue
   }

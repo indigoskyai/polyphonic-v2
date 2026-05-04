@@ -84,8 +84,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - [x] **M3** Hypomnema write path — gate + write + decay edge functions. Voice review deferred to deploy soak (needs real model output).
 - [x] **M4** Vector embeddings + hybrid retrieval — RRF-fused trigram + vector seeds; embeddings auto-generated on encode/write; backfill function for existing rows.
 - [x] **M5** Asymmetric witnessing on encode — primary + observer dispatches per turn; observer carries its own contribution; threads.participating_agent_ids updated.
-- [~] **M6** Sustained-attention graduation + supersession on contradiction.
-- [ ] **M7** Frontend `HypomnemaList` + final integration verification.
+- [x] **M6** Sustained-attention graduation + supersession on contradiction + daily belief-challenge cycle.
+- [~] **M7** Frontend `HypomnemaList` + final integration verification.
 
 ## Decision log
 
@@ -131,6 +131,10 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - 2026-05-04 11:55 · phase M4 · OpenRouter embeddings via `openai/text-embedding-3-small` (1536 dims), no fallback model · OpenRouter exposes embeddings on existing keys; if it 429s, the embedOne returns null and the row stays NULL. Backfill cron retries. Cost is negligible (~$0.02/1M tokens; engram corpus is small).
 - 2026-05-04 12:30 · phase M5 · observer note's INJECT_YOUR_CONTRIBUTION = the agent's council crosstalk/proposer draft (preferred) or their consultation response (fallback) · the observer prompt asks the agent to reflect on what THEY contributed; without that anchor it'd just be paraphrasing the primary's response. `collectObservers` in chat-multi prefers the council draft when both exist (richer voice fidelity).
 - 2026-05-04 12:30 · phase M5 · `threads.participating_agent_ids` unioned per-turn instead of overwritten · preserves history of who's touched the thread across sessions; future direct-thread queries can filter by it. `primary_agent_id` only set when current value is null or default-luca-but-this-turn-isn't-luca, so user-driven direct-with-anima/vektor threads keep their primary.
+- 2026-05-04 13:15 · phase M6 · graduation promotes via direct insert into engrams (skipping mnemos.encode's surprise check) · graduation is a different pathway with its own gating (sustained attention + age + LLM judge); subjecting it to surprise-against-existing-engrams would block exactly the case we want — entries that crystallize what the agent has been carrying for weeks. Engrams get tags `hypomnema-graduate` + agent_id + original entry tags so retrieval can filter if needed. Source_context preserves the hypomnema_entry_id for traceback.
+- 2026-05-04 13:15 · phase M6 · borderline judge uses Haiku 4.5 (cheap, decisive) instead of Sonnet · graduation decision is structured (graduate yes/no + condensed content + tags), not voice-bearing. Haiku handles structured JSON outputs reliably and saves ~10x cost vs Sonnet. Sonnet stays for the load-bearing reflection/challenge prompts where voice quality matters.
+- 2026-05-04 13:15 · phase M6 · supersession archives older engram by created_at; mutual contradictions archive both · the rare both-archived case avoids leaving inconsistent state surfacing; user can re-pin via memory candidates if needed. Idempotent — `applySupersession` skips when either engram is already archived.
+- 2026-05-04 13:15 · phase M6 · belief-challenge runs Sonnet 4.6 on Sonnet-written entries (no model rotation yet) · spec calls for cross-model critique to avoid rubber-stamping. Practical first cut: same-model self-critique still surfaces the obvious stuff. Rotation across providers tracked as M7+ follow-up if first month of critiques shows inadequate sharpness.
 
 
 ## Backend asks queue
