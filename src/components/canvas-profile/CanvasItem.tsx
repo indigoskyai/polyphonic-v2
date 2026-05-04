@@ -4,7 +4,7 @@ import { useProfileCanvasStore } from '@/stores/profileCanvasStore';
 import ArtifactTile from './items/ArtifactTile';
 import UploadTile from './items/UploadTile';
 import NoteTile from './items/NoteTile';
-import { Trash2, Layers, GripVertical } from 'lucide-react';
+import { Trash2, Layers } from 'lucide-react';
 
 interface Props {
   itemId: string;
