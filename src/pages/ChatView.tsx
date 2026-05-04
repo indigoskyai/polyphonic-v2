@@ -420,20 +420,36 @@ export default function ChatView() {
     }
   }, [isStreaming, streamingContent]);
 
-  // Throttled, calmer auto-scroll. Uses instant scrollTop during streams to
-  // avoid fighting smooth-scroll easing curves; smooth-scrolls only for
-  // discrete message changes.
+  // User-scroll-aware auto-scroll. We follow the bottom of the stream as
+  // long as the user is "pinned" there; the moment they scroll up, we stop
+  // following and surface the scroll-to-bottom pill. Pinning resumes when
+  // they scroll back to within `pinThreshold` of the bottom.
+  const userPinnedRef = useRef(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const lastScrollAtRef = useRef(0);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const threshold = 140;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (!isNearBottom) return;
+    const pinThreshold = 96;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const pinned = distance < pinThreshold;
+      userPinnedRef.current = pinned;
+      setShowScrollDown(!pinned && (isStreaming || messages.length > 0));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [isStreaming, messages.length]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (!userPinnedRef.current) return;
     const now = performance.now();
     if (isStreaming || streamingContent) {
-      // throttle to ~10fps
-      if (now - lastScrollAtRef.current < 100) return;
+      // Throttle during streaming so we don't thrash the layout.
+      if (now - lastScrollAtRef.current < 80) return;
       lastScrollAtRef.current = now;
       el.scrollTop = el.scrollHeight;
     } else {
@@ -441,6 +457,14 @@ export default function ChatView() {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, streamingContent, streamingThinking, isStreaming]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    userPinnedRef.current = true;
+    setShowScrollDown(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   // Reload-mid-stream recovery — persist in-progress streamed content to
   // localStorage so a refresh during streaming surfaces the partial reply
