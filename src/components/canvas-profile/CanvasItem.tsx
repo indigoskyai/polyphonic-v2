@@ -107,9 +107,9 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
       onClick={(e) => { if (mode === 'edit') { e.stopPropagation(); setSelected(itemId); } }}
     >
       <div data-canvas-item-body className="canvas-item-body">
-        {item.item_type === 'artifact' && <ArtifactTile payload={item.payload} mode={mode} interacting={interacting} />}
-        {item.item_type === 'upload'   && <UploadTile   payload={item.payload} mode={mode} />}
-        {item.item_type === 'note'     && <NoteTile     payload={item.payload} mode={mode} />}
+        {item.item_type === 'artifact' && <ArtifactTile payload={item.payload as any} mode={mode} interacting={interacting} />}
+        {item.item_type === 'upload'   && <UploadTile   payload={item.payload as any} mode={mode} />}
+        {item.item_type === 'note'     && <NoteTile     payload={item.payload as any} mode={mode} />}
       </div>
       {item.caption && (
         <div className="canvas-item-caption">{item.caption}</div>
