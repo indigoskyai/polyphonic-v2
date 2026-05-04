@@ -52,7 +52,7 @@ export default function PublicProfileSettings() {
     setError(null); setSaving(true);
     const res = await claimUserHandle(handleInput, displayName || normalizeHandle(handleInput));
     setSaving(false);
-    if (!res.ok) setError(res.error);
+    if (!res.ok) setError((res as { ok: false; error: string }).error);
   };
 
   const saveProfile = async (patch: Partial<{ display_name: string; bio_short: string; accent_color: string; published: boolean }>) => {
