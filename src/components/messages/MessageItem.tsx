@@ -58,6 +58,11 @@ function ThinkingBlockComplete({ content }: { content: string }) {
   );
 }
 
+// Stable empty array reference so the artifact selector returns the same
+// value across renders when there are no artifacts for this thread —
+// keeps React.memo on MessageItem effective.
+const EMPTY_ARTIFACTS: import('@/stores/artifactStore').Artifact[] = [];
+
 interface Props {
   messageId: string;
   /** Created-at of the next message, or null if this is the last. Used to
