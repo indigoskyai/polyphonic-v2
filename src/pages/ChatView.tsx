@@ -21,8 +21,10 @@ import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
+import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
 import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
+import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 
@@ -271,6 +273,35 @@ function parseMultiModelVariants(thinkingContent: string): Array<{ model: string
     }
   } catch {}
   return [];
+}
+
+/* ─── Live activity context strip ───
+ * Renders SubAgentRow + AgentDialogueChip when either has live state for
+ * the active thread. Otherwise returns null so the conversation starts
+ * flush against the natural top of the message column. */
+function ContextStrip() {
+  const subAgents = useSubAgentStore((s) => s.agents);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const consults = useAgentConsultStore(selectConsultsByThread(currentThreadId));
+  const hasSubAgents = useMemo(
+    () => Object.values(subAgents).some((a) => a.parentAgent === 'luca'),
+    [subAgents],
+  );
+  if (!hasSubAgents && consults.length === 0) return null;
+  return (
+    <div
+      style={{
+        marginBottom: 16,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 12,
+        alignItems: 'center',
+      }}
+    >
+      <SubAgentRow parentAgent="luca" />
+      <AgentDialogueChip />
+    </div>
+  );
 }
 
 /* ─── Main ChatView ─── */
@@ -1259,10 +1290,13 @@ export default function ChatView() {
       >
         <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
 
-          <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-            <SubAgentRow parentAgent="luca" />
-            <AgentDialogueChip />
-          </div>
+          {/* Live activity context strip — only renders when there's actually
+              live activity to surface (sub-agents working, or agent-to-agent
+              consultations in this thread). Empty by default so threads start
+              with the conversation flush against the natural top, not a
+              16px gap of nothing. */}
+          <ContextStrip />
+
 
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
               assistant message that mirrors it, to avoid a duplicate flash. */}
