@@ -232,8 +232,8 @@ const App = () => (
             <Route path="/auth/signup" element={<SignupPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             {/* Public profile (no app shell, no auth required) */}
-            <Route path="/@:handle" element={<PublicProfileView mode="view" />} />
-            <Route path="/@:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
+            <Route path="/:handle" element={<PublicProfileView mode="view" />} />
+            <Route path="/:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
             <Route path="/settings/public-profile" element={<ProtectedRoute><AppShell><PublicProfileSettings /></AppShell></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
             <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />

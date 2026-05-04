@@ -12,7 +12,8 @@ interface Props { mode: 'view' | 'edit' }
 
 export default function PublicProfileView({ mode }: Props) {
   const params = useParams();
-  const handle = params.handle?.toLowerCase() || '';
+  const rawHandle = params.handle || '';
+  const handle = rawHandle.startsWith('@') ? rawHandle.slice(1).toLowerCase() : '';
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -27,9 +28,10 @@ export default function PublicProfileView({ mode }: Props) {
   const [vp, setVp] = useState<{ x: number; y: number; zoom: number } | undefined>(undefined);
 
   useEffect(() => {
+    if (!rawHandle.startsWith('@')) { navigate('/', { replace: true }); return; }
     if (!handle) return;
     loadByHandle(handle);
-  }, [handle, loadByHandle]);
+  }, [handle, rawHandle, loadByHandle, navigate]);
 
   useEffect(() => {
     let cancelled = false;
