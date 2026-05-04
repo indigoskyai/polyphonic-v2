@@ -9,6 +9,7 @@
 const ALLOWED_ORIGINS = [
   "https://polyphonic.chat",
   "https://www.polyphonic.chat",
+  "https://polyphonic-v2.lovable.app",
   "https://483efe7e-e882-4d1d-8f74-8b9b0098170f.lovableproject.com",
   "http://localhost:8080",
   "http://localhost:5173",
@@ -18,6 +19,11 @@ const ALLOWED_ORIGINS = [
 // 8081, 8082… depending on what's free, so a literal allowlist is brittle.
 const LOCAL_DEV_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
 
+// Lovable preview/sandbox domains: id-preview--<uuid>.lovable.app,
+// <slug>.lovable.app, and *.lovableproject.com. These are auto-generated per
+// project/branch so we match by pattern, not literal allowlist.
+const LOVABLE_PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+(?:--[a-z0-9-]+)?\.lovable(?:project)?\.(?:app|com)$/i;
+
 // Treat anything other than explicit "production" as a non-prod environment so
 // preview/staging deploys keep working with localhost dev tools. In prod the
 // localhost regex is disabled entirely.
@@ -26,6 +32,7 @@ const IS_PROD = (Deno.env.get("DENO_ENV") ?? Deno.env.get("ENVIRONMENT") ?? "")
 
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (LOVABLE_PREVIEW_ORIGIN.test(origin)) return true;
   if (!IS_PROD && LOCAL_DEV_ORIGIN.test(origin)) return true;
   return false;
 }
