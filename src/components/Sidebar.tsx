@@ -17,6 +17,7 @@ export default function Sidebar() {
     : path.startsWith('/mind') ? SidebarMind
     : path.startsWith('/journal') ? SidebarJournal
     : path.startsWith('/profile') ? SidebarProfile
+    : path === '/settings/public-profile' ? SidebarProfile
     : path.startsWith('/import') ? SidebarImport
     : path.startsWith('/settings') ? SidebarSettings
     : SidebarChat;
