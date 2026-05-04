@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import RichBody from '@/components/rich/RichBody';
+import { isCouncilDebugEnabled } from '@/lib/debug';
 
 /**
  * CouncilPanel — elegant viewer for the LLM Council deliberation behind a
@@ -785,8 +786,16 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
               </div>
             )}
 
-            {/* Voice critique row */}
-            {critique && <CritiqueRow critique={critique} hasRevision={hasRevision} />}
+            {/* Voice critique row — hidden from end users by default. The
+                critique still runs every synthesize turn (chat-multi calls
+                Haiku 4.5, persists trace in metadata.critique). It's only
+                rendered when council debug mode is on:
+                  - DevTools: localStorage.setItem('councilDebug','true')
+                  - URL: ?debug=council
+                Used for tuning during the calibration round. */}
+            {critique && isCouncilDebugEnabled() && (
+              <CritiqueRow critique={critique} hasRevision={hasRevision} />
+            )}
           </div>
         </div>
       </div>

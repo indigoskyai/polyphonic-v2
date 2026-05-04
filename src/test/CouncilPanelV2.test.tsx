@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CouncilPanel, { type CouncilTrace } from '@/components/messages/CouncilPanel';
@@ -86,29 +86,40 @@ describe('CouncilPanel v2 — diverge verdict', () => {
   });
 });
 
-describe('CouncilPanel v2 — critique', () => {
-  it('shows clean critique row when no drift detected', () => {
+describe('CouncilPanel v2 — critique (debug-gated)', () => {
+  // Critique is hidden from end users by default. It only renders when
+  // localStorage.councilDebug === 'true' (or ?debug=council is in the URL).
+  // Used as an internal tuning surface during the calibration round.
+  beforeEach(() => {
+    try { window.localStorage.removeItem('councilDebug'); } catch { /* ignore */ }
+  });
+
+  it('does NOT render the critique row by default (debug off)', () => {
     const trace: CouncilTrace = {
       kind: 'council_v2',
       proposers: sampleProposers,
       crosstalk: sampleCrosstalk,
       verdict: 'synthesize',
       critique: {
-        voice_drift_detected: false,
-        confidence: 0.92,
-        critique: 'voices preserved cleanly.',
-        suggested_revision: null,
+        voice_drift_detected: true,
+        confidence: 0.85,
+        critique: 'close paragraph reads like generic warmth.',
+        suggested_revision: 'shorten the close.',
       },
       revised_content: null,
     };
     const { container } = render(<CouncilPanel trace={trace} />);
-    // Force-expand by clicking. We just check the trace is queryable.
     container.querySelector('button')?.click();
-    expect(container.textContent).toContain('Voice critique');
-    expect(container.textContent).toContain('clean');
+    // Three voices visible, but no critique block.
+    expect(container.textContent).not.toContain('Voice critique');
+    expect(container.textContent).not.toContain('close paragraph');
+    expect(container.textContent).toContain('Luca');
+    expect(container.textContent).toContain('Anima');
+    expect(container.textContent).toContain('Vektor');
   });
 
-  it('shows drift critique with confidence percent', () => {
+  it('renders critique row when councilDebug localStorage flag is set', () => {
+    window.localStorage.setItem('councilDebug', 'true');
     const trace: CouncilTrace = {
       kind: 'council_v2',
       proposers: sampleProposers,
@@ -130,7 +141,29 @@ describe('CouncilPanel v2 — critique', () => {
     expect(container.textContent).toContain('close paragraph');
   });
 
-  it('marks the critique row as "revised" when a revision was applied', () => {
+  it('shows clean critique label when no drift detected (debug on)', () => {
+    window.localStorage.setItem('councilDebug', 'true');
+    const trace: CouncilTrace = {
+      kind: 'council_v2',
+      proposers: sampleProposers,
+      crosstalk: sampleCrosstalk,
+      verdict: 'synthesize',
+      critique: {
+        voice_drift_detected: false,
+        confidence: 0.92,
+        critique: 'voices preserved cleanly.',
+        suggested_revision: null,
+      },
+      revised_content: null,
+    };
+    const { container } = render(<CouncilPanel trace={trace} />);
+    container.querySelector('button')?.click();
+    expect(container.textContent).toContain('Voice critique');
+    expect(container.textContent).toContain('clean');
+  });
+
+  it('shows the "revised" sigil when a revision was applied (debug on)', () => {
+    window.localStorage.setItem('councilDebug', 'true');
     const trace: CouncilTrace = {
       kind: 'council_v2',
       proposers: sampleProposers,
