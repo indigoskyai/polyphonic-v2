@@ -1,0 +1,68 @@
+/* Public profile canvas */
+.canvas-root { user-select: none; }
+
+.canvas-item {
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--border-faint);
+  box-shadow: 0 18px 40px -28px rgba(0,0,0,0.7);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.canvas-item.is-edit { cursor: grab; }
+.canvas-item.is-edit.is-dragging { cursor: grabbing; }
+.canvas-item.is-selected {
+  border-color: var(--luca-full, #c9a87c);
+  box-shadow: 0 0 0 1px rgba(201,168,124,0.35), 0 22px 50px -26px rgba(0,0,0,0.75);
+}
+.canvas-item-body { width: 100%; height: 100%; pointer-events: auto; }
+.canvas-item-caption {
+  position: absolute; left: 0; right: 0; bottom: -22px;
+  text-align: center; font-family: var(--font-mono);
+  font-size: 10.5px; color: var(--text-soft);
+  letter-spacing: var(--track-mono); text-transform: uppercase;
+  pointer-events: none;
+}
+
+.canvas-item-grab {
+  position: absolute; top: 4px; left: 4px;
+  width: 18px; height: 18px; border-radius: 6px;
+  background: rgba(20,20,24,0.6); color: var(--text-soft);
+  display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); cursor: grab;
+}
+.canvas-item.is-edit:hover .canvas-item-grab,
+.canvas-item.is-selected .canvas-item-grab { display: inline-flex; }
+
+.canvas-item-toolbar {
+  position: absolute; top: -34px; right: 0;
+  display: inline-flex; gap: 4px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px;
+  box-shadow: 0 12px 28px -16px rgba(0,0,0,0.6);
+}
+.canvas-item-toolbar button {
+  width: 24px; height: 24px; border-radius: 999px;
+  background: transparent; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-body);
+}
+.canvas-item-toolbar button:hover { background: var(--overlay-hover); }
+
+.canvas-resize-handle {
+  position: absolute; width: 10px; height: 10px;
+  background: var(--luca-full, #c9a87c); border: 1px solid var(--canvas);
+  border-radius: 2px; z-index: 5;
+}
+.canvas-resize-handle.h-nw { top: -5px; left: -5px;  cursor: nwse-resize; }
+.canvas-resize-handle.h-n  { top: -5px; left: 50%;   transform: translateX(-50%); cursor: ns-resize; }
+.canvas-resize-handle.h-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.canvas-resize-handle.h-e  { top: 50%; right: -5px;  transform: translateY(-50%); cursor: ew-resize; }
+.canvas-resize-handle.h-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.canvas-resize-handle.h-s  { bottom: -5px; left: 50%;   transform: translateX(-50%); cursor: ns-resize; }
+.canvas-resize-handle.h-sw { bottom: -5px; left: -5px;  cursor: nesw-resize; }
+.canvas-resize-handle.h-w  { top: 50%; left: -5px;     transform: translateY(-50%); cursor: ew-resize; }
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-item { transition: none; }
+}
