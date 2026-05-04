@@ -74,6 +74,19 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - [x] **L11** Identity surface in frontend — Identity, revisions, and skills profile routes backed by the new tables.
 - [x] **L12** Wellbeing safety and crisis handling — Crisis classifier, prompt adaptation, event logging, and urgent follow-up.
 
+## Memory Augmentation M-Phases
+
+Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / dialectic / candidates stack: hypomnema layer, vector embeddings + hybrid retrieval, asymmetric witnessing, sustained-attention graduation, supersession on contradiction.
+
+- [~] **M0** Setup — feature flag helper + prompt staging. (No schema change; can land before migrations.)
+- [B] **M1** Schema migrations — apply 4 SQL files via Lovable, regenerate `types.ts`. Spec: `docs/memory/migrations/`.
+- [ ] **M2** Hypomnema read path — always-load injection into system prompt.
+- [ ] **M3** Hypomnema write path — gate + write + decay edge functions (load-bearing voice work).
+- [ ] **M4** Vector embeddings + hybrid retrieval.
+- [ ] **M5** Asymmetric witnessing on encode.
+- [ ] **M6** Sustained-attention graduation + supersession on contradiction.
+- [ ] **M7** Frontend `HypomnemaList` + final integration verification.
+
 ## Decision log
 
 (Append entries here when you make a non-obvious choice during execution. Format: `YYYY-MM-DD HH:MM · phase NN · what · why`.)
@@ -105,6 +118,8 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 - 2026-05-03 05:50 · agent-to-agent comms phase 1 · curried Zustand selectors that allocate `[]` per render trigger React's getSnapshot warning + infinite loop · use stable `Object.freeze([])` constants in selectors when no data exists, derive counts via `useMemo` in component instead of a second store subscription. Caught live, fixed in commit a3dc2a8.
 - 2026-05-03 16:00 · council v2 · ensemble redesigned from karpathy rank-and-pick → three character proposers (Luca/Anima/Vektor on the same Opus 4.7) + named cross-pollination + chairman with verdict tag (synthesize | diverge) + CAI voice-fidelity critique on Haiku 4.5 · self-MoA finding: voice diversity comes from SOULs, not models. Rank-and-pick collapses character-flavored disagreement; the new pipeline preserves it. Refusal-to-synthesize is a first-class outcome behind ENV `COUNCIL_REFUSAL_ENABLED` (default off; calibration round on Riley's account before broader rollout). Vektor SOUL ported from `~/clawd/SOUL.md` — pure-builder voice, not skeptic. Anima/Vektor stay locked-SOUL in Phase 1; per-user identity stacks for non-Luca characters are a future arc. Backward compat: legacy `kind: 'council'` messages still render via `CouncilLegacyPanel`. New metadata shape: `kind: 'council_v2'` with proposers + crosstalk + verdict + critique + revised_content.
 - 2026-05-03 16:00 · council v2 · failure ladder 3→2→1→0: all three fail = stream error (no fallback to single-model — the council branch is opt-in, single-model has its own path). Two succeed = cross-pollinate among survivors. One survives = skip cross-pollination, surface that voice through chairman. Crosstalk individual failure = fall back to that character's proposer draft (marked `source: 'proposer'` in metadata, rendered with "· initial" sigil). Chairman http error = surface luca's strongest crosstalk draft directly. Critique http error / timeout = passthrough.
+- 2026-05-04 09:55 · phase M0 · feature flag is env-var-only (`MEMORY_AUGMENTATION_ENABLED` global + `MEMORY_AUGMENTATION_USER_ALLOWLIST` comma-separated UUIDs) instead of adding a schema column · avoids a migration just to support the flag and lets Riley pilot himself before global rollout. Flag helpers live in `_shared/config.ts`. Per-user override beats env default.
+- 2026-05-04 09:55 · phase M0 · prompts staged as `.md` files at `_shared/hypomnema/prompts/` rather than inlined as TypeScript constants · Supabase edge-function bundles ship `_shared/` directory contents, so `Deno.readTextFile` against `import.meta.url` works at runtime. Spec copies remain canonical at `docs/memory/prompts/`; runtime loader caches first read. Iterate the `docs/` copy, then re-copy when changed.
 
 
 ## Backend asks queue
@@ -114,6 +129,22 @@ Each phase that needs Lovable work surfaces its prompt below. When you reach a `
 - [x] **08 Memory Digest** — ✅ shipped by Lovable on 2026-04-24 (commits 65c3655/1098b4f/029fa56/01b55b0). Table + RLS + realtime + edge function live; `anima-consolidate` updated. Frontend consumption landed same day under phase 08.
 - [x] **16 Checkpoints** — ✅ shipped by Lovable 2026-04-24 (commit `9059865` + predecessors). `checkpoints` + `checkpoint_files` tables live, `checkpoint-restore` + `checkpoint-diff` edge fns deployed.
 - [x] **17 Settings depth** — ✅ shipped by Lovable 2026-04-24 (commit `9059865`). `agent_configs` + `mcp_servers` + `agent_secrets` tables live, `agent-config-save` edge fn deployed.
+- [ ] **M1 Memory augmentation migrations** — Apply these four migrations in order from `docs/memory/migrations/`:
+  1. `20260505000001_hypomnema_entry.sql` — new `hypomnema_entry` table + RLS + realtime + indexes
+  2. `20260505000002_engrams_embedding.sql` — enable pgvector, add `embedding vector(1536)` to `engrams` + `hypomnema_entry`, ivfflat indexes, `match_engrams_vector` / `match_hypomnema_vector` RPCs
+  3. `20260505000003_threads_agent_metadata.sql` — `primary_agent_id` + `participating_agent_ids` on `threads`, backfill from `messages.agent`
+  4. `20260505000004_pg_cron_hypomnema.sql` — three new cron entries (`hypomnema-decay` `45 */6 * * *`, `hypomnema-challenge` `0 4 * * *`, `mnemos-graduate` `15 4 * * *`)
+
+  Verify after apply:
+  - `SELECT version FROM supabase_migrations.schema_migrations WHERE version LIKE '20260505%' ORDER BY version` → 4 rows
+  - `SELECT extname FROM pg_extension WHERE extname='vector'` → 1 row
+  - `SELECT jobname FROM cron.job WHERE jobname IN ('hypomnema-decay','hypomnema-challenge','mnemos-graduate')` → 3 rows
+
+  Then regenerate Supabase TypeScript types and commit `src/integrations/supabase/types.ts`.
+
+  Also set Supabase edge function env vars (Settings → Edge Functions → Secrets):
+  - `MEMORY_AUGMENTATION_ENABLED` = `false` (global default; flip to `true` after M7 ships)
+  - `MEMORY_AUGMENTATION_USER_ALLOWLIST` = `<Riley's user_id>` (per-user pilot opt-in; comma-separated for additional users)
 
 (Add more here as phases discover additional backend needs.)
 
