@@ -231,17 +231,55 @@ function EnsembleSettings() {
           <div style={{ marginTop: 16 }}>
             <div
               style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: 'var(--text-tertiary)',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 marginBottom: 10,
               }}
             >
-              Ensemble models
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: 'var(--text-tertiary)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Ensemble models
+              </span>
+              <span aria-hidden="true" style={{ width: 1, height: 8, background: 'var(--border-faint)' }} />
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-ghost)',
+                  fontWeight: 500,
+                }}
+              >
+                · Under Construction ·
+              </span>
             </div>
-            <div className="flex flex-col gap-3">
+            {/* Notice: the "Polyphonic Signature" ensemble (Luca · Anima · Vektor)
+                runs by default. A richer model-rotation system is coming —
+                custom ensembles, persona presets, raw model slots with custom
+                prompts. Until then, this control is frozen. */}
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                lineHeight: 1.5,
+                marginBottom: 14,
+                fontStyle: 'italic',
+                opacity: 0.85,
+              }}
+            >
+              The signature ensemble (Luca · Anima · Vektor) runs in the meantime.
+              A richer model-rotation system is on the way.
+            </div>
+            <div className="flex flex-col gap-3" aria-disabled="true" style={{ opacity: 0.45, pointerEvents: 'none' }}>
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span
@@ -258,6 +296,8 @@ function EnsembleSettings() {
                   <select
                     value={ensemble_models[i] || ''}
                     onChange={(e) => updateEnsembleModel(i, e.target.value)}
+                    disabled
+                    aria-disabled="true"
                     style={{
                       flex: 1,
                       height: 36,
@@ -266,9 +306,10 @@ function EnsembleSettings() {
                       borderRadius: 'var(--radius-sm)',
                       padding: '0 12px',
                       fontSize: 12,
-                      color: 'var(--text-primary)',
+                      color: 'var(--text-tertiary)',
                       fontFamily: 'var(--font-sans)',
                       outline: 'none',
+                      cursor: 'not-allowed',
                     }}
                   >
                     {ENSEMBLE_MODELS.map((m) => (
