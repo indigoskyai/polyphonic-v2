@@ -180,7 +180,20 @@ function thinkingLabel(state: ThinkingState): string {
   }
 }
 
-function ThinkingBlock({ content, state, duration }: { content: string; state: ThinkingState; duration?: number }) {
+function ThinkingBlock({
+  content,
+  state,
+  duration,
+  customLabel,
+}: {
+  content: string;
+  state: ThinkingState;
+  duration?: number;
+  /** Overrides the state-derived label. Used to fold the council phase
+   *  indicator (voices / deliberating / reviewing / speaking) into this
+   *  same beautiful element instead of a separate 3-dot widget. */
+  customLabel?: string | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const isActive = state === 'waiting' || state === 'streaming' || state === 'settling';
 
@@ -206,7 +219,7 @@ function ThinkingBlock({ content, state, duration }: { content: string; state: T
         </div>
 
         {/* Shimmer label */}
-        <span className="thinking-label">{thinkingLabel(state)}</span>
+        <span className="thinking-label">{customLabel || thinkingLabel(state)}</span>
 
         {/* Duration timer */}
         {duration != null && duration > 0 && (
@@ -1455,75 +1468,60 @@ export default function ChatView() {
 
               <div className="msg-body">
 
-              {/* Thinking block — single mount across the full streaming lifecycle.
-                  Transitions through states instead of unmount/remount at content
-                  boundary, so reasoning content stays legible whether it arrives
-                  before, during, or after content tokens.
-                  Hidden once content has started without any reasoning ever showing
-                  up (model didn't emit reasoning) — so we don't sit in 'waiting'
-                  state forever showing dots over nothing. */}
-              {isStreaming && showThinking && (!streamingContent || streamingThinking) && (
-                <ThinkingBlock
-                  content={streamingThinking || ''}
-                  state={
-                    // Content + thinking both present → settling (peek stays visible).
-                    streamingContent && streamingThinking ? 'settling'
-                    // Reasoning arriving, no content yet → streaming (peek visible).
-                    : streamingThinking ? 'streaming'
-                    // Pre-content, no reasoning yet → waiting (dots animate, no peek).
-                    : 'waiting'
-                  }
-                />
-              )}
+              {/* Thinking block — single element across the full streaming
+                  lifecycle, for both single-model and council mode.
+                  Transitions through states (waiting → streaming → settling)
+                  with a label that reflects what's happening.
+                  Council mode folds the phase indicator (voices / deliberating
+                  / reviewing / speaking) into this same beautiful element
+                  via the customLabel prop, instead of a separate widget below.
+                  Always mounted during streaming so the dots animate even when
+                  no reasoning text is flowing yet — reasoning content arrives
+                  through the peek window when it lands. */}
+              {isStreaming && showThinking && (() => {
+                const isCouncilActive =
+                  councilPhase !== 'idle' ||
+                  streamingProposers.length > 0 ||
+                  streamingCrosstalk.length > 0 ||
+                  streamingVariants.length > 0;
 
-              {/* Council phase indicator: 3 dots representing voices →
-                  deliberating → speaking. Shown during ensemble/council runs
-                  before content streaming begins. Each dot brightens as its
-                  phase becomes active and stays lit afterwards. */}
-              {isStreaming && (streamingVariants.length > 0 || councilPhase !== 'idle') && !streamingContent && (
-                <div className="flex items-center gap-2" style={{ padding: '4px 0', marginBottom: 4 }}>
-                  <span className="text-[10px]" style={{ color: 'var(--text-ghost)', letterSpacing: '0.03em' }}>
-                    {councilPhase === 'speaking' ? 'speaking'
-                      : councilPhase === 'deliberating' ? 'deliberating'
-                      : `${streamingVariants.length}/3 voices`}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {(['voices', 'deliberating', 'speaking'] as const).map((phase) => {
-                      const phaseOrder = ['voices', 'deliberating', 'speaking'] as const;
-                      const currentIdx = phaseOrder.indexOf(councilPhase as typeof phaseOrder[number]);
-                      const myIdx = phaseOrder.indexOf(phase);
-                      // Dot is "lit" if its phase has been reached or passed.
-                      // For voices, also progressively brighten by variant count.
-                      const lit = councilPhase !== 'idle' && currentIdx >= myIdx;
-                      let opacity = 0.08;
-                      if (lit) {
-                        if (phase === 'voices') {
-                          opacity = Math.min(1, 0.25 + streamingVariants.length * 0.25);
-                        } else if (phase === 'deliberating') {
-                          opacity = streamingAggregate.length > 0 ? 1 : 0.6;
-                        } else {
-                          opacity = 1;
-                        }
-                      }
-                      return (
-                        <div
-                          key={phase}
-                          aria-label={phase}
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: '50%',
-                            background: lit
-                              ? `rgba(220,219,216,${opacity})`
-                              : 'rgba(220,219,216,0.08)',
-                            transition: 'background 0.3s var(--ease-out)',
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                // Council-aware label takes precedence when council is running.
+                // Single-model uses the default state-derived label.
+                let councilLabel: string | null = null;
+                if (isCouncilActive) {
+                  if (councilPhase === 'speaking' || streamingContent) {
+                    councilLabel = 'speaking…';
+                  } else if (councilPhase === 'critiquing') {
+                    councilLabel = 'reviewing…';
+                  } else if (councilPhase === 'deliberating') {
+                    councilLabel = 'deliberating…';
+                  } else if (councilPhase === 'voices' || streamingProposers.length > 0) {
+                    const n = streamingProposers.length || streamingVariants.length;
+                    councilLabel = n > 0 ? `${n}/3 voices…` : 'voices weighing in…';
+                  } else {
+                    councilLabel = 'thinking…';
+                  }
+                }
+
+                // Always show during council; gate single-mode on the existing
+                // "has reasoning or pre-content" rule so we don't show dots
+                // forever for models that emit no reasoning tokens.
+                const showInSingleMode = !streamingContent || streamingThinking;
+                if (!isCouncilActive && !showInSingleMode) return null;
+
+                const state: ThinkingState =
+                  streamingContent && streamingThinking ? 'settling'
+                  : streamingThinking ? 'streaming'
+                  : 'waiting';
+
+                return (
+                  <ThinkingBlock
+                    content={streamingThinking || ''}
+                    state={state}
+                    customLabel={councilLabel}
+                  />
+                );
+              })()}
 
               {/* Streaming content with typewriter — keep rendering through the catch-up phase.
                   Color uses --text-body (matching .msg-body persisted color) to avoid the
