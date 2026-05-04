@@ -319,6 +319,24 @@ function ContextStrip() {
   );
 }
 
+/* ─── Animated row wrapper ───
+ * Plays the entry animation only on the row's first mount, so re-renders
+ * triggered by streaming tokens (or any list reflow) don't re-pop existing
+ * rows. CSS handles the actual keyframes via the [data-fresh] selector.
+ */
+function FreshMsgRow({ children, className = 'msg-row', style }: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const fresh = useFirstMount();
+  return (
+    <div className={className} data-fresh={fresh ? 'true' : undefined} style={style}>
+      {children}
+    </div>
+  );
+}
+
 /* ─── Main ChatView ─── */
 export default function ChatView() {
   const { threadId } = useParams();
