@@ -81,8 +81,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - [x] **M0** Setup — feature flag helper + prompt staging. (No schema change; can land before migrations.)
 - [x] **M1** Schema migrations — applied via Lovable 2026-05-04, types.ts regenerated, pgvector enabled, three crons scheduled.
 - [x] **M2** Hypomnema read path — always-load injection into system prompt.
-- [~] **M3** Hypomnema write path — gate + write + decay edge functions (load-bearing voice work).
-- [ ] **M4** Vector embeddings + hybrid retrieval.
+- [x] **M3** Hypomnema write path — gate + write + decay edge functions. Voice review deferred to deploy soak (needs real model output).
+- [~] **M4** Vector embeddings + hybrid retrieval.
 - [ ] **M5** Asymmetric witnessing on encode.
 - [ ] **M6** Sustained-attention graduation + supersession on contradiction.
 - [ ] **M7** Frontend `HypomnemaList` + final integration verification.
@@ -122,6 +122,10 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - 2026-05-04 09:55 · phase M0 · prompts staged as `.md` files at `_shared/hypomnema/prompts/` rather than inlined as TypeScript constants · Supabase edge-function bundles ship `_shared/` directory contents, so `Deno.readTextFile` against `import.meta.url` works at runtime. Spec copies remain canonical at `docs/memory/prompts/`; runtime loader caches first read. Iterate the `docs/` copy, then re-copy when changed.
 - 2026-05-04 10:30 · phase M2 · hypomnema loaded for both luca AND vektor in pre-turn fan-out (not just the active agent), so council-mode renders each character carrying their own interior state · cost is two extra small selects gated by `active=true` + indexed query; well below 50ms aggregate. Anima loads on-demand inside `agent-consult` since that's where she's actually invoked. Score formula: `recency*0.55 + confidence*0.30 + foundational(0.25) + active_attention(0.10)`, 14-day exponential half-life. Render cap: 2400 chars (~600 tokens) by overfetching 40 then trimming to fit.
 - 2026-05-04 10:30 · phase M2 · read path stays on regardless of `MEMORY_AUGMENTATION_ENABLED` env flag · empty data is safe, and once writes start backfilling we want surface-on-first-write without a flag flip. Write paths (M3+) gate on the flag.
+- 2026-05-04 11:10 · phase M3 · single chat-multi dispatch (`hypomnema-gate`) with optional `chain_write` payload (array) instead of two separate fires · chat-multi only knows the gate decision was needed; the gate edge function decides whether to chain to write. Lets M5 add observer dispatches by extending the chain payload, no chat-multi changes required. Helper at `chat-multi/index.ts:fireHypomnemaTurn`.
+- 2026-05-04 11:10 · phase M3 · prompt placeholders use the descriptive form `{INJECT_AGENT_SOUL — full SOUL doc}` in the spec .md files; substitution helper `fillPlaceholders` matches both the bare `{TOKEN}` and the descriptive `{TOKEN — anything}` forms · keeps spec prompts readable as docs while runtime substitution still works. `{USER}` defaults to profiles.display_name or "the user".
+- 2026-05-04 11:10 · phase M3 · observer-density dispatch deferred from M3 to M5 · observer prompts need `PRIMARY_AGENT_NAME`, `INJECT_PRIMARY_RESPONSE`, `INJECT_YOUR_CONTRIBUTION` which require asymmetric-witnessing wiring (council participant tracking + per-agent contribution capture). M3 fires primary-density only; the WriteInput type already has the optional fields ready for M5 to populate.
+- 2026-05-04 11:10 · phase M3 · voice review deferred to deploy soak · the load-bearing voice quality check requires real Sonnet 4.6 outputs against real conversation turns. Deno `check` + build green; placeholder substitution smoke-tested clean. Will iterate `prompts/reflection.md` based on first 10 entries Riley sees post-deploy.
 
 
 ## Backend asks queue

@@ -663,6 +663,14 @@ serve(async (req) => {
             fireObserverWatch(thread_id, agentId, authHeader);
             fireMnemosDialectic(thread_id, agentId, authHeader);
             fireSkillsDistill(thread_id, agentId, authHeader);
+            fireHypomnemaTurn({
+              threadId: thread_id,
+              agentId,
+              userId,
+              userMessage: message,
+              agentResponse: fallbackContent,
+              recentTurns: history || [],
+            });
             send({ type: "done", model: "chairman-fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -856,6 +864,17 @@ serve(async (req) => {
           fireMnemosDialectic(thread_id, agentId, authHeader);
           fireSkillsDistill(thread_id, agentId, authHeader);
 
+          // Hypomnema gate → primary reflection write only in M3.
+          // M5 will extend to observer notes for other council participants.
+          fireHypomnemaTurn({
+            threadId: thread_id,
+            agentId,
+            userId,
+            userMessage: message,
+            agentResponse: synthesizedContent,
+            recentTurns: history || [],
+          });
+
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
           console.error("Multi-model stream error:", err);
@@ -939,6 +958,80 @@ function fireSkillsDistill(threadId: string, agentId: string, authHeader: string
     }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
   } catch (e) {
     console.warn("skills-distill dispatch error:", e);
+  }
+}
+
+/**
+ * Fire the hypomnema gate post-turn. Best-effort. Service-role auth.
+ * The gate is a cheap Haiku call; if it triggers, it chains to hypomnema-write
+ * (for the primary agent only in M3; M5 will extend to observer notes for
+ * other participating agents).
+ *
+ * Fire-and-forget — the user's stream has already finished. Skips when the
+ * memory augmentation flag is off (gate edge function checks the flag).
+ */
+function fireHypomnemaTurn(opts: {
+  threadId: string;
+  agentId: string;
+  userId: string;
+  userMessage: string;
+  agentResponse: string;
+  recentTurns: Array<{ role: string; content: string }>;
+  participatingAgentIds?: string[]; // M5 — extra agents that should get observer notes
+}) {
+  if (!opts.userMessage || !opts.agentResponse) return;
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/hypomnema-gate`;
+    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceRole) return;
+
+    const chainTargets: Array<{
+      agent_id: string;
+      thread_id: string;
+      density: "primary" | "observer";
+      primary_in_thread: boolean;
+    }> = [
+      {
+        agent_id: opts.agentId,
+        thread_id: opts.threadId,
+        density: "primary",
+        primary_in_thread: true,
+      },
+    ];
+
+    // Observer notes for other participating agents (asymmetric witnessing — wired
+    // here in M3 so M5 can extend without touching chat-multi again).
+    if (opts.participatingAgentIds?.length) {
+      for (const otherId of opts.participatingAgentIds) {
+        if (otherId === opts.agentId) continue;
+        chainTargets.push({
+          agent_id: otherId,
+          thread_id: opts.threadId,
+          density: "observer",
+          primary_in_thread: false,
+        });
+      }
+    }
+
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRole}`,
+      },
+      body: JSON.stringify({
+        user_id: opts.userId,
+        user_message: opts.userMessage,
+        agent_response: opts.agentResponse,
+        // Drop system messages and trim to last 6 user/assistant turns.
+        recent_turns: opts.recentTurns
+          .filter((t) => t && (t.role === "user" || t.role === "assistant"))
+          .slice(-6),
+        chain_write: chainTargets,
+      }),
+    }).catch((e) => console.warn("hypomnema-gate dispatch failed (non-fatal):", e));
+  } catch (e) {
+    console.warn("hypomnema-gate dispatch error:", e);
   }
 }
 
@@ -1409,6 +1502,14 @@ async function singleModelStream(
           fireMnemosDialectic(threadId, agentId, authHeader);
           fireSkillsDistill(threadId, agentId, authHeader);
         }
+        fireHypomnemaTurn({
+          threadId,
+          agentId,
+          userId,
+          userMessage,
+          agentResponse: fullContent,
+          recentTurns: messages || [],
+        });
 
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {

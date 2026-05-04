@@ -18,3 +18,12 @@
 
 export { loadPrompt, type PromptName } from "./prompts.ts";
 export { loadHypomnema, type LoadHypomnemaResult } from "./read.ts";
+export {
+  runSalienceGate,
+  writeHypomnemaEntry,
+  type GateInput,
+  type GateResult,
+  type WriteInput,
+  type WriteResult,
+} from "./write.ts";
+export { decayAllActiveEntries, computeDecayedSalience, type DecayResult } from "./decay.ts";
