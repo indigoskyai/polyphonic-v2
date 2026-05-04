@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@350;370;400;420;450;550&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import './components/canvas-profile/canvas.css';
 
 @tailwind base;
 @tailwind components;
@@ -7411,4 +7412,3 @@ html {
   text-transform: uppercase; margin-right: auto;
 }
 
-@import './components/canvas-profile/canvas.css';

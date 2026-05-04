@@ -113,7 +113,7 @@ export default function PublicProfileSettings() {
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--text-primary)' }}>@{myHandle.handle}</div>
                 <button
                   type="button"
-                  onClick={() => navigate(`/@${myHandle.handle}`)}
+                  onClick={() => navigate(`/u/${myHandle.handle}`)}
                   style={{ ...secondaryBtn }}
                 >
                   view profile <ExternalLink size={11} />
@@ -159,7 +159,7 @@ export default function PublicProfileSettings() {
               <p style={{ color: 'var(--text-soft)', fontSize: 13, lineHeight: 1.55, marginBottom: 12 }}>
                 Place items, drag, resize, set your home view. Changes save as you go.
               </p>
-              <button type="button" onClick={() => navigate(`/@${myHandle.handle}/edit`)} style={primaryBtn}>
+              <button type="button" onClick={() => navigate(`/u/${myHandle.handle}/edit`)} style={primaryBtn}>
                 Open canvas editor →
               </button>
             </Section>

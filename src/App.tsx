@@ -232,6 +232,9 @@ const App = () => (
             <Route path="/auth/signup" element={<SignupPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             {/* Public profile (no app shell, no auth required) */}
+            <Route path="/u/:handle" element={<PublicProfileView mode="view" />} />
+            <Route path="/u/:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
+            {/* Legacy/pretty @-prefixed URLs: redirect to /u/:handle since React Router v6 has issues parsing the @ prefix attached to a param. */}
             <Route path="/@:handle" element={<PublicProfileView mode="view" />} />
             <Route path="/@:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
             <Route path="/settings/public-profile" element={<ProtectedRoute><AppShell><PublicProfileSettings /></AppShell></ProtectedRoute>} />
