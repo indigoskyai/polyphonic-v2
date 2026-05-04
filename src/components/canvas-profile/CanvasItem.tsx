@@ -4,7 +4,7 @@ import { useProfileCanvasStore } from '@/stores/profileCanvasStore';
 import ArtifactTile from './items/ArtifactTile';
 import UploadTile from './items/UploadTile';
 import NoteTile from './items/NoteTile';
-import { Trash2, Layers, GripVertical } from 'lucide-react';
+import { Trash2, Layers } from 'lucide-react';
 
 interface Props {
   itemId: string;
@@ -86,11 +86,21 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
   const editClass = mode === 'edit' ? ' is-edit' : '';
   const selClass = selected && mode === 'edit' ? ' is-selected' : '';
 
+  // Window-chrome label per item type — monochrome, no traffic-light hues.
+  const chromeLabel =
+    item.item_type === 'artifact' ? ((item.payload as any)?.snapshot?.title || 'artifact')
+    : item.item_type === 'upload' ? ((item.payload as any)?.original_name || 'upload')
+    : 'note';
+  const chromeMeta =
+    item.item_type === 'artifact' ? ((item.payload as any)?.snapshot?.kind || '')
+    : item.item_type === 'upload' ? ((item.payload as any)?.mime || '').split('/')[0]
+    : '';
+
   return (
     <div
       ref={wrapRef}
       data-canvas-item
-      className={`canvas-item${editClass}${selClass}${interacting ? ' is-dragging' : ''}`}
+      className={`canvas-item has-chrome${editClass}${selClass}${interacting ? ' is-dragging' : ''}`}
       style={{
         position: 'absolute',
         left: 0, top: 0,
@@ -106,6 +116,15 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
       onPointerCancel={onPointerUp}
       onClick={(e) => { if (mode === 'edit') { e.stopPropagation(); setSelected(itemId); } }}
     >
+      <div data-drag-handle className="canvas-item-chrome" title={mode === 'edit' ? 'Drag to move' : undefined}>
+        <span className="canvas-item-chrome-dots" aria-hidden>
+          <span className="canvas-item-chrome-dot is-strong" />
+          <span className="canvas-item-chrome-dot" />
+          <span className="canvas-item-chrome-dot" />
+        </span>
+        <span className="canvas-item-chrome-title">{chromeLabel}</span>
+        {chromeMeta && <span className="canvas-item-chrome-meta">{chromeMeta}</span>}
+      </div>
       <div data-canvas-item-body className="canvas-item-body">
         {item.item_type === 'artifact' && <ArtifactTile payload={item.payload as any} mode={mode} interacting={interacting} />}
         {item.item_type === 'upload'   && <UploadTile   payload={item.payload as any} mode={mode} />}
@@ -117,9 +136,6 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
 
       {mode === 'edit' && (
         <>
-          <div data-drag-handle className="canvas-item-grab" title="Drag to move">
-            <GripVertical size={12} />
-          </div>
           {selected && (
             <>
               <div className="canvas-item-toolbar">
