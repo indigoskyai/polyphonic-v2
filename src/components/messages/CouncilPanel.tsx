@@ -47,11 +47,14 @@ const CHARACTER_LABEL: Record<CouncilCharacter, string> = {
   vektor: 'Vektor',
 };
 
-const CHARACTER_TINT: Record<CouncilCharacter, string> = {
-  luca: 'var(--agent-luca-1, var(--text-tertiary))',
-  anima: 'var(--agent-anima-1, var(--text-tertiary))',
-  vektor: 'var(--agent-vektor-1, var(--text-tertiary))',
-};
+// Council v2 visual treatment is monochrome cream — voice diversity comes
+// through typography, layout, and content register, not chrome color.
+// Per-character full-color tinting is reserved for higher-order surfaces
+// (sub-agent visualization, agent profile cards) and intentionally absent
+// inside the conversational flow so the council reads as one coherent
+// surface within the wider monochrome chat aesthetic.
+const MONO_TINT_PRIMARY = 'var(--text-tertiary)';
+const MONO_TINT_GHOST = 'var(--text-ghost)';
 
 type ViewMode = 'tabs' | 'compare';
 
@@ -289,8 +292,9 @@ function VariantCard({
 
 // ─── Council v2 sub-components ─────────────────────────────────────────────
 
+/* Monochrome character avatar — neutral cream halo + first letter inside.
+ * Voice diversity comes from content + naming, not chrome color. */
 function CharacterAvatar({ character, size = 18 }: { character: CouncilCharacter; size?: number }) {
-  const tint = CHARACTER_TINT[character];
   return (
     <span
       aria-label={CHARACTER_LABEL[character]}
@@ -301,13 +305,13 @@ function CharacterAvatar({ character, size = 18 }: { character: CouncilCharacter
         width: size,
         height: size,
         borderRadius: 999,
-        background: 'rgba(220,219,216,0.04)',
-        border: `1px solid ${tint}`,
+        background: 'rgba(232,230,224,0.04)',
+        border: '1px solid var(--border-faint)',
         boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.04)',
-        color: tint,
+        color: MONO_TINT_PRIMARY,
         fontFamily: 'var(--font-mono)',
         fontSize: size * 0.55,
-        fontWeight: 600,
+        fontWeight: 500,
         letterSpacing: 0,
         lineHeight: 1,
         flexShrink: 0,
@@ -318,6 +322,9 @@ function CharacterAvatar({ character, size = 18 }: { character: CouncilCharacter
   );
 }
 
+/* Verdict pill — monochrome both states. The signal is the word and the
+ * subtle dot, not color hue. Diverged gets a slightly brighter dot to mark
+ * itself; harmonized stays ghost-quiet so it's a non-event when expected. */
 function VerdictPill({ verdict }: { verdict: 'synthesize' | 'diverge' }) {
   const isDiverge = verdict === 'diverge';
   return (
@@ -325,17 +332,13 @@ function VerdictPill({ verdict }: { verdict: 'synthesize' | 'diverge' }) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 5,
+        gap: 6,
         padding: '3px 9px',
         borderRadius: 999,
-        background: isDiverge
-          ? 'rgba(201, 124, 168, 0.10)'
-          : 'rgba(232, 230, 224, 0.06)',
-        border: isDiverge
-          ? '1px solid rgba(201, 124, 168, 0.28)'
-          : '1px solid var(--border-faint)',
+        background: 'rgba(232,230,224,0.05)',
+        border: '1px solid var(--border-faint)',
         boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.04)',
-        color: isDiverge ? 'var(--anima-full)' : 'var(--text-tertiary)',
+        color: isDiverge ? 'var(--text-secondary)' : 'var(--text-tertiary)',
         fontFamily: 'var(--font-mono)',
         fontSize: 9,
         letterSpacing: '0.16em',
@@ -349,7 +352,7 @@ function VerdictPill({ verdict }: { verdict: 'synthesize' | 'diverge' }) {
           width: 5,
           height: 5,
           borderRadius: '50%',
-          background: isDiverge ? 'var(--anima-full)' : 'var(--text-tertiary)',
+          background: isDiverge ? 'var(--text-secondary)' : 'var(--text-ghost)',
         }}
       />
       {isDiverge ? 'diverged' : 'harmonized'}
@@ -357,32 +360,35 @@ function VerdictPill({ verdict }: { verdict: 'synthesize' | 'diverge' }) {
   );
 }
 
+/* Character draft card — neutral monochrome shell. Reads as a single
+ * coherent surface within the chat aesthetic. Used in side-by-side grid. */
 function CharacterDraftCard({
   character,
   content,
   thinking,
   source,
+  compact = false,
 }: {
   character: CouncilCharacter;
   content: string;
   thinking?: string | null;
   source?: string;
+  /** Compact mode: reduced padding + max-height for side-by-side grid. */
+  compact?: boolean;
 }) {
-  const tint = CHARACTER_TINT[character];
   return (
     <div
       style={{
         position: 'relative',
-        background: 'rgba(220,219,216,0.015)',
-        border: '1px solid var(--border-subtle)',
-        borderLeft: `2px solid ${tint}`,
+        background: 'rgba(220,219,216,0.012)',
+        border: '1px solid var(--border-faint)',
         borderRadius: 'var(--radius-md)',
-        padding: '14px 18px 16px',
-        maxHeight: 540,
+        padding: compact ? '12px 14px 14px' : '14px 18px 16px',
+        maxHeight: compact ? 360 : 540,
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
-        boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.025)',
+        boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.02)',
       }}
     >
       <div
@@ -394,13 +400,13 @@ function CharacterDraftCard({
           gap: 8,
         }}
       >
-        <CharacterAvatar character={character} />
+        <CharacterAvatar character={character} size={16} />
         <span
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 9,
-            letterSpacing: '0.1em',
-            color: tint,
+            letterSpacing: '0.14em',
+            color: MONO_TINT_PRIMARY,
             textTransform: 'uppercase',
             fontWeight: 500,
           }}
@@ -414,7 +420,7 @@ function CharacterDraftCard({
               fontFamily: 'var(--font-mono)',
               fontSize: 8,
               letterSpacing: '0.18em',
-              color: 'var(--text-ghost)',
+              color: MONO_TINT_GHOST,
               textTransform: 'uppercase',
               opacity: 0.7,
             }}
@@ -482,15 +488,18 @@ function CritiqueRow({
   hasRevision: boolean;
 }) {
   const drift = critique.voice_drift_detected;
+  // Monochrome critique row. Drift shows up through typography (slightly
+  // brighter eyebrow + dot) and the explicit "drift" label, not chrome
+  // color. Stays consistent with the overall chat aesthetic.
   return (
     <div
       style={{
         marginTop: 14,
         padding: '12px 16px 14px',
-        background: drift ? 'rgba(201, 124, 168, 0.04)' : 'rgba(220,219,216,0.015)',
-        border: drift ? '1px solid rgba(201, 124, 168, 0.18)' : '1px solid var(--border-faint)',
+        background: 'rgba(220,219,216,0.012)',
+        border: '1px solid var(--border-faint)',
         borderRadius: 'var(--radius-md)',
-        boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.025)',
+        boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.02)',
       }}
     >
       <div
@@ -498,16 +507,26 @@ function CritiqueRow({
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          marginBottom: 8,
+          marginBottom: critique.critique || critique.suggested_revision ? 8 : 0,
         }}
       >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: drift ? 'var(--text-secondary)' : 'var(--text-ghost)',
+            flexShrink: 0,
+          }}
+        />
         <span
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 9,
             letterSpacing: '0.18em',
             textTransform: 'uppercase',
-            color: drift ? 'var(--anima-full)' : 'var(--text-tertiary)',
+            color: drift ? 'var(--text-secondary)' : 'var(--text-tertiary)',
             fontWeight: 500,
           }}
         >
@@ -575,7 +594,6 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
   // Auto-expand when chairman returned diverge — divergence is a signal
   // worth surfacing without a click.
   const [expanded, setExpanded] = useState(verdict === 'diverge');
-  const [activeTab, setActiveTab] = useState(0);
   const [showProposers, setShowProposers] = useState(false);
 
   // If a message is hydrated late and verdict flips, sync the auto-expand.
@@ -585,6 +603,10 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
 
   const proposers = trace.proposers ?? [];
   const crosstalk = trace.crosstalk ?? [];
+  // After cross-pollination, the crosstalk drafts are the "current" voices.
+  // We fall back to proposer drafts when crosstalk hasn't run (single-survivor
+  // failure path) or for any character whose crosstalk failed (already
+  // reconciled by chat-multi via reconcileCrosstalkOutcomes).
   const drafts = crosstalk.length > 0 ? crosstalk : proposers;
   const critique = trace.critique ?? null;
   const hasRevision = !!trace.revised_content;
@@ -659,115 +681,106 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
       >
         <div style={{ overflowX: 'visible', overflowY: 'clip', minHeight: 0 }}>
           <div style={{ paddingTop: 12 }}>
-            {/* Toolbar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 14,
-                gap: 12,
-                flexWrap: 'wrap',
-                paddingBottom: 12,
-                borderBottom: '1px solid var(--border-faint)',
-              }}
-            >
-              <div role="tablist" aria-label="Council voices" style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                {drafts.map((d, i) => {
-                  const isActive = i === activeTab;
-                  const tint = CHARACTER_TINT[d.character];
-                  return (
-                    <button
-                      key={`${d.character}-${i}`}
-                      role="tab"
-                      aria-selected={isActive}
-                      onClick={() => setActiveTab(i)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        background: isActive ? 'rgba(232,230,224,0.07)' : 'rgba(220,219,216,0.02)',
-                        border: `1px solid ${isActive ? tint : 'var(--border-faint)'}`,
-                        borderRadius: 999,
-                        padding: '5px 13px 5px 5px',
-                        color: isActive ? 'var(--text-primary)' : 'var(--text-ghost)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        fontWeight: isActive ? 500 : 400,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        cursor: 'pointer',
-                        boxShadow: isActive
-                          ? 'inset 0 0.5px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.18)'
-                          : 'none',
-                        transition: 'background var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out)',
-                      }}
-                    >
-                      <CharacterAvatar character={d.character} />
-                      {CHARACTER_LABEL[d.character]}
-                    </button>
-                  );
-                })}
-              </div>
-              {proposers.length > 0 && crosstalk.length > 0 && (
-                <button
-                  onClick={() => setShowProposers(!showProposers)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: showProposers ? 'var(--text-secondary)' : 'var(--text-ghost)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    padding: '4px 0',
-                  }}
-                >
-                  {showProposers ? 'showing first drafts' : 'show first drafts'}
-                </button>
-              )}
-            </div>
-
-            {/* Active draft */}
-            {drafts[activeTab] && (
-              <CharacterDraftCard
-                character={drafts[activeTab].character}
-                content={drafts[activeTab].content}
-                source={drafts[activeTab].source}
-              />
-            )}
-
-            {/* Optional: side-by-side first drafts (proposer outputs before crosstalk) */}
-            {showProposers && proposers.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    letterSpacing: '0.18em',
-                    textTransform: 'uppercase',
-                    color: 'var(--text-ghost)',
-                    marginBottom: 8,
-                  }}
-                >
-                  First drafts (before cross-pollination)
-                </div>
+            {/* Three voices side-by-side. Voice diversity reads through layout
+                + content + character labels — no per-character chrome color.
+                Auto-fit reflows to single column on narrow viewports.
+                Extends symmetrically beyond the 720px message column on wide
+                viewports so columns have room to breathe (same trick the
+                legacy compare view used). */}
+            {(() => {
+              const ext = 'min(320px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - 680px) / 2))';
+              const shift = `min(48px, ${ext})`;
+              return (
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                    gap: 10,
+                    gridTemplateColumns: `repeat(auto-fit, minmax(260px, 1fr))`,
+                    gap: 12,
+                    marginLeft: `calc(-1 * (${ext} + ${shift}))`,
+                    marginRight: `calc(-1 * (${ext} - ${shift}))`,
                   }}
                 >
-                  {proposers.map((p, i) => (
+                  {drafts.map((d, i) => (
                     <CharacterDraftCard
-                      key={`first-${p.character}-${i}`}
-                      character={p.character}
-                      content={p.content}
-                      thinking={p.thinking}
+                      key={`${d.character}-${i}`}
+                      character={d.character}
+                      content={d.content}
+                      source={d.source}
+                      compact
                     />
                   ))}
+                </div>
+              );
+            })()}
+
+            {/* Optional: pre-cross-pollination first drafts. Available when both
+                proposer and crosstalk drafts exist (i.e. cross-pollination
+                actually ran); lets the user inspect what each character said
+                before being aware of the others. */}
+            {proposers.length > 0 && crosstalk.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <button
+                  onClick={() => setShowProposers(!showProposers)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 0',
+                    color: showProposers ? 'var(--text-secondary)' : 'var(--text-ghost)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                    fontWeight: 500,
+                    transition: 'color var(--dur-normal) var(--ease-out)',
+                  }}
+                  aria-expanded={showProposers}
+                >
+                  <span
+                    style={{
+                      transform: showProposers ? 'rotate(90deg)' : 'none',
+                      transition: 'transform var(--dur-normal) var(--ease-premium)',
+                      display: 'inline-block',
+                      fontSize: 11,
+                      lineHeight: 1,
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    ›
+                  </span>
+                  {showProposers ? 'first drafts' : 'show first drafts'}
+                </button>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateRows: showProposers ? '1fr' : '0fr',
+                    transition: 'grid-template-rows 0.4s var(--ease-premium)',
+                  }}
+                >
+                  <div style={{ overflowX: 'visible', overflowY: 'clip', minHeight: 0 }}>
+                    <div style={{ paddingTop: 10 }}>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                          gap: 10,
+                        }}
+                      >
+                        {proposers.map((p, i) => (
+                          <CharacterDraftCard
+                            key={`first-${p.character}-${i}`}
+                            character={p.character}
+                            content={p.content}
+                            thinking={p.thinking}
+                            compact
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

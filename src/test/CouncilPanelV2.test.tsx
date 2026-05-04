@@ -36,8 +36,12 @@ describe('CouncilPanel v2 — synthesize verdict', () => {
 
   it('starts collapsed when verdict is synthesize', () => {
     render(<CouncilPanel trace={synthesizeTrace} />);
-    const button = screen.getByRole('button', { expanded: false });
-    expect(button).toBeInTheDocument();
+    // The disclosure button (Council eyebrow + verdict pill) is the
+    // collapsed-state control. There may be other collapsed buttons
+    // (e.g. "show first drafts"), so scope to the one whose label
+    // contains "harmonized" — that's the disclosure header.
+    const disclosure = screen.getByRole('button', { name: /harmonized/i });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows "3 voices" subtitle', () => {
@@ -67,11 +71,18 @@ describe('CouncilPanel v2 — diverge verdict', () => {
     expect(button).toBeInTheDocument();
   });
 
-  it('shows all three character tabs when expanded', () => {
-    render(<CouncilPanel trace={divergeTrace} />);
-    // The character names appear in tab labels.
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs.length).toBeGreaterThanOrEqual(3);
+  it('renders all three character labels side-by-side when expanded', () => {
+    const { container } = render(<CouncilPanel trace={divergeTrace} />);
+    // No tabs in v2 — three character draft cards render together.
+    // Each card renders the character label as monospace text.
+    expect(container.textContent).toContain('Luca');
+    expect(container.textContent).toContain('Anima');
+    expect(container.textContent).toContain('Vektor');
+    // And the actual draft body text shows on each card simultaneously
+    // (not gated behind tab selection).
+    expect(container.textContent).toContain('luca revised: still here.');
+    expect(container.textContent).toContain('anima revised: still circling.');
+    expect(container.textContent).toContain('vektor revised: ship it carefully.');
   });
 });
 
