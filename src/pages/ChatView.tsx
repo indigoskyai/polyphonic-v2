@@ -32,6 +32,12 @@ import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
  * Decouples reveal speed from network chunk delivery. Maintains a steady
  * cadence (~60 chars/sec) that ramps up gracefully if the buffer falls behind.
  */
+/* ─── Smooth, rate-limited typewriter hook ───
+ * Decouples reveal speed from network chunk delivery. Maintains a steady
+ * cadence that ramps gracefully when the buffer falls behind, capped so
+ * bursts don't dump. Skips setState when nothing advances so React doesn't
+ * re-render the streaming bubble idly.
+ */
 function useSmoothTypewriter(target: string, active = true) {
   const [displayed, setDisplayed] = useState(active ? '' : target);
   const displayedRef = useRef(displayed);
@@ -39,11 +45,11 @@ function useSmoothTypewriter(target: string, active = true) {
   const lastTickRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const prevTargetRef = useRef('');
+  // Exponential moving average of the gap, so cadence eases instead of
+  // stair-stepping when bursts of tokens land.
+  const gapEmaRef = useRef(0);
 
-  // keep refs current
-  useEffect(() => {
-    targetRef.current = target;
-  }, [target]);
+  useEffect(() => { targetRef.current = target; }, [target]);
 
   useEffect(() => {
     if (!active) {
@@ -52,11 +58,11 @@ function useSmoothTypewriter(target: string, active = true) {
       return;
     }
 
-    // If target is a fresh stream (not a continuation), reset
     if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
       if (!target.startsWith(prevTargetRef.current)) {
         displayedRef.current = '';
         setDisplayed('');
+        gapEmaRef.current = 0;
       }
     }
     prevTargetRef.current = target;
@@ -71,22 +77,23 @@ function useSmoothTypewriter(target: string, active = true) {
       const gap = tgt.length - curLen;
 
       if (gap > 0) {
-        // Cadence tuned for premium feel:
-        //   base 200 cps so "intro" tokens feel snappy, not slow.
-        //   ramp aggressively once a buffer accumulates so we never feel
-        //   like we're holding the model back. at gap > 400, we burst
-        //   through at ~1800 cps which is effectively instant for normal
-        //   reading pace but still reads as flowing rather than dumping.
-        let charsPerMs = 0.20;       // 200 cps — base, feels brisk
-        if (gap > 40)   charsPerMs = 0.40;   // 400 cps — caught up
-        if (gap > 150)  charsPerMs = 0.80;   // 800 cps — moderate backlog
-        if (gap > 400)  charsPerMs = 1.80;   // ~1800 cps — flush burst
+        // Smooth the gap so cadence rises/falls gracefully
+        gapEmaRef.current = gapEmaRef.current * 0.7 + gap * 0.3;
+        const smoothedGap = gapEmaRef.current;
+
+        // Cadence tiers — capped at ~600 cps so even huge bursts read as
+        // confident typing rather than a paste.
+        let charsPerMs = 0.22;                   // base ~220 cps
+        if (smoothedGap > 60)   charsPerMs = 0.36;  // ~360 cps
+        if (smoothedGap > 200)  charsPerMs = 0.60;  // ~600 cps cap
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
-        const next = tgt.slice(0, nextLen);
-        displayedRef.current = next;
-        setDisplayed(next);
+        if (nextLen !== curLen) {
+          const next = tgt.slice(0, nextLen);
+          displayedRef.current = next;
+          setDisplayed(next);
+        }
       }
 
       rafRef.current = requestAnimationFrame(tick);
