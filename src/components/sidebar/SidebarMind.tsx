@@ -1,14 +1,37 @@
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useViewTabStore, MindTab } from '@/stores/viewTabStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
+import SidebarHeader from './SidebarHeader';
+import SidebarRow from './SidebarRow';
+import AgentScopeSelect from './AgentScopeSelect';
 
-interface NavItem { name: MindTab; meta: string; }
+interface StreamItem { name: MindTab; meta: string; }
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: '14px 16px 6px',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        letterSpacing: 'var(--track-folio)',
+        color: 'var(--text-ghost)',
+        textTransform: 'uppercase',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function SidebarMind() {
+  const navigate = useNavigate();
+  const path = useLocation().pathname;
   const mindTab = useViewTabStore((s) => s.mindTab);
   const setMindTab = useViewTabStore((s) => s.setMindTab);
   const { thoughts, dreams, wanderings, insights, reflections, activityLog, memoryStats } = useCognitiveStore();
 
-  const items: NavItem[] = [
+  const streams: StreamItem[] = [
     { name: 'Overview',    meta: 'live' },
     { name: 'Thoughts',    meta: String(thoughts.length) },
     { name: 'Dreams',      meta: String(dreams.length) },
@@ -19,48 +42,38 @@ export default function SidebarMind() {
     { name: 'Activity',    meta: String(activityLog.length) },
   ];
 
+  const onMind = path === '/mind' || path.startsWith('/mind/');
+
   return (
-    <div className="r2-sidebar">
-      <div className="sidebar-head">
-        <div className="sidebar-eye">View · Mind</div>
-        <h2 className="sidebar-head-title">Mind</h2>
-      </div>
+    <>
+      <SidebarHeader folio="§ 05" title="Mind" />
+      <AgentScopeSelect />
+      <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px', scrollbarWidth: 'none' }}>
+        <GroupLabel>Self</GroupLabel>
+        <SidebarRow
+          label="Identity"
+          active={path.startsWith('/profile/identity')}
+          onClick={() => navigate('/profile/identity')}
+        />
+        <SidebarRow
+          label="Revisions"
+          active={path.startsWith('/profile/revisions')}
+          onClick={() => navigate('/profile/revisions')}
+        />
 
-      <div className="sidebar-search">
-        <span className="sidebar-search-glyph">⌕</span>
-        <span className="sidebar-search-text">Search the inner life…</span>
-        <span className="sidebar-search-kbd">⌘K</span>
+        <GroupLabel>Streams</GroupLabel>
+        {streams.map((it) => (
+          <SidebarRow
+            key={it.name}
+            label={it.name}
+            active={onMind && mindTab === it.name}
+            onClick={() => {
+              setMindTab(it.name);
+              if (!onMind) navigate('/mind');
+            }}
+          />
+        ))}
       </div>
-
-      <div className="sidebar-section-eye">
-        Sections <span className="count">{items.length}</span>
-      </div>
-
-      <div className="sidebar-list">
-        {items.map((it) => {
-          const active = mindTab === it.name;
-          return (
-            <button
-              key={it.name}
-              type="button"
-              className={`sidebar-item${active ? ' active' : ''}`}
-              onClick={() => setMindTab(it.name)}
-            >
-              <span className="sidebar-item-name">
-                <span className="sidebar-item-glyph">·</span>{it.name}
-              </span>
-              <span className="sidebar-item-meta">{it.meta}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="sidebar-foot">
-        {/* MOCK: synced/substrate/last-consol values until wired */}
-        <div className="sidebar-foot-row"><span>Synced</span><span className="v">2 min ago</span></div>
-        <div className="sidebar-foot-row"><span>Substrate</span><span className="v">ticking</span></div>
-        <div className="sidebar-foot-row"><span>Last consol.</span><span className="v">3h ago</span></div>
-      </div>
-    </div>
+    </>
   );
 }

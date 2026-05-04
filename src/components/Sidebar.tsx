@@ -16,6 +16,10 @@ export default function Sidebar() {
     path.startsWith('/memory') ? SidebarMemory
     : path.startsWith('/mind') ? SidebarMind
     : path.startsWith('/journal') ? SidebarJournal
+    : path.startsWith('/profile/identity') ? SidebarMind
+    : path.startsWith('/profile/revisions') ? SidebarMind
+    : path.startsWith('/profile/skills') ? SidebarSettings
+    : path.startsWith('/profile/schedule') ? SidebarSettings
     : path.startsWith('/profile') ? SidebarProfile
     : path === '/settings/public-profile' ? SidebarProfile
     : path.startsWith('/import') ? SidebarImport
