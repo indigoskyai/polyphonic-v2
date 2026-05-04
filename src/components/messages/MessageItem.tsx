@@ -87,7 +87,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
   const agents = useAgentSettingsStore((s) => s.agents);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const threadArtifacts = useArtifactStore(
-    (s) => (currentThreadId ? s.byThread[currentThreadId] || [] : []),
+    (s) => (currentThreadId ? s.byThread[currentThreadId] ?? EMPTY_ARTIFACTS : EMPTY_ARTIFACTS),
   );
 
   const isFirstMount = useFirstMount();
