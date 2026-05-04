@@ -116,6 +116,7 @@ export function buildLucaSystemPrompt(parts: {
   convictions?: string;
   skillsBlock?: string;
   pendingRevisions?: string;
+  hypomnemaBlock?: string;
   continuityNote?: string;
   crisisDirective?: string;
 }): string {
@@ -127,6 +128,11 @@ export function buildLucaSystemPrompt(parts: {
     parts.selfModel ? `\n## How you've been showing up\n${parts.selfModel}` : "",
     parts.skillsBlock ? `\n## Relevant skills you've developed\n${parts.skillsBlock}` : "",
     parts.pendingRevisions ? `\n## Pending revisions\n${parts.pendingRevisions}` : "",
+    // Hypomnema sits between pendingRevisions (self-correction queue) and
+    // emotionalBlock (world state). It's interior state — what you're sitting
+    // with right now about this person — and it loads even when retrieval
+    // returns nothing. Already framed with its own header in loadHypomnema().
+    parts.hypomnemaBlock || "",
     parts.emotionalBlock ? `\n${parts.emotionalBlock}` : "",
     parts.beliefsBlock || "",
     parts.memoryContext || "",

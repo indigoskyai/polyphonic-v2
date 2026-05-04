@@ -5,6 +5,7 @@ import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
+import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import {
   buildCrisisDirective,
@@ -228,7 +229,7 @@ serve(async (req) => {
       .limit(50);
 
     // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult] = await Promise.allSettled([
+    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult, hypomnemaLucaResult, hypomnemaVektorResult] = await Promise.allSettled([
       loadEmotionalState(supabase, userId),
       supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
         .eq("user_id", userId).eq("active", true)
@@ -242,6 +243,11 @@ serve(async (req) => {
       agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
       agentIsSystemLuca ? loadPendingRevisions(supabase, userId, thread_id) : Promise.resolve([]),
       agentIsSystemLuca ? loadRelevantAgentSkills(supabase, userId, agentId, message) : Promise.resolve([]),
+      // Hypomnema — interior state. Always-load. Empty on first contact = safe.
+      // Read path stays on regardless of MEMORY_AUGMENTATION_ENABLED — empty data is benign,
+      // and once writes start backfilling entries we want them surfaced immediately.
+      loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
+      loadHypomnema(supabase, userId, "vektor").catch(() => ({ block: "", count: 0, rendered: 0 })),
     ]);
 
     // Format emotional context
@@ -272,6 +278,8 @@ serve(async (req) => {
     const pendingRevisionsBlock = formatPendingRevisionsPrompt(pendingRevisions || []);
     const relevantSkills = skillsResult.status === "fulfilled" ? skillsResult.value : [];
     const skillsBlock = formatAgentSkillsPrompt(relevantSkills || []);
+    const hypomnemaLucaBlock = hypomnemaLucaResult.status === "fulfilled" ? hypomnemaLucaResult.value.block : "";
+    const hypomnemaVektorBlock = hypomnemaVektorResult.status === "fulfilled" ? hypomnemaVektorResult.value.block : "";
 
     // Thread gap detection — if returning to an idle conversation
     let continuityNote = "";
@@ -323,6 +331,7 @@ serve(async (req) => {
           convictions: identityDocs?.convictions,
           skillsBlock,
           pendingRevisions: pendingRevisionsBlock,
+          hypomnemaBlock: hypomnemaLucaBlock,
           continuityNote,
           crisisDirective,
         })
@@ -412,6 +421,7 @@ serve(async (req) => {
               convictions: identityDocs?.convictions,
               skillsBlock,
               pendingRevisions: pendingRevisionsBlock,
+              hypomnemaBlock: hypomnemaLucaBlock,
               continuityNote,
               crisisDirective,
             },
@@ -420,6 +430,7 @@ serve(async (req) => {
             },
             vektor: {
               userModel: identityDocs?.userModel,
+              hypomnemaBlock: hypomnemaVektorBlock,
               continuityNote,
             },
           };

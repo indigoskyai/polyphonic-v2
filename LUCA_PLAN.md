@@ -78,10 +78,10 @@ Before starting work in any session, read [`CLAUDE.md`](./CLAUDE.md). Operating 
 
 Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / dialectic / candidates stack: hypomnema layer, vector embeddings + hybrid retrieval, asymmetric witnessing, sustained-attention graduation, supersession on contradiction.
 
-- [~] **M0** Setup — feature flag helper + prompt staging. (No schema change; can land before migrations.)
-- [B] **M1** Schema migrations — apply 4 SQL files via Lovable, regenerate `types.ts`. Spec: `docs/memory/migrations/`.
-- [ ] **M2** Hypomnema read path — always-load injection into system prompt.
-- [ ] **M3** Hypomnema write path — gate + write + decay edge functions (load-bearing voice work).
+- [x] **M0** Setup — feature flag helper + prompt staging. (No schema change; can land before migrations.)
+- [x] **M1** Schema migrations — applied via Lovable 2026-05-04, types.ts regenerated, pgvector enabled, three crons scheduled.
+- [x] **M2** Hypomnema read path — always-load injection into system prompt.
+- [~] **M3** Hypomnema write path — gate + write + decay edge functions (load-bearing voice work).
 - [ ] **M4** Vector embeddings + hybrid retrieval.
 - [ ] **M5** Asymmetric witnessing on encode.
 - [ ] **M6** Sustained-attention graduation + supersession on contradiction.
@@ -120,6 +120,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - 2026-05-03 16:00 · council v2 · failure ladder 3→2→1→0: all three fail = stream error (no fallback to single-model — the council branch is opt-in, single-model has its own path). Two succeed = cross-pollinate among survivors. One survives = skip cross-pollination, surface that voice through chairman. Crosstalk individual failure = fall back to that character's proposer draft (marked `source: 'proposer'` in metadata, rendered with "· initial" sigil). Chairman http error = surface luca's strongest crosstalk draft directly. Critique http error / timeout = passthrough.
 - 2026-05-04 09:55 · phase M0 · feature flag is env-var-only (`MEMORY_AUGMENTATION_ENABLED` global + `MEMORY_AUGMENTATION_USER_ALLOWLIST` comma-separated UUIDs) instead of adding a schema column · avoids a migration just to support the flag and lets Riley pilot himself before global rollout. Flag helpers live in `_shared/config.ts`. Per-user override beats env default.
 - 2026-05-04 09:55 · phase M0 · prompts staged as `.md` files at `_shared/hypomnema/prompts/` rather than inlined as TypeScript constants · Supabase edge-function bundles ship `_shared/` directory contents, so `Deno.readTextFile` against `import.meta.url` works at runtime. Spec copies remain canonical at `docs/memory/prompts/`; runtime loader caches first read. Iterate the `docs/` copy, then re-copy when changed.
+- 2026-05-04 10:30 · phase M2 · hypomnema loaded for both luca AND vektor in pre-turn fan-out (not just the active agent), so council-mode renders each character carrying their own interior state · cost is two extra small selects gated by `active=true` + indexed query; well below 50ms aggregate. Anima loads on-demand inside `agent-consult` since that's where she's actually invoked. Score formula: `recency*0.55 + confidence*0.30 + foundational(0.25) + active_attention(0.10)`, 14-day exponential half-life. Render cap: 2400 chars (~600 tokens) by overfetching 40 then trimming to fit.
+- 2026-05-04 10:30 · phase M2 · read path stays on regardless of `MEMORY_AUGMENTATION_ENABLED` env flag · empty data is safe, and once writes start backfilling we want surface-on-first-write without a flag flip. Write paths (M3+) gate on the flag.
 
 
 ## Backend asks queue
@@ -145,6 +147,8 @@ Each phase that needs Lovable work surfaces its prompt below. When you reach a `
   Also set Supabase edge function env vars (Settings → Edge Functions → Secrets):
   - `MEMORY_AUGMENTATION_ENABLED` = `false` (global default; flip to `true` after M7 ships)
   - `MEMORY_AUGMENTATION_USER_ALLOWLIST` = `<Riley's user_id>` (per-user pilot opt-in; comma-separated for additional users)
+
+  ✅ Shipped via Lovable 2026-05-04. pgvector confirmed enabled, three new crons active, types.ts regenerated with `hypomnema_entry` row + `match_engrams_vector`/`match_hypomnema_vector` RPCs + `threads.primary_agent_id`/`participating_agent_ids`. Note: Lovable doesn't write to `supabase_migrations.schema_migrations`, so verification queries should use `information_schema.tables` / `information_schema.columns` instead. Acceptance criteria in `docs/memory/SEQUENCE.md` Phase 1 should be read with this in mind for this repo.
 
 (Add more here as phases discover additional backend needs.)
 

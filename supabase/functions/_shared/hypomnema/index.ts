@@ -17,3 +17,4 @@
  */
 
 export { loadPrompt, type PromptName } from "./prompts.ts";
+export { loadHypomnema, type LoadHypomnemaResult } from "./read.ts";

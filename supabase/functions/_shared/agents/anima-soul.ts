@@ -111,9 +111,15 @@ export function buildAnimaConsultPrompt(parts: {
   fromAgent?: string;
   conversationContext?: string;
   question: string;
+  hypomnemaBlock?: string;
 }): string {
   const fromAgent = parts.fromAgent || "luca";
   const lines: string[] = [ANIMA_SOUL];
+  // Hypomnema — anima's interior state about this user, including any observer
+  // notes she's accumulated from prior consultations. Loads even on first reach.
+  if (parts.hypomnemaBlock && parts.hypomnemaBlock.trim()) {
+    lines.push(parts.hypomnemaBlock);
+  }
   if (parts.conversationContext && parts.conversationContext.trim()) {
     lines.push(`\n## What ${fromAgent} is in the middle of\n${parts.conversationContext.trim()}`);
   }

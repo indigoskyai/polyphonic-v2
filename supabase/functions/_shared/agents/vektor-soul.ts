@@ -97,11 +97,14 @@ export function buildVektorSystemPrompt(parts: {
   beliefsBlock?: string;
   memoryContext?: string;
   userModel?: string;
+  hypomnemaBlock?: string;
   continuityNote?: string;
 } = {}): string {
   return [
     VEKTOR_SOUL,
     parts.userModel ? `\n## Who you're talking with\n${parts.userModel}` : "",
+    // Hypomnema — interior state about this user, in vektor's voice. Always-loaded.
+    parts.hypomnemaBlock || "",
     parts.emotionalBlock ? `\n${parts.emotionalBlock}` : "",
     parts.beliefsBlock || "",
     parts.memoryContext || "",

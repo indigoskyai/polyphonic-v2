@@ -12,6 +12,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildAnimaConsultPrompt } from "../_shared/agents/anima-soul.ts";
+import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 
 const ANIMA_MODEL = "anthropic/claude-opus-4-7";
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -86,11 +87,17 @@ serve(async (req) => {
     const consultationId = inserted.id as string;
 
     try {
+      // Load hypomnema for the consulted agent so they show up carrying their
+      // interior state about this user (including any observer notes from
+      // prior consultations). Empty on first contact = safe.
+      const hypomnemaResult = await loadHypomnema(supabase, userId, toAgent).catch(() => ({ block: "" }));
+
       const { systemPrompt, model } = buildAgentPrompt({
         toAgent,
         fromAgent: fromAgent || "luca",
         question,
         conversationContext: context,
+        hypomnemaBlock: hypomnemaResult.block,
       });
 
       const response = await callModel(apiKey, model, systemPrompt, question);
@@ -146,6 +153,7 @@ interface AgentPromptInputs {
   fromAgent: string;
   question: string;
   conversationContext: string;
+  hypomnemaBlock?: string;
 }
 
 interface AgentPromptResult {
@@ -160,6 +168,7 @@ function buildAgentPrompt(inputs: AgentPromptInputs): AgentPromptResult {
         fromAgent: inputs.fromAgent,
         conversationContext: inputs.conversationContext,
         question: inputs.question,
+        hypomnemaBlock: inputs.hypomnemaBlock,
       }),
       model: ANIMA_MODEL,
     };
