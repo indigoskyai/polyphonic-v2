@@ -1133,6 +1133,8 @@ export type Database = {
           content: string
           created_at: string | null
           digest_id: string | null
+          embedding: string | null
+          embedding_model: string | null
           emotional_arousal: number | null
           emotional_valence: number | null
           engram_type: string
@@ -1156,6 +1158,8 @@ export type Database = {
           content: string
           created_at?: string | null
           digest_id?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
           emotional_arousal?: number | null
           emotional_valence?: number | null
           engram_type: string
@@ -1179,6 +1183,8 @@ export type Database = {
           content?: string
           created_at?: string | null
           digest_id?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
           emotional_arousal?: number | null
           emotional_valence?: number | null
           engram_type?: string
@@ -1266,6 +1272,129 @@ export type Database = {
           reserved?: boolean
         }
         Relationships: []
+      }
+      hypomnema_entry: {
+        Row: {
+          active: boolean
+          active_attention: boolean
+          agent_id: string
+          confidence: number
+          content: string
+          created_at: string
+          density: string
+          domain: string | null
+          embedding: string | null
+          embedding_model: string | null
+          foundational: boolean
+          graduated_to_engram_id: string | null
+          id: string
+          last_challenged: string
+          last_revised: string
+          meta: Json
+          primary_in_thread: boolean
+          revision_count: number
+          revisions: Json
+          source: string
+          source_message_id: string | null
+          superseded_by: string | null
+          tags: string[]
+          thread_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          active_attention?: boolean
+          agent_id?: string
+          confidence?: number
+          content: string
+          created_at?: string
+          density?: string
+          domain?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          foundational?: boolean
+          graduated_to_engram_id?: string | null
+          id?: string
+          last_challenged?: string
+          last_revised?: string
+          meta?: Json
+          primary_in_thread?: boolean
+          revision_count?: number
+          revisions?: Json
+          source?: string
+          source_message_id?: string | null
+          superseded_by?: string | null
+          tags?: string[]
+          thread_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          active_attention?: boolean
+          agent_id?: string
+          confidence?: number
+          content?: string
+          created_at?: string
+          density?: string
+          domain?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          foundational?: boolean
+          graduated_to_engram_id?: string | null
+          id?: string
+          last_challenged?: string
+          last_revised?: string
+          meta?: Json
+          primary_in_thread?: boolean
+          revision_count?: number
+          revisions?: Json
+          source?: string
+          source_message_id?: string | null
+          superseded_by?: string | null
+          tags?: string[]
+          thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hypomnema_entry_graduated_to_engram_id_fkey"
+            columns: ["graduated_to_engram_id"]
+            isOneToOne: false
+            referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hypomnema_entry_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hypomnema_entry_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "hypomnema_entry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hypomnema_entry_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hypomnema_entry_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       idempotency_keys: {
         Row: {
@@ -2558,7 +2687,9 @@ export type Database = {
           created_at: string
           heat: string
           id: string
+          participating_agent_ids: string[]
           pinned: boolean
+          primary_agent_id: string
           title: string | null
           updated_at: string
           user_id: string
@@ -2568,7 +2699,9 @@ export type Database = {
           created_at?: string
           heat?: string
           id?: string
+          participating_agent_ids?: string[]
           pinned?: boolean
+          primary_agent_id?: string
           title?: string | null
           updated_at?: string
           user_id: string
@@ -2578,7 +2711,9 @@ export type Database = {
           created_at?: string
           heat?: string
           id?: string
+          participating_agent_ids?: string[]
           pinned?: boolean
+          primary_agent_id?: string
           title?: string | null
           updated_at?: string
           user_id?: string
@@ -2780,6 +2915,40 @@ export type Database = {
           surprise_score: number
           tags: string[]
           updated_at: string
+          user_id: string
+        }[]
+      }
+      match_engrams_vector: {
+        Args: {
+          match_count?: number
+          min_strength?: number
+          p_user_id?: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          engram_type: string
+          id: string
+          similarity: number
+          stability: number
+          strength: number
+          user_id: string
+        }[]
+      }
+      match_hypomnema_vector: {
+        Args: {
+          match_count?: number
+          p_agent_id?: string
+          p_user_id?: string
+          query_embedding: string
+        }
+        Returns: {
+          agent_id: string
+          content: string
+          density: string
+          domain: string
+          id: string
+          similarity: number
           user_id: string
         }[]
       }
