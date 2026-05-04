@@ -72,7 +72,7 @@ export default function StarterLayoutPicker({ onClose }: Props) {
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 'var(--track-mono)', color: 'var(--text-soft)', textTransform: 'uppercase', marginBottom: 8 }}>
           § choose a starting layout
         </div>
-        <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 32, color: 'var(--text-primary)', margin: 0, marginBottom: 6 }}>
+        <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 32, color: 'var(--text-primary)', margin: 0, marginBottom: 6 }}>
           How should your canvas begin?
         </h2>
         <p style={{ color: 'var(--text-soft)', fontSize: 14, marginBottom: 24, maxWidth: 540 }}>
@@ -95,7 +95,7 @@ export default function StarterLayoutPicker({ onClose }: Props) {
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-mono)' }}>
                 template
               </div>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: 'var(--text-primary)', marginTop: 4 }}>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, color: 'var(--text-primary)', marginTop: 4 }}>
                 {TEMPLATES[key].label}
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-soft)', marginTop: 8, lineHeight: 1.55 }}>

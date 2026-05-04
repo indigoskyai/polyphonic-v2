@@ -141,7 +141,7 @@
   margin-bottom: 18px;
   display: grid;
   place-items: center;
-  font-family: var(--font-serif, 'Instrument Serif', serif);
+  font-family: var(--font-sans);
   position: relative;
   overflow: hidden;
 }
@@ -163,7 +163,7 @@
 
 .frame-names { margin-bottom: 14px; }
 .frame-name {
-  font-family: var(--font-serif, 'Instrument Serif', serif);
+  font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -252,7 +252,7 @@
 
 .frame-stat { text-align: center; padding: 6px 0; }
 .frame-stat-value {
-  font-family: var(--font-serif, 'Instrument Serif', serif);
+  font-family: var(--font-sans);
   font-size: 20px;
   color: var(--text-primary);
   margin-bottom: 2px;
@@ -485,7 +485,7 @@
   letter-spacing: 0.4em;
 }
 .frame-empty-title {
-  font-family: var(--font-serif, 'Instrument Serif', serif);
+  font-family: var(--font-sans);
   font-size: 22px;
   color: var(--text-primary);
 }

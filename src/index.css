@@ -1,6 +1,5 @@
 @import url('https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@350;370;400;420;450;550&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,350;0,370;0,400;0,420;0,450;0,550;1,400;1,450&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 @import './components/canvas-profile/canvas.css';
 
@@ -163,7 +162,8 @@
   --font-sans:      'Switzer', -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
   --font-grotesque: var(--font-sans);
   --font-mono:      'JetBrains Mono', 'SF Mono', 'Geist Mono', 'Fira Code', ui-monospace, monospace;
-  --font-serif:     'Instrument Serif', serif;
+  /* --font-serif removed: collapsed onto --font-sans for unified hierarchy */
+  --font-serif:     var(--font-sans);
 
   /* Letter-spacing scale */
   --track-tight:   -0.02em;
@@ -2216,7 +2216,7 @@ html {
   align-items: center;
   justify-content: center;
   color: var(--text-primary);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 14px;
   font-style: italic;
 }
@@ -2975,7 +2975,7 @@ html {
     opacity var(--dur-normal) var(--ease-out);
 }
 .agent-glyph {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 48px;
   color: var(--text-soft);
   text-transform: lowercase;
@@ -6987,7 +6987,7 @@ html {
   line-height: 1.6;
 }
 .s-row-content.poetic {
-  font-family: var(--font-serif); font-style: italic;
+  font-family: var(--font-sans); font-style: italic;
   font-size: 15px; color: var(--text-body); line-height: 1.75;
 }
 .s-row-tags { display: flex; flex-wrap: wrap; gap: 6px; }

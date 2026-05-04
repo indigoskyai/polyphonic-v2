@@ -138,7 +138,7 @@ function SkillRow({
           ) : (
             <h2
               style={{
-                fontFamily: 'var(--font-serif)',
+                fontFamily: 'var(--font-sans)',
                 fontSize: 28,
                 lineHeight: 1.1,
                 color: 'var(--text-primary)',
@@ -287,7 +287,7 @@ export default function ProfileSkillsView() {
           </div>
           <h1
             style={{
-              fontFamily: 'var(--font-serif)',
+              fontFamily: 'var(--font-sans)',
               fontSize: 42,
               lineHeight: 1,
               color: 'var(--text-primary)',

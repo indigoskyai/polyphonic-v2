@@ -15,10 +15,10 @@ import { useMemo, useState, type ReactNode } from 'react';
  *          in an instrument context, status strips, page numbering.
  *          Always tracked. Often uppercase. The "this is data" voice.
  *
- *   serif  (--font-serif, Instrument Serif)
+ *   sans italic (--font-sans, italic)
  *          Editorial accents — italic only. Ledes, lede sentences, named
  *          entities (value names, ranked-list labels, theme constellation
- *          items, divergence-bar labels), identity portrait, italic quotes.
+ *          items, identity portrait, italic quotes).
  *          The "this was named/written by a person" voice.
  *
  *   sans   (--font-sans, Switzer)
@@ -383,7 +383,7 @@ export function RankedList({ items }: {
           </span>
           <div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: item.evidence ? 4 : 0 }}>
-              <span style={{ fontSize: 14, color: INK, fontFamily: 'var(--font-serif)', fontStyle: 'italic', textTransform: 'capitalize' }}>
+              <span style={{ fontSize: 14, color: INK, fontFamily: 'var(--font-sans)', fontStyle: 'italic', textTransform: 'capitalize' }}>
                 {item.label}
               </span>
               {item.sublabel && (
@@ -456,7 +456,7 @@ export function ConstellationCloud({ items, weighted = true, maxFontSize = 16, m
         }}>
           <span style={{
             fontSize: s.fontSize,
-            fontFamily: 'var(--font-serif)',
+            fontFamily: 'var(--font-sans)',
             fontStyle: 'italic',
             fontWeight: s.isTop3 ? 500 : undefined,
             color: s.color,
@@ -713,7 +713,7 @@ export function SectionEyebrow({
         <p style={{
           margin: 0, paddingLeft: index !== undefined ? 46 : 0,
           fontSize: 15, fontStyle: 'italic',
-          color: 'rgba(244, 243, 240, 0.6)', fontFamily: 'var(--font-serif)',
+          color: 'rgba(244, 243, 240, 0.6)', fontFamily: 'var(--font-sans)',
           lineHeight: 1.55, maxWidth: 680,
         }}>
           {lede}
@@ -1024,7 +1024,7 @@ export function JourneyTimeline({ phases, activeIndex = 0, onSelect }: {
           marginTop: 16, padding: '14px 18px',
           borderLeft: `1px solid ${INK_HAIR}`,
           fontSize: 12.5, color: 'var(--text-body)',
-          lineHeight: 1.65, fontFamily: 'var(--font-serif)', fontStyle: 'italic',
+          lineHeight: 1.65, fontFamily: 'var(--font-sans)', fontStyle: 'italic',
         }}>
           {phases[activeIndex].description}
         </div>
@@ -1308,7 +1308,7 @@ export function DivergenceBar({ items }: {
               <span
                 style={{
                   fontSize: 12.5,
-                  fontFamily: 'var(--font-serif)',
+                  fontFamily: 'var(--font-sans)',
                   fontStyle: 'italic',
                   color: INK,
                   lineHeight: 1.5,
@@ -1846,7 +1846,7 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
               {/* Thread label (italic-serif, capitalized) */}
               <text
                 x={20} y={yMid}
-                fontSize={15} fontFamily="var(--font-serif)"
+                fontSize={15} fontFamily="var(--font-sans)"
                 fontStyle="italic" fill={labelColor}
                 dominantBaseline="middle"
                 style={{ textTransform: 'capitalize', transition: 'fill 200ms ease' }}
@@ -1941,7 +1941,7 @@ export function ThreadArcs({ threads, laneHeight = 32 }: {
             zIndex: 50,
           }}
         >
-          {tooltip.date} · <span style={{ color: INK_SOFT, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>{tooltip.thread}</span>
+          {tooltip.date} · <span style={{ color: INK_SOFT, fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>{tooltip.thread}</span>
         </div>
       )}
     </div>
