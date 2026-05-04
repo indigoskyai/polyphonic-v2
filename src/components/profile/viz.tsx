@@ -15,10 +15,10 @@ import { useMemo, useState, type ReactNode } from 'react';
  *          in an instrument context, status strips, page numbering.
  *          Always tracked. Often uppercase. The "this is data" voice.
  *
- *   serif  (--font-serif, Instrument Serif)
+ *   sans italic (--font-sans, italic)
  *          Editorial accents — italic only. Ledes, lede sentences, named
  *          entities (value names, ranked-list labels, theme constellation
- *          items, divergence-bar labels), identity portrait, italic quotes.
+ *          items, identity portrait, italic quotes).
  *          The "this was named/written by a person" voice.
  *
  *   sans   (--font-sans, Switzer)
