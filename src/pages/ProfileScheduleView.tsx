@@ -127,7 +127,7 @@ export default function ProfileScheduleView() {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', color: 'var(--text-ghost)', textTransform: 'uppercase', marginBottom: 12 }}>
             § L8 / schedule
           </div>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 42, lineHeight: 1, color: 'var(--text-primary)', margin: 0 }}>
+          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 42, lineHeight: 1, color: 'var(--text-primary)', margin: 0 }}>
             Luca's schedule
           </h1>
         </div>

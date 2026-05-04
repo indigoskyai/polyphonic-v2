@@ -676,7 +676,7 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
               {profile.identity_narrative ? (
                 <p style={{
                   fontSize: 15, color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-serif)', fontStyle: 'italic',
+                  fontFamily: 'var(--font-sans)', fontStyle: 'italic',
                   lineHeight: 1.85, margin: 0, letterSpacing: '0.005em',
                 }}>
                   "{profile.identity_narrative}"
@@ -684,7 +684,7 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
               ) : (
                 <p style={{
                   fontSize: 12, color: 'rgba(244, 243, 240, 0.4)',
-                  fontStyle: 'italic', fontFamily: 'var(--font-serif)',
+                  fontStyle: 'italic', fontFamily: 'var(--font-sans)',
                 }}>
                   Identity portrait pending — generate to render the narrative.
                 </p>
@@ -890,7 +890,7 @@ function PersonalityTab({ data }: { data: any }) {
               size={260}
             />
             <div>
-              <div style={{ fontSize: 18, fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 14, textTransform: 'capitalize', letterSpacing: '0.005em' }}>
+              <div style={{ fontSize: 18, fontFamily: 'var(--font-sans)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 14, textTransform: 'capitalize', letterSpacing: '0.005em' }}>
                 {data.attachment_style.primary}
               </div>
               {data.attachment_style.evidence && (
@@ -971,7 +971,7 @@ function CommunicationTab({ data }: { data: any }) {
               traces={[{ values: inferred, primary: true }]}
               size={260}
             />
-            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-serif)', margin: 0 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-sans)', margin: 0 }}>
               Each axis maps a prose dimension scored heuristically (extreme/very-high/high/moderate/low/very-low). With richer pipeline scoring this becomes calibrated; for now the shape is directional.
             </p>
           </div>
@@ -1316,7 +1316,7 @@ function CognitionTab({ data, memoryStats, engramSummary }: {
               traces={[{ values: bandwidthValues, primary: true }]}
               size={260}
             />
-            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-serif)', margin: 0 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--text-body)', lineHeight: 1.75, fontStyle: 'italic', fontFamily: 'var(--font-sans)', margin: 0 }}>
               Logic ← principle + commitment. Creativity ← synthesis + reflection. Pattern ← relationship + engram density. Memory ← fact + moment. Integration weighted from synthesis/reflection. Abstract ← all reflective categories. Each axis normalized to your own corpus max.
             </p>
           </div>
@@ -1562,7 +1562,7 @@ function ShadowTab({ data, memoryStats, valuesData }: {
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 4 }}>
             {data.unasked_questions.map((q: string, i: number) => (
-              <p key={i} style={{ fontSize: 15, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)', fontStyle: 'italic', lineHeight: 1.75, margin: 0, paddingLeft: 16, borderLeft: '1px solid rgba(244, 243, 240, 0.22)' }}>
+              <p key={i} style={{ fontSize: 15, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)', fontStyle: 'italic', lineHeight: 1.75, margin: 0, paddingLeft: 16, borderLeft: '1px solid rgba(244, 243, 240, 0.22)' }}>
                 "{q}"
               </p>
             ))}

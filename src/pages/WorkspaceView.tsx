@@ -95,7 +95,7 @@ export default function WorkspaceView() {
             </div>
             <h1
               style={{
-                fontFamily: 'var(--font-serif)',
+                fontFamily: 'var(--font-sans)',
                 fontSize: 42,
                 lineHeight: 1,
                 color: 'var(--text-primary)',

@@ -2216,7 +2216,7 @@ html {
   align-items: center;
   justify-content: center;
   color: var(--text-primary);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 14px;
   font-style: italic;
 }
@@ -2975,7 +2975,7 @@ html {
     opacity var(--dur-normal) var(--ease-out);
 }
 .agent-glyph {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 48px;
   color: var(--text-soft);
   text-transform: lowercase;
@@ -6987,7 +6987,7 @@ html {
   line-height: 1.6;
 }
 .s-row-content.poetic {
-  font-family: var(--font-serif); font-style: italic;
+  font-family: var(--font-sans); font-style: italic;
   font-size: 15px; color: var(--text-body); line-height: 1.75;
 }
 .s-row-tags { display: flex; flex-wrap: wrap; gap: 6px; }

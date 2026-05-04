@@ -93,7 +93,7 @@ export default function Rail() {
           background: 'var(--overlay-hover)',
           border: `1px solid ${emotionalIndicator.tint}30`,
           color: emotionalIndicator.tint,
-          fontFamily: 'var(--font-serif)',
+          fontFamily: 'var(--font-sans)',
           fontStyle: 'italic',
           fontSize: 15,
           lineHeight: 1,
