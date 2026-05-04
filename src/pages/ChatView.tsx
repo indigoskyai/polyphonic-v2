@@ -1466,106 +1466,17 @@ export default function ChatView() {
               );
             }
 
+            // Regular message — delegated to memoized <MessageItem>, which
+            // subscribes to its own row in the store. The parent's per-token
+            // streamingContent updates do not re-render existing items.
+            const next = messages[i + 1];
             return (
-            <div
-              key={msg.id}
-              className="msg-row"
-              style={{
-                animation: `msgEnter var(--dur-settle) var(--ease-premium) both`,
-                animationDelay: `${Math.min(i * 30, 150)}ms`,
-              }}
-            >
-              <div className="msg-sidehead">
-                {showTimestamps && (
-                  <div className="msg-time">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                  </div>
-                )}
-                <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-                  {msg.role === 'user'
-                    ? 'You'
-                    : msg.agent === 'guardian'
-                      ? 'Observer'
-                      : getAgentDisplayName(msg.agent, agentNameById)}
-                </div>
-              </div>
-
-              <div className="msg-body">
-                {/* Thinking block — always show if thinking_content is a real string */}
-                {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
-                  <ThinkingBlock content={msg.thinking_content} state="complete" />
-                )}
-
-                {/* Message content — RichBody for agents (tables, code blocks with syntax highlight, kbd pills), plain markdown for user */}
-                {msg.role === 'user'
-                  ? <MessageContent content={msg.content} />
-                  : <RichBody source={msg.content} />}
-
-                {/* Council deliberation viewer.
-                    Hydrates from msg.metadata in two shapes:
-                      kind === "council_v2" → three character proposers + crosstalk
-                                              + verdict + critique (CouncilV2Panel)
-                      kind === "council"    → legacy karpathy rank trace
-                                              (CouncilLegacyPanel)
-                    Falls back to live-stream variants / legacy multi-model
-                    thinking_content payload for messages from before the
-                    metadata column existed. */}
-                {(() => {
-                  const md = (msg as any).metadata;
-                  if (md && md.kind === 'council_v2'
-                      && (Array.isArray(md.proposers) && md.proposers.length > 0
-                          || Array.isArray(md.crosstalk) && md.crosstalk.length > 0)) {
-                    return <CouncilPanel trace={md} />;
-                  }
-                  if (md && md.kind === 'council' && Array.isArray(md.variants) && md.variants.length > 0) {
-                    return <CouncilPanel trace={md} />;
-                  }
-                  if ((msg as any).variants && (msg as any).variants.length > 0) {
-                    return <CouncilPanel trace={{ variants: (msg as any).variants }} />;
-                  }
-                  if (msg.thinking_content && isMultiModelThinking(msg.thinking_content)) {
-                    return <CouncilPanel trace={{ variants: parseMultiModelVariants(msg.thinking_content) }} />;
-                  }
-                  return null;
-                })()}
-
-                {/* B.7 — attachments rendered below message body; dispatch on type */}
-                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-                  <div className="msg-attachments" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {msg.attachments.map((att, idx) => {
-                      const meta = (att.meta || {}) as any;
-                      if (att.type === 'image') {
-                        return <ImagePreview key={idx} src={att.url} alt={meta.alt} agent={meta.agent} />;
-                      }
-                      if (att.type === 'code') {
-                        return <CodePreviewCard key={idx} code={meta.code || ''} lang={meta.lang} label={meta.label} />;
-                      }
-                      return <MessageAttachment key={idx} name={meta.name || 'file'} size={meta.size} mime={meta.mime} url={att.url} />;
-                    })}
-                  </div>
-                )}
-
-                {threadArtifacts
-                  .filter((artifact) => {
-                    if (artifact.source_message_id === msg.id) return true;
-                    // Orphan artifact (no source_message_id): attach to the
-                    // most recent message at-or-before its created_at so it
-                    // renders inline in the thread instead of pinned to the
-                    // bottom.
-                    if (artifact.source_message_id) return false;
-                    const aT = new Date(artifact.created_at).getTime();
-                    const mT = new Date(msg.created_at).getTime();
-                    if (mT > aT) return false;
-                    // find next message after msg; if it's also <= aT, skip here
-                    const next = messages[i + 1];
-                    if (next && new Date(next.created_at).getTime() <= aT) return false;
-                    return true;
-                  })
-                  .map((artifact) => (
-                    <ArtifactCard key={artifact.id} artifact={artifact} />
-                  ))}
-              </div>
-            </div>
+              <MessageItem
+                key={msg.id}
+                messageId={msg.id}
+                nextCreatedAt={next ? next.created_at : null}
+                isLast={i === messages.length - 1}
+              />
             );
           })}
 
