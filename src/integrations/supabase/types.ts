@@ -1240,6 +1240,33 @@ export type Database = {
         }
         Relationships: []
       }
+      handles: {
+        Row: {
+          created_at: string
+          handle: string
+          owner_agent_id: string | null
+          owner_kind: string
+          owner_user_id: string | null
+          reserved: boolean
+        }
+        Insert: {
+          created_at?: string
+          handle: string
+          owner_agent_id?: string | null
+          owner_kind: string
+          owner_user_id?: string | null
+          reserved?: boolean
+        }
+        Update: {
+          created_at?: string
+          handle?: string
+          owner_agent_id?: string | null
+          owner_kind?: string
+          owner_user_id?: string | null
+          reserved?: boolean
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           created_at: string
@@ -2099,6 +2126,65 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_items: {
+        Row: {
+          caption: string | null
+          created_at: string
+          h: number
+          handle: string
+          id: string
+          item_type: string
+          payload: Json
+          published: boolean
+          rotation: number
+          updated_at: string
+          w: number
+          x: number
+          y: number
+          z: number
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          h?: number
+          handle: string
+          id?: string
+          item_type: string
+          payload?: Json
+          published?: boolean
+          rotation?: number
+          updated_at?: string
+          w?: number
+          x?: number
+          y?: number
+          z?: number
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          h?: number
+          handle?: string
+          id?: string
+          item_type?: string
+          payload?: Json
+          published?: boolean
+          rotation?: number
+          updated_at?: string
+          w?: number
+          x?: number
+          y?: number
+          z?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_items_handle_fkey"
+            columns: ["handle"]
+            isOneToOne: false
+            referencedRelation: "handles"
+            referencedColumns: ["handle"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           agent_status: string
@@ -2146,6 +2232,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      profiles_public: {
+        Row: {
+          accent_color: string
+          avatar_storage_path: string | null
+          bio_long: string
+          bio_short: string
+          created_at: string
+          display_name: string
+          handle: string
+          home_viewport: Json
+          published: boolean
+          theme: Json
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string
+          avatar_storage_path?: string | null
+          bio_long?: string
+          bio_short?: string
+          created_at?: string
+          display_name?: string
+          handle: string
+          home_viewport?: Json
+          published?: boolean
+          theme?: Json
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string
+          avatar_storage_path?: string | null
+          bio_long?: string
+          bio_short?: string
+          created_at?: string
+          display_name?: string
+          handle?: string
+          home_viewport?: Json
+          published?: boolean
+          theme?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_public_handle_fkey"
+            columns: ["handle"]
+            isOneToOne: true
+            referencedRelation: "handles"
+            referencedColumns: ["handle"]
+          },
+        ]
       }
       psychological_profile: {
         Row: {
@@ -2622,6 +2758,7 @@ export type Database = {
         Args: { function_name: string; payload?: Json }
         Returns: number
       }
+      is_handle_owner: { Args: { p_handle: string }; Returns: boolean }
       mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
         Args: { match_count?: number; p_user_id?: string; query_text: string }
