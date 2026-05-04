@@ -143,7 +143,7 @@ export default function FrameProfileLayout({ profile, items, isOwner, handle }: 
               <button
                 type="button"
                 className="frame-btn frame-btn-secondary"
-                onClick={() => navigate(`/@${handle}/edit`)}
+                onClick={() => navigate(`/u/${handle}/edit`)}
               >
                 edit canvas
               </button>
@@ -206,7 +206,7 @@ export default function FrameProfileLayout({ profile, items, isOwner, handle }: 
               <button
                 type="button"
                 className="frame-view-btn"
-                onClick={() => navigate(`/@${handle}?view=canvas`)}
+                onClick={() => navigate(`/u/${handle}?view=canvas`)}
                 title="Canvas view"
               >
                 canvas
@@ -224,7 +224,7 @@ export default function FrameProfileLayout({ profile, items, isOwner, handle }: 
                 <button
                   type="button"
                   className="frame-btn frame-btn-primary"
-                  onClick={() => navigate(`/@${handle}/edit`)}
+                  onClick={() => navigate(`/u/${handle}/edit`)}
                 >
                   open canvas editor
                 </button>

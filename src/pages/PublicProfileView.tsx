@@ -62,7 +62,7 @@ export default function PublicProfileView({ mode }: Props) {
 
   // gate: edit mode requires owner
   useEffect(() => {
-    if (mode === 'edit' && user && profile && !isOwner) navigate(`/@${handle}`, { replace: true });
+    if (mode === 'edit' && user && profile && !isOwner) navigate(`/u/${handle}`, { replace: true });
   }, [mode, user, profile, isOwner, handle, navigate]);
 
   if (loading) {
@@ -131,7 +131,7 @@ export default function PublicProfileView({ mode }: Props) {
       {isOwner && mode === 'view' && (
         <button
           type="button"
-          onClick={() => navigate(`/@${handle}/edit`)}
+          onClick={() => navigate(`/u/${handle}/edit`)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '8px 12px', borderRadius: 999,
@@ -147,7 +147,7 @@ export default function PublicProfileView({ mode }: Props) {
       {isOwner && mode === 'edit' && (
         <button
           type="button"
-          onClick={() => navigate(`/@${handle}`)}
+          onClick={() => navigate(`/u/${handle}`)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '8px 12px', borderRadius: 999,
@@ -272,7 +272,7 @@ export default function PublicProfileView({ mode }: Props) {
       {TopBar}
 
       {mode === 'edit' && isOwner && (
-        <EditToolbar onExit={() => navigate(`/@${handle}`)} viewport={vp || profile.home_viewport} />
+        <EditToolbar onExit={() => navigate(`/u/${handle}`)} viewport={vp || profile.home_viewport} />
       )}
 
       {showStarter && <StarterLayoutPicker onClose={() => setShowStarter(false)} />}
