@@ -1074,10 +1074,12 @@ html {
 .s-pill:hover { color: var(--text-soft); background: var(--surface-2); border-color: var(--border-subtle); }
 .s-pill:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Chat scroll area — ultra-smooth scrolling */
+/* Chat scroll area — manual smooth control per scroll call.
+   Removed scroll-behavior: smooth so manual el.scrollTo({behavior:'smooth'})
+   isn't double-eased and per-token instant scrolling stays crisp. */
 .chat-scroll-area {
-  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  overflow-anchor: auto;
 }
 
 /* Chat message hover subtle highlight */
@@ -1096,7 +1098,52 @@ html {
   gap: 24px;
   margin-bottom: 28px;
   padding: 4px 0;
+  /* Don't let live-streaming reflows nudge already-rendered rows. */
+  overflow-anchor: none;
 }
+
+/* Entry animation only on a row's first mount. <FreshMsgRow> sets the
+   data-fresh flag once via useFirstMount(); after that the row is inert
+   so streaming-token re-renders never re-trigger the keyframes. */
+.msg-row[data-fresh="true"] {
+  animation: msgEnter var(--dur-settle, 240ms) var(--ease-premium, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  will-change: opacity, transform;
+}
+.msg-row[data-fresh="true"]:nth-child(2) { animation-delay: 30ms; }
+.msg-row[data-fresh="true"]:nth-child(3) { animation-delay: 60ms; }
+.msg-row[data-fresh="true"]:nth-child(n+4) { animation-delay: 90ms; }
+
+/* Floating scroll-to-bottom pill */
+.scroll-to-bottom-pill {
+  position: absolute;
+  right: 24px;
+  bottom: 132px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-soft);
+  cursor: pointer;
+  box-shadow: 0 4px 18px -6px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(4px);
+  animation: scrollPillIn 200ms var(--ease-out, ease-out) forwards;
+  transition: background 160ms var(--ease-out, ease-out), color 160ms var(--ease-out, ease-out), border-color 160ms var(--ease-out, ease-out);
+}
+.scroll-to-bottom-pill:hover {
+  background: var(--surface-raised);
+  color: var(--text-body);
+  border-color: var(--border-strong, var(--border-subtle));
+}
+@keyframes scrollPillIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .msg-sidehead {
   display: flex;
   flex-direction: column;

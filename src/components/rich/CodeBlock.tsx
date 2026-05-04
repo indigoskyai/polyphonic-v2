@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, WrapText, Download, Maximize2, X } from 'lucide-react';
 import { highlightSync, normalizeLang, onHighlighterReady } from './highlighter';
+import { getCachedHighlight, setCachedHighlight } from './highlightCache';
 
 const ART_GLYPHS = /[╭╮╰╯─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋█▀▄▌▐░▒▓◆◇○●◐◑▲▼◀▶★☆✦✧⬢⬡]/;
 function looksLikeArt(text: string): boolean {
@@ -46,10 +47,20 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const lineCount = source.split('\n').length;
   const collapsible = !streaming && lineCount > COLLAPSE_THRESHOLD;
 
+  // Highlight strategy:
+  //   - while streaming: skip Shiki entirely (return null → plain <pre>).
+  //     Re-highlighting a growing buffer per token is the #1 source of
+  //     code-block flicker. The closing fence is what flips us back.
+  //   - completed blocks: check the LRU cache first; only call Shiki
+  //     once per unique (lang, source) pair, then memoize the result.
   const html = useMemo(() => {
-    if (isArt || !lang) return null;
-    return highlightSync(source, normalized);
-  }, [source, lang, normalized, isArt, hlVersion]);
+    if (isArt || !lang || streaming) return null;
+    const cached = getCachedHighlight(normalized, source);
+    if (cached !== undefined) return cached;
+    const out = highlightSync(source, normalized);
+    setCachedHighlight(normalized, source, out);
+    return out;
+  }, [source, lang, normalized, isArt, streaming, hlVersion]);
 
   const copy = async () => {
     try {

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useFirstMount } from '@/lib/useFirstMount';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
@@ -12,6 +13,7 @@ import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import CouncilPanel from '@/components/messages/CouncilPanel';
+import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
@@ -27,10 +29,17 @@ import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import { clearHighlightCache } from '@/components/rich/highlightCache';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
  * cadence (~60 chars/sec) that ramps up gracefully if the buffer falls behind.
+ */
+/* ─── Smooth, rate-limited typewriter hook ───
+ * Decouples reveal speed from network chunk delivery. Maintains a steady
+ * cadence that ramps gracefully when the buffer falls behind, capped so
+ * bursts don't dump. Skips setState when nothing advances so React doesn't
+ * re-render the streaming bubble idly.
  */
 function useSmoothTypewriter(target: string, active = true) {
   const [displayed, setDisplayed] = useState(active ? '' : target);
@@ -39,11 +48,11 @@ function useSmoothTypewriter(target: string, active = true) {
   const lastTickRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const prevTargetRef = useRef('');
+  // Exponential moving average of the gap, so cadence eases instead of
+  // stair-stepping when bursts of tokens land.
+  const gapEmaRef = useRef(0);
 
-  // keep refs current
-  useEffect(() => {
-    targetRef.current = target;
-  }, [target]);
+  useEffect(() => { targetRef.current = target; }, [target]);
 
   useEffect(() => {
     if (!active) {
@@ -52,11 +61,11 @@ function useSmoothTypewriter(target: string, active = true) {
       return;
     }
 
-    // If target is a fresh stream (not a continuation), reset
     if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
       if (!target.startsWith(prevTargetRef.current)) {
         displayedRef.current = '';
         setDisplayed('');
+        gapEmaRef.current = 0;
       }
     }
     prevTargetRef.current = target;
@@ -71,22 +80,23 @@ function useSmoothTypewriter(target: string, active = true) {
       const gap = tgt.length - curLen;
 
       if (gap > 0) {
-        // Cadence tuned for premium feel:
-        //   base 200 cps so "intro" tokens feel snappy, not slow.
-        //   ramp aggressively once a buffer accumulates so we never feel
-        //   like we're holding the model back. at gap > 400, we burst
-        //   through at ~1800 cps which is effectively instant for normal
-        //   reading pace but still reads as flowing rather than dumping.
-        let charsPerMs = 0.20;       // 200 cps — base, feels brisk
-        if (gap > 40)   charsPerMs = 0.40;   // 400 cps — caught up
-        if (gap > 150)  charsPerMs = 0.80;   // 800 cps — moderate backlog
-        if (gap > 400)  charsPerMs = 1.80;   // ~1800 cps — flush burst
+        // Smooth the gap so cadence rises/falls gracefully
+        gapEmaRef.current = gapEmaRef.current * 0.7 + gap * 0.3;
+        const smoothedGap = gapEmaRef.current;
+
+        // Cadence tiers — capped at ~600 cps so even huge bursts read as
+        // confident typing rather than a paste.
+        let charsPerMs = 0.22;                   // base ~220 cps
+        if (smoothedGap > 60)   charsPerMs = 0.36;  // ~360 cps
+        if (smoothedGap > 200)  charsPerMs = 0.60;  // ~600 cps cap
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
-        const next = tgt.slice(0, nextLen);
-        displayedRef.current = next;
-        setDisplayed(next);
+        if (nextLen !== curLen) {
+          const next = tgt.slice(0, nextLen);
+          displayedRef.current = next;
+          setDisplayed(next);
+        }
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -309,16 +319,49 @@ function ContextStrip() {
   );
 }
 
+/* ─── Animated row wrapper ───
+ * Plays the entry animation only on the row's first mount, so re-renders
+ * triggered by streaming tokens (or any list reflow) don't re-pop existing
+ * rows. CSS handles the actual keyframes via the [data-fresh] selector.
+ */
+function FreshMsgRow({ children, className = 'msg-row', style }: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const fresh = useFirstMount();
+  return (
+    <div className={className} data-fresh={fresh ? 'true' : undefined} style={style}>
+      {children}
+    </div>
+  );
+}
+
 /* ─── Main ChatView ─── */
 export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const {
-    messages, currentThreadId, isStreaming, streamingContent, streamingThinking, threads,
-    loadMessages, subscribeMessages, setCurrentThread, createThread, addMessage,
-    setStreaming, setStreamingContent, setStreamingThinking, loadThreads, updateThreadAgent,
-  } = useThreadStore();
+  // Narrow selectors — the parent renders the *list shell* and the
+  // streaming bubble. Individual messages are handled by <MessageItem>,
+  // which subscribes to its own row. This split is what makes per-token
+  // streaming stop re-rendering the whole thread.
+  const messages = useThreadStore((s) => s.messages);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const isStreaming = useThreadStore((s) => s.isStreaming);
+  const streamingContent = useThreadStore((s) => s.streamingContent);
+  const streamingThinking = useThreadStore((s) => s.streamingThinking);
+  const threads = useThreadStore((s) => s.threads);
+  const loadMessages = useThreadStore((s) => s.loadMessages);
+  const subscribeMessages = useThreadStore((s) => s.subscribeMessages);
+  const setCurrentThread = useThreadStore((s) => s.setCurrentThread);
+  const createThread = useThreadStore((s) => s.createThread);
+  const addMessage = useThreadStore((s) => s.addMessage);
+  const setStreaming = useThreadStore((s) => s.setStreaming);
+  const setStreamingContent = useThreadStore((s) => s.setStreamingContent);
+  const setStreamingThinking = useThreadStore((s) => s.setStreamingThinking);
+  const loadThreads = useThreadStore((s) => s.loadThreads);
+  const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
   const threadArtifacts = useMemo(
@@ -396,20 +439,36 @@ export default function ChatView() {
     }
   }, [isStreaming, streamingContent]);
 
-  // Throttled, calmer auto-scroll. Uses instant scrollTop during streams to
-  // avoid fighting smooth-scroll easing curves; smooth-scrolls only for
-  // discrete message changes.
+  // User-scroll-aware auto-scroll. We follow the bottom of the stream as
+  // long as the user is "pinned" there; the moment they scroll up, we stop
+  // following and surface the scroll-to-bottom pill. Pinning resumes when
+  // they scroll back to within `pinThreshold` of the bottom.
+  const userPinnedRef = useRef(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const lastScrollAtRef = useRef(0);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const threshold = 140;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (!isNearBottom) return;
+    const pinThreshold = 96;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const pinned = distance < pinThreshold;
+      userPinnedRef.current = pinned;
+      setShowScrollDown(!pinned && (isStreaming || messages.length > 0));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [isStreaming, messages.length]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (!userPinnedRef.current) return;
     const now = performance.now();
     if (isStreaming || streamingContent) {
-      // throttle to ~10fps
-      if (now - lastScrollAtRef.current < 100) return;
+      // Throttle during streaming so we don't thrash the layout.
+      if (now - lastScrollAtRef.current < 80) return;
       lastScrollAtRef.current = now;
       el.scrollTop = el.scrollHeight;
     } else {
@@ -417,6 +476,14 @@ export default function ChatView() {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, streamingContent, streamingThinking, isStreaming]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    userPinnedRef.current = true;
+    setShowScrollDown(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   // Reload-mid-stream recovery — persist in-progress streamed content to
   // localStorage so a refresh during streaming surfaces the partial reply
@@ -496,6 +563,12 @@ export default function ChatView() {
 
   useEffect(() => {
     if (!threadId) return;
+    // Wipe the per-block syntax-highlight cache so a long session doesn't
+    // accumulate completed snippets across every thread the user opens.
+    clearHighlightCache();
+    // Reset scroll-pin so a new thread auto-scrolls to bottom.
+    userPinnedRef.current = true;
+    setShowScrollDown(false);
     setCurrentThread(threadId);
     loadMessages(threadId);
     loadArtifacts(threadId);
@@ -614,10 +687,13 @@ export default function ChatView() {
 
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
-    if (ta) {
-      ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 240) + 'px';
-    }
+    if (!ta) return;
+    // Measure target height without thrashing layout twice if it hasn't
+    // changed. We only touch `style.height` when the new measurement
+    // differs from the current one.
+    ta.style.height = 'auto';
+    const next = Math.min(ta.scrollHeight, 240) + 'px';
+    if (ta.style.height !== next) ta.style.height = next;
   };
 
   const sendGuardianMessage = useCallback(async () => {
@@ -1409,106 +1485,17 @@ export default function ChatView() {
               );
             }
 
+            // Regular message — delegated to memoized <MessageItem>, which
+            // subscribes to its own row in the store. The parent's per-token
+            // streamingContent updates do not re-render existing items.
+            const next = messages[i + 1];
             return (
-            <div
-              key={msg.id}
-              className="msg-row"
-              style={{
-                animation: `msgEnter var(--dur-settle) var(--ease-premium) both`,
-                animationDelay: `${Math.min(i * 30, 150)}ms`,
-              }}
-            >
-              <div className="msg-sidehead">
-                {showTimestamps && (
-                  <div className="msg-time">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                  </div>
-                )}
-                <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-                  {msg.role === 'user'
-                    ? 'You'
-                    : msg.agent === 'guardian'
-                      ? 'Observer'
-                      : getAgentDisplayName(msg.agent, agentNameById)}
-                </div>
-              </div>
-
-              <div className="msg-body">
-                {/* Thinking block — always show if thinking_content is a real string */}
-                {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
-                  <ThinkingBlock content={msg.thinking_content} state="complete" />
-                )}
-
-                {/* Message content — RichBody for agents (tables, code blocks with syntax highlight, kbd pills), plain markdown for user */}
-                {msg.role === 'user'
-                  ? <MessageContent content={msg.content} />
-                  : <RichBody source={msg.content} />}
-
-                {/* Council deliberation viewer.
-                    Hydrates from msg.metadata in two shapes:
-                      kind === "council_v2" → three character proposers + crosstalk
-                                              + verdict + critique (CouncilV2Panel)
-                      kind === "council"    → legacy karpathy rank trace
-                                              (CouncilLegacyPanel)
-                    Falls back to live-stream variants / legacy multi-model
-                    thinking_content payload for messages from before the
-                    metadata column existed. */}
-                {(() => {
-                  const md = (msg as any).metadata;
-                  if (md && md.kind === 'council_v2'
-                      && (Array.isArray(md.proposers) && md.proposers.length > 0
-                          || Array.isArray(md.crosstalk) && md.crosstalk.length > 0)) {
-                    return <CouncilPanel trace={md} />;
-                  }
-                  if (md && md.kind === 'council' && Array.isArray(md.variants) && md.variants.length > 0) {
-                    return <CouncilPanel trace={md} />;
-                  }
-                  if ((msg as any).variants && (msg as any).variants.length > 0) {
-                    return <CouncilPanel trace={{ variants: (msg as any).variants }} />;
-                  }
-                  if (msg.thinking_content && isMultiModelThinking(msg.thinking_content)) {
-                    return <CouncilPanel trace={{ variants: parseMultiModelVariants(msg.thinking_content) }} />;
-                  }
-                  return null;
-                })()}
-
-                {/* B.7 — attachments rendered below message body; dispatch on type */}
-                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-                  <div className="msg-attachments" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {msg.attachments.map((att, idx) => {
-                      const meta = (att.meta || {}) as any;
-                      if (att.type === 'image') {
-                        return <ImagePreview key={idx} src={att.url} alt={meta.alt} agent={meta.agent} />;
-                      }
-                      if (att.type === 'code') {
-                        return <CodePreviewCard key={idx} code={meta.code || ''} lang={meta.lang} label={meta.label} />;
-                      }
-                      return <MessageAttachment key={idx} name={meta.name || 'file'} size={meta.size} mime={meta.mime} url={att.url} />;
-                    })}
-                  </div>
-                )}
-
-                {threadArtifacts
-                  .filter((artifact) => {
-                    if (artifact.source_message_id === msg.id) return true;
-                    // Orphan artifact (no source_message_id): attach to the
-                    // most recent message at-or-before its created_at so it
-                    // renders inline in the thread instead of pinned to the
-                    // bottom.
-                    if (artifact.source_message_id) return false;
-                    const aT = new Date(artifact.created_at).getTime();
-                    const mT = new Date(msg.created_at).getTime();
-                    if (mT > aT) return false;
-                    // find next message after msg; if it's also <= aT, skip here
-                    const next = messages[i + 1];
-                    if (next && new Date(next.created_at).getTime() <= aT) return false;
-                    return true;
-                  })
-                  .map((artifact) => (
-                    <ArtifactCard key={artifact.id} artifact={artifact} />
-                  ))}
-              </div>
-            </div>
+              <MessageItem
+                key={msg.id}
+                messageId={msg.id}
+                nextCreatedAt={next ? next.created_at : null}
+                isLast={i === messages.length - 1}
+              />
             );
           })}
 
@@ -1624,6 +1611,21 @@ export default function ChatView() {
         {/* Bottom spacer for smooth scrolling */}
         <div style={{ height: 24 }} />
       </div>
+
+      {/* Floating scroll-to-bottom pill — appears only when the user has
+          scrolled away from the live edge of the conversation. */}
+      {showScrollDown && (
+        <button
+          type="button"
+          className="scroll-to-bottom-pill"
+          onClick={scrollToBottom}
+          aria-label="Scroll to latest"
+        >
+          <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6l4 4 4-4" />
+          </svg>
+        </button>
+      )}
 
       {/* Input zone */}
       <div className="input-zone">
