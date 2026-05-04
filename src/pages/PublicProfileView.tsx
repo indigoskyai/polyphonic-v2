@@ -28,9 +28,10 @@ export default function PublicProfileView({ mode }: Props) {
   const [vp, setVp] = useState<{ x: number; y: number; zoom: number } | undefined>(undefined);
 
   useEffect(() => {
+    if (!rawHandle.startsWith('@')) { navigate('/', { replace: true }); return; }
     if (!handle) return;
     loadByHandle(handle);
-  }, [handle, loadByHandle]);
+  }, [handle, rawHandle, loadByHandle, navigate]);
 
   useEffect(() => {
     let cancelled = false;
