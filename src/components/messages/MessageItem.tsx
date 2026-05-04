@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useThreadStore } from '@/stores/threadStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
@@ -177,5 +177,3 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
 // Bare memo() — props are all primitives so default shallow compare is correct.
 const MessageItem = React.memo(MessageItemImpl);
 export default MessageItem;
-
-import React from 'react';
