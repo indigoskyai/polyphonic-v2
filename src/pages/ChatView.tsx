@@ -793,11 +793,29 @@ export default function ChatView() {
                     thinking: data.thinking || null,
                   });
                   setStreamingProposers([...collectedProposers]);
+                  // Surface this proposer's reasoning in the peek window so
+                  // the user sees actual content flowing during the council
+                  // pre-content stages, not just a phase label.
+                  if (data.thinking) {
+                    const label = (data.character as string).charAt(0).toUpperCase() + (data.character as string).slice(1);
+                    fullThinking += (fullThinking ? '\n\n' : '') + `— ${label} —\n${data.thinking}`;
+                    setStreamingThinking(fullThinking);
+                  }
                 } else {
                   collectedVariants.push({ model: data.model, content: data.text, thinking: data.thinking || null });
                   setStreamingVariants([...collectedVariants]);
                 }
                 if (councilPhase === 'idle') setCouncilPhase('voices');
+              } else if (data.type === 'proposer_thinking') {
+                // Council v2 emits this when a proposer's reasoning lands
+                // (separate from the variant's content). Pipe into the same
+                // peek-window stream so the reasoning hub stays alive across
+                // the whole council pipeline.
+                if (data.text && data.character) {
+                  const label = (data.character as string).charAt(0).toUpperCase() + (data.character as string).slice(1);
+                  fullThinking += (fullThinking ? '\n\n' : '') + `— ${label} —\n${data.text}`;
+                  setStreamingThinking(fullThinking);
+                }
               } else if (data.type === 'crosstalk') {
                 collectedCrosstalk.push({
                   character: data.character as CouncilV2Character,
@@ -806,6 +824,15 @@ export default function ChatView() {
                 });
                 setStreamingCrosstalk([...collectedCrosstalk]);
                 setCouncilPhase('deliberating');
+                // Briefly surface the cross-pollinated draft in the peek
+                // window too (truncated) so the deliberation reads as
+                // actually moving through phases.
+                if (data.text) {
+                  const label = (data.character as string).charAt(0).toUpperCase() + (data.character as string).slice(1);
+                  const snippet = String(data.text).slice(0, 320);
+                  fullThinking += (fullThinking ? '\n\n' : '') + `— ${label} (revised) —\n${snippet}${String(data.text).length > 320 ? '…' : ''}`;
+                  setStreamingThinking(fullThinking);
+                }
               } else if (data.type === 'crosstalk_starting') {
                 setCouncilPhase('deliberating');
               } else if (data.type === 'crosstalk_done' || data.type === 'crosstalk_skipped') {
@@ -852,7 +879,17 @@ export default function ChatView() {
                 fullContent += data.text;
                 setStreamingContent(fullContent);
               } else if (data.type === 'thinking') {
-                fullThinking += data.text;
+                // In council mode, fullThinking already carries proposer +
+                // crosstalk segments with character headers. Insert a
+                // Chairman header on the first chairman thinking chunk so
+                // the trail stays readable when expanded after stream ends.
+                const isCouncilTrail = collectedProposers.length > 0 && /— [A-Z]/.test(fullThinking);
+                const needsChairmanHeader = isCouncilTrail && !fullThinking.includes('— Chairman —');
+                if (needsChairmanHeader) {
+                  fullThinking += (fullThinking ? '\n\n' : '') + '— Chairman —\n' + data.text;
+                } else {
+                  fullThinking += data.text;
+                }
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {
                 // Hydrate council trace into message metadata. Prefer council_v2
