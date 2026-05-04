@@ -7410,3 +7410,5 @@ html {
   color: var(--text-soft); letter-spacing: 0.14em;
   text-transform: uppercase; margin-right: auto;
 }
+
+@import './components/canvas-profile/canvas.css';
