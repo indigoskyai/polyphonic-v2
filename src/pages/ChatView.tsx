@@ -12,6 +12,7 @@ import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import CouncilPanel from '@/components/messages/CouncilPanel';
+import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
@@ -27,6 +28,7 @@ import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import { clearHighlightCache } from '@/components/rich/highlightCache';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
