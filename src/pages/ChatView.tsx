@@ -668,10 +668,13 @@ export default function ChatView() {
 
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
-    if (ta) {
-      ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 240) + 'px';
-    }
+    if (!ta) return;
+    // Measure target height without thrashing layout twice if it hasn't
+    // changed. We only touch `style.height` when the new measurement
+    // differs from the current one.
+    ta.style.height = 'auto';
+    const next = Math.min(ta.scrollHeight, 240) + 'px';
+    if (ta.style.height !== next) ta.style.height = next;
   };
 
   const sendGuardianMessage = useCallback(async () => {
