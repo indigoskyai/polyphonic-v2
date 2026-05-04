@@ -83,8 +83,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - [x] **M2** Hypomnema read path — always-load injection into system prompt.
 - [x] **M3** Hypomnema write path — gate + write + decay edge functions. Voice review deferred to deploy soak (needs real model output).
 - [x] **M4** Vector embeddings + hybrid retrieval — RRF-fused trigram + vector seeds; embeddings auto-generated on encode/write; backfill function for existing rows.
-- [~] **M5** Asymmetric witnessing on encode.
-- [ ] **M6** Sustained-attention graduation + supersession on contradiction.
+- [x] **M5** Asymmetric witnessing on encode — primary + observer dispatches per turn; observer carries its own contribution; threads.participating_agent_ids updated.
+- [~] **M6** Sustained-attention graduation + supersession on contradiction.
 - [ ] **M7** Frontend `HypomnemaList` + final integration verification.
 
 ## Decision log
@@ -129,6 +129,8 @@ Spec at `docs/memory/`. Adds five augmentations to existing Mnemos / identity / 
 - 2026-05-04 11:55 · phase M4 · embedding generation gated on `context.api_key && isMemoryAugmentationEnabled(userId)` rather than auto-running for everyone · keeps embeddings off until Riley's user_id is in the allowlist; engrams without embeddings stay valid (NULL embedding allowed, retrieval falls back to trigram). The `embeddings-backfill` edge function picks up NULL-embedding rows on demand or via manual POST.
 - 2026-05-04 11:55 · phase M4 · hybrid seed via RRF k=60, weights trigram=0.3 / vector=0.5 · vector hit gets stronger weight because trigram already wins on exact match — RRF gives credit to vector when paraphrase is the only hit. Vector-only hits hydrated via single `select * where id in (...)` so spread activation gets full engram fields. When apiKey omitted or flag off, falls back to trigram-only (existing behavior unchanged).
 - 2026-05-04 11:55 · phase M4 · OpenRouter embeddings via `openai/text-embedding-3-small` (1536 dims), no fallback model · OpenRouter exposes embeddings on existing keys; if it 429s, the embedOne returns null and the row stays NULL. Backfill cron retries. Cost is negligible (~$0.02/1M tokens; engram corpus is small).
+- 2026-05-04 12:30 · phase M5 · observer note's INJECT_YOUR_CONTRIBUTION = the agent's council crosstalk/proposer draft (preferred) or their consultation response (fallback) · the observer prompt asks the agent to reflect on what THEY contributed; without that anchor it'd just be paraphrasing the primary's response. `collectObservers` in chat-multi prefers the council draft when both exist (richer voice fidelity).
+- 2026-05-04 12:30 · phase M5 · `threads.participating_agent_ids` unioned per-turn instead of overwritten · preserves history of who's touched the thread across sessions; future direct-thread queries can filter by it. `primary_agent_id` only set when current value is null or default-luca-but-this-turn-isn't-luca, so user-driven direct-with-anima/vektor threads keep their primary.
 
 
 ## Backend asks queue

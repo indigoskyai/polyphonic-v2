@@ -375,6 +375,7 @@ serve(async (req) => {
         agentId,
         authHeader,
         pendingRevisions || [],
+        toolMessages,
       );
     }
 
@@ -663,6 +664,11 @@ serve(async (req) => {
             fireObserverWatch(thread_id, agentId, authHeader);
             fireMnemosDialectic(thread_id, agentId, authHeader);
             fireSkillsDistill(thread_id, agentId, authHeader);
+            const fallbackObservers = collectObservers({
+              primaryAgentId: agentId,
+              councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
+              toolMessages,
+            });
             fireHypomnemaTurn({
               threadId: thread_id,
               agentId,
@@ -670,7 +676,14 @@ serve(async (req) => {
               userMessage: message,
               agentResponse: fallbackContent,
               recentTurns: history || [],
+              observers: fallbackObservers,
             });
+            updateThreadAgentMetadata(
+              supabase,
+              thread_id,
+              agentId,
+              [agentId, ...fallbackObservers.map((o) => o.agentId)],
+            ).catch(() => {});
             send({ type: "done", model: "chairman-fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -864,8 +877,13 @@ serve(async (req) => {
           fireMnemosDialectic(thread_id, agentId, authHeader);
           fireSkillsDistill(thread_id, agentId, authHeader);
 
-          // Hypomnema gate → primary reflection write only in M3.
-          // M5 will extend to observer notes for other council participants.
+          // Hypomnema gate → primary reflection + observer notes for the
+          // other council characters (M5: asymmetric witnessing).
+          const synthObservers = collectObservers({
+            primaryAgentId: agentId,
+            councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
+            toolMessages,
+          });
           fireHypomnemaTurn({
             threadId: thread_id,
             agentId,
@@ -873,7 +891,14 @@ serve(async (req) => {
             userMessage: message,
             agentResponse: synthesizedContent,
             recentTurns: history || [],
+            observers: synthObservers,
           });
+          updateThreadAgentMetadata(
+            supabase,
+            thread_id,
+            agentId,
+            [agentId, ...synthObservers.map((o) => o.agentId)],
+          ).catch(() => {});
 
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
@@ -964,8 +989,11 @@ function fireSkillsDistill(threadId: string, agentId: string, authHeader: string
 /**
  * Fire the hypomnema gate post-turn. Best-effort. Service-role auth.
  * The gate is a cheap Haiku call; if it triggers, it chains to hypomnema-write
- * (for the primary agent only in M3; M5 will extend to observer notes for
- * other participating agents).
+ * (one call per participating agent — primary for `agentId`, observer for the rest).
+ *
+ * Observers carry their own contribution from the turn (their proposer/crosstalk
+ * draft from a council pass, or their consultation response from `consult_anima`).
+ * The observer prompt uses that contribution as the "what you contributed" anchor.
  *
  * Fire-and-forget — the user's stream has already finished. Skips when the
  * memory augmentation flag is off (gate edge function checks the flag).
@@ -977,7 +1005,9 @@ function fireHypomnemaTurn(opts: {
   userMessage: string;
   agentResponse: string;
   recentTurns: Array<{ role: string; content: string }>;
-  participatingAgentIds?: string[]; // M5 — extra agents that should get observer notes
+  /** Other agents who participated. Their `contribution` becomes the
+   *  observer prompt's INJECT_YOUR_CONTRIBUTION. */
+  observers?: Array<{ agentId: string; contribution: string }>;
 }) {
   if (!opts.userMessage || !opts.agentResponse) return;
   try {
@@ -990,6 +1020,9 @@ function fireHypomnemaTurn(opts: {
       thread_id: string;
       density: "primary" | "observer";
       primary_in_thread: boolean;
+      primary_agent_name?: string;
+      primary_response?: string;
+      your_contribution?: string;
     }> = [
       {
         agent_id: opts.agentId,
@@ -999,16 +1032,17 @@ function fireHypomnemaTurn(opts: {
       },
     ];
 
-    // Observer notes for other participating agents (asymmetric witnessing — wired
-    // here in M3 so M5 can extend without touching chat-multi again).
-    if (opts.participatingAgentIds?.length) {
-      for (const otherId of opts.participatingAgentIds) {
-        if (otherId === opts.agentId) continue;
+    if (opts.observers?.length) {
+      for (const obs of opts.observers) {
+        if (obs.agentId === opts.agentId) continue;
         chainTargets.push({
-          agent_id: otherId,
+          agent_id: obs.agentId,
           thread_id: opts.threadId,
           density: "observer",
           primary_in_thread: false,
+          primary_agent_name: opts.agentId,
+          primary_response: opts.agentResponse,
+          your_contribution: obs.contribution,
         });
       }
     }
@@ -1033,6 +1067,75 @@ function fireHypomnemaTurn(opts: {
   } catch (e) {
     console.warn("hypomnema-gate dispatch error:", e);
   }
+}
+
+/**
+ * Update threads.primary_agent_id + participating_agent_ids per turn.
+ * Best-effort. The migration backfilled existing threads from messages.agent.
+ */
+async function updateThreadAgentMetadata(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  threadId: string,
+  primaryAgentId: string,
+  participatingAgentIds: string[],
+): Promise<void> {
+  try {
+    const unique = [...new Set([primaryAgentId, ...participatingAgentIds])];
+    // Fetch current row so we can union with existing participants instead of overwriting.
+    const { data: current } = await supabase
+      .from("threads")
+      .select("participating_agent_ids, primary_agent_id")
+      .eq("id", threadId)
+      .maybeSingle();
+    const existing = Array.isArray(current?.participating_agent_ids) ? current.participating_agent_ids : [];
+    const merged = [...new Set([...existing, ...unique])];
+    const update: Record<string, unknown> = { participating_agent_ids: merged };
+    // Only set primary_agent_id if it's not already set or it's been changing.
+    if (!current?.primary_agent_id || current.primary_agent_id === "luca" && primaryAgentId !== "luca") {
+      update.primary_agent_id = primaryAgentId;
+    }
+    await supabase.from("threads").update(update).eq("id", threadId);
+  } catch (err) {
+    console.warn("[chat-multi] thread agent metadata update failed:", (err as Error).message);
+  }
+}
+
+/**
+ * Extract observer agents + their contributions from a council pass and from
+ * any `consult_*` tool messages. Returns the full set of non-primary agents
+ * who participated in the turn.
+ */
+function collectObservers(opts: {
+  primaryAgentId: string;
+  councilDrafts?: Array<{ character: string; content: string }>;
+  toolMessages?: Array<{ tool?: string; output?: { from_agent?: string; to_agent?: string; response?: string } }>;
+}): Array<{ agentId: string; contribution: string }> {
+  const observers = new Map<string, string>();
+
+  if (opts.councilDrafts?.length) {
+    for (const draft of opts.councilDrafts) {
+      if (draft.character !== opts.primaryAgentId && draft.content) {
+        observers.set(draft.character, draft.content);
+      }
+    }
+  }
+
+  if (opts.toolMessages?.length) {
+    for (const tm of opts.toolMessages) {
+      const tool = tm?.tool;
+      if (typeof tool !== "string" || !tool.startsWith("consult_")) continue;
+      const consultedAgent = tm?.output?.to_agent || tool.replace(/^consult_/, "");
+      const response = tm?.output?.response;
+      if (consultedAgent && consultedAgent !== opts.primaryAgentId && typeof response === "string" && response) {
+        // If the same agent already has a council draft, prefer it (richer context);
+        // otherwise use the consultation response.
+        if (!observers.has(consultedAgent)) observers.set(consultedAgent, response);
+      }
+    }
+  }
+
+  return [...observers.entries()].map(([agentId, contribution]) => ({ agentId, contribution }));
 }
 
 async function runToolPlanner(threadId: string, authHeader: string, messages: any[]): Promise<any[]> {
@@ -1404,6 +1507,8 @@ async function singleModelStream(
   agentId: string = "luca",
   authHeader: string = "",
   pendingRevisions: PendingRevision[] = [],
+  // deno-lint-ignore no-explicit-any
+  toolMessages: any[] = [],
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1504,6 +1609,10 @@ async function singleModelStream(
           fireMnemosDialectic(threadId, agentId, authHeader);
           fireSkillsDistill(threadId, agentId, authHeader);
         }
+        const singleObservers = collectObservers({
+          primaryAgentId: agentId,
+          toolMessages,
+        });
         fireHypomnemaTurn({
           threadId,
           agentId,
@@ -1511,7 +1620,14 @@ async function singleModelStream(
           userMessage,
           agentResponse: fullContent,
           recentTurns: messages || [],
+          observers: singleObservers,
         });
+        updateThreadAgentMetadata(
+          supabase,
+          threadId,
+          agentId,
+          [agentId, ...singleObservers.map((o) => o.agentId)],
+        ).catch(() => {});
 
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {

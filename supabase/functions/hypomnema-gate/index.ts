@@ -24,19 +24,20 @@ interface GatePayload {
    * hypomnema-write is dispatched (fire-and-forget) with this payload merged
    * with user/turn fields. Lets chat-multi fire a single call.
    */
-  chain_write?: {
-    agent_id: string;
-    thread_id?: string | null;
-    source_message_id?: string | null;
-    density?: "primary" | "observer";
-    primary_in_thread?: boolean;
-  } | Array<{
-    agent_id: string;
-    thread_id?: string | null;
-    source_message_id?: string | null;
-    density?: "primary" | "observer";
-    primary_in_thread?: boolean;
-  }>;
+  chain_write?: ChainWriteTarget | ChainWriteTarget[];
+}
+
+interface ChainWriteTarget {
+  agent_id: string;
+  thread_id?: string | null;
+  source_message_id?: string | null;
+  density?: "primary" | "observer";
+  primary_in_thread?: boolean;
+  /** Observer-density only: the primary agent's name + response + the
+   *  observer's own contribution to the turn (consult/council output). */
+  primary_agent_name?: string;
+  primary_response?: string;
+  your_contribution?: string;
 }
 
 serve(async (req) => {
@@ -86,7 +87,7 @@ serve(async (req) => {
       const targets = Array.isArray(body.chain_write) ? body.chain_write : [body.chain_write];
       const writeBaseUrl = `${url}/functions/v1/hypomnema-write`;
       for (const target of targets) {
-        const writeBody = {
+        const writeBody: Record<string, unknown> = {
           user_id: userId,
           agent_id: target.agent_id,
           thread_id: target.thread_id ?? null,
@@ -97,6 +98,11 @@ serve(async (req) => {
           agent_response: agentResponse,
           recent_turns: recentTurns,
         };
+        if (target.density === "observer") {
+          if (target.primary_agent_name) writeBody.primary_agent_name = target.primary_agent_name;
+          if (target.primary_response) writeBody.primary_response = target.primary_response;
+          if (target.your_contribution) writeBody.your_contribution = target.your_contribution;
+        }
         fetch(writeBaseUrl, {
           method: "POST",
           headers: {

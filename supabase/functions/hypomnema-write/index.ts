@@ -24,6 +24,10 @@ interface WritePayload {
   user_message: string;
   agent_response: string;
   recent_turns?: Array<{ role: string; content: string }>;
+  // Observer-density only:
+  primary_agent_name?: string;
+  primary_response?: string;
+  your_contribution?: string;
 }
 
 serve(async (req) => {
@@ -72,6 +76,9 @@ serve(async (req) => {
       userMessage,
       agentResponse,
       recentTurns: Array.isArray(body.recent_turns) ? body.recent_turns : [],
+      primaryAgentName: body.primary_agent_name,
+      primaryResponse: body.primary_response,
+      yourContribution: body.your_contribution,
     });
 
     return json(result, 200, corsHeaders);
