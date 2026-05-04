@@ -71,11 +71,16 @@ function useSmoothTypewriter(target: string, active = true) {
       const gap = tgt.length - curLen;
 
       if (gap > 0) {
-        // Base 60 chars/sec; ramp toward 250 chars/sec when buffer grows
-        let charsPerMs = 0.06;
-        if (gap > 200) charsPerMs = 0.12;
-        if (gap > 400) charsPerMs = 0.25;
-        if (gap > 1200) charsPerMs = 0.6;
+        // Cadence tuned for premium feel:
+        //   base 200 cps so "intro" tokens feel snappy, not slow.
+        //   ramp aggressively once a buffer accumulates so we never feel
+        //   like we're holding the model back. at gap > 400, we burst
+        //   through at ~1800 cps which is effectively instant for normal
+        //   reading pace but still reads as flowing rather than dumping.
+        let charsPerMs = 0.20;       // 200 cps — base, feels brisk
+        if (gap > 40)   charsPerMs = 0.40;   // 400 cps — caught up
+        if (gap > 150)  charsPerMs = 0.80;   // 800 cps — moderate backlog
+        if (gap > 400)  charsPerMs = 1.80;   // ~1800 cps — flush burst
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
