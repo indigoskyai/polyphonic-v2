@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, WrapText, Download, Maximize2, X } from 'lucide-react';
 import { highlightSync, normalizeLang, onHighlighterReady } from './highlighter';
+import { getCachedHighlight, setCachedHighlight } from './highlightCache';
 
 const ART_GLYPHS = /[╭╮╰╯─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋█▀▄▌▐░▒▓◆◇○●◐◑▲▼◀▶★☆✦✧⬢⬡]/;
 function looksLikeArt(text: string): boolean {
