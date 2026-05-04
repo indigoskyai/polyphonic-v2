@@ -1612,6 +1612,21 @@ export default function ChatView() {
         <div style={{ height: 24 }} />
       </div>
 
+      {/* Floating scroll-to-bottom pill — appears only when the user has
+          scrolled away from the live edge of the conversation. */}
+      {showScrollDown && (
+        <button
+          type="button"
+          className="scroll-to-bottom-pill"
+          onClick={scrollToBottom}
+          aria-label="Scroll to latest"
+        >
+          <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6l4 4 4-4" />
+          </svg>
+        </button>
+      )}
+
       {/* Input zone */}
       <div className="input-zone">
         <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}`}>
