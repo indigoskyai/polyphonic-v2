@@ -136,9 +136,6 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
 
       {mode === 'edit' && (
         <>
-          <div data-drag-handle className="canvas-item-grab" title="Drag to move">
-            <GripVertical size={12} />
-          </div>
           {selected && (
             <>
               <div className="canvas-item-toolbar">
