@@ -27,6 +27,8 @@ import {
 } from "./constants.ts";
 
 import type { MnemosEngine } from "./engine.ts";
+import { embedOne, reciprocalRankFusion } from "../embeddings.ts";
+import { isMemoryAugmentationEnabled } from "../config.ts";
 
 // ---------------------------------------------------------------------------
 // Connection-type spread weights
@@ -97,22 +99,14 @@ export async function retrieve(
   const supabase = engine.getClient();
   const userId = engine.getUserId();
 
-  // ── Step 1: Seed via embedding similarity ──────────────────────────────
-  // The RPC `match_engrams` is expected to accept:
-  //   query_text  — the raw text (embedding computed server-side)
-  //   match_count — how many seeds to return
-  //   user_id     — row-level security scope
-  // It returns rows with { id, similarity, ...engram fields }.
-  const seedCount = Math.max(limit, 10); // fetch enough seeds to allow spread
-  const { data: seeds, error: seedError } = await supabase.rpc("match_engrams", {
-    query_text: query,
-    match_count: seedCount,
-    p_user_id: userId,
-  });
-
-  if (seedError) {
-    throw new Error(`Seed retrieval failed: ${seedError.message}`);
-  }
+  // ── Step 1: Seed via hybrid retrieval (M4) ─────────────────────────────
+  // Default: trigram-only via match_engrams (existing behavior).
+  // When options.api_key is provided AND memory augmentation is enabled, we
+  // also pull vector seeds via match_engrams_vector and RRF-fuse the two
+  // ranked lists. Spreading activation continues unchanged from the fused
+  // seed set.
+  const seedCount = Math.max(limit, 10);
+  const seeds = await hybridSeed(supabase, query, userId, seedCount, options.api_key);
 
   if (!seeds || seeds.length === 0) {
     return [];
@@ -349,6 +343,112 @@ async function reconsolidate(
  * Map a seed row (from match_engrams RPC) to an Engram shape.
  * The RPC may return columns in a flat structure.
  */
+/**
+ * Hybrid seed retrieval — fuses trigram similarity (existing match_engrams) with
+ * vector cosine similarity (M1's match_engrams_vector RPC) via Reciprocal Rank
+ * Fusion. Falls back to trigram-only if no API key is provided or the memory
+ * augmentation flag is off.
+ *
+ * Returns an array of seed rows in match_engrams shape (flat fields including
+ * `similarity`). Vector-only hits are hydrated by re-fetching the missing
+ * fields with a single `select * where id in (...)` against engrams.
+ */
+async function hybridSeed(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase client
+  supabase: any,
+  query: string,
+  userId: string,
+  matchCount: number,
+  apiKey?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- match_engrams row shape varies
+): Promise<any[]> {
+  const trigramP = supabase.rpc("match_engrams", {
+    query_text: query,
+    match_count: matchCount,
+    p_user_id: userId,
+  }).then(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r: { data: any[] | null; error: any }) => ({ rows: r.data ?? [], err: r.error }),
+  );
+
+  const vectorP = (async () => {
+    if (!apiKey || !isMemoryAugmentationEnabled(userId)) return { rows: [], err: null };
+    try {
+      const embed = await embedOne(apiKey, query);
+      if (!embed || embed.vector.length === 0) return { rows: [], err: null };
+      const r = await supabase.rpc("match_engrams_vector", {
+        query_embedding: embed.vector,
+        match_count: matchCount,
+        p_user_id: userId,
+        min_strength: 0.05,
+      });
+      return { rows: r.data ?? [], err: r.error };
+    } catch (err) {
+      console.warn("[mnemos.retrieve] vector seed failed (non-fatal):", (err as Error).message);
+      return { rows: [], err: null };
+    }
+  })();
+
+  const [trigramRes, vectorRes] = await Promise.all([trigramP, vectorP]);
+  if (trigramRes.err) {
+    throw new Error(`Seed retrieval failed: ${trigramRes.err.message}`);
+  }
+
+  const trigramRows = trigramRes.rows;
+  const vectorRows = vectorRes.rows;
+
+  // No vector hits → return trigram unchanged.
+  if (vectorRows.length === 0) return trigramRows;
+
+  // Index trigram rows by id for fusion + hydration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const trigramById = new Map<string, any>(trigramRows.map((r: any) => [r.id, r]));
+
+  const fusedIds = reciprocalRankFusion(
+    [
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ids: trigramRows.map((r: any) => r.id), weight: 0.3 },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ids: vectorRows.map((r: any) => r.id), weight: 0.5 },
+    ],
+    60,
+  ).slice(0, matchCount);
+
+  // Hydrate any vector-only ids that don't appear in the trigram set.
+  const missingIds = fusedIds.filter((id) => !trigramById.has(id));
+  if (missingIds.length > 0) {
+    const { data: hydrated, error: hydErr } = await supabase
+      .from("engrams")
+      .select("id, user_id, content, engram_type, strength, stability, accessibility, emotional_valence, emotional_arousal, surprise_score, source_context, tags, state, last_accessed_at, access_count, created_at, updated_at")
+      .in("id", missingIds);
+    if (hydErr) {
+      console.warn("[mnemos.retrieve] vector-only hydration failed:", hydErr.message);
+    } else if (hydrated) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const row of hydrated as any[]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vecRow = vectorRows.find((v: any) => v.id === row.id);
+        trigramById.set(row.id, { ...row, similarity: vecRow?.similarity ?? 0.5 });
+      }
+    }
+  }
+
+  // For vector-also hits in the trigram set, blend the similarity score so
+  // computeSeedActivation gives weight to vector-found relevance too.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const vRow of vectorRows as any[]) {
+    const tRow = trigramById.get(vRow.id);
+    if (tRow) {
+      const triSim = typeof tRow.similarity === "number" ? tRow.similarity : 0;
+      const vecSim = typeof vRow.similarity === "number" ? vRow.similarity : 0;
+      tRow.similarity = Math.max(triSim, vecSim);
+    }
+  }
+
+  // Return rows in fused order, dropping any that hydration couldn't recover.
+  return fusedIds.map((id) => trigramById.get(id)).filter(Boolean);
+}
+
 function seedToEngram(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC row shape varies
   seed: any,

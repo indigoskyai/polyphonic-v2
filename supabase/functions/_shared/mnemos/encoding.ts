@@ -18,6 +18,8 @@ import type {
   Belief,
   EmotionalState,
 } from "./types.ts";
+import { buildEmbeddingText, embedOne } from "../embeddings.ts";
+import { isMemoryAugmentationEnabled } from "../config.ts";
 
 import {
   SURPRISE_ENCODING_BONUS,
@@ -377,6 +379,31 @@ export async function encode(
   }
 
   const engram = insertedEngram as Engram;
+
+  // 4b. Embedding (M4) — best-effort post-insert. NULL on failure; the
+  //     embeddings-backfill cron picks up engrams with NULL embeddings.
+  if (context.api_key && isMemoryAugmentationEnabled(userId)) {
+    try {
+      const embedText = buildEmbeddingText({
+        content: engram.content,
+        engram_type: engram.engram_type,
+        tags: engram.tags,
+      });
+      const embed = await embedOne(context.api_key, embedText);
+      if (embed && embed.vector.length > 0) {
+        const { error: embedErr } = await client
+          .from("engrams")
+          .update({ embedding: embed.vector, embedding_model: embed.model })
+          .eq("id", engram.id);
+        if (embedErr) {
+          console.warn("[mnemos.encode] embedding update failed:", embedErr.message);
+        }
+      }
+    } catch (err) {
+      // Embedding is non-fatal — log and continue.
+      console.warn("[mnemos.encode] embedding generation failed (non-fatal):", (err as Error).message);
+    }
+  }
 
   // 5. Connection discovery and creation
   const discovered = await discoverConnections(

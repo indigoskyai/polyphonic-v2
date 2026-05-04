@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPrompt } from "./prompts.ts";
+import { embedOne } from "../embeddings.ts";
 
 const GATE_MODEL = "anthropic/claude-haiku-4.5";
 const WRITE_MODEL_PRIMARY = "anthropic/claude-sonnet-4.6";
@@ -501,5 +502,22 @@ export async function writeHypomnemaEntry(
     return { status: "error", reason: `insert failed: ${insErr?.message || "unknown"}`, raw: text };
   }
 
-  return { status: "wrote", entryId: inserted.id as string };
+  const entryId = inserted.id as string;
+
+  // Embedding (M4) — best-effort post-insert. NULL on failure; backfill picks up.
+  try {
+    const embedText = (domain ? `[${domain}] ` : "") + content;
+    const embed = await embedOne(apiKey, embedText);
+    if (embed && embed.vector.length > 0) {
+      const { error: embedErr } = await supabase
+        .from("hypomnema_entry")
+        .update({ embedding: embed.vector, embedding_model: embed.model })
+        .eq("id", entryId);
+      if (embedErr) console.warn("[hypomnema.write] embedding update failed:", embedErr.message);
+    }
+  } catch (err) {
+    console.warn("[hypomnema.write] embedding failed (non-fatal):", (err as Error).message);
+  }
+
+  return { status: "wrote", entryId };
 }

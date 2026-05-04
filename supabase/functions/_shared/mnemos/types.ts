@@ -125,6 +125,13 @@ export interface EncodingContext {
   source_context?: Record<string, unknown>;
   /** IDs of existing engrams to connect to. */
   related_engram_ids?: string[];
+  /**
+   * OpenRouter API key for post-insert embedding generation. When omitted,
+   * the engram is stored with a NULL embedding and the backfill cron will
+   * pick it up later. Gated behind the memory-augmentation flag at the
+   * call site.
+   */
+  api_key?: string;
 }
 
 /** Options for retrieval queries. */
@@ -143,6 +150,14 @@ export interface RetrievalOptions {
   spread_activation?: boolean;
   /** Depth of spreading activation traversal. */
   spread_depth?: number;
+  /**
+   * OpenRouter API key for vector-based seed retrieval. When provided AND
+   * the memory-augmentation flag is on, retrieval seeds via RRF-fused
+   * trigram + vector similarity. When omitted, falls back to trigram-only
+   * seed (existing behavior). Either way, spreading activation continues
+   * unchanged from the seeds.
+   */
+  api_key?: string;
 }
 
 /** Options for the decay process. */

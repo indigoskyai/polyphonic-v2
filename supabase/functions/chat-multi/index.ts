@@ -237,7 +237,7 @@ serve(async (req) => {
       (async () => {
         try {
           const mnemos = new MnemosEngine(supabase, userId);
-          return await mnemos.retrieve(message, { limit: 5, spread_activation: true });
+          return await mnemos.retrieve(message, { limit: 5, spread_activation: true, api_key: apiKey });
         } catch { return []; }
       })(),
       agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
@@ -657,7 +657,7 @@ serve(async (req) => {
               (e) => console.warn("pending revision finalization failed:", e)
             );
             await autoTitleThread(supabase, thread_id, message, fallbackContent, apiKey!);
-            encodeMnemosMemory(supabase, userId, message, fallbackContent).catch(
+            encodeMnemosMemory(supabase, userId, message, fallbackContent, apiKey).catch(
               (e) => console.warn("Mnemos encode failed (non-fatal):", e)
             );
             fireObserverWatch(thread_id, agentId, authHeader);
@@ -855,7 +855,7 @@ serve(async (req) => {
           );
 
           // Encode the exchange into Mnemos (fire and forget)
-          encodeMnemosMemory(supabase, userId, message, synthesizedContent).catch(
+          encodeMnemosMemory(supabase, userId, message, synthesizedContent, apiKey).catch(
             (e) => console.warn("Mnemos encode failed (non-fatal):", e)
           );
 
@@ -1376,6 +1376,7 @@ async function encodeMnemosMemory(
   userId: string,
   userMessage: string,
   assistantResponse: string,
+  apiKey?: string,
 ) {
   const mnemos = new MnemosEngine(supabase, userId);
   await mnemos.encode(
@@ -1384,6 +1385,7 @@ async function encodeMnemosMemory(
       engram_type: "episodic",
       tags: ["conversation"],
       source_context: { type: "chat_exchange" },
+      api_key: apiKey,
     }
   );
 }
@@ -1494,7 +1496,7 @@ async function singleModelStream(
         );
 
         // Encode into Mnemos
-        encodeMnemosMemory(supabase, userId, userMessage, fullContent).catch(() => {});
+        encodeMnemosMemory(supabase, userId, userMessage, fullContent, apiKey).catch(() => {});
 
         // Fire post-turn background reflection (best-effort)
         if (authHeader) {
