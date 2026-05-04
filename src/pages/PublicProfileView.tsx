@@ -6,14 +6,15 @@ import { supabase } from '@/integrations/supabase/client';
 import InfiniteCanvas from '@/components/canvas-profile/InfiniteCanvas';
 import EditToolbar from '@/components/canvas-profile/EditToolbar';
 import StarterLayoutPicker from '@/components/canvas-profile/StarterLayoutPicker';
+import FrameProfileLayout from '@/components/canvas-profile/FrameProfileLayout';
 import { Pencil, Eye, ArrowLeft } from 'lucide-react';
 
 interface Props { mode: 'view' | 'edit' }
 
 export default function PublicProfileView({ mode }: Props) {
   const params = useParams();
-  const rawHandle = params.handle || '';
-  const handle = rawHandle.startsWith('@') ? rawHandle.slice(1).toLowerCase() : '';
+  // Route is /@:handle so params.handle has no leading @
+  const handle = (params.handle || '').toLowerCase();
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -27,11 +28,13 @@ export default function PublicProfileView({ mode }: Props) {
   const [showStarter, setShowStarter] = useState(false);
   const [vp, setVp] = useState<{ x: number; y: number; zoom: number } | undefined>(undefined);
 
+  // Default presentation = Frame (sidebar+gallery). Canvas = ?view=canvas.
+  const view: 'frame' | 'canvas' = (search.get('view') === 'canvas' || mode === 'edit') ? 'canvas' : 'frame';
+
   useEffect(() => {
-    if (!rawHandle.startsWith('@')) { navigate('/', { replace: true }); return; }
     if (!handle) return;
     loadByHandle(handle);
-  }, [handle, rawHandle, loadByHandle, navigate]);
+  }, [handle, loadByHandle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +46,7 @@ export default function PublicProfileView({ mode }: Props) {
     return () => { cancelled = true; };
   }, [user, handle]);
 
-  // viewport from URL
+  // viewport from URL (canvas only)
   const initialVp = useMemo(() => {
     const x = Number(search.get('x'));
     const y = Number(search.get('y'));
@@ -78,7 +81,7 @@ export default function PublicProfileView({ mode }: Props) {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 'var(--track-mono)', color: 'var(--text-ghost)', textTransform: 'uppercase' }}>
             § 404
           </div>
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 32, color: 'var(--text-primary)', marginTop: 6 }}>
+          <div style={{ fontFamily: 'var(--font-serif, "Instrument Serif", serif)', fontSize: 32, color: 'var(--text-primary)', marginTop: 6 }}>
             @{handle} hasn't been claimed.
           </div>
           {user && (
@@ -100,6 +103,87 @@ export default function PublicProfileView({ mode }: Props) {
     );
   }
 
+  // Top bar shared across both views
+  const TopBar = (
+    <div
+      style={{
+        position: 'fixed', top: 18, right: 22,
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        zIndex: 60,
+      }}
+    >
+      {user && (
+        <button
+          type="button"
+          onClick={() => navigate('/chat')}
+          title="Back to app"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 12px', borderRadius: 999,
+            background: 'var(--surface-3)', border: '1px solid var(--border)',
+            color: 'var(--text-body)', cursor: 'pointer', fontSize: 11,
+            fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+          }}
+        >
+          <ArrowLeft size={12} /> app
+        </button>
+      )}
+      {isOwner && mode === 'view' && (
+        <button
+          type="button"
+          onClick={() => navigate(`/@${handle}/edit`)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 12px', borderRadius: 999,
+            background: 'var(--ink)', border: '1px solid var(--ink)',
+            color: 'var(--floor)', cursor: 'pointer', fontSize: 11,
+            fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+            fontWeight: 600,
+          }}
+        >
+          <Pencil size={12} /> edit
+        </button>
+      )}
+      {isOwner && mode === 'edit' && (
+        <button
+          type="button"
+          onClick={() => navigate(`/@${handle}`)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 12px', borderRadius: 999,
+            background: 'var(--surface-3)', border: '1px solid var(--border)',
+            color: 'var(--text-body)', cursor: 'pointer', fontSize: 11,
+            fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+          }}
+        >
+          <Eye size={12} /> preview
+        </button>
+      )}
+    </div>
+  );
+
+  // FRAME view (default for view-mode)
+  if (view === 'frame' && mode === 'view') {
+    return (
+      <>
+        <FrameProfileLayout profile={profile} items={items} isOwner={isOwner} handle={handle} />
+        {TopBar}
+        {isOwner && !profile.published && (
+          <div className="frame-unpublished-banner" style={{
+            position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)',
+            background: 'var(--surface-3)', border: '1px solid var(--border-strong)',
+            color: 'var(--text-body)', padding: '8px 14px', borderRadius: 999,
+            fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+            zIndex: 50,
+          }}>
+            unpublished — only you can see this
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // CANVAS view (always for edit mode; opt-in via ?view=canvas in view mode)
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--canvas)' }}>
       <InfiniteCanvas
@@ -111,11 +195,12 @@ export default function PublicProfileView({ mode }: Props) {
           next.set('x', String(Math.round(v.x)));
           next.set('y', String(Math.round(v.y)));
           next.set('z', v.zoom.toFixed(3));
+          // preserve view=canvas if present
           setSearch(next, { replace: true });
         }}
       />
 
-      {/* Floating header */}
+      {/* Floating header (canvas only) */}
       <div
         style={{
           position: 'absolute', top: 18, left: 22,
@@ -137,7 +222,7 @@ export default function PublicProfileView({ mode }: Props) {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: 'var(--track-mono)', color: 'var(--text-soft)', textTransform: 'uppercase' }}>
             @{handle}
           </div>
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.1, marginTop: 2 }}>
+          <div style={{ fontFamily: 'var(--font-serif, "Instrument Serif", serif)', fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.1, marginTop: 2 }}>
             {profile.display_name}
           </div>
           {profile.bio_short && (
@@ -148,56 +233,43 @@ export default function PublicProfileView({ mode }: Props) {
         </div>
       </div>
 
-      {/* Right-side controls */}
-      <div style={{ position: 'absolute', top: 18, right: 22, display: 'inline-flex', alignItems: 'center', gap: 8, zIndex: 50 }}>
-        {user && (
+      {/* View switch (canvas mode, not in edit) */}
+      {mode === 'view' && (
+        <div style={{
+          position: 'absolute', top: 70, left: 22, zIndex: 50,
+          display: 'inline-flex', background: 'var(--surface-3)',
+          border: '1px solid var(--border)', borderRadius: 999, padding: 3,
+        }}>
           <button
             type="button"
-            onClick={() => navigate('/chat')}
-            title="Back to app"
+            onClick={() => {
+              const next = new URLSearchParams(search);
+              next.delete('view'); next.delete('x'); next.delete('y'); next.delete('z');
+              setSearch(next, { replace: true });
+            }}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 12px', borderRadius: 999,
-              background: 'var(--surface-3)', border: '1px solid var(--border)',
-              color: 'var(--text-body)', cursor: 'pointer', fontSize: 11,
-              fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+              background: 'transparent', border: 'none', padding: '5px 12px', borderRadius: 999,
+              cursor: 'pointer', color: 'var(--text-soft)',
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
             }}
           >
-            <ArrowLeft size={12} /> app
+            frame
           </button>
-        )}
-        {isOwner && mode === 'view' && (
           <button
             type="button"
-            onClick={() => navigate(`/@${handle}/edit`)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 12px', borderRadius: 999,
-              background: 'var(--luca-full)', border: '1px solid var(--luca-full)',
-              color: '#1a1a1f', cursor: 'pointer', fontSize: 11,
-              fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
-              fontWeight: 600,
+              background: 'var(--surface-4)', border: 'none', padding: '5px 12px', borderRadius: 999,
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
+              cursor: 'default',
             }}
           >
-            <Pencil size={12} /> edit
+            canvas
           </button>
-        )}
-        {isOwner && mode === 'edit' && (
-          <button
-            type="button"
-            onClick={() => navigate(`/@${handle}`)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 12px', borderRadius: 999,
-              background: 'var(--surface-3)', border: '1px solid var(--border)',
-              color: 'var(--text-body)', cursor: 'pointer', fontSize: 11,
-              fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
-            }}
-          >
-            <Eye size={12} /> preview
-          </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {TopBar}
 
       {mode === 'edit' && isOwner && (
         <EditToolbar onExit={() => navigate(`/@${handle}`)} viewport={vp || profile.home_viewport} />
@@ -210,8 +282,8 @@ export default function PublicProfileView({ mode }: Props) {
         <div
           style={{
             position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(201,168,124,0.12)', border: '1px solid rgba(201,168,124,0.35)',
-            color: 'var(--luca-full)', padding: '8px 14px', borderRadius: 999,
+            background: 'var(--surface-3)', border: '1px solid var(--border-strong)',
+            color: 'var(--text-body)', padding: '8px 14px', borderRadius: 999,
             fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase',
             zIndex: 50,
           }}
