@@ -45,7 +45,9 @@ export default function Rail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { createThread } = useThreadStore();
-  const settingsOpen = location.pathname.startsWith('/settings');
+  const settingsOpen = location.pathname.startsWith('/settings')
+    || location.pathname.startsWith('/profile/skills')
+    || location.pathname.startsWith('/profile/schedule');
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
@@ -65,6 +67,10 @@ export default function Rail() {
     : location.pathname.startsWith('/mind') ? 'mind'
     : location.pathname.startsWith('/journal') ? 'journal'
     : location.pathname.startsWith('/import') ? 'import'
+    : location.pathname.startsWith('/profile/identity') ? 'mind'
+    : location.pathname.startsWith('/profile/revisions') ? 'mind'
+    : location.pathname.startsWith('/profile/skills') ? 'settings'
+    : location.pathname.startsWith('/profile/schedule') ? 'settings'
     : location.pathname.startsWith('/profile') ? 'profile'
     : location.pathname.startsWith('/dashboard') ? 'mind'
     : 'chat';

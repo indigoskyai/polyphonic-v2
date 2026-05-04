@@ -1,119 +1,111 @@
-
 ## Goal
 
-Two things, in one pass:
+Realign left-rail sidebars so they reflect what's *Luca's cognition* vs. *the user's psychological profile*, and lay groundwork for multiple agent minds.
 
-1. **Kill Instrument Serif everywhere.** Replace it with the existing sans stack so headings, profile names, italic pull-quotes, and decorative numerals all match a single, refined hierarchy — Linear / Claude / ChatGPT-grade consistency.
-2. **Stub the public-profile / canvas work** behind a "Social intelligence — coming soon" cover. Keep the code in place (so we can resume later) but don't expose it.
+## Current state (problem)
 
----
+- **Profile sidebar** (`SidebarProfile`) shows: Public profile, Identity, Skills, Revisions, Schedule, plus the 9 psych tabs. Identity/Skills/Revisions/Schedule are about Luca, not the user — they don't belong here. Skills/Routines are also under Settings, so they're duplicated.
+- **Mind sidebar** (`SidebarMind`) shows only cognition streams (Overview, Thoughts, Dreams, …, Activity). Identity & Revisions live nowhere obvious.
+- **Settings sidebar** already has Skills + Routines — correct, leave alone.
 
-## Part 1 — Typography standardization
+## Target structure
 
-### The rule (single source of truth)
-
-We collapse to **two families** plus weights:
-
-- `--font-sans` (Switzer / Inter fallback) — every heading, body, label, value, italic accent. **Default for everything.**
-- `--font-mono` (JetBrains Mono) — section labels (`§ 04`), telemetry, code, KBD, timestamps, anything that today reads as `text-mono` / uppercase tracked.
-
-`--font-serif` is **deleted** as a token and the Google Fonts import for Instrument Serif is removed. Italics that previously leaned on the serif become **sans italic at the same size** (Switzer has a true italic) — the contrast is now weight + italic, not family-switch.
-
-### Hierarchy (applied consistently across Settings, Profile/Mind, Workspace, Canvas overlays)
-
-| Role | Family | Size | Weight | Tracking | Use |
-|---|---|---|---|---|---|
-| Display | sans | 32–42 | 450 | -0.02em | Page titles ("Public profile", "Identity", "Skills") |
-| H2 | sans | 22 | 500 | -0.015em | Section heads inside a page |
-| H3 | sans | 16 | 500 | -0.005em | Card titles |
-| Body | sans | 14 | 400 | 0.003em | Paragraphs, inputs |
-| Body-sm | sans | 13 | 400 | 0.003em | Secondary copy |
-| Meta | mono | 10–11 | 400 | 0.08em, UPPERCASE | `§ 09`, "YOUR HANDLE", labels |
-| Numeric / value | mono | varies | 400 | 0.04em | Stats, telemetry, hex codes |
-| Quote / accent | sans **italic** | matches body | 400 | 0.003em | Replaces every serif-italic pull-quote |
-
-### Concrete code changes
-
-- **`src/index.css`**
-  - Remove `@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif…')` (line 2).
-  - Remove `--font-serif` token (line 166).
-  - Audit the canonical type-scale block (lines 177+) and confirm no role references serif; if any do, swap to sans.
-- **All call sites** (sweep + replace): files containing `var(--font-serif)` / `Instrument Serif` / `font-serif`:
-  - `src/pages/ProfileView.tsx` (6 spots)
-  - `src/pages/ProfileIdentityView.tsx` (2)
-  - `src/pages/ProfileSkillsView.tsx` (2)
-  - `src/pages/ProfileScheduleView.tsx` (1)
-  - `src/pages/ProfileRevisionsView.tsx` (1)
-  - `src/pages/WorkspaceView.tsx` (1)
-  - `src/pages/PublicProfileView.tsx` (4)
-  - `src/pages/settings/PublicProfileSettings.tsx` (1)
-  - `src/components/profile/viz.tsx` (9, including SVG `fontFamily="var(--font-serif)"`)
-  - `src/components/Rail.tsx` (1)
-  - `src/components/canvas/CanvasPanel.tsx` (1)
-  - `src/components/canvas/ArtifactRenderer.tsx` (1)
-  - `src/components/canvas-profile/canvas.css` (4)
-  - `src/components/canvas-profile/StarterLayoutPicker.tsx` (2)
-
-  For each: remove `fontFamily: 'var(--font-serif)'` (inherit sans) and remove `fontStyle: 'italic'` **only** where the italic was purely decorative — keep italic on true emphasis (pull-quotes, taglines) since Switzer italic still reads as a soft accent. Default rule: **keep italic, drop family**.
-
-- **`src/components/profile/viz.tsx` header comment** — update the docstring that lists "serif (--font-serif, Instrument Serif)" so future contributors don't reach for it.
-
-### Profile/Mind consistency pass (the "multiple fonts on one page" complaint)
-
-While doing the sweep, on each Mind tab (`PortraitMind`, `EmotionsMind`, `CognitionMind`, `RelationshipsMind`, `ValuesMind`, `ShadowMind`, `GrowthMind`, `CommunicationMind`) verify section heads, card titles, and inline values all map to the role table above. Any one-off `fontSize` / `fontWeight` that drifts from the table gets pulled into a role. No new tokens — just enforce the existing scale.
-
----
-
-## Part 2 — Stub the public-profile feature
-
-We **do not delete** the work — it's freshly built and we'll resume. We hide every entry point behind a cover.
-
-### Cover component
-
-New `src/components/common/ComingSoonCover.tsx` — full-surface dark panel:
-
-```text
-┌───────────────────────────────────┐
-│                                   │
-│          § coming soon            │   ← mono meta
-│                                   │
-│       Social intelligence         │   ← sans display, 36
-│                                   │
-│   Public profiles, shareable      │   ← sans body-sm, --text-soft
-│   canvases, and handle claiming   │
-│   are on the roadmap.             │
-│                                   │
-└───────────────────────────────────┘
+### Profile rail button (psychological profile — the user)
+```
+§ 04  Profile
+  Public profile
+  ──────────────
+  Portrait
+  Personality
+  Communication
+  Emotions
+  Values
+  Relationships
+  Cognition
+  Growth
+  Shadow
 ```
 
-Centered, monochromatic, no buttons. Optional `subtitle` prop so the same component covers different surfaces with the right copy.
+### Mind rail button (Luca's cognition, scoped per-agent)
+```
+§ 05  Mind
+  [Agent ▾  Luca]      ← agent scope selector (only Luca for now)
+  ── SELF ──
+  Identity
+  Revisions
+  ── STREAMS ──
+  Overview
+  Thoughts
+  Dreams
+  Wanderings
+  Insights
+  Reflections
+  Beliefs
+  Activity
+```
 
-### Where the cover gets mounted
+### Settings rail button (unchanged)
+Skills and Routines remain only here.
 
-- **`src/pages/settings/PublicProfileSettings.tsx`** — render `<ComingSoonCover />` at the top of the panel and short-circuit the rest (or render the cover *over* the form behind a non-interactive overlay so we keep the layout for later). Simpler: replace the body with the cover.
-- **`src/pages/PublicProfileView.tsx`** (`/u/:handle` and `/u/:handle/edit`) — render `<ComingSoonCover />` as the entire page, regardless of mode, owner state, or `?view=`.
-- **`src/components/sidebar/SidebarProfile.tsx`** — keep the "Public profile" row visible (so users discover it's coming) but it just navigates to the covered settings page.
+### Schedule
+Per your call: moves out of Profile, lives only under Settings → Routines (already routed there via `/settings/routines` which renders `ProfileScheduleView`). The standalone `/profile/schedule` route stays accessible but is no longer linked from any sidebar.
 
-The legacy `/@:handle` routes already redirect into the same view, so they're covered automatically.
+## Implementation
 
-### What stays untouched
+### 1. Agent scope store (new) — `src/stores/agentScopeStore.ts`
+Tiny Zustand store: `{ activeAgentId: 'luca', availableAgents: [{id:'luca',name:'Luca'}], setActiveAgent }`. Hardcode `[{id:'luca',name:'Luca'}]` for now; future agents will be appended without UI changes.
 
-- All canvas-profile components, stores (`profileCanvasStore`, `handleStore`), migration, and `FrameProfileLayout` stay on disk. No deletions.
-- The `canvas.css` import in `index.css` stays (harmless when components aren't rendered).
+### 2. Agent scope picker (new) — `src/components/sidebar/AgentScopeSelect.tsx`
+Compact dropdown styled like existing sidebar chrome (mono caps eyebrow "AGENT", current name in sans, chevron). Disabled-feel when only one agent. Used at top of `SidebarMind` (and reusable later for `SidebarProfile` if user wants per-agent psych views).
 
----
+### 3. `SidebarMind.tsx` — rewrite item list
+- Mount `<AgentScopeSelect/>` under the header.
+- Render two grouped sections via small `GroupLabel` (same pattern as `SidebarSettings`):
+  - **SELF**: Identity (→ `/profile/identity`), Revisions (→ `/profile/revisions`)
+  - **STREAMS**: existing 8 tabs (Overview…Activity) using `setMindTab`.
+- Active state: Identity/Revisions are active when `pathname` matches; stream items active when on `/mind` AND `mindTab` matches.
+- Clicking a stream item from `/profile/identity` should navigate to `/mind` and set the tab.
+
+### 4. `SidebarProfile.tsx` — remove non-psych items
+Drop the rows for Identity, Skills, Revisions, Schedule. Keep: Public profile + the 9 `TABS`.
+
+### 5. `Sidebar.tsx` — route → panel mapping
+`/profile/identity` and `/profile/revisions` should now show **SidebarMind** (since they are Luca's cognition surfaces conceptually). Update mapping:
+```
+path.startsWith('/profile/identity')   → SidebarMind
+path.startsWith('/profile/revisions')  → SidebarMind
+path.startsWith('/profile/skills')     → SidebarSettings  (matches "lives in settings")
+path.startsWith('/profile/schedule')   → SidebarSettings
+path.startsWith('/profile')            → SidebarProfile
+```
+Keep `/settings/public-profile → SidebarProfile` (the fix you just approved).
+
+### 6. `Rail.tsx` — active-icon highlighting
+Update `activeView` so Identity/Revisions light the **mind** icon, and Skills/Schedule light the **settings** icon:
+```
+/profile/identity, /profile/revisions          → 'mind'
+/profile/skills, /profile/schedule             → 'settings' (handled via existing settingsOpen check; extend it)
+/profile (anything else)                       → 'profile'
+```
+
+### 7. No route changes
+All existing routes (`/profile/identity`, `/profile/revisions`, `/profile/skills`, `/profile/schedule`, `/settings/skills`, `/settings/routines`) stay. We're only changing which sidebar lists them and which rail icon highlights.
 
 ## Verification
 
-1. `rg "Instrument Serif|--font-serif|font-serif"` returns **zero matches** in `src/`.
-2. Visual diff on `/settings`, `/profile`, `/mind`, `/workspace`, `/chat`: page titles all render in sans; no font-family switches mid-page.
-3. `/settings/public-profile`, `/u/anything`, `/u/anything/edit` all show the "Social intelligence — coming soon" cover.
-4. Console clean, no FOUT from missing serif font.
-
----
+- Click rail **Profile** icon → sidebar shows only Public profile + 9 psych tabs. No Identity/Skills/Revisions/Schedule.
+- Click rail **Mind** icon → sidebar shows agent scope (Luca), then SELF (Identity, Revisions), then STREAMS (Overview…Activity).
+- Click **Identity** in Mind sidebar → navigates to `/profile/identity`, Mind sidebar persists, rail Mind icon stays lit.
+- Click **Revisions** in Mind sidebar → same behavior.
+- Click rail **Settings** icon → Skills + Routines visible there (unchanged).
+- No console errors on `/mind`, `/profile`, `/profile/identity`, `/profile/revisions`, `/settings/skills`, `/settings/routines`.
 
 ## Out of scope
 
-- Adding a new font family or weight.
-- Refactoring the type-scale tokens themselves (the existing scale is good once serif is removed).
-- Deleting or migrating any canvas-profile code or the database tables.
+- Actually wiring multi-agent data (only Luca exists). Scope selector renders but doesn't filter data yet — `cognitiveStore` stays single-user.
+- Renaming pages (`ProfileIdentityView` etc.). Will rename in a later pass once routes are updated.
+- Visual redesign of Identity/Revisions pages.
+
+## Open question (none — answered above)
+
+Schedule → Settings (per your answer). Mind ordering → grouped SELF / STREAMS sections (per your answer). Multi-agent → store + picker stub (per your answer).
