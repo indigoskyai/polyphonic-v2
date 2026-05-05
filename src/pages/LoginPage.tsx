@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -33,6 +34,22 @@ export default function LoginPage() {
     // Avoid email-enumeration: never reveal whether the address is registered.
     if (error) console.warn('[reset]', error.message);
     setInfo('If that email exists, a reset link is on its way.');
+  };
+
+  const handleGoogle = async () => {
+    setError(''); setInfo('');
+    setLoading(true);
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: `${window.location.origin}/chat`,
+    });
+    if (result.error) {
+      setError(result.error.message ?? 'Google sign-in failed');
+      setLoading(false);
+      return;
+    }
+    if (!result.redirected) {
+      navigate('/chat');
+    }
   };
 
   return (
@@ -107,6 +124,21 @@ export default function LoginPage() {
             {forgotMode ? 'Back to sign in' : 'Forgot password?'}
           </button>
         </form>
+
+        {!forgotMode && (
+          <>
+            <div className="my-4 text-[10px] text-center" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>OR</div>
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={loading}
+              className="w-full h-10 text-sm font-medium rounded-[var(--radius-md)] cursor-pointer"
+              style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
+            >
+              Continue with Google
+            </button>
+          </>
+        )}
 
         <p className="mt-6 text-xs text-center" style={{ color: 'var(--text-ghost)' }}>
           No account?{' '}
