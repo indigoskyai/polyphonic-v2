@@ -472,20 +472,30 @@ export default function ChatView() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [isStreaming, messages.length]);
 
+  const scrollRafRef = useRef(0);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (!userPinnedRef.current) return;
-    const now = performance.now();
     if (isStreaming || streamingContent) {
-      // Throttle during streaming so we don't thrash the layout.
-      if (now - lastScrollAtRef.current < 80) return;
-      lastScrollAtRef.current = now;
-      el.scrollTop = el.scrollHeight;
+      // Coalesce stream-driven scrolls into one per frame; instant scroll
+      // (no smooth easing) so it tracks the typewriter without compounding.
+      if (scrollRafRef.current) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = 0;
+        if (!userPinnedRef.current) return;
+        const node = scrollRef.current;
+        if (node) node.scrollTop = node.scrollHeight;
+      });
     } else {
-      lastScrollAtRef.current = now;
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
+    return () => {
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
+    };
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
   const scrollToBottom = useCallback(() => {
