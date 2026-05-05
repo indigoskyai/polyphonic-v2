@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authRedirectTo, signInWithGoogle } from '@/lib/authFlow';
+import { authRedirectTo, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -29,6 +29,20 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
     const { error, redirected } = await signInWithGoogle();
+    if (error) {
+      setError(error);
+      setLoading(false);
+      return;
+    }
+    if (!redirected) {
+      navigate('/chat');
+    }
+  };
+
+  const handleApple = async () => {
+    setError('');
+    setLoading(true);
+    const { error, redirected } = await signInWithApple();
     if (error) {
       setError(error);
       setLoading(false);
@@ -124,6 +138,38 @@ export default function SignupPage() {
             G
           </span>
           Continue with Google
+        </button>
+
+        <button
+          type="button"
+          onClick={handleApple}
+          disabled={loading}
+          aria-label="Continue with Apple"
+          className="h-10 w-full mt-3 text-sm font-medium rounded-[var(--radius-md)] cursor-pointer flex items-center justify-center gap-2"
+          style={{
+            background: 'var(--bg-void)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-sans)',
+            opacity: loading ? 0.55 : 1,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            className="flex items-center justify-center"
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: '50%',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+            }}
+          >
+            
+          </span>
+          Continue with Apple
         </button>
 
         <p className="mt-6 text-xs text-center" style={{ color: 'var(--text-ghost)' }}>

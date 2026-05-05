@@ -22,3 +22,18 @@ export async function signInWithGoogle(): Promise<{ error?: string; redirected: 
 
   return { redirected: Boolean(result.redirected) };
 }
+
+export async function signInWithApple(): Promise<{ error?: string; redirected: boolean }> {
+  const result = await lovable.auth.signInWithOAuth('apple', {
+    redirect_uri: authRedirectTo('/chat'),
+  });
+
+  if (result.error) {
+    return {
+      error: result.error.message ?? 'Apple sign-in failed',
+      redirected: false,
+    };
+  }
+
+  return { redirected: Boolean(result.redirected) };
+}

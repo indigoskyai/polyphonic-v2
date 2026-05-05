@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authRedirectTo, signInWithGoogle } from '@/lib/authFlow';
+import { authRedirectTo, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -41,6 +41,21 @@ export default function LoginPage() {
     setInfo('');
     setLoading(true);
     const { error, redirected } = await signInWithGoogle();
+    if (error) {
+      setError(error);
+      setLoading(false);
+      return;
+    }
+    if (!redirected) {
+      navigate('/chat');
+    }
+  };
+
+  const handleApple = async () => {
+    setError('');
+    setInfo('');
+    setLoading(true);
+    const { error, redirected } = await signInWithApple();
     if (error) {
       setError(error);
       setLoading(false);
@@ -155,6 +170,37 @@ export default function LoginPage() {
                   G
                 </span>
                 Continue with Google
+              </button>
+              <button
+                type="button"
+                onClick={handleApple}
+                disabled={loading}
+                aria-label="Continue with Apple"
+                className="h-10 text-sm font-medium rounded-[var(--radius-md)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                style={{
+                  background: 'var(--bg-void)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-sans)',
+                  opacity: loading ? 0.55 : 1,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                  }}
+                >
+                  
+                </span>
+                Continue with Apple
               </button>
             </>
           )}
