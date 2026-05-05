@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -22,6 +23,22 @@ export default function SignupPage() {
     if (error) setError(error.message);
     else setSent(true);
     setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    setLoading(true);
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: `${window.location.origin}/chat`,
+    });
+    if (result.error) {
+      setError(result.error.message ?? 'Google sign-in failed');
+      setLoading(false);
+      return;
+    }
+    if (!result.redirected) {
+      navigate('/chat');
+    }
   };
 
   if (sent) {
