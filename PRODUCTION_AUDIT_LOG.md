@@ -1162,3 +1162,25 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the verification-warning cleanup to `main`.
 3. Continue Phase 5 contrast and route-timing gates.
+
+---
+
+## Phase 5 — Contrast Token Gate  [x] (2026-05-05)
+
+**Changed**
+- Raised `text-mid` and `text-secondary` so normal secondary text clears AA contrast on core app surfaces.
+- Lifted `text-soft`, `text-tertiary`, and `text-ghost` enough to stay readable for large labels and secondary UI while preserving a restrained hierarchy.
+- Added `src/test/designTokens.test.ts` as a regression guard for core surface/text token contrast.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/designTokens.test.ts` passed.
+- Local Playwright `/auth/login` smoke reported 0 warnings/errors.
+
+**Remaining risks**
+- Full route-level color contrast should still be checked during the final authenticated release pass because isolated one-off inline colors can bypass tokens.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the contrast-token milestone to `main`.
+3. Continue Phase 5 route-timing and final launch checklist gates.
