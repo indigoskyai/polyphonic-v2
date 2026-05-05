@@ -1480,6 +1480,22 @@ export default function ChatView() {
   // path as the paperclip control.
   const [isDragging, setIsDragging] = useState(false);
   const dragDepthRef = useRef(0);
+  const resetDragState = useCallback(() => {
+    dragDepthRef.current = 0;
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('dragend', resetDragState);
+    window.addEventListener('drop', resetDragState);
+    window.addEventListener('blur', resetDragState);
+    return () => {
+      window.removeEventListener('dragend', resetDragState);
+      window.removeEventListener('drop', resetDragState);
+      window.removeEventListener('blur', resetDragState);
+    };
+  }, [resetDragState]);
+
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     if (!e.dataTransfer?.types?.includes('Files')) return;
     e.preventDefault();
@@ -1496,10 +1512,9 @@ export default function ChatView() {
   }, []);
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    dragDepthRef.current = 0;
-    setIsDragging(false);
+    resetDragState();
     queueAttachmentFiles(e.dataTransfer?.files);
-  }, [queueAttachmentFiles]);
+  }, [queueAttachmentFiles, resetDragState]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
@@ -1549,12 +1564,13 @@ export default function ChatView() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                className="chat-file-input"
-                onChange={(e) => {
-                  queueAttachmentFiles(e.currentTarget.files);
-                  e.currentTarget.value = '';
-                }}
-              />
+                  className="chat-file-input"
+                  onChange={(e) => {
+                    resetDragState();
+                    queueAttachmentFiles(e.currentTarget.files);
+                    e.currentTarget.value = '';
+                  }}
+                />
               {renderModelKeyNotice()}
               {renderPendingAttachments()}
               <div className="input-row">
@@ -1954,6 +1970,7 @@ export default function ChatView() {
             multiple
             className="chat-file-input"
             onChange={(e) => {
+              resetDragState();
               queueAttachmentFiles(e.currentTarget.files);
               e.currentTarget.value = '';
             }}

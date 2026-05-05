@@ -720,3 +720,33 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Run `npm run verify`.
 2. Commit and push this stop-control patch.
+
+---
+
+## Phase 2 — Attachment Deploy Smoke and Drag Overlay Polish  [~] (2026-05-05)
+
+**Found**
+- Ran a local browser attachment-context smoke after the latest pushes.
+- Thread `742bffb1-ffe7-4f1d-a1d8-c25b10ff8a02`:
+  - User message displayed `phase2-deploy-smoke.md` with inline markdown preview and marker `PHASE2_ATTACHMENT_CONTEXT_MARKER_2026_05_05`.
+  - Luca replied: "No attachment came through — only text."
+- This proves the frontend upload/display path is working, but the currently deployed remote `chat-multi` edge function still does not include `_shared/chat-attachments.ts` runtime context.
+- Code review of the synthetic drag path exposed a polish risk: drag state only reset through component-level leave/drop paths, with no defensive cleanup for canceled drags, browser blur, or file-picker selection.
+
+**Changed**
+- Marked P2-001 `Blocked` pending Lovable/Supabase redeploy of `chat` and `chat-multi`.
+- Added drag/drop cleanup:
+  - global `dragend`, `drop`, and `blur` reset the overlay state
+  - file-input attachment selection also resets drag state
+
+**Verified**
+- `npx tsc --noEmit` passed for the drag/drop cleanup.
+
+**Remaining risks**
+- P2-001 cannot be verified until deployed `chat`/`chat-multi` include the attachment prompt-context patch.
+- P2-010 needs a post-HMR browser retest before marking `Verified`.
+
+**Next**
+1. Retest interrupted drag overlay after reload/HMR.
+2. Run `npm run verify`.
+3. Commit and push the drag-overlay polish.
