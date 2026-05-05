@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -37,5 +37,36 @@ describe('Phase 4 reliability guardrails', () => {
       expect(source).toContain('import { trackCronJob } from "../_shared/cronHealth.ts";');
       expect(source).toMatch(/return await trackCronJob\("[a-z-]+", async \(\) => \{/);
     }
+  });
+
+  it('does not leave config-implicit edge functions without a source auth marker', () => {
+    const config = readRepoFile('supabase/config.toml');
+    const configured = new Set(
+      [...config.matchAll(/^\[functions\.([^\]]+)\]\nverify_jwt\s*=\s*\w+/gm)].map((m) => m[1]),
+    );
+    const functionsRoot = join(process.cwd(), 'supabase/functions');
+    const implicitFunctions = readdirSync(functionsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+      .map((entry) => entry.name)
+      .filter((name) => !configured.has(name))
+      .sort();
+
+    const missingAuthMarkers = implicitFunctions.filter((name) => {
+      const indexPath = join(functionsRoot, name, 'index.ts');
+      if (!existsSync(indexPath)) return true;
+      const source = readFileSync(indexPath, 'utf8');
+      return !(
+        source.includes('authenticateUser(req)') ||
+        source.includes('auth.getUser') ||
+        source.includes('auth.getClaims') ||
+        source.includes('.getUser(') ||
+        source.includes('requireServiceRole(req') ||
+        source.includes('auth !== `Bearer ${serviceRole}`') ||
+        source.includes('authHeader !== `Bearer ${serviceRoleKey}`') ||
+        source.includes('authenticateDeviceToken(')
+      );
+    });
+
+    expect(missingAuthMarkers).toEqual([]);
   });
 });

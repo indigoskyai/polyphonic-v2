@@ -946,3 +946,22 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 
 **Next**
 1. Continue Phase 4 edge-envelope and function-config posture sweep.
+
+---
+
+## Phase 4 — Edge Config Guardrail  [x] (2026-05-05)
+
+**Done**
+- Reviewed the 17 edge-function directories that do not have explicit entries in `supabase/config.toml`.
+- Confirmed they are not obviously anonymous: each has a source-level auth marker for user JWT, service-role bearer, or device-token style authentication.
+
+**Changed**
+- Extended `src/test/phase4Reliability.test.ts` so future config-implicit edge functions fail the test unless they visibly authenticate in source.
+- This avoids changing Supabase deploy defaults blindly while still guarding against accidental anonymous function additions.
+
+**Verified**
+- `npx vitest run src/test/phase4Reliability.test.ts` passed: 4 tests.
+
+**Next**
+1. Continue user-visible edge error-envelope sweep.
+2. Decide later whether to add explicit config blocks for all functions after hosted deploy behavior is confirmed.
