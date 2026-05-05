@@ -4,12 +4,12 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 
 ## Security
 - [ ] Security scan: zero unaccepted findings (`security--run_security_scan`)
-- [ ] Supabase linter: zero unaccepted warnings (`supabase--linter`)
+- [x] Supabase linter: zero unaccepted warnings (`supabase--linter`; residual infos/warnings accepted in P4-016)
 - [ ] RLS verified on every public-schema table; all owner-scoped
 - [ ] No `SERVICE_ROLE` references in client `src/`
 - [ ] CORS allowlist contains production domain only (no wildcard)
 - [ ] All `verify_jwt = false` functions documented as either in-code-validating or intentionally public
-- [ ] Storage buckets owner-scoped
+- [x] Storage buckets owner-scoped or explicitly published-reference scoped
 - [x] Auth: HIBP password check ON, email confirmation configured, `/reset-password` page live
 
 ## Reliability

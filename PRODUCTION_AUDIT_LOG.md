@@ -1249,3 +1249,32 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push this Phase 4 hardening milestone to `main`.
 2. Ask Lovable to apply/re-check the hardening migration and confirm the two RPC warnings plus profile-upload listing warning are closed.
 3. Complete real human hosted auth smoke for email confirmation, Google, Apple, forgot-password, and logout.
+
+---
+
+## Phase 4 — Hosted Launch Hardening Verification  [x] (2026-05-05)
+
+**Changed**
+- Updated the audit evidence from Lovable's hosted verification after `d35c04f` deployed.
+- Marked P4-014 and P4-015 verified now that the hosted migration/linter checks passed.
+- Added P4-016 to record accepted residual Supabase linter noise separately from launch blockers.
+- Updated the launch checklist for accepted linter status and storage-bucket scoping.
+
+**Verified**
+- Lovable confirmed `20260505235900_harden_launch_auth_and_profile_storage.sql` applied successfully.
+- `invoke_edge_function` and `get_app_config` are no longer executable by anonymous/authenticated roles; service-role execute remains available.
+- Supabase linter no longer flags those two helpers under WARN 0028/0029.
+- `profile-uploads` broad public read policy was removed. Remaining access is owner read/upload/update/delete plus published-profile asset read gated by `profiles_public.published` and `profile_items.published`.
+- `/privacy` and `/terms` are registered in the app, load on staging, and are linked from login/signup.
+- Google and Apple OAuth still route through Lovable Cloud OAuth.
+- Hosted operations reconfirmed: zero edge 5xx in the reported 7-day window, all 17 cron jobs healthy in the last 24h with 0 errors, restricted CORS unchanged, HIBP enabled, email confirmation on, signups open, anonymous auth off.
+
+**Remaining risks**
+- Manual Cloud Auth Site URL / redirect allowlist confirmation is still needed because Lovable reports that panel is not programmatically inspectable.
+- Real human staging smoke is still needed for email signup confirmation, Google signup/login, Apple signup/login, forgot-password email, and logout.
+- Remaining linter noise is accepted for launch scope: 13 intentional security-definer helper warnings, 1 extensions-in-public info, and 1 RLS-enabled-no-policy info.
+
+**Next**
+1. Commit and push this tracker update to `main`.
+2. Complete the human auth smoke list.
+3. Continue Phase 5 final release gates.
