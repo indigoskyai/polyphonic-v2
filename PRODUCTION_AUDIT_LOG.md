@@ -925,3 +925,24 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Continue Phase 4 with edge-auth/config posture review for the 17 missing function config entries.
 2. Sweep edge error envelopes on user-visible functions.
 3. Verify hosted cron health after Lovable/Supabase deploy context is available.
+
+---
+
+## Phase 4 — Account Auth Polish  [x] (2026-05-05)
+
+**Changed**
+- Aligned signup with reset-password policy by raising the signup password minimum from 6 to 8 characters.
+- Updated signup copy to say `Password (min 8 chars)`.
+- Added browser credential hints:
+  - login email: `autocomplete="email"`
+  - login password: `autocomplete="current-password"`
+  - signup email: `autocomplete="email"`
+  - signup password: `autocomplete="new-password"`
+  - reset password fields: `autocomplete="new-password"`
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- Local Playwright/Chrome mobile auth smoke reported signup password `minLength=8`, matching placeholder, expected autocomplete hints, forgot-password mode visible, reset invalid-link state present, and `errors: []`.
+
+**Next**
+1. Continue Phase 4 edge-envelope and function-config posture sweep.

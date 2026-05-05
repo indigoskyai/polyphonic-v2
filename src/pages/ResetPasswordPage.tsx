@@ -75,6 +75,7 @@ export default function ResetPasswordPage() {
               style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
               required
               minLength={8}
+              autoComplete="new-password"
               autoFocus
             />
             <input
@@ -87,6 +88,7 @@ export default function ResetPasswordPage() {
               style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
               required
               minLength={8}
+              autoComplete="new-password"
             />
             {error && <p className="text-xs" style={{ color: '#c97c7c' }}>{error}</p>}
             {info && <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{info}</p>}

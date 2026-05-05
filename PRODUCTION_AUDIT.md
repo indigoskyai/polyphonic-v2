@@ -62,6 +62,7 @@ Updated: 2026-05-05
 - Phase 4 background observability: `scheduled-task-run` and `crisis-followup` now record success/failure through `cron_health`.
 - Phase 4 auth hardening: `mnemos-digest-build` now treats service mode as an exact service-role bearer match, not a substring match.
 - Phase 4 password-recovery browser check: `/reset-password` invalid-link state and `/auth/login` forgot-password mode load with no browser errors.
+- Phase 4 account-auth polish: signup password minimum now matches reset password minimum at 8 characters, and auth inputs expose correct autocomplete hints.
 - Verified with `npm run verify`, targeted unit tests, production build, live desktop chat smoke, and mobile browser check.
 
 ### Blocked
@@ -143,6 +144,7 @@ Ledger rules:
 | P4-003 | P2 | Verified | Service-role auth / Mnemos digest | `mnemos-digest-build` used substring matching to identify service-role mode. | Service-mode detection should require the exact `Bearer <service-role>` header. | Replaced substring detection with exact bearer comparison. | `npx vitest run src/test/phase4Reliability.test.ts`; `deno check supabase/functions/mnemos-digest-build/index.ts`. | Pending |
 | P4-004 | P2 | Verified | RLS source inventory | Static migration scan needed to confirm obvious table-policy omissions before deeper live review. | Created public tables should have RLS enabled; service-only tables should be explicit. | Static source scan found 75 created public tables and 75 RLS-enabled tables; policy paths detected for all except `idempotency_keys`, which is explicitly documented as service-role only. | Node static migration scan on `supabase/migrations` and `docs/memory/migrations`. Live policy behavior still needs hosted verification. | Pending |
 | P4-005 | P2 | Blocked | Hosted reliability metrics | Phase 4 requires last-5xx-in-7d and last-24h cron success rates, but the local repo has no production log feed or service-role DB access. | Hosted function logs and `cron_health` production rows should confirm no active background failures. | Need Lovable/Supabase production logs or service-role DB inspection. Continue local source hardening meanwhile. | Blocked on hosted observability access/deploy context. | Pending |
+| P4-006 | P3 | Verified | Account auth UX / password recovery | Signup allowed 6-character passwords while reset password required 8, and auth inputs lacked browser credential hints. | Account creation and recovery should use the same minimum password length and cooperate with browser password managers. | Updated signup to `minLength=8` with matching copy; added `autocomplete` hints to login, signup, and reset password fields. | `npx tsc --noEmit`; local Playwright mobile auth smoke: signup password `minLength=8`, placeholder `Password (min 8 chars)`, autocomplete hints present, forgot-password visible, reset invalid-link state present, 0 browser errors. | Pending |
 
 ---
 

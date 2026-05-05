@@ -53,11 +53,14 @@ export default function SignupPage() {
           <input aria-label="Email" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
             className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none"
             style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
+            autoComplete="email"
             required />
-          <input aria-label="Password" type="password" placeholder="Password (min 6 chars)" value={password} onChange={(e) => setPassword(e.target.value)}
+          <input aria-label="Password" type="password" placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)}
             className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none"
             style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
-            minLength={6} required />
+            minLength={8}
+            autoComplete="new-password"
+            required />
           {error && <p className="text-xs" style={{ color: '#c97c7c' }}>{error}</p>}
           <button type="submit" disabled={loading}
             className="h-10 text-sm font-medium rounded-[var(--radius-md)] cursor-pointer"

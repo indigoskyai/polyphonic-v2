@@ -54,6 +54,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none transition-all"
+            autoComplete="email"
             style={{
               background: 'var(--bg-void)',
               border: '1px solid var(--border)',
@@ -70,6 +71,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none transition-all"
+              autoComplete="current-password"
               style={{
                 background: 'var(--bg-void)',
                 border: '1px solid var(--border)',
