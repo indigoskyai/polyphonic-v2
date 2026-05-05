@@ -888,7 +888,7 @@ export default function ChatView() {
   };
 
   const renderModelKeyNotice = () => {
-    if (!modelKeyMissing || alcoveOpen) return null;
+    if (!modelKeyMissing) return null;
     return (
       <div className="composer-key-warning" role="status">
         <span>No model key connected.</span>
@@ -934,7 +934,7 @@ export default function ChatView() {
   }, [patchMessage, user]);
 
   const sendGuardianMessage = useCallback(async () => {
-    if (!input.trim() || !user || guardianStreaming) return;
+    if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
 
     const messageText = input.trim();
     let tid = currentThreadId;
@@ -971,9 +971,12 @@ export default function ChatView() {
       });
 
       if (!resp.ok) {
-        const errText = await resp.text().catch(() => '');
-        console.error('Guardian error:', resp.status, errText);
-        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: `Observer could not respond (${resp.status}). Check that your API key is configured in Settings.` }]);
+        const err = await parseEdgeError(resp.clone()).catch(() => ({ message: `Request failed (${resp.status})` } as any));
+        const isMissingKey = /api key/i.test(err.message || '') || err.code === 'unauthorized';
+        const friendly = isMissingKey
+          ? 'No model API key configured. Open Settings -> Models to add your OpenRouter key.'
+          : friendlyMessage(err);
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: friendly }]);
         return;
       }
 
@@ -1008,7 +1011,6 @@ export default function ChatView() {
                 fullContent += data.text;
                 setGuardianStreamingContent(fullContent);
               } else if (data.type === 'error') {
-                console.error('Guardian stream error:', data.text);
                 committed = true;
                 setGuardianMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'Observer encountered an error.' }]);
                 setGuardianStreamingContent('');
@@ -1026,14 +1028,13 @@ export default function ChatView() {
       // Fallback: stream ended without a `done` event
       commitFinal(fullContent);
     } catch (e) {
-      console.error('Guardian connection error:', e);
       setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
     } finally {
       setGuardianStreaming(false);
       setGuardianStreamingContent('');
       loadThreads();
     }
-  }, [input, user, currentThreadId, guardianStreaming]);
+  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing]);
 
   const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
@@ -1992,7 +1993,7 @@ export default function ChatView() {
             </div>
           </div>
 
-          {!alcoveOpen && renderModelKeyNotice()}
+          {renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
 
           {/* Textarea */}
@@ -2006,7 +2007,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to continue…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? (modelKeyMissing ? 'Add a model key to ask Observer…' : 'Ask the Observer...') : modelKeyMissing ? 'Add a model key to continue…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -2064,7 +2065,7 @@ export default function ChatView() {
             <button
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
-              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? !input.trim() : (modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
             >
               <span className="send-icon">
                 <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">

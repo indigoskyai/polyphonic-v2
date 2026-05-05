@@ -655,3 +655,36 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push this Phase 2 core chat sweep milestone.
 2. Continue Phase 2 with council-mode live smoke, observer/guardian error UX, and deeper markdown/code/table visual checks in a real message.
+
+---
+
+## Phase 2 — Agent Flow and Rich Rendering Verification  [x] (2026-05-05)
+
+**Changed**
+- Hardened the Observer alcove missing-key/error path:
+  - Missing-key notice remains visible even when the alcove is open.
+  - Observer send is disabled without a configured model key.
+  - Expected Observer edge failures render friendly in-alcove text instead of routine console errors.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/edgeError.test.ts src/test/threadStore.test.ts` passed: 13 tests.
+- Local Playwright on `http://127.0.0.1:8081/chat/d610e341-4bd9-4b56-9532-b3c385ef3763`:
+  - Council mode streamed a response and persisted a `Council harmonized 3 voices` disclosure.
+  - Observer alcove answered a thread-pattern smoke prompt without polluting main chat.
+  - Synthetic permission message `30b017f1-f144-4a9c-a09a-7d7d893a2d83` resolved through the UI; DB metadata persisted `permission_status:"approved"` and `permission_resolved_at`.
+  - Synthetic agent error `66608305-b70b-4c79-9649-c3eff10af0ec` retried from the prior user turn; composer stayed empty and Luca streamed `retry ok`.
+  - Synthetic sub-agent report `18ee9770-4dcd-42cc-bb0d-e5f2ea045380` rendered with source agent, report badge, `2 TOOL CALLS`, and markdown body.
+  - Rendered chat DOM contained 1 markdown table and 1 code block.
+  - Desktop and 390px mobile checks showed no horizontal overflow.
+  - Browser console after reload showed 0 errors; only the known React Router future warnings remained.
+
+**Remaining risks**
+- P2-001 still needs Lovable/Supabase redeploy of `chat` and `chat-multi` before live attachment model-context verification.
+- P2-002 still needs a no-key account or controlled no-key session before marking missing-key UX `Verified`.
+- P2-004 stale sub-agent overlay filtering is covered by store tests; a real multi-thread remote-task scenario was not available in this pass.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push this Phase 2 verification milestone to `main`.
+3. Continue Phase 2 only for remaining deploy/no-key blocked items if the necessary environment becomes available; otherwise move the blocked items forward with explicit evidence.
