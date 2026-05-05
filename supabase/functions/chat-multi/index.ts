@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
 import {
@@ -11,15 +10,13 @@ import {
   recordCrisisEvent,
   resolveCrisisResource,
 } from "../_shared/agents/crisis.ts";
-import {
-  finalizePendingRevisions,
-  type PendingRevision,
-} from "../_shared/agents/pending-revisions.ts";
+import type { PendingRevision } from "../_shared/agents/pending-revisions.ts";
 import { summarizeToolContext } from "../_shared/agents/tool-context.ts";
 import {
   buildLucaPromptPartsFromContinuity,
   loadContinuityPacket,
   logContinuityDiagnostics,
+  queueContinuityTurnWrites,
   type ContinuityPacket,
 } from "../_shared/continuity/index.ts";
 import {
@@ -628,37 +625,26 @@ serve(async (req) => {
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
             );
-            finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], fallbackContent).catch(
-              (e) => console.warn("pending revision finalization failed:", e)
-            );
             await autoTitleThread(supabase, thread_id, message, fallbackContent, apiKey!);
-            encodeMnemosMemory(supabase, userId, message, fallbackContent, apiKey).catch(
-              (e) => console.warn("Mnemos encode failed (non-fatal):", e)
-            );
-            fireObserverWatch(thread_id, agentId, authHeader);
-            fireMnemosDialectic(thread_id, agentId, authHeader);
-            fireSkillsDistill(thread_id, agentId, authHeader);
             const fallbackObservers = collectObservers({
               primaryAgentId: agentId,
               councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
               toolMessages,
             });
-            fireHypomnemaTurn({
+            queueContinuityTurnWrites({
+              supabase,
               threadId: thread_id,
               agentId,
               userId,
               userMessage: message,
               agentResponse: fallbackContent,
               sourceMessageId: fallbackMessageId,
+              apiKey,
+              authHeader,
+              pendingRevisions: pendingRevisions || [],
               recentTurns: history || [],
               observers: fallbackObservers,
             });
-            updateThreadAgentMetadata(
-              supabase,
-              thread_id,
-              agentId,
-              [agentId, ...fallbackObservers.map((o) => o.agentId)],
-            ).catch(() => {});
             send({ type: "done", model: "chairman-fallback", tokens_used: null });
             controller.close();
             clearInterval(heartbeat);
@@ -827,10 +813,6 @@ serve(async (req) => {
             { rankings, aggregate, label_to_model: labelToModel },
             councilV2Trace,
           );
-          finalizePendingRevisions(supabase, apiKey!, pendingRevisions || [], synthesizedContent).catch(
-            (e) => console.warn("pending revision finalization failed:", e)
-          );
-
           // Update thread timestamp
           await supabase
             .from("threads")
@@ -842,16 +824,6 @@ serve(async (req) => {
             (e) => console.error("Auto-title failed:", e)
           );
 
-          // Encode the exchange into Mnemos (fire and forget)
-          encodeMnemosMemory(supabase, userId, message, synthesizedContent, apiKey).catch(
-            (e) => console.warn("Mnemos encode failed (non-fatal):", e)
-          );
-
-          // Fire observer-watch (best-effort)
-          fireObserverWatch(thread_id, agentId, authHeader);
-          fireMnemosDialectic(thread_id, agentId, authHeader);
-          fireSkillsDistill(thread_id, agentId, authHeader);
-
           // Hypomnema gate → primary reflection + observer notes for the
           // other council characters (M5: asymmetric witnessing).
           const synthObservers = collectObservers({
@@ -859,22 +831,20 @@ serve(async (req) => {
             councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
             toolMessages,
           });
-          fireHypomnemaTurn({
+          queueContinuityTurnWrites({
+            supabase,
             threadId: thread_id,
             agentId,
             userId,
             userMessage: message,
             agentResponse: synthesizedContent,
             sourceMessageId: synthesizedMessageId,
+            apiKey,
+            authHeader,
+            pendingRevisions: pendingRevisions || [],
             recentTurns: history || [],
             observers: synthObservers,
           });
-          updateThreadAgentMetadata(
-            supabase,
-            thread_id,
-            agentId,
-            [agentId, ...synthObservers.map((o) => o.agentId)],
-          ).catch(() => {});
 
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
@@ -903,183 +873,6 @@ serve(async (req) => {
     });
   }
 });
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Fire observer-watch in the background. Best-effort. Skips for the Observer's own threads. */
-function fireObserverWatch(threadId: string, agentId: string, authHeader: string) {
-  if (agentId === "observer") return; // don't observe the observer
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/observer-watch`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
-    }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("observer-watch dispatch error:", e);
-  }
-}
-
-/** Fire mnemos-dialectic in the background. Best-effort. Luca only. */
-function fireMnemosDialectic(threadId: string, agentId: string, authHeader: string) {
-  if (agentId !== "luca") return;
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mnemos-dialectic`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
-    }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("mnemos-dialectic dispatch error:", e);
-  }
-}
-
-/** Fire skills-distill in the background. Best-effort. Luca only. */
-function fireSkillsDistill(threadId: string, agentId: string, authHeader: string) {
-  if (agentId !== "luca") return;
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/skills-distill`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: agentId }),
-    }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("skills-distill dispatch error:", e);
-  }
-}
-
-/**
- * Fire the hypomnema gate post-turn. Best-effort. Service-role auth.
- * The gate is a cheap Haiku call; if it triggers, it chains to hypomnema-write
- * (one call per participating agent — primary for `agentId`, observer for the rest).
- *
- * Observers carry their own contribution from the turn (their proposer/crosstalk
- * draft from a council pass, or their consultation response from `consult_anima`).
- * The observer prompt uses that contribution as the "what you contributed" anchor.
- *
- * Fire-and-forget — the user's stream has already finished. Skips when the
- * memory augmentation flag is off (gate edge function checks the flag).
- */
-function fireHypomnemaTurn(opts: {
-  threadId: string;
-  agentId: string;
-  userId: string;
-  userMessage: string;
-  agentResponse: string;
-  sourceMessageId?: string | null;
-  recentTurns: Array<{ role: string; content: string }>;
-  /** Other agents who participated. Their `contribution` becomes the
-   *  observer prompt's INJECT_YOUR_CONTRIBUTION. */
-  observers?: Array<{ agentId: string; contribution: string }>;
-}) {
-  if (!opts.userMessage || !opts.agentResponse) return;
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/hypomnema-gate`;
-    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!serviceRole) return;
-
-    const chainTargets: Array<{
-      agent_id: string;
-      thread_id: string;
-      source_message_id?: string | null;
-      density: "primary" | "observer";
-      primary_in_thread: boolean;
-      primary_agent_name?: string;
-      primary_response?: string;
-      your_contribution?: string;
-    }> = [
-      {
-        agent_id: opts.agentId,
-        thread_id: opts.threadId,
-        source_message_id: opts.sourceMessageId ?? null,
-        density: "primary",
-        primary_in_thread: true,
-      },
-    ];
-
-    if (opts.observers?.length) {
-      for (const obs of opts.observers) {
-        if (obs.agentId === opts.agentId) continue;
-        chainTargets.push({
-          agent_id: obs.agentId,
-          thread_id: opts.threadId,
-          source_message_id: opts.sourceMessageId ?? null,
-          density: "observer",
-          primary_in_thread: false,
-          primary_agent_name: opts.agentId,
-          primary_response: opts.agentResponse,
-          your_contribution: obs.contribution,
-        });
-      }
-    }
-
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceRole}`,
-      },
-      body: JSON.stringify({
-        user_id: opts.userId,
-        user_message: opts.userMessage,
-        agent_response: opts.agentResponse,
-        // Drop system messages and trim to last 6 user/assistant turns.
-        recent_turns: opts.recentTurns
-          .filter((t) => t && (t.role === "user" || t.role === "assistant"))
-          .slice(-6),
-        chain_write: chainTargets,
-      }),
-    }).catch((e) => console.warn("hypomnema-gate dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("hypomnema-gate dispatch error:", e);
-  }
-}
-
-/**
- * Update threads.primary_agent_id + participating_agent_ids per turn.
- * Best-effort. The migration backfilled existing threads from messages.agent.
- */
-async function updateThreadAgentMetadata(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  threadId: string,
-  primaryAgentId: string,
-  participatingAgentIds: string[],
-): Promise<void> {
-  try {
-    const unique = [...new Set([primaryAgentId, ...participatingAgentIds])];
-    // Fetch current row so we can union with existing participants instead of overwriting.
-    const { data: current } = await supabase
-      .from("threads")
-      .select("participating_agent_ids, primary_agent_id")
-      .eq("id", threadId)
-      .maybeSingle();
-    const existing = Array.isArray(current?.participating_agent_ids) ? current.participating_agent_ids : [];
-    const merged = [...new Set([...existing, ...unique])];
-    const update: Record<string, unknown> = { participating_agent_ids: merged };
-    // Only set primary_agent_id if it's not already set or it's been changing.
-    if (!current?.primary_agent_id || current.primary_agent_id === "luca" && primaryAgentId !== "luca") {
-      update.primary_agent_id = primaryAgentId;
-    }
-    await supabase.from("threads").update(update).eq("id", threadId);
-  } catch (err) {
-    console.warn("[chat-multi] thread agent metadata update failed:", (err as Error).message);
-  }
-}
 
 /**
  * Extract observer agents + their contributions from a council pass and from
@@ -1458,27 +1251,6 @@ async function saveAssistantMessage(
   return inserted?.id ?? null;
 }
 
-/** Encode a conversation exchange into Mnemos. */
-async function encodeMnemosMemory(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  userId: string,
-  userMessage: string,
-  assistantResponse: string,
-  apiKey?: string,
-) {
-  const mnemos = new MnemosEngine(supabase, userId);
-  await mnemos.encode(
-    `User: ${userMessage}\nAssistant: ${assistantResponse.slice(0, 500)}`,
-    {
-      engram_type: "episodic",
-      tags: ["conversation"],
-      source_context: { type: "chat_exchange" },
-      api_key: apiKey,
-    }
-  );
-}
-
 /** Single-model streaming fallback (same as original chat function). */
 async function singleModelStream(
   messages: any[],
@@ -1585,39 +1357,24 @@ async function singleModelStream(
         }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
-        finalizePendingRevisions(supabase, apiKey, pendingRevisions || [], fullContent).catch(
-          (e) => console.warn("pending revision finalization failed:", e)
-        );
-
-        // Encode into Mnemos
-        encodeMnemosMemory(supabase, userId, userMessage, fullContent, apiKey).catch(() => {});
-
-        // Fire post-turn background reflection (best-effort)
-        if (authHeader) {
-          fireObserverWatch(threadId, agentId, authHeader);
-          fireMnemosDialectic(threadId, agentId, authHeader);
-          fireSkillsDistill(threadId, agentId, authHeader);
-        }
         const singleObservers = collectObservers({
           primaryAgentId: agentId,
           toolMessages,
         });
-        fireHypomnemaTurn({
+        queueContinuityTurnWrites({
+          supabase,
           threadId,
           agentId,
           userId,
           userMessage,
           agentResponse: fullContent,
           sourceMessageId: insertedMessage?.id ?? null,
+          apiKey,
+          authHeader,
+          pendingRevisions: pendingRevisions || [],
           recentTurns: messages || [],
           observers: singleObservers,
         });
-        updateThreadAgentMetadata(
-          supabase,
-          threadId,
-          agentId,
-          [agentId, ...singleObservers.map((o) => o.agentId)],
-        ).catch(() => {});
 
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {

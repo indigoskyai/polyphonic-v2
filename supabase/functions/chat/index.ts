@@ -3,12 +3,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import {
-  finalizePendingRevisions,
-} from "../_shared/agents/pending-revisions.ts";
-import {
   buildLucaPromptPartsFromContinuity,
   loadContinuityPacket,
   logContinuityDiagnostics,
+  queueContinuityTurnWrites,
 } from "../_shared/continuity/index.ts";
 import {
   buildCrisisDirective,
@@ -271,7 +269,7 @@ serve(async (req) => {
           }
 
           // Save assistant message to DB
-          await supabase.from("messages").insert({
+          const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
             thread_id,
             user_id: userId,
             role: "assistant",
@@ -280,7 +278,10 @@ serve(async (req) => {
             agent: "luca",
             thinking_content: fullThinking || null,
             tokens_used: tokensUsed,
-          });
+          }).select("id").single();
+          if (insertError) {
+            throw new Error(`Failed to save assistant message: ${insertError.message}`);
+          }
 
           // Update thread timestamp
           await supabase
@@ -299,13 +300,19 @@ serve(async (req) => {
           autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
-          finalizePendingRevisions(supabase, apiKey!, continuity.pendingRevisions, fullContent).catch(
-            (e) => console.warn("pending revision finalization failed:", e)
-          );
-
-          fireObserverWatch(thread_id, authHeader);
-          fireMnemosDialectic(thread_id, authHeader);
-          fireSkillsDistill(thread_id, authHeader);
+          queueContinuityTurnWrites({
+            supabase,
+            userId,
+            threadId: thread_id,
+            agentId: "luca",
+            userMessage: message,
+            agentResponse: fullContent,
+            sourceMessageId: insertedMessage?.id ?? null,
+            apiKey,
+            authHeader,
+            pendingRevisions: continuity.pendingRevisions,
+            recentTurns: openRouterMessages,
+          });
 
           send({
             type: "done",
@@ -338,54 +345,6 @@ serve(async (req) => {
     });
   }
 });
-
-function fireMnemosDialectic(threadId: string, authHeader: string) {
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mnemos-dialectic`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
-    }).catch((e) => console.warn("mnemos-dialectic dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("mnemos-dialectic dispatch error:", e);
-  }
-}
-
-function fireObserverWatch(threadId: string, authHeader: string) {
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/observer-watch`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
-    }).catch((e) => console.warn("observer-watch dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("observer-watch dispatch error:", e);
-  }
-}
-
-function fireSkillsDistill(threadId: string, authHeader: string) {
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/skills-distill`;
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({ thread_id: threadId, agent_id: "luca" }),
-    }).catch((e) => console.warn("skills-distill dispatch failed (non-fatal):", e));
-  } catch (e) {
-    console.warn("skills-distill dispatch error:", e);
-  }
-}
 
 async function runToolPlanner(threadId: string, authHeader: string, messages: any[]): Promise<any[]> {
   try {

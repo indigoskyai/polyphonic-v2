@@ -301,3 +301,25 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Build the Continuity Kernel write/finalization path so post-turn behavior has one observable route for Mnemos encoding, Hypomnema reflection, pending-revision finalization, and dispatch failures.
 2. Run the fresh-thread continuity script against the local app and inspect database writes.
 3. Run `npm run verify` before marking the memory milestone complete.
+
+---
+
+## Phase 1 — Continuity Kernel Write Path  [~] (2026-05-05)
+
+**Done**
+- Added `queueContinuityTurnWrites` as the shared post-turn finalization path.
+- Routed `chat` and `chat-multi` through that path for pending revisions, Mnemos encoding, observer-watch, Mnemos dialectic, skills distillation, Hypomnema gate dispatch, and thread-agent metadata updates.
+- Legacy `chat` now preserves the assistant message id and sends it into the Hypomnema write chain, matching `chat-multi` provenance behavior.
+- Added tests proving Hypomnema write payload provenance, observer chain targets, queued operation reporting, and explicit skipped states when auth/service env is missing.
+
+**Verified**
+- `npx vitest run src/test/continuityWrite.test.ts src/test/continuityKernel.test.ts src/test/lucaIdentityPrompt.test.ts` passed: 12 tests.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts supabase/functions/_shared/continuity/write.ts` passed.
+- `npm run verify` passed: typecheck, unit tests, integration placeholder, and production build.
+
+**Remaining risks**
+- The local write queue is verified structurally; the live deployed edge functions still need a substantive browser turn plus database/log inspection to prove Hypomnema and Mnemos writes happen in the hosted environment.
+
+**Next**
+1. Push the write-path milestone to `main`.
+2. Use browser verification for the fresh-thread continuity script and inspect memory surfaces/database writes.

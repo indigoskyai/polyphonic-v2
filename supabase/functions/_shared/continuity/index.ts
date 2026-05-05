@@ -17,3 +17,15 @@ export {
   type ContinuityPacket,
   type FunctionalMemory,
 } from "./kernel.ts";
+
+export {
+  buildHypomnemaGatePayload,
+  encodeMnemosExchange,
+  queueContinuityTurnWrites,
+  type ContinuityObserverContribution,
+  type ContinuityWriteDeps,
+  type ContinuityWriteOperation,
+  type ContinuityWriteOptions,
+  type ContinuityWriteReport,
+  type ContinuityWriteStatus,
+} from "./write.ts";
