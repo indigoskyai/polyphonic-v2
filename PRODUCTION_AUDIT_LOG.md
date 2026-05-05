@@ -397,11 +397,29 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
   - If a salience-approved turn still cannot complete a full reflection, the system writes a low-confidence recovery Hypomnema entry with the exact user/assistant turn and provenance metadata.
   - Gate activity severity now detects write response bodies with `status:error`, not just non-2xx HTTP statuses.
 - Added focused tests for retry and recovery behavior.
+- After Lovable redeployed the retry/recovery patch, opened the staged preview directly, signed into the test account, and sent a substantive Luca continuity turn using the marker "ember bridge recovery".
+- Confirmed the live response was closer to the target: Luca recognized the marker directly and answered with continuity language instead of a detached brief.
+- Confirmed live Hypomnema write behavior:
+  - `entity_activity_log` recorded a triggered Hypomnema gate for the staged preview turn.
+  - The chained write returned `{ status: "revised", entryId: "e184..." }`.
+  - `hypomnema_entry` content updated to carry "ember bridge recovery" with confidence `0.82`.
+- Found and fixed stale revision provenance:
+  - The revised row content was current, but top-level `thread_id` and `source_message_id` still pointed to the older entry source.
+  - Revision updates now move top-level provenance to the latest source turn and preserve the previous/current source IDs inside `revisions` and `meta.last_revision_source`.
 
 **Verified**
 - `npx vitest run src/test/hypomnemaWrite.test.ts src/test/hypomnemaSalience.test.ts src/test/continuityWrite.test.ts src/test/continuityKernel.test.ts` passed: 11 tests.
 - `deno check supabase/functions/hypomnema-gate/index.ts supabase/functions/hypomnema-write/index.ts supabase/functions/_shared/hypomnema/write.ts` passed.
 - `npm run verify` passed: typecheck, 199 unit tests, integration placeholder, and production build.
+- Staged Lovable preview live test:
+  - Browser path: direct preview `/chat`.
+  - User message id: `90d0649b-7ad7-4062-9c27-bd428c3bd14a`.
+  - Assistant message id: `abc47570-86d5-46b3-a677-7b257c4b55bb`.
+  - Hypomnema activity id: `2885137a-7fa9-4f41-9555-31d45415ecac`.
+  - Hypomnema entry id: `e184cdf4-3cda-47a2-be1d-9b1d8881f8ba`.
+- `npx vitest run src/test/hypomnemaWrite.test.ts` passed after the provenance fix: 3 tests.
+- `deno check supabase/functions/hypomnema-write/index.ts supabase/functions/_shared/hypomnema/write.ts` passed after the provenance fix.
+- `npm run verify` passed after the provenance fix: typecheck, 200 unit tests, integration placeholder, and production build.
 - Live DB inspection showed:
   - `hypomnema_entry` count was 1 for the test account.
   - Latest Hypomnema row was for Luca and the fresh-thread recall failure.
@@ -409,12 +427,13 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
   - Mnemos engrams existed for the "ember bridge" turns, including the exact phrase turn.
 
 **Remaining risks**
-- The retry/recovery patch is local until committed, pushed, and redeployed to the edge functions.
-- The live test account still needs a new post-deploy substantive continuity turn so the corrected path can create a marker-carrying Hypomnema row through production code.
+- The retry/recovery patch has live proof, but the revision-provenance fix is local until committed, pushed, and redeployed to `hypomnema-write`.
+- The next test still needs a fresh thread follow-up to prove Luca carries the revised Hypomnema naturally without the user re-supplying the marker.
+- Mnemos did not create a new engram for the staged "ember bridge recovery" turn; this may be salience gating, but should be inspected before closing Phase 1 write behavior.
 - P1-011 remains open until Luca recalls the marker naturally in a fresh thread without retrieval-shaped explanation.
 
 **Next**
-1. Run typecheck/build or full verify after the patch.
+1. Run full verify after the revision-provenance patch.
 2. Commit and push this milestone to `main`.
-3. Redeploy `hypomnema-gate` and `hypomnema-write`.
-4. Rerun the fresh-thread continuity script and inspect `/profile/identity`, `hypomnema_entry`, `entity_activity_log`, and Luca's fresh-thread response quality.
+3. Ask Lovable to redeploy `hypomnema-write`.
+4. Rerun the fresh-thread continuity script and inspect `/profile/identity`, `hypomnema_entry`, `entity_activity_log`, Mnemos encoding, and Luca's fresh-thread response quality.

@@ -600,7 +600,7 @@ export async function writeHypomnemaEntry(
   if (revisesId && input.density === "primary") {
     const { data: existing, error: exErr } = await supabase
       .from("hypomnema_entry")
-      .select("id, content, confidence, revisions, revision_count")
+      .select("id, content, confidence, revisions, revision_count, thread_id, source_message_id, meta")
       .eq("id", revisesId)
       .eq("user_id", input.userId)
       .eq("agent_id", input.agentId)
@@ -617,13 +617,22 @@ export async function writeHypomnemaEntry(
           old_confidence: oldConfidence,
           new_confidence: confidence,
           previous_content: existing.content,
+          previous_thread_id: existing.thread_id ?? null,
+          previous_source_message_id: existing.source_message_id ?? null,
+          source_thread_id: input.threadId,
+          source_message_id: input.sourceMessageId,
           reason,
           timestamp: new Date().toISOString(),
         },
       ];
+      const existingMeta = existing.meta && typeof existing.meta === "object" && !Array.isArray(existing.meta)
+        ? existing.meta
+        : {};
       const { error: upErr } = await supabase
         .from("hypomnema_entry")
         .update({
+          thread_id: input.threadId ?? existing.thread_id ?? null,
+          source_message_id: input.sourceMessageId ?? existing.source_message_id ?? null,
           content,
           confidence,
           domain,
@@ -633,6 +642,13 @@ export async function writeHypomnemaEntry(
           last_revised: new Date().toISOString(),
           active_attention: true,
           source: "reflection",
+          meta: {
+            ...existingMeta,
+            last_revision_source: {
+              thread_id: input.threadId,
+              source_message_id: input.sourceMessageId,
+            },
+          },
         })
         .eq("id", revisesId);
       if (upErr) {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeHypomnemaEntry } from '../../supabase/functions/_shared/hypomnema/write';
 
-function createSupabaseStub() {
+function createSupabaseStub(existingHypomnema?: Record<string, unknown>) {
   const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; row: Record<string, unknown> }> = [];
 
@@ -36,6 +36,7 @@ function createSupabaseStub() {
 
     maybeSingle() {
       if (this.table === 'profiles') return Promise.resolve({ data: { display_name: 'Riley' }, error: null });
+      if (this.table === 'hypomnema_entry' && existingHypomnema) return Promise.resolve({ data: existingHypomnema, error: null });
       return Promise.resolve({ data: null, error: null });
     }
 
@@ -124,5 +125,53 @@ describe('Hypomnema write resilience', () => {
     expect(inserts[0].row.confidence).toBe(0.45);
     expect(inserts[0].row.tags).toContain('ember-bridge');
     expect(inserts[0].row.meta).toMatchObject({ recovery: true });
+  });
+
+  it('moves revision provenance to the latest source turn while preserving the prior source in revisions', async () => {
+    const { supabase, updates } = createSupabaseStub({
+      id: 'entry-1',
+      content: 'older reflection',
+      confidence: 0.6,
+      revisions: [],
+      revision_count: 0,
+      thread_id: 'old-thread',
+      source_message_id: 'old-message',
+      meta: { existing: true },
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({
+            content: 'ember bridge recovery now feels carried rather than briefed.',
+            domain: 'identity',
+            tags: ['ember-bridge', 'continuity'],
+            confidence: 0.84,
+            revises_existing_id: 'entry-1',
+            revision_reason: 'new turn clarified the continuity marker',
+          }) } }],
+          usage: { total_tokens: 42 },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }] }), { status: 200 });
+    }));
+
+    const result = await writeHypomnemaEntry(supabase, 'openrouter-key', baseInput());
+
+    expect(result.status).toBe('revised');
+    const update = updates.find((u) => u.table === 'hypomnema_entry' && u.row.content);
+    expect(update?.row.thread_id).toBe('thread-1');
+    expect(update?.row.source_message_id).toBe('message-1');
+    expect(update?.row.meta).toMatchObject({
+      existing: true,
+      last_revision_source: { thread_id: 'thread-1', source_message_id: 'message-1' },
+    });
+    expect(update?.row.revisions).toEqual([
+      expect.objectContaining({
+        previous_thread_id: 'old-thread',
+        previous_source_message_id: 'old-message',
+        source_thread_id: 'thread-1',
+        source_message_id: 'message-1',
+      }),
+    ]);
   });
 });
