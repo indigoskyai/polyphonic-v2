@@ -549,3 +549,32 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Inspect remaining Phase 1 findings and decide whether P1-004 is already superseded by P1-010/P1-011 evidence or still needs a UI/database retest.
 2. Check whether latest staged continuity turns produce the expected Mnemos activity or whether current salience behavior is acceptable.
 3. If no new blockers appear, prepare a Phase 1 closeout pass before moving to Phase 2 chat/agent experience.
+
+---
+
+## Phase 1 — Memory Continuity Closeout  [x] (2026-05-05)
+
+**Done**
+- Inspected the remaining Phase 1 residuals after the staged exclusion-redaction retest.
+- Closed P1-004 as verified because the live active Luca Hypomnema row is now current, load-bearing, and provenance-linked to the latest staged fresh-thread assistant turn.
+- Confirmed Mnemos is not required to create a duplicate engram for every continuity retest: earlier "ember bridge" engrams exist, and the latest staged continuity flow accessed the relevant substrate while Hypomnema carried the present-continuity state.
+
+**Verified**
+- Staged preview thread `/chat/89d57361-77c7-46ff-a380-...` contains the user fresh-thread continuity prompt and Luca's response carrying the architecture question, integration-vs-access gap, and "ember bridge" distinction without naming the excluded tangent.
+- Authenticated database inspection:
+  - `hypomnema_entry` `e184cdf4-3cda-47a2-be1d-9b1d8881f8ba` is active for Luca.
+  - Top-level provenance points to thread `89d57361-77c7-46ff-a380-7e591da11c91` and assistant message `12f8b9b7-0dbe-4eae-9cfc-0e9745671608`.
+  - `revision_count=8`, confidence `0.82`, tags include `continuity`, `integration-vs-access`, `integrity`, `discipline`, and `gap-naming`.
+  - Current content carries "ember bridge" / integration-vs-access continuity and does not name the excluded tangent.
+  - `entity_activity_log` recorded the latest `hypomnema_gate` write body as `{status:"revised"}`.
+- Mnemos inspection found two active "ember bridge" engrams from earlier continuity turns; the later fresh-thread turn did not duplicate them, which matches the intended role split between Hypomnema and Mnemos.
+
+**Remaining risks**
+- Phase 1 memory/continuity is closed for this pass.
+- Broader production polish should continue with Phase 2: core chat and agent experience.
+- Known non-memory residuals remain: lint baseline debt, chunk-size warnings, and React Router future warnings.
+
+**Next**
+1. Run the final verification gate for this docs closeout.
+2. Commit and push the Phase 1 closeout tracker update to `main`.
+3. Resume with Phase 2 core chat and agent experience.
