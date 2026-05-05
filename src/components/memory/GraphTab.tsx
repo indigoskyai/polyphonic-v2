@@ -19,6 +19,7 @@ import { useMemoryStore, type Engram, type Connection } from '@/stores/memorySto
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryRealtime } from '@/hooks/useMemoryRealtime';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { generateMockGraph } from '@/lib/mockGraphData';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
@@ -124,10 +125,6 @@ function fmtClock(d = new Date()): string {
 }
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
 
-const PREFERS_REDUCED = typeof window !== 'undefined'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false;
-
 // ── Component ──────────────────────────────────────────────────────────────
 export default function GraphTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -136,6 +133,7 @@ export default function GraphTab() {
   const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
   const userId = useAuthStore((s) => s.user?.id);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   // Subscribe to live updates
   useMemoryRealtime(userId);
@@ -250,9 +248,9 @@ export default function GraphTab() {
     adjacencyRef.current = adj;
 
     // Reheat sim — mild for live updates, hot for first load
-    alphaRef.current = isFirst ? 1 : Math.max(alphaRef.current, 0.35);
+    alphaRef.current = prefersReducedMotion ? 0 : isFirst ? 1 : Math.max(alphaRef.current, 0.35);
     setHasSettled(false);
-  }, [activeEngrams, connections]);
+  }, [activeEngrams, connections, prefersReducedMotion]);
 
   // ── Physics + render loop ───────────────────────────────────────────────
   useEffect(() => {
@@ -360,12 +358,18 @@ export default function GraphTab() {
     const render = () => {
       // Camera easing
       const cam = cameraRef.current;
-      cam.x += (cam.tx - cam.x) * 0.18;
-      cam.y += (cam.ty - cam.y) * 0.18;
-      cam.zoom += (cam.tz - cam.zoom) * 0.18;
+      if (prefersReducedMotion) {
+        cam.x = cam.tx;
+        cam.y = cam.ty;
+        cam.zoom = cam.tz;
+      } else {
+        cam.x += (cam.tx - cam.x) * 0.18;
+        cam.y += (cam.ty - cam.y) * 0.18;
+        cam.zoom += (cam.tz - cam.zoom) * 0.18;
+      }
 
       // Pan inertia (when not actively dragging)
-      if (dragRef.current.mode === 'none' && (Math.abs(dragRef.current.vx) > 0.05 || Math.abs(dragRef.current.vy) > 0.05)) {
+      if (!prefersReducedMotion && dragRef.current.mode === 'none' && (Math.abs(dragRef.current.vx) > 0.05 || Math.abs(dragRef.current.vy) > 0.05)) {
         cam.tx += dragRef.current.vx;
         cam.ty += dragRef.current.vy;
         dragRef.current.vx *= 0.92;
@@ -393,7 +397,7 @@ export default function GraphTab() {
         const isDimmed = focusId && !isFocused;
         const ageA = Math.min(1, (now - a.spawnedAt) / 1400);
         const ageB = Math.min(1, (now - b.spawnedAt) / 1400);
-        const fadeIn = easeOutCubic(Math.min(ageA, ageB));
+        const fadeIn = prefersReducedMotion ? 1 : easeOutCubic(Math.min(ageA, ageB));
 
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -422,7 +426,7 @@ export default function GraphTab() {
         const isNeighbor = focusNeighbors?.has(node.id);
         const isDimmed = focusId && !isHovered && !isSelected && !isNeighbor;
         const age = Math.min(1, (now - node.spawnedAt) / 1400);
-        const fadeIn = easeOutCubic(age);
+        const fadeIn = prefersReducedMotion ? 1 : easeOutCubic(age);
 
         // Filled disc
         ctx.beginPath();
@@ -464,7 +468,7 @@ export default function GraphTab() {
         }
 
         // New-node breath pulse for first 1.4s
-        if (age < 1) {
+        if (!prefersReducedMotion && age < 1) {
           const pulseR = r + (1 - age) * 6;
           ctx.beginPath();
           ctx.arc(node.x, node.y, pulseR, 0, Math.PI * 2);
@@ -484,7 +488,7 @@ export default function GraphTab() {
       ro.disconnect();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [prefersReducedMotion, hasSettled]);
 
   // ── Convert client coords → world coords ────────────────────────────────
   const clientToWorld = useCallback((cx: number, cy: number) => {
@@ -530,7 +534,7 @@ export default function GraphTab() {
       const { x, y } = clientToWorld(e.clientX, e.clientY);
       const n = nodesRef.current.get(drag.nodeId);
       if (n) { n.fx = x; n.fy = y; }
-      alphaRef.current = Math.max(alphaRef.current, 0.3);
+      if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.3);
       return;
     }
     const node = getNodeAtClient(e.clientX, e.clientY);
@@ -541,7 +545,7 @@ export default function GraphTab() {
     } else {
       setCursorPos(null);
     }
-  }, [clientToWorld, getNodeAtClient]);
+  }, [clientToWorld, getNodeAtClient, prefersReducedMotion]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const node = getNodeAtClient(e.clientX, e.clientY);
@@ -563,11 +567,11 @@ export default function GraphTab() {
         openDrawer('memory-detail', { engramId: n.engram.id });
       }
       if (n) { n.fx = null; n.fy = null; }
-      alphaRef.current = Math.max(alphaRef.current, 0.15);
+      if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
     }
     dragRef.current.mode = 'none';
     dragRef.current.nodeId = null;
-  }, [setSelectedEngram, openDrawer]);
+  }, [setSelectedEngram, openDrawer, prefersReducedMotion]);
 
   const handleMouseLeave = useCallback(() => {
     dragRef.current.mode = 'none';
@@ -595,8 +599,8 @@ export default function GraphTab() {
     // Fit-to-view: reset camera + reheat
     const cam = cameraRef.current;
     cam.tx = 0; cam.ty = 0; cam.tz = 1;
-    alphaRef.current = Math.max(alphaRef.current, 0.4);
-  }, []);
+    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.4);
+  }, [prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -680,7 +684,7 @@ export default function GraphTab() {
                 style={{
                   display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
                   background: 'var(--text-soft)',
-                  animation: 'graphPulse 1.6s ease-in-out infinite',
+                  animation: prefersReducedMotion ? 'none' : 'graphPulse 1.6s ease-in-out infinite',
                 }}
               />
             )}
@@ -771,7 +775,7 @@ export default function GraphTab() {
               pointerEvents: 'none',
               boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
               zIndex: 10,
-              animation: 'graphTooltipIn 140ms var(--ease-out, ease-out) both',
+              animation: prefersReducedMotion ? 'none' : 'graphTooltipIn 140ms var(--ease-out, ease-out) both',
             }}
           >
             <div style={{

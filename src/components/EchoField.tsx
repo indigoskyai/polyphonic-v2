@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface EchoFieldProps {
   size?: number;
@@ -19,6 +20,7 @@ export default function EchoField({
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef(state);
   const animRef = useRef(0);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => { stateRef.current = state; }, [state]);
 
@@ -31,7 +33,7 @@ export default function EchoField({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const N = particleCount;
+    const N = prefersReducedMotion ? Math.min(particleCount, 1800) : particleCount;
 
     let W: number, H: number, pw: number, ph: number;
     let imgData: ImageData, pix: Uint8ClampedArray;
@@ -254,11 +256,16 @@ export default function EchoField({
 
       contagion *= 0.93;
       ctx!.putImageData(imgData, 0, 0);
-      animRef.current = requestAnimationFrame(render);
+      if (!prefersReducedMotion) {
+        animRef.current = requestAnimationFrame(render);
+      }
     }
 
     // Handle resize
-    const observer = new ResizeObserver(resize);
+    const observer = new ResizeObserver(() => {
+      resize();
+      if (prefersReducedMotion) render(performance.now());
+    });
     observer.observe(container);
 
     // Pause when tab not visible
@@ -267,19 +274,27 @@ export default function EchoField({
         cancelAnimationFrame(animRef.current);
       } else {
         lastFrameTime = performance.now();
-        animRef.current = requestAnimationFrame(render);
+        if (prefersReducedMotion) {
+          render(lastFrameTime);
+        } else {
+          animRef.current = requestAnimationFrame(render);
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
-    animRef.current = requestAnimationFrame(render);
+    if (prefersReducedMotion) {
+      render(performance.now());
+    } else {
+      animRef.current = requestAnimationFrame(render);
+    }
 
     return () => {
       cancelAnimationFrame(animRef.current);
       observer.disconnect();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [particleCount]);
+  }, [particleCount, prefersReducedMotion]);
 
   useEffect(() => {
     const cleanup = init();

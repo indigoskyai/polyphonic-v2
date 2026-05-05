@@ -1120,3 +1120,26 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the keyboard-focus milestone to `main`.
 3. Continue Phase 5 reduced-motion, contrast, and route-timing gates.
+
+---
+
+## Phase 5 — Reduced Motion Hardening  [x] (2026-05-05)
+
+**Changed**
+- Added `usePrefersReducedMotion` so runtime components can respond to the system motion preference and preference changes.
+- Updated `EchoField` so reduced-motion users get a lighter static particle frame instead of a continuous canvas animation loop.
+- Updated the Mnemos graph so reduced-motion users do not get camera easing, pan inertia, spawn pulses, or inline graph pulse/tooltip animations while interaction remains available.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/reducedMotion.test.tsx src/test/dialogFocus.test.tsx` passed.
+- Local Playwright `/_mobile` smoke with `reducedMotion:'reduce'` confirmed `matchMedia=true`, mobile pulse and speaking-halo animations compute to `none`, drawer transition computes to `0s`, and browser console messages were empty.
+
+**Remaining risks**
+- Authenticated `/import`, `/chat`, and `/memory` direct reduced-motion browser evidence should be added in a later signed-in pass; this milestone covers source behavior plus a public local motion-heavy preview.
+- Phase 5 still needs contrast and route-timing gates.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the reduced-motion milestone to `main`.
+3. Continue Phase 5 contrast and route-timing gates.
