@@ -38,6 +38,8 @@ export default function ModelsSettings() {
   const [showKey, setShowKey] = useState(false);
   const [keyPreview, setKeyPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [keyError, setKeyError] = useState('');
+  const [keyInfo, setKeyInfo] = useState('');
 
   useEffect(() => {
     supabase
@@ -50,18 +52,38 @@ export default function ModelsSettings() {
   }, []);
 
   const saveKey = async () => {
+    if (!apiKey.trim()) return;
     setSaving(true);
-    await supabase.rpc('save_user_api_key', { p_key: apiKey });
-    const { data } = await supabase.from('user_api_keys').select('key_preview').maybeSingle();
-    setKeyPreview(data?.key_preview ?? null);
-    setApiKey('');
+    setKeyError('');
+    setKeyInfo('');
+    const { error: saveError } = await supabase.rpc('save_user_api_key', { p_key: apiKey.trim() });
+    if (saveError) {
+      setKeyError(saveError.message || 'Could not save API key.');
+      setSaving(false);
+      return;
+    }
+    const { data, error: previewError } = await supabase.from('user_api_keys').select('key_preview').maybeSingle();
+    if (previewError) {
+      setKeyError(previewError.message || 'API key saved, but preview could not be loaded.');
+    } else {
+      setKeyPreview(data?.key_preview ?? null);
+      setApiKey('');
+      setKeyInfo('API key saved.');
+    }
     setSaving(false);
   };
 
   const deleteKey = async () => {
-    await supabase.rpc('delete_user_api_key');
+    setKeyError('');
+    setKeyInfo('');
+    const { error } = await supabase.rpc('delete_user_api_key');
+    if (error) {
+      setKeyError(error.message || 'Could not remove API key.');
+      return;
+    }
     setKeyPreview(null);
     setApiKey('');
+    setKeyInfo('API key removed.');
   };
 
   return (
@@ -95,6 +117,8 @@ export default function ModelsSettings() {
                 value={apiKey}
                 placeholder="sk-or-..."
                 onChange={(e) => setApiKey(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
                 style={{
                   height: 40,
                   width: '100%',
@@ -151,6 +175,8 @@ export default function ModelsSettings() {
         <div style={{ fontSize: 12, color: 'var(--text-ghost)', lineHeight: 1.4 }}>
           Your OpenRouter API key. Encrypted and stored securely.
         </div>
+        {keyError && <div style={{ marginTop: 10, fontSize: 12, color: '#c97c7c' }}>{keyError}</div>}
+        {keyInfo && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-tertiary)' }}>{keyInfo}</div>}
 
         <EnsembleSettings />
       </div>

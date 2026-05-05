@@ -964,6 +964,25 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 
 **Next**
 1. Continue user-visible edge error-envelope sweep.
+
+---
+
+## Phase 4 — Model Key Management UX  [x] (2026-05-05)
+
+**Changed**
+- `ModelsSettings` now surfaces OpenRouter key save/delete success and failure state instead of silently ignoring RPC errors.
+- Key save trims input, preserves the entered key on save failure, reloads the stored preview after success, and clears the input only after a confirmed save.
+- Key delete now reports failures and only clears the local preview after the delete RPC succeeds.
+- The API key field disables browser autocomplete and spellcheck.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- Authenticated Playwright/Chrome `/settings/models` smoke confirmed the models settings route, API key section, and key-management controls loaded with 0 browser errors.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the Phase 4 model-key milestone to `main`.
+3. Continue the user-visible edge error-envelope sweep.
 2. Decide later whether to add explicit config blocks for all functions after hosted deploy behavior is confirmed.
 
 ---
