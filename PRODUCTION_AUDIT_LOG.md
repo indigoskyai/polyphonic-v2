@@ -965,3 +965,35 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Continue user-visible edge error-envelope sweep.
 2. Decide later whether to add explicit config blocks for all functions after hosted deploy behavior is confirmed.
+
+---
+
+## Phase 4 — Hosted Cron Health Check  [x] (2026-05-05)
+
+**Done**
+- Authenticated to the hosted Supabase project with the provided test account and queried `cron_health` through normal RLS.
+- Did not record credentials, secrets, raw tokens, or API keys in the tracker.
+
+**Verified**
+- Hosted read returned 17 `cron_health` rows.
+- Recent successful rows included:
+  - `luca-pulse`
+  - `anima-dispatch:anima-think`
+  - `anima-dispatch:anima-observe`
+  - `anima-dispatch:anima-emotional-state`
+  - `mnemos-decay`
+  - `observer-watch`
+  - `journal-cron`
+  - `hypomnema-decay`
+  - `mnemos-consolidate`
+  - `mnemos-graduate`
+  - `hypomnema-challenge`
+  - `mnemos-digest-build`
+- Every returned row had `last_error: null` and `error_count: 0`.
+- `daily_usage` read through the test account returned 0 rows, which is acceptable for a user-scoped table when no usage rows exist for that account/day.
+
+**Remaining risks**
+- Last-5xx-in-7d function-log counts still require Lovable/Supabase hosted function logs.
+
+**Next**
+1. Continue user-visible edge error-envelope sweep.
