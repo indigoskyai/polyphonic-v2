@@ -61,18 +61,21 @@ function useSmoothTypewriter(target: string, active = true) {
       return;
     }
 
+    // Detect a brand-new message (target no longer extends prior target):
+    // reset the buffer and EMA so cadence doesn't start mid-curve.
     if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
       if (!target.startsWith(prevTargetRef.current)) {
         displayedRef.current = '';
         setDisplayed('');
         gapEmaRef.current = 0;
+        lastTickRef.current = 0;
       }
     }
     prevTargetRef.current = target;
 
     const tick = (now: number) => {
       if (!lastTickRef.current) lastTickRef.current = now;
-      const elapsed = now - lastTickRef.current;
+      const elapsed = Math.min(now - lastTickRef.current, 64); // clamp huge frames
       lastTickRef.current = now;
 
       const tgt = targetRef.current;
@@ -80,15 +83,13 @@ function useSmoothTypewriter(target: string, active = true) {
       const gap = tgt.length - curLen;
 
       if (gap > 0) {
-        // Smooth the gap so cadence rises/falls gracefully
-        gapEmaRef.current = gapEmaRef.current * 0.7 + gap * 0.3;
+        // Smoothed gap with EMA so cadence rises and falls gracefully.
+        gapEmaRef.current = gapEmaRef.current * 0.8 + gap * 0.2;
         const smoothedGap = gapEmaRef.current;
 
-        // Cadence tiers — capped at ~600 cps so even huge bursts read as
-        // confident typing rather than a paste.
-        let charsPerMs = 0.22;                   // base ~220 cps
-        if (smoothedGap > 60)   charsPerMs = 0.36;  // ~360 cps
-        if (smoothedGap > 200)  charsPerMs = 0.60;  // ~600 cps cap
+        // Continuous cadence curve: 180 cps base, ramps to ~520 cps cap.
+        // sqrt-ish curve avoids the staircase from a tiered switch.
+        const charsPerMs = Math.min(0.52, 0.18 + Math.sqrt(smoothedGap) * 0.024);
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
@@ -97,14 +98,24 @@ function useSmoothTypewriter(target: string, active = true) {
           displayedRef.current = next;
           setDisplayed(next);
         }
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // Caught up — go idle. We re-arm via the effect when target grows.
+        lastTickRef.current = 0;
+        rafRef.current = 0;
       }
-
-      rafRef.current = requestAnimationFrame(tick);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    // Only start the loop if there's actually work to do; otherwise the
+    // next target change re-runs this effect and starts it then.
+    if (displayedRef.current.length < target.length) {
+      rafRef.current = requestAnimationFrame(tick);
+    } else {
+      displayedRef.current = target;
+      setDisplayed(target);
+    }
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       lastTickRef.current = 0;
     };
   }, [active, target]);
@@ -153,10 +164,25 @@ function StreamingText({
     return () => clearTimeout(t);
   }, [settled, onSettled]);
 
-  // Memoize the parsed markdown tree so it doesn't reparse on every keystroke unnecessarily
+  // Throttle markdown reparse: re-render the tree only when the displayed
+  // text grew by ≥8 chars, crossed a markdown boundary (newline / fence /
+  // list marker), or finished settling. Cuts reparse cost dramatically on
+  // long replies and keeps the typewriter at 60fps.
+  const lastTreeLenRef = useRef(0);
+  const treeSourceLen = useMemo(() => {
+    const prev = lastTreeLenRef.current;
+    const cur = displayed.length;
+    if (cur === 0) { lastTreeLenRef.current = 0; return 0; }
+    if (settled || !isStreaming) { lastTreeLenRef.current = cur; return cur; }
+    if (cur - prev >= 8) { lastTreeLenRef.current = cur; return cur; }
+    const tail = displayed.slice(prev);
+    if (/[\n`*_>#-]/.test(tail)) { lastTreeLenRef.current = cur; return cur; }
+    return prev;
+  }, [displayed, settled, isStreaming]);
+
   const tree = useMemo(
-    () => <RichBody source={displayed} streaming />,
-    [displayed]
+    () => <RichBody source={displayed.slice(0, treeSourceLen)} streaming />,
+    [displayed, treeSourceLen]
   );
 
   return (
@@ -461,20 +487,30 @@ export default function ChatView() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [isStreaming, messages.length]);
 
+  const scrollRafRef = useRef(0);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (!userPinnedRef.current) return;
-    const now = performance.now();
     if (isStreaming || streamingContent) {
-      // Throttle during streaming so we don't thrash the layout.
-      if (now - lastScrollAtRef.current < 80) return;
-      lastScrollAtRef.current = now;
-      el.scrollTop = el.scrollHeight;
+      // Coalesce stream-driven scrolls into one per frame; instant scroll
+      // (no smooth easing) so it tracks the typewriter without compounding.
+      if (scrollRafRef.current) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = 0;
+        if (!userPinnedRef.current) return;
+        const node = scrollRef.current;
+        if (node) node.scrollTop = node.scrollHeight;
+      });
     } else {
-      lastScrollAtRef.current = now;
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
+    return () => {
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
+    };
   }, [messages, streamingContent, streamingThinking, isStreaming]);
 
   const scrollToBottom = useCallback(() => {
@@ -1382,11 +1418,16 @@ export default function ChatView() {
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
               assistant message that mirrors it, to avoid a duplicate flash. */}
           {messages.map((msg, i) => {
+            // Hide the persisted last assistant message while the streaming
+            // bubble is still mounted, regardless of exact content match.
+            // Recency + role + agent is the dedupe key — content can drift
+            // when the chairman emits a revised body after the stub queued.
             const isLastAssistant =
-              lingeringStream != null &&
+              (isStreaming || lingeringStream != null) &&
               i === messages.length - 1 &&
               msg.role === 'assistant' &&
-              msg.content === lingeringStream;
+              (msg.agent ?? null) === (activeAgentId ?? null) &&
+              Date.now() - new Date(msg.created_at).getTime() < 60_000;
             if (isLastAssistant) return null;
 
             // B.2 — permission_request branch: render inline card instead of msg-row
