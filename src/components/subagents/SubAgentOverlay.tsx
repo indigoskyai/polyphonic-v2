@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 
 function formatTime(ts: number): string {
@@ -29,18 +30,16 @@ export default function SubAgentOverlay() {
   const select = useSubAgentStore((s) => s.select);
   const close = useSubAgentStore((s) => s.closeOverlay);
   const cancel = useSubAgentStore((s) => s.cancel);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const handleEscape = useCallback(() => close(), [close]);
 
-  useEffect(() => {
-    if (!parentAgent) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [parentAgent, close]);
+  useDialogFocus({
+    active: !!parentAgent,
+    containerRef: panelRef,
+    initialFocusRef: closeButtonRef,
+    onEscape: handleEscape,
+  });
 
   const children = useMemo(
     () => Object.values(agents)
@@ -54,10 +53,18 @@ export default function SubAgentOverlay() {
   const selected = selectedId ? agents[selectedId] : null;
 
   return (
-    <aside className="overlay-panel" data-open="true" role="dialog" aria-label={`Sub-agents of ${parentAgent}`}>
+    <aside
+      ref={panelRef}
+      className="overlay-panel"
+      data-open="true"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Sub-agents of ${parentAgent}`}
+      tabIndex={-1}
+    >
       <header className="overlay-header">
         <span className="overlay-crumb">SUB-AGENTS / {parentAgent.toUpperCase()}</span>
-        <button type="button" className="overlay-close-btn" onClick={close} aria-label="Close overlay">
+        <button ref={closeButtonRef} type="button" className="overlay-close-btn" onClick={close} aria-label="Close overlay">
           ×
         </button>
       </header>

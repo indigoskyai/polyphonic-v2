@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, WrapText, Download, Maximize2, X } from 'lucide-react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { highlight as highlightSyntax } from './syntaxHighlight';
 import { getCachedHighlight, setCachedHighlight } from './highlightCache';
 
@@ -47,15 +48,23 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const [wrap, setWrap] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const fullscreenRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenCloseRef = useRef<HTMLButtonElement | null>(null);
+  const closeFullscreen = useCallback(() => setFullscreen(false), []);
 
-  // Lock body scroll + ESC to close while fullscreen
+  useDialogFocus({
+    active: fullscreen,
+    containerRef: fullscreenRef,
+    initialFocusRef: fullscreenCloseRef,
+    onEscape: closeFullscreen,
+  });
+
+  // Lock body scroll while fullscreen
   useEffect(() => {
     if (!fullscreen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+    return () => { document.body.style.overflow = prev; };
   }, [fullscreen]);
 
   const isArt = !lang && looksLikeArt(source);
@@ -199,7 +208,7 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
         aria-modal="true"
         onClick={(e) => { if (e.target === e.currentTarget) setFullscreen(false); }}
       >
-        <div className="code-fullscreen-shell">
+        <div ref={fullscreenRef} className="code-fullscreen-shell" tabIndex={-1}>
           <div className="code-block-header">
             <div className="code-block-title">
               <span className="code-block-dot" aria-hidden />
@@ -225,7 +234,7 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
                 {copied ? <Check size={13} /> : <Copy size={13} />}
                 <span className="code-copy-label">{copied ? 'copied' : 'copy'}</span>
               </button>
-              <button type="button" className="code-icon-btn" onClick={() => setFullscreen(false)} title="Close (Esc)" aria-label="Close fullscreen">
+              <button ref={fullscreenCloseRef} type="button" className="code-icon-btn" onClick={closeFullscreen} title="Close (Esc)" aria-label="Close fullscreen">
                 <X size={13} />
               </button>
             </div>

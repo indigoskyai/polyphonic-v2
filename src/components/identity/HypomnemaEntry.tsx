@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { HypomnemaEntry } from '@/stores/hypomnemaStore';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 
 function formatRelative(iso: string): string {
   const ts = new Date(iso).getTime();
@@ -23,9 +24,20 @@ interface Props {
 export default function HypomnemaEntryCard({ entry, onForget }: Props) {
   const [showRevisions, setShowRevisions] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
   const revisions = Array.isArray(entry.revisions) ? entry.revisions : [];
   const hasRevisions = revisions.length > 0;
   const graduated = !!entry.graduated_to_engram_id;
+  const closeConfirm = useCallback(() => setShowConfirm(false), []);
+
+  useDialogFocus({
+    active: showConfirm,
+    containerRef: confirmRef,
+    initialFocusRef: cancelRef,
+    onEscape: closeConfirm,
+    trapFocus: false,
+  });
 
   return (
     <article
@@ -177,8 +189,10 @@ export default function HypomnemaEntryCard({ entry, onForget }: Props) {
 
       {showConfirm ? (
         <div
+          ref={confirmRef}
           role="dialog"
           aria-label="Confirm forget"
+          tabIndex={-1}
           style={{
             marginTop: 12,
             padding: '10px 12px',
@@ -221,8 +235,9 @@ export default function HypomnemaEntryCard({ entry, onForget }: Props) {
               forget it
             </button>
             <button
+              ref={cancelRef}
               type="button"
-              onClick={() => setShowConfirm(false)}
+              onClick={closeConfirm}
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { useMobileShellStore } from '@/stores/mobileShellStore';
 
 export interface MobileDrawerThread {
@@ -15,6 +16,15 @@ interface Props {
 export default function MobileDrawer({ threads, onSelect }: Props) {
   const open = useMobileShellStore((s) => s.drawerOpen);
   const close = useMobileShellStore((s) => s.closeDrawer);
+  const drawerRef = useRef<HTMLElement | null>(null);
+  const handleEscape = useCallback(() => close(), [close]);
+
+  useDialogFocus({
+    active: open,
+    containerRef: drawerRef,
+    onEscape: handleEscape,
+  });
+
   return (
     <>
       <div
@@ -24,10 +34,14 @@ export default function MobileDrawer({ threads, onSelect }: Props) {
         aria-hidden={!open}
       />
       <aside
+        ref={drawerRef}
         className="m-drawer"
         data-open={open ? 'true' : undefined}
         role="dialog"
+        aria-modal={open ? 'true' : undefined}
+        aria-hidden={!open}
         aria-label="Threads"
+        tabIndex={-1}
       >
         <div className="m-drawer-header">Threads</div>
         <div className="m-drawer-body">

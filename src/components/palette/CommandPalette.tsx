@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { usePaletteStore, type PaletteResult, type Scope } from '@/stores/paletteStore';
@@ -6,6 +6,7 @@ import { buildResults, buildQuickActions, getScopeCounts } from '@/lib/paletteSe
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import PaletteResults from './PaletteResults';
 
 const SCOPE_TABS: { value: Scope; label: string; kbd: string }[] = [
@@ -35,6 +36,7 @@ export default function CommandPaletteV2() {
   const openDrawer = useDrawerStore((s) => s.open);
   const createThread = useThreadStore((s) => s.createThread);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const paletteRef = useRef<HTMLDivElement | null>(null);
 
   const handlers = useMemo(() => ({
     navigate,
@@ -47,7 +49,19 @@ export default function CommandPaletteV2() {
     },
   }), [navigate, openDrawer, createThread, user]);
 
-  // Global ⌘K listener + scope hotkeys + ESC
+  const closePalette = useCallback(() => {
+    pushRecent(usePaletteStore.getState().query);
+    setOpen(false);
+  }, [pushRecent, setOpen]);
+
+  useDialogFocus({
+    active: open,
+    containerRef: paletteRef,
+    initialFocusRef: inputRef,
+    onEscape: closePalette,
+  });
+
+  // Global ⌘K listener + scope hotkeys
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
@@ -57,12 +71,6 @@ export default function CommandPaletteV2() {
         return;
       }
       if (!usePaletteStore.getState().open) return;
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        pushRecent(usePaletteStore.getState().query);
-        setOpen(false);
-        return;
-      }
       if (meta && ['1', '2', '3', '4', '5'].includes(e.key)) {
         e.preventDefault();
         setScope(SCOPE_TABS[parseInt(e.key, 10) - 1].value);
@@ -70,7 +78,7 @@ export default function CommandPaletteV2() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setOpen, setScope, pushRecent]);
+  }, [setOpen, setScope]);
 
   // Body scroll lock
   useEffect(() => {
@@ -143,8 +151,7 @@ export default function CommandPaletteV2() {
   };
 
   const handleBackdropClick = () => {
-    pushRecent(query);
-    setOpen(false);
+    closePalette();
   };
 
   if (!open) return createPortal(<div className="palette-backdrop" />, document.body);
@@ -152,7 +159,7 @@ export default function CommandPaletteV2() {
   return createPortal(
     <>
       <div className="palette-backdrop" data-open="true" onClick={handleBackdropClick} />
-      <div className="palette" data-open="true" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div ref={paletteRef} className="palette" data-open="true" role="dialog" aria-modal="true" aria-label="Command palette" tabIndex={-1}>
         <div className="palette-search">
           <svg className="palette-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="7" cy="7" r="5" />

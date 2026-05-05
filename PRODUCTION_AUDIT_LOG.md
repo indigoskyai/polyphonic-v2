@@ -1092,3 +1092,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the React Router warning cleanup to `main`.
 3. Continue Phase 5 accessibility/focus/reduced-motion release gates.
+
+---
+
+## Phase 5 — Keyboard Focus Hardening  [x] (2026-05-05)
+
+**Changed**
+- Added a shared `useDialogFocus` helper for custom dialog surfaces.
+- Wired shared focus placement, Tab containment, Escape close, and opener-focus restoration into:
+  - command palette
+  - code fullscreen overlay
+  - sub-agent overlay
+  - Hypomnema forget confirmation
+  - mobile thread drawer
+- Marked the mobile drawer as modal only while open and hidden from assistive tech while closed.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/dialogFocus.test.tsx src/test/CouncilPanelV2.test.tsx` passed.
+- Local Playwright `/_mobile` smoke confirmed focus lands on the first thread, `Shift+Tab` wraps to the last thread, `Tab` wraps to the first thread, `Escape` closes the drawer, focus returns to the opener, and browser console messages were empty.
+
+**Remaining risks**
+- Command palette and code fullscreen behavior are covered by the shared hook test and code wiring, but the unauthenticated local route does not mount the app shell; an authenticated browser pass can add direct palette evidence later.
+- CouncilPanel tests still emit existing React `act(...)` warnings.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the keyboard-focus milestone to `main`.
+3. Continue Phase 5 reduced-motion, contrast, and route-timing gates.
