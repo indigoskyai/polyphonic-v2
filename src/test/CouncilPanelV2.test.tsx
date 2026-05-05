@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { render as rtlRender, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CouncilPanel, { type CouncilTrace } from '@/components/messages/CouncilPanel';
 
@@ -113,7 +113,7 @@ describe('CouncilPanel v2 — critique (debug-gated)', () => {
       revised_content: null,
     };
     const { container } = render(<CouncilPanel trace={trace} />);
-    container.querySelector('button')?.click();
+    fireEvent.click(container.querySelector('button')!);
     // Three voices visible, but no critique block.
     expect(container.textContent).not.toContain('Voice critique');
     expect(container.textContent).not.toContain('close paragraph');
@@ -138,7 +138,7 @@ describe('CouncilPanel v2 — critique (debug-gated)', () => {
       revised_content: null,
     };
     const { container } = render(<CouncilPanel trace={trace} />);
-    container.querySelector('button')?.click();
+    fireEvent.click(container.querySelector('button')!);
     expect(container.textContent).toContain('Voice critique');
     expect(container.textContent).toContain('drift');
     expect(container.textContent).toContain('85%');
@@ -161,7 +161,7 @@ describe('CouncilPanel v2 — critique (debug-gated)', () => {
       revised_content: null,
     };
     const { container } = render(<CouncilPanel trace={trace} />);
-    container.querySelector('button')?.click();
+    fireEvent.click(container.querySelector('button')!);
     expect(container.textContent).toContain('Voice critique');
     expect(container.textContent).toContain('clean');
   });
@@ -182,7 +182,7 @@ describe('CouncilPanel v2 — critique (debug-gated)', () => {
       revised_content: 'final revised reply.',
     };
     const { container } = render(<CouncilPanel trace={trace} />);
-    container.querySelector('button')?.click();
+    fireEvent.click(container.querySelector('button')!);
     expect(container.textContent).toContain('revised');
   });
 });

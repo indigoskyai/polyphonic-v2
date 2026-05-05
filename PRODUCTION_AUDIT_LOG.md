@@ -1143,3 +1143,22 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the reduced-motion milestone to `main`.
 3. Continue Phase 5 contrast and route-timing gates.
+
+---
+
+## Phase 5 — Verification Warning Cleanup  [x] (2026-05-05)
+
+**Changed**
+- Replaced raw DOM `.click()` calls in `CouncilPanelV2.test.tsx` with Testing Library `fireEvent.click`.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/CouncilPanelV2.test.tsx` passed 14 tests with no React `act(...)` warnings.
+
+**Remaining risks**
+- Full lint is still a separate baseline-debt gate.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the verification-warning cleanup to `main`.
+3. Continue Phase 5 contrast and route-timing gates.
