@@ -1210,3 +1210,42 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the auth provider/logout milestone to `main`.
 3. Fold Lovable's hosted auth report into the launch checklist when it returns.
+
+---
+
+## Phase 4 — Hosted Auth Report And Launch Hardening  [x] (2026-05-05)
+
+**Changed**
+- Pulled Lovable's Google/Apple auth and Deno-import fixes from `main`.
+- Kept Lovable Cloud OAuth as the auth broker and added source coverage for Apple OAuth redirect behavior.
+- Added a visible Apple button mark on login and signup.
+- Added public `/privacy` and `/terms` pages and linked them from login/signup.
+- Exempted public auth/legal/profile routes from the first-run redirect gate so legal pages remain reachable.
+- Added a launch hardening migration for:
+  - `invoke_edge_function(text, jsonb)` execute revoked from `PUBLIC`, `anon`, and `authenticated`; granted to `service_role`.
+  - `get_app_config(text)` execute revoked from `PUBLIC`, `anon`, and `authenticated`; granted to `service_role`.
+  - `profile-uploads` broad public object read dropped and replaced with owner read plus published-profile-reference read.
+- Updated the launch checklist with the Lovable hosted report: HIBP enabled, email confirmation configured, cron health green, and zero reported edge-function 5xx responses.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/authFlow.test.ts src/test/phase4Reliability.test.ts` passed: 10 tests.
+- `npm run verify` passed: typecheck, 225 unit tests, empty integration placeholder with `--passWithNoTests`, and production build.
+- Local Playwright browser smoke on `http://127.0.0.1:8082/auth/login`, `/auth/signup`, `/privacy`, and `/terms` passed visually on desktop/mobile.
+- Browser console logs for those routes contained only the React DevTools development info message.
+- Screenshots/artifacts:
+  - `output/playwright/phase4-auth-login-desktop.png`
+  - `output/playwright/phase4-auth-signup-mobile.png`
+  - `output/playwright/phase4-privacy-mobile.png`
+  - `output/playwright/phase4-terms-desktop.png`
+
+**Remaining risks**
+- Real human staging smoke is still needed for email signup confirmation, Google signup/login, Apple signup/login, forgot-password email, and logout.
+- Lovable Cloud Auth settings still need final Site URL / redirect allowlist confirmation for production domains plus staging.
+- New database hardening migration still needs hosted migration deployment/linter re-check.
+- Privacy/Terms copy exists for launch gating, but final legal/operator review is still recommended before public production launch.
+
+**Next**
+1. Commit and push this Phase 4 hardening milestone to `main`.
+2. Ask Lovable to apply/re-check the hardening migration and confirm the two RPC warnings plus profile-upload listing warning are closed.
+3. Complete real human hosted auth smoke for email confirmation, Google, Apple, forgot-password, and logout.

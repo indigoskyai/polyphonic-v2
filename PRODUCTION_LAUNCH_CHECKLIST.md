@@ -10,17 +10,18 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] CORS allowlist contains production domain only (no wildcard)
 - [ ] All `verify_jwt = false` functions documented as either in-code-validating or intentionally public
 - [ ] Storage buckets owner-scoped
-- [ ] Auth: HIBP password check ON, email confirmation configured, `/reset-password` page live
+- [x] Auth: HIBP password check ON, email confirmation configured, `/reset-password` page live
 
 ## Reliability
 - [ ] Every edge function has CORS preflight + CORS-on-error + try/catch wrapper
-- [ ] All cron loops succeeded ≥ 95% in the last 24h
-- [ ] No 5xx from any edge function in the last 7 days (or each is documented + accepted)
+- [x] All cron loops succeeded ≥ 95% in the last 24h
+- [x] No 5xx from any edge function in the last 7 days (or each is documented + accepted)
 - [ ] Cascade-on-user-delete tested in a scratch account; zero orphan rows
 
 ## Auth
 - [ ] Email signup → confirmation → login round-trip green on staging
-- [ ] Google OAuth signup → login round-trip green on staging (repo UI/helper wired; hosted provider config/report pending)
+- [ ] Google OAuth signup → login round-trip green on staging (hosted provider configured; human round trip pending)
+- [ ] Apple OAuth signup → login round-trip green on staging (repo UI/helper wired; human round trip pending)
 - [ ] Forgot-password → email → `/reset-password` → new password → login green
 - [ ] Logout fully clears client state (repo-side reset verified locally; staging smoke pending)
 
@@ -44,7 +45,7 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] Cron health surface live and showing recent green ticks
 
 ## Legal / content
-- [ ] Privacy policy page exists and is linked from auth pages
-- [ ] Terms of service page exists and is linked from auth pages
+- [x] Privacy policy page exists and is linked from auth pages
+- [x] Terms of service page exists and is linked from auth pages
 - [ ] Favicon + social-share meta + robots.txt present
 - [ ] Footer attributions / OSS notices (if any) present

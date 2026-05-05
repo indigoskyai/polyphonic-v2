@@ -13,7 +13,7 @@ vi.mock('@/integrations/lovable', () => ({
   },
 }));
 
-import { authRedirectTo, signInWithGoogle } from '@/lib/authFlow';
+import { authRedirectTo, signInWithApple, signInWithGoogle } from '@/lib/authFlow';
 
 describe('authFlow', () => {
   beforeEach(() => {
@@ -33,6 +33,16 @@ describe('authFlow', () => {
     expect(mocks.signInWithOAuth).toHaveBeenCalledWith('google', {
       redirect_uri: `${window.location.origin}/chat`,
       extraParams: { prompt: 'select_account' },
+    });
+  });
+
+  it('starts Apple OAuth with the app chat redirect', async () => {
+    mocks.signInWithOAuth.mockResolvedValue({ error: null, redirected: true });
+
+    await expect(signInWithApple()).resolves.toEqual({ redirected: true });
+
+    expect(mocks.signInWithOAuth).toHaveBeenCalledWith('apple', {
+      redirect_uri: `${window.location.origin}/chat`,
     });
   });
 

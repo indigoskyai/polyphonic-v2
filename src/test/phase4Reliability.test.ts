@@ -97,4 +97,19 @@ describe('Phase 4 reliability guardrails', () => {
       expect(source, file).toContain('code: "upstream_');
     }
   });
+
+  it('keeps launch-sensitive database helpers and profile uploads hardened', () => {
+    const source = readRepoFile('supabase/migrations/20260505235900_harden_launch_auth_and_profile_storage.sql');
+
+    expect(source).toContain('REVOKE EXECUTE ON FUNCTION public.invoke_edge_function(text, jsonb) FROM PUBLIC, anon, authenticated;');
+    expect(source).toContain('GRANT EXECUTE ON FUNCTION public.invoke_edge_function(text, jsonb) TO service_role;');
+    expect(source).toContain('REVOKE EXECUTE ON FUNCTION public.get_app_config(text) FROM PUBLIC, anon, authenticated;');
+    expect(source).toContain('GRANT EXECUTE ON FUNCTION public.get_app_config(text) TO service_role;');
+    expect(source).toContain('DROP POLICY IF EXISTS "profile-uploads public read" ON storage.objects;');
+    expect(source).toContain('CREATE POLICY "profile-uploads owner read"');
+    expect(source).toContain('CREATE POLICY "profile-uploads published profile asset read"');
+    expect(source).toContain("auth.uid()::text = (storage.foldername(name))[1]");
+    expect(source).toContain("i.item_type = 'upload'");
+    expect(source).not.toContain("USING (bucket_id = 'profile-uploads');");
+  });
 });

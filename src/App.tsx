@@ -34,6 +34,8 @@ const queryClient = new QueryClient();
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
 const MemoryView = lazy(() => import("./pages/MemoryView"));
 const MindView = lazy(() => import("./pages/MindView"));
@@ -77,6 +79,15 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
+    const isPublicRoute =
+      location.pathname.startsWith('/auth/')
+      || location.pathname === '/reset-password'
+      || location.pathname === '/privacy'
+      || location.pathname === '/terms'
+      || location.pathname.startsWith('/u/')
+      || location.pathname.startsWith('/@');
+
+    if (isPublicRoute) { setChecked(true); return; }
     if (!user) { setChecked(true); return; }
     if (location.pathname === '/onboarding') { setChecked(true); return; }
     // Force re-entry via ?onboarding=1 (for QA)
@@ -246,6 +257,8 @@ const App = () => (
                 <Route path="/auth/login" element={<LoginPage />} />
                 <Route path="/auth/signup" element={<SignupPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/terms" element={<TermsPage />} />
                 {/* Public profile (no app shell, no auth required) */}
                 <Route path="/u/:handle" element={<PublicProfileView mode="view" />} />
                 <Route path="/u/:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />

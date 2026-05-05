@@ -167,7 +167,7 @@ export default function SignupPage() {
               fontSize: 11,
             }}
           >
-            
+            A
           </span>
           Continue with Apple
         </button>
@@ -175,6 +175,11 @@ export default function SignupPage() {
         <p className="mt-6 text-xs text-center" style={{ color: 'var(--text-ghost)' }}>
           Already have an account?{' '}
           <Link to="/auth/login" className="underline" style={{ color: 'var(--text-tertiary)' }}>Sign in</Link>
+        </p>
+        <p className="mt-4 text-[11px] text-center" style={{ color: 'var(--text-ghost)' }}>
+          <Link to="/privacy" className="underline" style={{ color: 'var(--text-ghost)' }}>Privacy</Link>
+          <span aria-hidden="true" className="mx-2">/</span>
+          <Link to="/terms" className="underline" style={{ color: 'var(--text-ghost)' }}>Terms</Link>
         </p>
       </div>
     </div>
