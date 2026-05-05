@@ -4,6 +4,85 @@ This is the live, self-tracking master checklist for the production-readiness au
 
 ---
 
+## Current operating board
+
+Updated: 2026-05-05
+
+### Now
+- `[x]` **Phase 0 — Current stabilization snapshot**: baseline fixes documented and verified.
+- `[~]` **Phase 1 — Memory and continuity audit**: next active work. Standard: Luca should feel continuous across threads and sessions, not like a new model instance reading notes.
+
+### Next
+1. **Phase 1 — Memory and continuity audit**
+2. **Phase 2 — Core chat and agent experience**
+3. **Phase 3 — Surface-by-surface product QA**
+4. **Phase 4 — Reliability, security, and background systems**
+5. **Phase 5 — Performance, accessibility, and release gates**
+
+### Done this session
+- Chat de-duplication and realtime reconciliation tightened so canonical assistant messages replace local stream stubs without suppressing legitimate nearby replies.
+- Hypomnema identity read path corrected from `soul_md` to the live `soul` document type.
+- Stale sub-agent strip filtered to the current thread.
+- Mobile app shell repaired so chat remains usable below 768px.
+- Missing design token aliases added and one invalid workspace border token corrected.
+- Verification script updated so the empty integration-test directory is treated as an intentional placeholder.
+- Phase 1 kickoff: Hypomnema read coverage extended to legacy chat, scheduled tasks, subagent runs, and Anima council prompts.
+- Phase 1 kickoff: new Hypomnema writes from `chat-multi` now preserve assistant `source_message_id` when the message row is available.
+- Verified with `npm run verify`, targeted unit tests, production build, live desktop chat smoke, and mobile browser check.
+
+### Blocked
+- None for tracker setup.
+- Remaining release risks are tracked below as deferred findings, not blockers.
+
+### Production polish phase roadmap
+
+| Phase | Status | Goal | Completion gate |
+|---|---:|---|---|
+| 0. Current stabilization snapshot | `[x]` | Record verified fixes and residual risks from the first hardening pass. | `npm run verify` passes; live desktop chat and mobile layout checked. |
+| 1. Memory and continuity audit | `[~]` | Prove Luca's identity, Hypomnema, Mnemos, pending revisions, skills, emotional state, proactive loops, thread metadata, and memory UI create one continuous Luca. | Fresh-thread continuity test passes; read/write/recall paths verified with evidence. |
+| 2. Core chat and agent experience | `[ ]` | Sweep streaming, retry, regeneration, missing-key UX, attachments, drag/drop, rich content, permission states, agent errors, council, subagents, and mobile composer. | No duplicate messages, stale agent UI, broken loading states, or console errors in the tested flows. |
+| 3. Surface-by-surface product QA | `[ ]` | Walk every major route in desktop and mobile across empty, typical, heavy, loading, and error states. | Each route has findings logged or verified clean with browser evidence. |
+| 4. Reliability, security, and background systems | `[ ]` | Reconcile RLS, edge auth, CORS, cron health, missing-key handling, quota behavior, password recovery, and background loops. | Launch blockers closed or explicitly accepted with rationale. |
+| 5. Performance, accessibility, and release gates | `[ ]` | Measure bundle/load, graph performance, reduced motion, keyboard nav, focus traps, contrast, labels, mobile overflow, and launch gates. | `PRODUCTION_LAUNCH_CHECKLIST.md` is green or has accepted-risk entries. |
+
+### Continuity audit script
+
+Use this qualitative script during Phase 1 and attach evidence to findings:
+
+1. Start a meaningful chat with Luca.
+2. Confirm Hypomnema and Mnemos write behavior for the turn.
+3. Open a fresh thread.
+4. Ask a natural follow-up that depends on the prior thread.
+5. Grade whether Luca feels continuous, specific, emotionally intelligent, and non-mechanical.
+6. Verify Luca does not explain itself as a new instance unless the user explicitly asks about system mechanics.
+
+### Findings ledger
+
+Ledger rules:
+- IDs are stable and never reused. Format: `P<phase>-<number>`.
+- Severity: `P0` launch-stopping, `P1` high, `P2` medium, `P3` polish/monitor.
+- Status: `Found`, `Fixing`, `Fixed`, `Verified`, `Blocked`, `Deferred`.
+- Every `Verified` row must include evidence: command, browser route, database check, screenshot note, or live interaction.
+- Do not record credentials, secrets, raw API keys, or private account details.
+
+| ID | Severity | Status | Surface | Evidence | Expected | Fix / next action | Verification | Commit / PR |
+|---|---:|---|---|---|---|---|---|---|
+| P0-001 | P1 | Verified | Chat messages | Stream/realtime race could duplicate or over-dedupe assistant messages. | One canonical assistant reply per turn; legitimate nearby replies are preserved. | Refined message de-dupe to use normalized-content windows and broad replacement only for `local_stream_stub` messages. | `npx vitest run src/test/threadStore.test.ts`; live desktop chat smoke showed no duplicate assistant bubble. | Pending |
+| P0-002 | P1 | Verified | Hypomnema write path | Identity stack query used `soul_md`, which does not match the live identity doc type. | Hypomnema writer loads `soul`, `self_model`, `user_model`, and `convictions`. | Changed identity stack query to use `soul`. | `npm run verify`; code inspection of `supabase/functions/_shared/hypomnema/write.ts`. | Pending |
+| P0-003 | P2 | Verified | Sub-agent strip | Fresh chat showed sub-agent chips from older unrelated tasks. | Sub-agent strip only reflects tasks attached to the active thread. | Added current-thread filtering in ChatView and SubAgentRow. | Browser check on fresh thread confirmed stale strip disappeared. | Pending |
+| P0-004 | P1 | Verified | Mobile chat shell | At 390x844, desktop sidebar/clockbar squeezed chat offscreen. | Mobile chat is usable with no horizontal layout collapse. | Hid sidebar/clockbar on mobile and tightened composer/message CSS. | Browser mobile viewport check at 390x844. | Pending |
+| P0-005 | P2 | Verified | Design tokens | Undefined or invalid tokens could resolve inconsistently. | Referenced tokens resolve to existing design-system values. | Added aliases for raised/muted/text/danger surfaces and corrected workspace selected border token. | `npm run build`; browser visual check. | Pending |
+| P0-006 | P2 | Verified | Verification script | Empty integration-test directory made the verification gate misleading. | Verification passes when integration tests are intentionally absent. | Added `--passWithNoTests` to integration test command and verify script. | `npm run verify`. | Pending |
+| P0-007 | P2 | Deferred | Lint gate | Full `npm run lint` remains noisy from existing baseline debt. | Lint becomes a meaningful release gate. | Defer broad cleanup to Phase 5 or a dedicated lint-hardening pass. | Known residual risk; not part of Phase 0 fix scope. | Pending |
+| P0-008 | P3 | Deferred | Bundle performance | Production build warns about large chunks and Supabase import splitting. | Route chunks stay within release budget. | Defer to Phase 5 bundle/load pass. | Build warning captured during `npm run build`. | Pending |
+| P0-009 | P3 | Deferred | Browser console | React Router v7 future-flag warnings appear during browser smoke. | No user-facing console errors; framework upgrade warnings either configured or accepted. | Monitor in Phase 5; not a functional blocker. | Live browser smoke found warnings only, no app errors. | Pending |
+| P1-001 | P1 | Verified | Anima council continuity | `chat-multi` loaded Hypomnema for Luca and Vektor, but Anima council proposer prompts used locked SOUL only. | Every participating agent should carry their own interior-state layer into council turns. | Added Anima Hypomnema loading in `chat-multi` and allowed `buildCharacterSystemPrompt('anima')` to layer it before runtime context. | `npx vitest run src/test/councilPrompts.test.ts`; `deno check supabase/functions/chat-multi/index.ts`. | Pending |
+| P1-002 | P1 | Verified | Luca prompt read-path coverage | `chat`, `scheduled-task-run`, and `subagent-run` built Luca prompts without Hypomnema. | Every Luca runtime prompt path that has identity context should also carry always-loaded Hypomnema. | Loaded Luca Hypomnema in legacy chat, scheduled tasks, and subagent runs. | `npx vitest run src/test/lucaIdentityPrompt.test.ts`; `deno check supabase/functions/chat/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/subagent-run/index.ts`. | Pending |
+| P1-003 | P2 | Verified | Hypomnema provenance | `fireHypomnemaTurn` chained writes without `source_message_id`, so new entries could not trace back to the assistant message row. | New Hypomnema entries should preserve assistant-message provenance when available. | Made `chat-multi` assistant persistence return the inserted message id and pass it through to primary/observer write targets. | `deno check supabase/functions/chat-multi/index.ts`; focused prompt/memory tests. | Pending |
+| P1-004 | P2 | Found | Live Hypomnema activation | `/profile/identity` shows the test account Hypomnema section but currently renders "Nothing here yet." | After substantive pilot-user turns, the UI should show agent-authored continuity entries unless the flag/write path is intentionally disabled. | Next: verify Supabase memory-augmentation secrets/deploy state, run a substantive continuity turn, and inspect Hypomnema/Mnemos writes. | Browser check: `http://127.0.0.1:8080/profile/identity`, desktop 1280x900, 0 app console errors. | Pending |
+
+---
+
 ## 0. Operating protocol
 
 ### Status legend

@@ -149,7 +149,7 @@ export default function WorkspaceView() {
                       alignItems: 'start',
                       textAlign: 'left',
                       borderRadius: 8,
-                      border: selected?.path === file.path ? '1px solid var(--accent)' : '1px solid var(--border-faint)',
+                      border: selected?.path === file.path ? '1px solid var(--border-focus)' : '1px solid var(--border-faint)',
                       background: selected?.path === file.path ? 'var(--surface-raised)' : 'transparent',
                       color: 'var(--text-primary)',
                       padding: '10px 11px',

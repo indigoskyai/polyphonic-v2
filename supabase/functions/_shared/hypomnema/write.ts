@@ -288,7 +288,7 @@ async function loadAgentContext(
       .select("doc_type, content")
       .eq("user_id", userId)
       .eq("agent_id", agentId)
-      .in("doc_type", ["soul_md", "self_model", "user_model", "convictions"]);
+      .in("doc_type", ["soul", "self_model", "user_model", "convictions"]);
     if (data && data.length > 0) {
       identitySummary = data
         .map((d: { doc_type: string; content: string }) =>

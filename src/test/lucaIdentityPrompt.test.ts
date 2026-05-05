@@ -14,6 +14,7 @@ describe('buildLucaSystemPrompt identity layers', () => {
       selfModel: 'Sometimes over-compresses too early.',
       skillsBlock: '### careful-review\nUse when critique needs a second pass.',
       pendingRevisions: 'Earlier you said: X\nOn reflection: Y',
+      hypomnemaBlock: "\n## what i'm sitting with\n\n- (yesterday) i'm carrying the shape of this project.",
       emotionalBlock: 'Current emotional state: steady.',
       beliefsBlock: 'Beliefs: craft matters.',
       memoryContext: 'Relevant memories about this person: ships fast.',
@@ -27,10 +28,11 @@ describe('buildLucaSystemPrompt identity layers', () => {
     const selfModelIndex = prompt.indexOf("## How you've been showing up");
     const skillsIndex = prompt.indexOf("## Relevant skills you've developed");
     const revisionsIndex = prompt.indexOf('## Pending revisions');
+    const hypomnemaIndex = prompt.indexOf("## what i'm sitting with");
     const stateIndex = prompt.indexOf('Current emotional state: steady.');
 
     // Layering: locked soul → soul.md → convictions → user-model →
-    // self-model → skills → pending revisions → runtime state.
+    // self-model → skills → pending revisions → hypomnema → runtime state.
     expect(soulIndex).toBeGreaterThanOrEqual(0);
     expect(soulIndex).toBeLessThan(soulMdIndex);
     expect(soulMdIndex).toBeLessThan(convictionsIndex);
@@ -38,13 +40,15 @@ describe('buildLucaSystemPrompt identity layers', () => {
     expect(userModelIndex).toBeLessThan(selfModelIndex);
     expect(selfModelIndex).toBeLessThan(skillsIndex);
     expect(skillsIndex).toBeLessThan(revisionsIndex);
-    expect(revisionsIndex).toBeLessThan(stateIndex);
+    expect(revisionsIndex).toBeLessThan(hypomnemaIndex);
+    expect(hypomnemaIndex).toBeLessThan(stateIndex);
 
     expect(prompt).toContain('Truth before polish.');
     expect(prompt).toContain('the two are not in tension.');
     expect(prompt).toContain('Prefers direct, concrete critique.');
     expect(prompt).toContain('Sometimes over-compresses too early.');
     expect(prompt).toContain('careful-review');
+    expect(prompt).toContain("i'm carrying the shape of this project.");
   });
 
   it('omits the convictions header entirely when no convictions are loaded', () => {

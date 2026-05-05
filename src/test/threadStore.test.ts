@@ -63,6 +63,24 @@ describe('threadStore.addMessage de-dupe', () => {
     expect(useThreadStore.getState().messages).toHaveLength(2);
   });
 
+  it('skips a local stream stub when a recent canonical assistant row already exists', () => {
+    useThreadStore.setState({
+      messages: [{
+        id: 'real-1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+        content: 'revised final answer', model: null, agent: 'luca',
+        thinking_content: null, tokens_used: null, bookmarked: false,
+        created_at: new Date().toISOString(),
+      }],
+    });
+    useThreadStore.getState().addMessage({
+      thread_id: 't1', user_id: 'u1', role: 'assistant', content: 'draft final answer',
+      model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+      metadata: { local_stream_stub: true },
+    });
+    expect(useThreadStore.getState().messages).toHaveLength(1);
+    expect(useThreadStore.getState().messages[0].id).toBe('real-1');
+  });
+
   it('does add when same content but >30s apart', () => {
     const old = new Date(Date.now() - 60_000).toISOString();
     useThreadStore.setState({

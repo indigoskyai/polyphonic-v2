@@ -60,7 +60,7 @@ export interface CharacterSystemParts {
    * placeholder so Phase 2 (per-user Anima identity) can extend without
    * breaking call sites.
    */
-  anima?: { extraContext?: string };
+  anima?: { extraContext?: string; hypomnemaBlock?: string };
   /** Phase 1: Vektor is locked-SOUL with optional layered runtime context. */
   vektor?: Parameters<typeof buildVektorSystemPrompt>[0];
 }
@@ -81,7 +81,8 @@ export function buildCharacterSystemPrompt(
       // Phase 1: just the locked SOUL, with optional runtime context
       // appended (so chat-multi can inform Anima of crisis state etc).
       const extra = parts.anima?.extraContext;
-      return extra ? `${ANIMA_SOUL}\n\n${extra}` : ANIMA_SOUL;
+      const hypomnema = parts.anima?.hypomnemaBlock;
+      return [ANIMA_SOUL, hypomnema || "", extra || ""].filter(Boolean).join("\n\n");
     }
     case "vektor":
       return buildVektorSystemPrompt(parts.vektor || {});

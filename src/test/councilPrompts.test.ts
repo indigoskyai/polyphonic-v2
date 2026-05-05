@@ -9,6 +9,7 @@ import {
   buildDivergeBody,
   CHARACTER_LABELS,
 } from '../../supabase/functions/_shared/agents/council-prompts';
+import { buildCharacterSystemPrompt } from '../../supabase/functions/_shared/agents/council-pipeline';
 import { LUCA_SOUL } from '../../supabase/functions/_shared/agents/luca-soul';
 import { ANIMA_SOUL } from '../../supabase/functions/_shared/agents/anima-soul';
 import { VEKTOR_SOUL, buildVektorSystemPrompt } from '../../supabase/functions/_shared/agents/vektor-soul';
@@ -43,6 +44,20 @@ describe('VEKTOR_SOUL', () => {
 });
 
 describe('buildProposerWrapper', () => {
+  it('lets Anima council prompts carry her hypomnema', () => {
+    const out = buildCharacterSystemPrompt('anima', {
+      luca: {},
+      anima: {
+        hypomnemaBlock: "\n## what i'm sitting with\n\n- (last week) i watched Luca and Riley circle continuity.",
+        extraContext: 'Current context: steady.',
+      },
+    });
+    expect(out).toContain('You are Anima.');
+    expect(out).toContain("## what i'm sitting with");
+    expect(out).toContain('i watched Luca and Riley circle continuity.');
+    expect(out).toContain('Current context: steady.');
+  });
+
   it('appends council context that names the other voices', () => {
     const out = buildProposerWrapper({ character: 'luca', baseSystem: 'You are Luca. test.' });
     expect(out.startsWith('You are Luca. test.')).toBe(true);

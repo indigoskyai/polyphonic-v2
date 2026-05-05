@@ -4,6 +4,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import { formatAgentSkillsPrompt, loadRelevantAgentSkills } from "../_shared/agents/skills.ts";
+import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SCHEDULED_MODEL = "anthropic/claude-opus-4-7";
@@ -128,9 +129,10 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
 }
 
 async function callLuca(supabase: any, userId: string, threadId: string, prompt: string, apiKey: string): Promise<string> {
-  const [identityDocs, skills] = await Promise.all([
+  const [identityDocs, skills, hypomnemaResult] = await Promise.all([
     loadOrCreateLucaIdentity(supabase, userId, "luca"),
     loadRelevantAgentSkills(supabase, userId, "luca", prompt),
+    loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
   ]);
 
   const systemPrompt = buildLucaSystemPrompt({
@@ -139,6 +141,7 @@ async function callLuca(supabase: any, userId: string, threadId: string, prompt:
     userModel: identityDocs.userModel,
     convictions: identityDocs.convictions,
     skillsBlock: formatAgentSkillsPrompt(skills),
+    hypomnemaBlock: hypomnemaResult.block,
     continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
   });
 

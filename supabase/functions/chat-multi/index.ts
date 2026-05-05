@@ -229,7 +229,7 @@ serve(async (req) => {
       .limit(50);
 
     // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult, hypomnemaLucaResult, hypomnemaVektorResult] = await Promise.allSettled([
+    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult, hypomnemaLucaResult, hypomnemaAnimaResult, hypomnemaVektorResult] = await Promise.allSettled([
       loadEmotionalState(supabase, userId),
       supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
         .eq("user_id", userId).eq("active", true)
@@ -247,6 +247,7 @@ serve(async (req) => {
       // Read path stays on regardless of MEMORY_AUGMENTATION_ENABLED — empty data is benign,
       // and once writes start backfilling entries we want them surfaced immediately.
       loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
+      loadHypomnema(supabase, userId, "anima").catch(() => ({ block: "", count: 0, rendered: 0 })),
       loadHypomnema(supabase, userId, "vektor").catch(() => ({ block: "", count: 0, rendered: 0 })),
     ]);
 
@@ -279,6 +280,7 @@ serve(async (req) => {
     const relevantSkills = skillsResult.status === "fulfilled" ? skillsResult.value : [];
     const skillsBlock = formatAgentSkillsPrompt(relevantSkills || []);
     const hypomnemaLucaBlock = hypomnemaLucaResult.status === "fulfilled" ? hypomnemaLucaResult.value.block : "";
+    const hypomnemaAnimaBlock = hypomnemaAnimaResult.status === "fulfilled" ? hypomnemaAnimaResult.value.block : "";
     const hypomnemaVektorBlock = hypomnemaVektorResult.status === "fulfilled" ? hypomnemaVektorResult.value.block : "";
 
     // Thread gap detection — if returning to an idle conversation
@@ -427,6 +429,7 @@ serve(async (req) => {
               crisisDirective,
             },
             anima: {
+              hypomnemaBlock: hypomnemaAnimaBlock,
               extraContext: crisisDirective || undefined,
             },
             vektor: {
@@ -648,7 +651,7 @@ serve(async (req) => {
             send({ type: "verdict", verdict: "synthesize" });
             send({ type: "content", text: fallbackContent });
             councilV2Trace.verdict = "synthesize";
-            await saveAssistantMessage(
+            const fallbackMessageId = await saveAssistantMessage(
               supabase, thread_id, userId, fallbackContent, "chairman-fallback",
               variants, null, agentId,
               { rankings, aggregate, label_to_model: labelToModel },
@@ -675,6 +678,7 @@ serve(async (req) => {
               userId,
               userMessage: message,
               agentResponse: fallbackContent,
+              sourceMessageId: fallbackMessageId,
               recentTurns: history || [],
               observers: fallbackObservers,
             });
@@ -846,7 +850,7 @@ serve(async (req) => {
           }
 
           // Save the synthesized message
-          await saveAssistantMessage(
+          const synthesizedMessageId = await saveAssistantMessage(
             supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis",
             variants, synthesisThinking || null, agentId,
             { rankings, aggregate, label_to_model: labelToModel },
@@ -890,6 +894,7 @@ serve(async (req) => {
             userId,
             userMessage: message,
             agentResponse: synthesizedContent,
+            sourceMessageId: synthesizedMessageId,
             recentTurns: history || [],
             observers: synthObservers,
           });
@@ -1004,6 +1009,7 @@ function fireHypomnemaTurn(opts: {
   userId: string;
   userMessage: string;
   agentResponse: string;
+  sourceMessageId?: string | null;
   recentTurns: Array<{ role: string; content: string }>;
   /** Other agents who participated. Their `contribution` becomes the
    *  observer prompt's INJECT_YOUR_CONTRIBUTION. */
@@ -1018,6 +1024,7 @@ function fireHypomnemaTurn(opts: {
     const chainTargets: Array<{
       agent_id: string;
       thread_id: string;
+      source_message_id?: string | null;
       density: "primary" | "observer";
       primary_in_thread: boolean;
       primary_agent_name?: string;
@@ -1027,6 +1034,7 @@ function fireHypomnemaTurn(opts: {
       {
         agent_id: opts.agentId,
         thread_id: opts.threadId,
+        source_message_id: opts.sourceMessageId ?? null,
         density: "primary",
         primary_in_thread: true,
       },
@@ -1038,6 +1046,7 @@ function fireHypomnemaTurn(opts: {
         chainTargets.push({
           agent_id: obs.agentId,
           thread_id: opts.threadId,
+          source_message_id: opts.sourceMessageId ?? null,
           density: "observer",
           primary_in_thread: false,
           primary_agent_name: opts.agentId,
@@ -1420,7 +1429,7 @@ async function saveAssistantMessage(
     critique: unknown | null;
     revised_content: string | null;
   } | null = null,
-) {
+) : Promise<string | null> {
   // Build metadata payload — when council v2 trace is provided, prefer that
   // shape (kind='council_v2'). Falls back to legacy council shape for any
   // remaining call sites.
@@ -1448,7 +1457,7 @@ async function saveAssistantMessage(
     };
   }
 
-  await supabase.from("messages").insert({
+  const { data: inserted, error: insertError } = await supabase.from("messages").insert({
     thread_id: threadId,
     user_id: userId,
     role: "assistant",
@@ -1458,7 +1467,11 @@ async function saveAssistantMessage(
     thinking_content: thinkingContent || null,
     tokens_used: null,
     ...(metadata ? { metadata } : {}),
-  });
+  }).select("id").single();
+
+  if (insertError) {
+    throw new Error(`Failed to save assistant message: ${insertError.message}`);
+  }
 
   // Legacy variants sidecar (kept for backward compat with any existing
   // readers; new readers should use messages.metadata).
@@ -1470,6 +1483,8 @@ async function saveAssistantMessage(
       salience: 0,
     });
   }
+
+  return inserted?.id ?? null;
 }
 
 /** Encode a conversation exchange into Mnemos. */
@@ -1589,11 +1604,14 @@ async function singleModelStream(
           }
         }
 
-        await supabase.from("messages").insert({
+        const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
           content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
-        });
+        }).select("id").single();
+        if (insertError) {
+          throw new Error(`Failed to save assistant message: ${insertError.message}`);
+        }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
         finalizePendingRevisions(supabase, apiKey, pendingRevisions || [], fullContent).catch(
@@ -1619,6 +1637,7 @@ async function singleModelStream(
           userId,
           userMessage,
           agentResponse: fullContent,
+          sourceMessageId: insertedMessage?.id ?? null,
           recentTurns: messages || [],
           observers: singleObservers,
         });

@@ -56,6 +56,13 @@ interface ThreadState {
   updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
 }
 
+const normContent = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
+const CONTENT_DEDUPE_WINDOW_MS = 30_000;
+const STREAM_STUB_DEDUPE_WINDOW_MS = 60_000;
+
+const isLocalStreamStub = (message: Pick<Message, 'metadata'>) =>
+  message.metadata?.local_stream_stub === true;
+
 export const useThreadStore = create<ThreadState>((set, get) => ({
   threads: [],
   currentThreadId: null,
@@ -92,13 +99,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   //
   // Two de-dupe paths:
   //   1. Same-id row already in state → drop (re-emit safety).
-  //   2. A local optimistic stub (added by ChatView's addMessage when a
-  //      stream finishes) with the same role + agent + content that
-  //      landed within the last 30 seconds → replace it with the canonical
-  //      DB row, so future updates can target by real UUID and we don't
-  //      render the same message twice.
+  //   2. A local optimistic stream stub with the same role + agent + content
+  //      in the recent window → replace it with the canonical DB row. For
+  //      stream stubs only, content may differ because Council critique can
+  //      revise the persisted body after the client buffered the first body.
   subscribeMessages: (threadId) => {
-    const norm = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
     const channel = supabase
       .channel(`thread-messages-${threadId}`)
       .on(
@@ -112,23 +117,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           if (existing.some((m) => m.id === row.id)) return;
 
           const rowTime = new Date(row.created_at).getTime();
-          // Match an optimistic stub by role/agent + recency. We deliberately
-          // do NOT compare content strictly: the chairman may emit a revised
-          // body after the stub was queued, so the canonical row's content
-          // can differ slightly. Recency + role + agent is enough to dedupe.
+          // Match only local optimistic stubs by role/agent + recency. We
+          // deliberately allow content drift for those stubs: the chairman may
+          // emit a revised body after the first body was queued, so the DB row
+          // can differ. Non-stub messages still require a content match.
           const stubIndex = existing.findIndex((m) => {
             if (m.id === row.id) return false;
             if (m.role !== row.role) return false;
             if ((m.agent ?? null) !== (row.agent ?? null)) return false;
-            // Stub IDs are crypto.randomUUID — DB IDs are also UUIDs, but
-            // stubs never collide with row.id (checked above). Treat any
-            // assistant stub for this agent in the last 60s as the same reply.
             const stubTime = new Date(m.created_at).getTime();
-            if (Math.abs(rowTime - stubTime) > 60_000) return false;
-            // Either content matches loosely OR this is the only recent stub
-            // for this role+agent (covers the revised-content race).
-            if (norm(m.content) === norm(row.content)) return true;
-            return m.role === 'assistant';
+            const age = Math.abs(rowTime - stubTime);
+            if (normContent(m.content) === normContent(row.content)) {
+              return age <= CONTENT_DEDUPE_WINDOW_MS;
+            }
+            return m.role === 'assistant' && isLocalStreamStub(m) && age <= STREAM_STUB_DEDUPE_WINDOW_MS;
           });
 
           if (stubIndex >= 0) {
@@ -164,20 +166,21 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   addMessage: (msg) => {
     const now = Date.now();
     const existing = get().messages;
-    const norm = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
-    const incomingNorm = norm(msg.content);
+    const incomingNorm = normContent(msg.content);
 
     // If realtime already delivered the canonical row for this same reply,
-    // skip the local stub. We accept either a normalized content match OR
-    // any recent assistant row for the same agent (handles revised-content
-    // race where the persisted content differs from the buffered stream).
+    // skip the local stub. Normal messages require a normalized content match;
+    // local stream stubs may use role/agent/recency only because persisted
+    // Council content can be revised after the buffered stream completes.
     const realtimeAlreadyHere = existing.some((m) => {
       if (m.role !== msg.role) return false;
       if ((m.agent ?? null) !== (msg.agent ?? null)) return false;
       const mTime = new Date(m.created_at).getTime();
-      if (Math.abs(now - mTime) > 60_000) return false;
-      if (norm(m.content) === incomingNorm) return true;
-      return msg.role === 'assistant';
+      const age = Math.abs(now - mTime);
+      if (normContent(m.content) === incomingNorm) {
+        return age <= CONTENT_DEDUPE_WINDOW_MS;
+      }
+      return msg.role === 'assistant' && isLocalStreamStub(msg) && age <= STREAM_STUB_DEDUPE_WINDOW_MS;
     });
     if (realtimeAlreadyHere) return;
 

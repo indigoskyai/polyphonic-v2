@@ -15,6 +15,7 @@ import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
+import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
@@ -224,9 +225,11 @@ async function runSubagentLoop(
   const apiKey = typeof apiKeyData === "string" ? apiKeyData.trim() : "";
   if (!apiKey) throw new Error("user has no OpenRouter key configured");
 
-  const [identityDocs, skills] = await Promise.all([
-    loadOrCreateLucaIdentity(supabase, task.user_id, task.agent_id || "luca"),
-    loadRelevantAgentSkills(supabase, task.user_id, task.agent_id || "luca", task.task_description),
+  const agentId = task.agent_id || "luca";
+  const [identityDocs, skills, hypomnemaResult] = await Promise.all([
+    loadOrCreateLucaIdentity(supabase, task.user_id, agentId),
+    loadRelevantAgentSkills(supabase, task.user_id, agentId, task.task_description),
+    loadHypomnema(supabase, task.user_id, agentId).catch(() => ({ block: "", count: 0, rendered: 0 })),
   ]);
 
   const systemPrompt = buildLucaSystemPrompt({
@@ -235,6 +238,7 @@ async function runSubagentLoop(
     userModel: identityDocs.userModel,
     convictions: identityDocs.convictions,
     skillsBlock: formatAgentSkillsPrompt(skills),
+    hypomnemaBlock: hypomnemaResult.block,
     continuityNote: `\n\n${SUBAGENT_INSTRUCTIONS}`,
   });
 

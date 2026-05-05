@@ -12,6 +12,7 @@ import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
 } from "../_shared/agents/skills.ts";
+import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 import {
   buildCrisisDirective,
   classifyCrisis,
@@ -102,9 +103,12 @@ serve(async (req) => {
       .single();
 
     const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
-    const identityDocs = await loadOrCreateLucaIdentity(supabase, userId, "luca");
-    const pendingRevisions = await loadPendingRevisions(supabase, userId, thread_id);
-    const relevantSkills = await loadRelevantAgentSkills(supabase, userId, "luca", message);
+    const [identityDocs, pendingRevisions, relevantSkills, hypomnemaResult] = await Promise.all([
+      loadOrCreateLucaIdentity(supabase, userId, "luca"),
+      loadPendingRevisions(supabase, userId, thread_id),
+      loadRelevantAgentSkills(supabase, userId, "luca", message),
+      loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
+    ]);
 
     // Load recent conversation history (last 50 messages)
     const { data: history } = await supabase
@@ -159,6 +163,7 @@ serve(async (req) => {
       convictions: identityDocs.convictions,
       skillsBlock: formatAgentSkillsPrompt(relevantSkills),
       pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
+      hypomnemaBlock: hypomnemaResult.block,
       crisisDirective,
     });
 

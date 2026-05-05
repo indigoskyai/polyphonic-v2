@@ -325,8 +325,8 @@ function ContextStrip() {
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const consults = useAgentConsultStore(selectConsultsByThread(currentThreadId));
   const hasSubAgents = useMemo(
-    () => Object.values(subAgents).some((a) => a.parentAgent === 'luca'),
-    [subAgents],
+    () => !!currentThreadId && Object.values(subAgents).some((a) => a.parentAgent === 'luca' && a.threadId === currentThreadId),
+    [subAgents, currentThreadId],
   );
   if (!hasSubAgents && consults.length === 0) return null;
   return (
@@ -339,7 +339,7 @@ function ContextStrip() {
         alignItems: 'center',
       }}
     >
-      <SubAgentRow parentAgent="luca" />
+      <SubAgentRow parentAgent="luca" threadId={currentThreadId} />
       <AgentDialogueChip />
     </div>
   );
@@ -1070,7 +1070,7 @@ export default function ChatView() {
                   bookmarked: false,
                   // Store variants as extra metadata on the message object (legacy convenience)
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
-                  ...(councilMetadata ? { metadata: councilMetadata } : {}),
+                  metadata: { ...(councilMetadata || {}), local_stream_stub: true },
                 } as any);
                 if (tid) loadArtifacts(tid);
               } else if (data.type === 'error') {

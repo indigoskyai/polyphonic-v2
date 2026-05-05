@@ -29,6 +29,8 @@
   --bg-surface:       rgba(220, 219, 216, 0.04);
   --bg-surface-hover: rgba(220, 219, 216, 0.07);
   --bg-glass:         rgba(14, 14, 17, 0.88);
+  --surface-raised:   var(--surface-2);
+  --surface-muted:    rgba(220, 219, 216, 0.025);
 
   /* Text hierarchy (warm cream, 10 tiers) */
   --ink:             rgba(244, 243, 240, 0.93);  /* HIGHEST — brightness cap */
@@ -41,6 +43,7 @@
   --text-faint:      rgba(178, 176, 172, 0.30);
   --text-ghost:      rgba(178, 176, 172, 0.36);
   --text-whisper:    rgba(178, 176, 172, 0.22);
+  --text:            var(--text-primary);
 
   /* Genome profile — warmer cream scale for the psychological dossier */
   --genome-ink:       rgba(247, 245, 240, 1.00);
@@ -135,6 +138,7 @@
   --red-accent: #f87171;
   --red-bg:     rgba(248, 113, 113, 0.06);
   --red-border: rgba(248, 113, 113, 0.18);
+  --danger:     var(--red-accent);
 
   --metric-fill:      rgba(234, 232, 228, 0.42);
   --metric-fill-soft: rgba(234, 232, 228, 0.28);
@@ -1020,6 +1024,79 @@ html {
   background: var(--overlay-active);
 }
 
+@media (max-width: 767px) {
+  .input-zone {
+    padding: 10px 10px 14px;
+    max-width: none;
+  }
+
+  .input-textarea {
+    font-size: 15px;
+    padding: 14px 16px;
+  }
+
+  .input-footer {
+    gap: 4px;
+    max-height: none;
+    min-width: 0;
+    padding: 5px 7px 7px 10px;
+  }
+
+  .agent-pills {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 1px;
+    overflow: hidden;
+  }
+
+  .agent-pills > * {
+    flex-shrink: 0;
+  }
+
+  .agent-pills > :first-child {
+    min-width: 0;
+    max-width: 72px;
+    overflow: hidden;
+  }
+
+  .agent-pills > :first-child .agent-pill {
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-pill {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .ensemble-pill {
+    width: 26px;
+    gap: 0;
+    margin-left: 0;
+    overflow: hidden;
+    padding: 3px 7px;
+    font-size: 0;
+  }
+
+  .ensemble-pill svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .effort-select {
+    flex: 0 0 60px;
+    width: 60px;
+    padding-left: 4px;
+    padding-right: 16px;
+  }
+
+  .send-btn {
+    flex: 0 0 30px;
+  }
+}
+
 /* ======================================================================
    STREAMING CURSOR
    ====================================================================== */
@@ -1182,6 +1259,19 @@ html {
 }
 .msg-body p { margin-bottom: 12px; }
 .msg-body p:last-child { margin-bottom: 0; }
+
+@media (max-width: 767px) {
+  .msg-row {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .msg-time,
+  .msg-author {
+    font-size: 9px;
+  }
+}
 
 /* Sidebar navigation row — proper button semantics, keyboard focus, hover, touch target. */
 .sidebar-row {
@@ -7411,4 +7501,3 @@ html {
   color: var(--text-soft); letter-spacing: 0.14em;
   text-transform: uppercase; margin-right: auto;
 }
-

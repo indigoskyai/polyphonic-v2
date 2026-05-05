@@ -57,6 +57,7 @@ import PermissionModal from "./components/permissions/PermissionModal";
 import CanvasPanel from "./components/canvas/CanvasPanel";
 import PublicProfileView from "./pages/PublicProfileView";
 import PublicProfileSettings from "./pages/settings/PublicProfileSettings";
+import { useIsMobile } from "./hooks/use-mobile";
 
 const queryClient = new QueryClient();
 
@@ -110,6 +111,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const loadNotifications = useNotificationStore((s) => s.load);
   const subscribeNotifications = useNotificationStore((s) => s.subscribe);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) loadSettings(user.id);
@@ -134,7 +136,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       }}
     >
       <Rail />
-      <Sidebar />
+      {!isMobile && <Sidebar />}
       <div
         className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
         style={{
@@ -147,7 +149,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <ConnectionBanner />
         <ImportProgressBanner />
         {children}
-        {clockbarVisible && <Clockbar />}
+        {clockbarVisible && !isMobile && <Clockbar />}
       </div>
       <CommandPalette />
       <DrawerRouter />

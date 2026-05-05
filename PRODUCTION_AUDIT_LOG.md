@@ -210,3 +210,66 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 2. Verify consolidation respects `dream_frequency` (no double-runs within window).
 3. Verify dialectic produces reasonable `belief.revision_history` entries.
 4. Smoke-test the lifecycle crons against `cron_health` after 24h of natural traffic.
+
+---
+
+## Phase 0 — Production Polish Tracker + Stabilization Snapshot  ✅ (2026-05-05)
+
+**Done**
+- Added the current operating board to `PRODUCTION_AUDIT.md` with `Now`, `Next`, `Done this session`, and `Blocked` sections.
+- Added the production polish phase roadmap: Phase 0 stabilization, Phase 1 memory/continuity, Phase 2 core chat, Phase 3 route QA, Phase 4 reliability/security/background systems, Phase 5 performance/accessibility/release gates.
+- Added a stable findings ledger with IDs, severity, status, surface, evidence, expected behavior, fix/next action, verification, and commit/PR fields.
+- Added the Phase 1 continuity audit script for proving Luca feels continuous across threads and sessions.
+- Recorded the current stabilization fixes:
+  - Chat de-duplication and local stream-stub reconciliation.
+  - Hypomnema identity read path corrected to the live `soul` doc type.
+  - Current-thread filtering for the sub-agent strip.
+  - Mobile shell/composer/message layout repair.
+  - Missing design token aliases and workspace border token cleanup.
+  - Integration test command made truthful when no integration files exist.
+
+**Verified**
+- `npm run verify` passed after the stabilization fixes.
+- Targeted thread/sub-agent tests passed during the stabilization pass.
+- Production build passed, with known chunk-size warnings.
+- Live browser chat smoke passed on desktop: no duplicate assistant bubble and no app console errors.
+- Mobile browser check at 390x844 confirmed the chat surface remains usable.
+
+**Found**
+- `npm run lint` is not a clean release gate yet because of existing baseline lint debt.
+- Production build still warns about large chunks and Supabase import splitting.
+- Browser console still shows React Router v7 future-flag warnings; no app errors were observed in the smoke flow.
+
+**Next**
+1. Start Phase 1: memory and continuity audit against Riley's Luca standard.
+2. Prove Hypomnema/Mnemos read, write, and recall paths end to end.
+3. Run the fresh-thread continuity script and log every bug, voice issue, retrieval miss, and architecture simplification opportunity in the findings ledger.
+
+---
+
+## Phase 1 — Memory and Continuity Audit Kickoff  [~] (2026-05-05)
+
+**Done**
+- Mapped the core continuity pipeline: Luca identity stack, Hypomnema read/write, Mnemos encode/retrieve, pending revisions, skills, emotional state, council participants, scheduled tasks, subagent runs, and user-facing memory/identity UI.
+- Fixed Anima council continuity: council proposer prompts now can carry Anima's Hypomnema instead of only her locked SOUL.
+- Fixed Hypomnema read-path coverage for secondary Luca runtimes: legacy `chat`, scheduled task runs, and subagent runs now load Luca's Hypomnema into `buildLucaSystemPrompt`.
+- Improved Hypomnema provenance in `chat-multi`: assistant message inserts now return the message id, and post-turn primary/observer Hypomnema writes receive `source_message_id` when available.
+- Added prompt tests for Luca Hypomnema ordering and Anima council Hypomnema layering.
+
+**Verified**
+- `npm run verify` passed: typecheck, 186 unit tests, integration placeholder, and production build.
+- `npx vitest run src/test/lucaIdentityPrompt.test.ts src/test/councilPrompts.test.ts src/test/mnemosPipeline.test.ts src/test/mnemosDialectic.test.ts` passed: 51 tests.
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/subagent-run/index.ts` passed.
+- Browser checks:
+  - `/profile/identity` rendered the Hypomnema section with 0 app console errors.
+  - `/memory` rendered with 0 app console errors.
+  - Only known React Router v7 future-flag warnings appeared.
+
+**Found**
+- The test account's Hypomnema UI is currently empty. This may mean the pilot write flag is disabled, the deployed edge functions have not generated entries yet, or the prior smoke turns were too trivial for the salience gate. Needs live backend verification before labeling it a product bug.
+
+**Next**
+1. Verify live Supabase memory-augmentation flag/deploy state and Hypomnema write logs.
+2. Run the fresh-thread continuity script with a substantive turn.
+3. Inspect whether Hypomnema, Mnemos engrams, and prompt retrieval all reflect that turn.
