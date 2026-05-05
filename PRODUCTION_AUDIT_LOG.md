@@ -827,3 +827,15 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 
 **Next**
 1. Start Phase 3 with route-by-route browser QA under this scope.
+
+---
+
+## Phase 3 — Typography Scope Clarification  [x] (2026-05-05)
+
+**Changed**
+- Added typography as a first-class Phase 3 QA concern.
+- Phase 3 will check hierarchy, scale, consistency, line-height/readability, label and button text fit, responsive text behavior, and text overflow.
+- Typography findings remain within the functional UX pass: issues are in scope when they affect comprehension, navigation, density, usability, or perceived polish.
+
+**Next**
+1. Include typography checks in every route-by-route Phase 3 browser pass.
