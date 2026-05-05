@@ -98,6 +98,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   //      DB row, so future updates can target by real UUID and we don't
   //      render the same message twice.
   subscribeMessages: (threadId) => {
+    const norm = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
     const channel = supabase
       .channel(`thread-messages-${threadId}`)
       .on(
@@ -111,13 +112,23 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           if (existing.some((m) => m.id === row.id)) return;
 
           const rowTime = new Date(row.created_at).getTime();
+          // Match an optimistic stub by role/agent + recency. We deliberately
+          // do NOT compare content strictly: the chairman may emit a revised
+          // body after the stub was queued, so the canonical row's content
+          // can differ slightly. Recency + role + agent is enough to dedupe.
           const stubIndex = existing.findIndex((m) => {
             if (m.id === row.id) return false;
             if (m.role !== row.role) return false;
             if ((m.agent ?? null) !== (row.agent ?? null)) return false;
-            if (m.content !== row.content) return false;
+            // Stub IDs are crypto.randomUUID — DB IDs are also UUIDs, but
+            // stubs never collide with row.id (checked above). Treat any
+            // assistant stub for this agent in the last 60s as the same reply.
             const stubTime = new Date(m.created_at).getTime();
-            return Math.abs(rowTime - stubTime) < 30_000;
+            if (Math.abs(rowTime - stubTime) > 60_000) return false;
+            // Either content matches loosely OR this is the only recent stub
+            // for this role+agent (covers the revised-content race).
+            if (norm(m.content) === norm(row.content)) return true;
+            return m.role === 'assistant';
           });
 
           if (stubIndex >= 0) {
@@ -153,17 +164,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   addMessage: (msg) => {
     const now = Date.now();
     const existing = get().messages;
+    const norm = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
+    const incomingNorm = norm(msg.content);
 
-    // If realtime already delivered the canonical row for this same reply
-    // (same role/agent/content within the last 30 seconds), skip the local
-    // stub. Without this, the optimistic add and the realtime push both
-    // land in state and the message renders twice.
+    // If realtime already delivered the canonical row for this same reply,
+    // skip the local stub. We accept either a normalized content match OR
+    // any recent assistant row for the same agent (handles revised-content
+    // race where the persisted content differs from the buffered stream).
     const realtimeAlreadyHere = existing.some((m) => {
       if (m.role !== msg.role) return false;
       if ((m.agent ?? null) !== (msg.agent ?? null)) return false;
-      if (m.content !== msg.content) return false;
       const mTime = new Date(m.created_at).getTime();
-      return Math.abs(now - mTime) < 30_000;
+      if (Math.abs(now - mTime) > 60_000) return false;
+      if (norm(m.content) === incomingNorm) return true;
+      return msg.role === 'assistant';
     });
     if (realtimeAlreadyHere) return;
 
