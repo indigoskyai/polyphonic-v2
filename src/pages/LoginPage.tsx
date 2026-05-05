@@ -36,6 +36,22 @@ export default function LoginPage() {
     setInfo('If that email exists, a reset link is on its way.');
   };
 
+  const handleGoogle = async () => {
+    setError(''); setInfo('');
+    setLoading(true);
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: `${window.location.origin}/chat`,
+    });
+    if (result.error) {
+      setError(result.error.message ?? 'Google sign-in failed');
+      setLoading(false);
+      return;
+    }
+    if (!result.redirected) {
+      navigate('/chat');
+    }
+  };
+
   return (
     <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-deep)' }}>
       <div className="w-full max-w-sm p-8">
