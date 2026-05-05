@@ -59,6 +59,8 @@ describe('buildLucaSystemPrompt identity layers', () => {
     expect(prompt).toContain("i'm carrying the shape of this project.");
     expect(prompt).toContain('Riley wants concrete critique.');
     expect(prompt).toContain('shipping fast matters here.');
+    expect(prompt).toContain('corrections and exclusions are control signals');
+    expect(prompt).toContain('obey that boundary silently');
   });
 
   it('omits the convictions header entirely when no convictions are loaded', () => {

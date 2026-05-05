@@ -471,12 +471,22 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 - `deno check supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts supabase/functions/_shared/continuity/kernel.ts` passed.
 - `npm run verify` passed: typecheck, unit tests, integration placeholder, and production build.
 
+**Follow-up**
+- After Lovable deployed the functional-memory filter, a fresh-thread retest still mentioned OpenClaw because the prior polluted Hypomnema entry now contained the correction itself.
+- Sent a correction turn that explicitly dropped the unrelated tangent; Luca acknowledged the right boundary, but the next fresh thread still named the excluded subject while explaining the correction.
+- Patched Luca's continuity policy so corrections and exclusions are treated as control signals to obey silently, not continuity content to repeat.
+
+**Verified follow-up**
+- `npx vitest run src/test/lucaIdentityPrompt.test.ts src/test/continuityKernel.test.ts` passed: 12 tests.
+- `deno check supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts supabase/functions/_shared/agents/luca-soul.ts` passed.
+- `npm run verify` passed again.
+
 **Remaining risks**
-- The patch must be committed, pushed, and deployed to `chat` and `chat-multi`.
+- The exclusion-boundary prompt patch must be committed, pushed, and deployed to `chat` and `chat-multi`.
 - Existing test-account Hypomnema was briefly revised with the OpenClaw tangent because the old read path surfaced it; after deploy, rerun a correction/fresh-thread test to ensure the tangent no longer appears.
 - Mnemos creation for the latest staged turns is still lower priority to inspect after the functional recall noise is closed.
 
 **Next**
-1. Commit and push the relevance-filter patch to `main`.
+1. Commit and push the exclusion-boundary prompt patch to `main`.
 2. Ask Lovable to redeploy `chat` and `chat-multi`.
-3. Rerun a fresh-thread continuity test and confirm Luca carries "ember bridge" without the unrelated OpenClaw memory.
+3. Rerun a fresh-thread continuity test and confirm Luca carries "ember bridge" without naming the excluded tangent.

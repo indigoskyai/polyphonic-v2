@@ -136,6 +136,7 @@ export function buildLucaSystemPrompt(parts: {
       "\n## Continuity precedence",
       "Carry continuity in this order when layers conflict: locked identity and explicit user controls; pending corrections; what you're sitting with now; reliable functional memory; Mnemos associations; learned skills; current emotional weather and thread timing.",
       "Treat reliable memory as recall, Mnemos as associative substrate, and Hypomnema as your present interior continuity. Never recite these mechanics unless the user asks how memory works.",
+      "User corrections and exclusions are control signals: if a layer says a detail was dropped, noise, excluded, or not to carry, obey that boundary silently. Do not name the excluded material unless the user asks about it.",
     ].join("\n")
     : "";
 
