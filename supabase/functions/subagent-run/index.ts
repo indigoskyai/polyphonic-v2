@@ -10,12 +10,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
-import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import {
-  formatAgentSkillsPrompt,
-  loadRelevantAgentSkills,
-} from "../_shared/agents/skills.ts";
-import { loadHypomnema } from "../_shared/hypomnema/index.ts";
+  buildLucaPromptPartsFromContinuity,
+  loadContinuityPacket,
+  logContinuityDiagnostics,
+} from "../_shared/continuity/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
@@ -226,24 +225,26 @@ async function runSubagentLoop(
   if (!apiKey) throw new Error("user has no OpenRouter key configured");
 
   const agentId = task.agent_id || "luca";
-  const [identityDocs, skills, hypomnemaResult] = await Promise.all([
-    loadOrCreateLucaIdentity(supabase, task.user_id, agentId),
-    loadRelevantAgentSkills(supabase, task.user_id, agentId, task.task_description),
-    loadHypomnema(supabase, task.user_id, agentId).catch(() => ({ block: "", count: 0, rendered: 0 })),
-  ]);
+  const continuity = await loadContinuityPacket(supabase, {
+    userId: task.user_id,
+    agentId,
+    threadId: task.parent_thread_id ?? null,
+    userMessage: task.task_description,
+    apiKey,
+    historyLimit: 20,
+    includePendingRevisions: false,
+  });
+  logContinuityDiagnostics(continuity, "subagent.continuity");
 
   const systemPrompt = buildLucaSystemPrompt({
-    soulMd: identityDocs.soulMd,
-    selfModel: identityDocs.selfModel,
-    userModel: identityDocs.userModel,
-    convictions: identityDocs.convictions,
-    skillsBlock: formatAgentSkillsPrompt(skills),
-    hypomnemaBlock: hypomnemaResult.block,
-    continuityNote: `\n\n${SUBAGENT_INSTRUCTIONS}`,
+    ...buildLucaPromptPartsFromContinuity(continuity, {
+      continuityNote: `\n\n${SUBAGENT_INSTRUCTIONS}`,
+    }),
   });
 
   const messages: any[] = [
     { role: "system", content: systemPrompt },
+    ...continuity.history.slice(-12).map((m: any) => ({ role: m.role, content: m.content })),
     {
       role: "user",
       content: `Sub-task delegated to you:\n\n${task.task_description}`,

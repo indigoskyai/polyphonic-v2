@@ -2,17 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
-import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import {
   finalizePendingRevisions,
-  formatPendingRevisionsPrompt,
-  loadPendingRevisions,
 } from "../_shared/agents/pending-revisions.ts";
 import {
-  formatAgentSkillsPrompt,
-  loadRelevantAgentSkills,
-} from "../_shared/agents/skills.ts";
-import { loadHypomnema } from "../_shared/hypomnema/index.ts";
+  buildLucaPromptPartsFromContinuity,
+  loadContinuityPacket,
+  logContinuityDiagnostics,
+} from "../_shared/continuity/index.ts";
 import {
   buildCrisisDirective,
   classifyCrisis,
@@ -103,20 +100,6 @@ serve(async (req) => {
       .single();
 
     const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
-    const [identityDocs, pendingRevisions, relevantSkills, hypomnemaResult] = await Promise.all([
-      loadOrCreateLucaIdentity(supabase, userId, "luca"),
-      loadPendingRevisions(supabase, userId, thread_id),
-      loadRelevantAgentSkills(supabase, userId, "luca", message),
-      loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
-    ]);
-
-    // Load recent conversation history (last 50 messages)
-    const { data: history } = await supabase
-      .from("messages")
-      .select("id, role, content")
-      .eq("thread_id", thread_id)
-      .order("created_at", { ascending: true })
-      .limit(50);
 
     // Get user's OpenRouter API key (required — no platform fallback)
     const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
@@ -128,6 +111,17 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const continuity = await loadContinuityPacket(supabase, {
+      userId,
+      agentId: "luca",
+      threadId: thread_id,
+      userMessage: message,
+      apiKey,
+      historyLimit: 50,
+    });
+    logContinuityDiagnostics(continuity, "chat.continuity");
+    const history = continuity.history;
 
     // L12 — crisis classification on the user message. Cheap model, fail-soft.
     const classification = await classifyCrisis(apiKey, history ?? [], message);
@@ -145,7 +139,7 @@ serve(async (req) => {
       const lastUserMessage = (history ?? [])
         .slice()
         .reverse()
-        .find((row: { role: string; id: string }) => row.role === "user");
+        .find((row) => row.role === "user");
 
       recordCrisisEvent(supabase, {
         userId,
@@ -157,13 +151,9 @@ serve(async (req) => {
     }
 
     const systemPrompt = buildLucaSystemPrompt({
-      soulMd: identityDocs.soulMd,
-      selfModel: identityDocs.selfModel,
-      userModel: identityDocs.userModel,
-      convictions: identityDocs.convictions,
-      skillsBlock: formatAgentSkillsPrompt(relevantSkills),
-      pendingRevisions: formatPendingRevisionsPrompt(pendingRevisions),
-      hypomnemaBlock: hypomnemaResult.block,
+      ...buildLucaPromptPartsFromContinuity(continuity, {
+        crisisDirective,
+      }),
       crisisDirective,
     });
 
@@ -309,7 +299,7 @@ serve(async (req) => {
           autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
-          finalizePendingRevisions(supabase, apiKey!, pendingRevisions, fullContent).catch(
+          finalizePendingRevisions(supabase, apiKey!, continuity.pendingRevisions, fullContent).catch(
             (e) => console.warn("pending revision finalization failed:", e)
           );
 

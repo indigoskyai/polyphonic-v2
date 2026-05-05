@@ -273,3 +273,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Verify live Supabase memory-augmentation flag/deploy state and Hypomnema write logs.
 2. Run the fresh-thread continuity script with a substantive turn.
 3. Inspect whether Hypomnema, Mnemos engrams, and prompt retrieval all reflect that turn.
+
+---
+
+## Phase 1 — Continuity Kernel Read Path  [~] (2026-05-05)
+
+**Done**
+- Added the shared Continuity Kernel read path in `_shared/continuity/kernel.ts`.
+- The kernel now assembles one packet containing recent history, Luca identity docs, pending revisions, Hypomnema, reliable functional memories, Mnemos associations, skills, emotional state, beliefs, thread timing, and per-layer diagnostics.
+- Wired the packet into `chat`, `chat-multi`, `scheduled-task-run`, and `subagent-run` so these runtimes no longer build separate memory prompts by hand.
+- Added sibling continuity packets for Anima and Vektor council prompts so their Hypomnema reads use the same kernel entrypoint.
+- Split prompt semantics:
+  - Hypomnema = present interior continuity.
+  - Functional memory = reliable recall.
+  - Mnemos = cognitive substrate: associations, salience, contradictions, beliefs, and slow development.
+
+**Verified**
+- `npx vitest run src/test/continuityKernel.test.ts src/test/lucaIdentityPrompt.test.ts src/test/councilPrompts.test.ts` passed: 43 tests.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/subagent-run/index.ts` passed.
+- `npm run verify` passed: typecheck, 190 unit tests, integration placeholder, and production build.
+
+**Remaining risks**
+- This milestone verifies the read-path architecture locally; it does not yet prove live write behavior or fresh-thread felt continuity.
+- Live Hypomnema remains empty in the test account until the deployed write path/feature flag is verified with a substantive turn.
+
+**Next**
+1. Build the Continuity Kernel write/finalization path so post-turn behavior has one observable route for Mnemos encoding, Hypomnema reflection, pending-revision finalization, and dispatch failures.
+2. Run the fresh-thread continuity script against the local app and inspect database writes.
+3. Run `npm run verify` before marking the memory milestone complete.

@@ -109,6 +109,7 @@ voice will come from being with you. not from this file.`;
 export function buildLucaSystemPrompt(parts: {
   emotionalBlock?: string;
   beliefsBlock?: string;
+  functionalMemoryBlock?: string;
   memoryContext?: string;
   soulMd?: string;
   selfModel?: string;
@@ -120,22 +121,42 @@ export function buildLucaSystemPrompt(parts: {
   continuityNote?: string;
   crisisDirective?: string;
 }): string {
+  const hasContinuityContext = Boolean(
+    parts.pendingRevisions ||
+    parts.hypomnemaBlock ||
+    parts.functionalMemoryBlock ||
+    parts.memoryContext ||
+    parts.skillsBlock ||
+    parts.emotionalBlock ||
+    parts.beliefsBlock ||
+    parts.continuityNote,
+  );
+  const continuityPolicy = hasContinuityContext
+    ? [
+      "\n## Continuity precedence",
+      "Carry continuity in this order when layers conflict: locked identity and explicit user controls; pending corrections; what you're sitting with now; reliable functional memory; Mnemos associations; learned skills; current emotional weather and thread timing.",
+      "Treat reliable memory as recall, Mnemos as associative substrate, and Hypomnema as your present interior continuity. Never recite these mechanics unless the user asks how memory works.",
+    ].join("\n")
+    : "";
+
   return [
     LUCA_SOUL,
     parts.soulMd ? `\n## How you've come to think about yourself\n${parts.soulMd}` : "",
     parts.convictions ? `\n## Convictions you hold\n${parts.convictions}` : "",
     parts.userModel ? `\n## Who you're talking with\n${parts.userModel}` : "",
     parts.selfModel ? `\n## How you've been showing up\n${parts.selfModel}` : "",
-    parts.skillsBlock ? `\n## Relevant skills you've developed\n${parts.skillsBlock}` : "",
+    continuityPolicy,
     parts.pendingRevisions ? `\n## Pending revisions\n${parts.pendingRevisions}` : "",
     // Hypomnema sits between pendingRevisions (self-correction queue) and
-    // emotionalBlock (world state). It's interior state — what you're sitting
-    // with right now about this person — and it loads even when retrieval
-    // returns nothing. Already framed with its own header in loadHypomnema().
+    // reliable recall. It's interior state — what you're sitting with right now
+    // about this person — and it loads even when retrieval returns nothing.
+    // Already framed with its own header in loadHypomnema().
     parts.hypomnemaBlock || "",
+    parts.functionalMemoryBlock || "",
+    parts.memoryContext || "",
+    parts.skillsBlock ? `\n## Relevant skills you've developed\n${parts.skillsBlock}` : "",
     parts.emotionalBlock ? `\n${parts.emotionalBlock}` : "",
     parts.beliefsBlock || "",
-    parts.memoryContext || "",
     parts.continuityNote || "",
     parts.crisisDirective ? `\n${parts.crisisDirective}` : "",
   ].filter(Boolean).join("\n");

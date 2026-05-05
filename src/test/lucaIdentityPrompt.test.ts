@@ -15,9 +15,10 @@ describe('buildLucaSystemPrompt identity layers', () => {
       skillsBlock: '### careful-review\nUse when critique needs a second pass.',
       pendingRevisions: 'Earlier you said: X\nOn reflection: Y',
       hypomnemaBlock: "\n## what i'm sitting with\n\n- (yesterday) i'm carrying the shape of this project.",
+      functionalMemoryBlock: '\n## what i reliably remember\n\n- [preference, conf 0.91] Riley wants concrete critique.',
       emotionalBlock: 'Current emotional state: steady.',
       beliefsBlock: 'Beliefs: craft matters.',
-      memoryContext: 'Relevant memories about this person: ships fast.',
+      memoryContext: '\n## associations moving underneath\n\n- [semantic, activation 0.80] shipping fast matters here.',
       continuityNote: 'Pick up gently.',
     });
 
@@ -27,21 +28,28 @@ describe('buildLucaSystemPrompt identity layers', () => {
     const userModelIndex = prompt.indexOf("## Who you're talking with");
     const selfModelIndex = prompt.indexOf("## How you've been showing up");
     const skillsIndex = prompt.indexOf("## Relevant skills you've developed");
+    const policyIndex = prompt.indexOf('## Continuity precedence');
     const revisionsIndex = prompt.indexOf('## Pending revisions');
     const hypomnemaIndex = prompt.indexOf("## what i'm sitting with");
+    const functionalIndex = prompt.indexOf("## what i reliably remember");
+    const mnemosIndex = prompt.indexOf("## associations moving underneath");
     const stateIndex = prompt.indexOf('Current emotional state: steady.');
 
     // Layering: locked soul → soul.md → convictions → user-model →
-    // self-model → skills → pending revisions → hypomnema → runtime state.
+    // self-model → continuity policy → pending revisions → hypomnema →
+    // reliable recall → Mnemos substrate → skills → runtime state.
     expect(soulIndex).toBeGreaterThanOrEqual(0);
     expect(soulIndex).toBeLessThan(soulMdIndex);
     expect(soulMdIndex).toBeLessThan(convictionsIndex);
     expect(convictionsIndex).toBeLessThan(userModelIndex);
     expect(userModelIndex).toBeLessThan(selfModelIndex);
-    expect(selfModelIndex).toBeLessThan(skillsIndex);
-    expect(skillsIndex).toBeLessThan(revisionsIndex);
+    expect(selfModelIndex).toBeLessThan(policyIndex);
+    expect(policyIndex).toBeLessThan(revisionsIndex);
     expect(revisionsIndex).toBeLessThan(hypomnemaIndex);
-    expect(hypomnemaIndex).toBeLessThan(stateIndex);
+    expect(hypomnemaIndex).toBeLessThan(functionalIndex);
+    expect(functionalIndex).toBeLessThan(mnemosIndex);
+    expect(mnemosIndex).toBeLessThan(skillsIndex);
+    expect(skillsIndex).toBeLessThan(stateIndex);
 
     expect(prompt).toContain('Truth before polish.');
     expect(prompt).toContain('the two are not in tension.');
@@ -49,6 +57,8 @@ describe('buildLucaSystemPrompt identity layers', () => {
     expect(prompt).toContain('Sometimes over-compresses too early.');
     expect(prompt).toContain('careful-review');
     expect(prompt).toContain("i'm carrying the shape of this project.");
+    expect(prompt).toContain('Riley wants concrete critique.');
+    expect(prompt).toContain('shipping fast matters here.');
   });
 
   it('omits the convictions header entirely when no convictions are loaded', () => {

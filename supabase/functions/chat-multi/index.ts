@@ -3,10 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
-import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
-import { loadHypomnema } from "../_shared/hypomnema/index.ts";
-import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
 import {
   buildCrisisDirective,
   classifyCrisis,
@@ -16,15 +13,15 @@ import {
 } from "../_shared/agents/crisis.ts";
 import {
   finalizePendingRevisions,
-  formatPendingRevisionsPrompt,
-  loadPendingRevisions,
   type PendingRevision,
 } from "../_shared/agents/pending-revisions.ts";
-import {
-  formatAgentSkillsPrompt,
-  loadRelevantAgentSkills,
-} from "../_shared/agents/skills.ts";
 import { summarizeToolContext } from "../_shared/agents/tool-context.ts";
+import {
+  buildLucaPromptPartsFromContinuity,
+  loadContinuityPacket,
+  logContinuityDiagnostics,
+  type ContinuityPacket,
+} from "../_shared/continuity/index.ts";
 import {
   buildProposerInputs,
   buildCrosstalkInputs,
@@ -87,6 +84,38 @@ How to handle the council's deliberation:
 - Never use phrases like "combining", "synthesizing", "council", or "perspectives"
 - Be concise — your response should not exceed the length of the council favorite
 - Let your emotional state and beliefs naturally influence your tone and what you emphasize`;
+}
+
+async function loadCouncilSiblingContinuity(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  threadId: string,
+  message: string,
+  apiKey: string,
+): Promise<{ anima: ContinuityPacket | null; vektor: ContinuityPacket | null }> {
+  const base = {
+    userId,
+    threadId,
+    userMessage: message,
+    apiKey,
+    includeHistory: false,
+    includeIdentity: false,
+    includePendingRevisions: false,
+    includeFunctionalMemory: false,
+    includeMnemos: false,
+    includeSkills: false,
+    includeEmotionalState: false,
+    includeBeliefs: false,
+  };
+
+  const [anima, vektor] = await Promise.all([
+    loadContinuityPacket(supabase, { ...base, agentId: "anima" }),
+    loadContinuityPacket(supabase, { ...base, agentId: "vektor" }),
+  ]);
+  logContinuityDiagnostics(anima, "chat-multi.continuity.anima");
+  logContinuityDiagnostics(vektor, "chat-multi.continuity.vektor");
+  return { anima, vektor };
 }
 
 const DEFAULT_ENSEMBLE = [
@@ -220,80 +249,34 @@ serve(async (req) => {
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
 
-    // Load conversation history
-    const { data: history } = await supabase
-      .from("messages")
-      .select("role, content, created_at")
-      .eq("thread_id", thread_id)
-      .order("created_at", { ascending: true })
-      .limit(50);
+    const continuity = await loadContinuityPacket(supabase, {
+      userId,
+      agentId,
+      threadId: thread_id,
+      userMessage: message,
+      apiKey,
+      historyLimit: 50,
+      includeIdentity: agentIsSystemLuca,
+      includePendingRevisions: agentIsSystemLuca,
+      includeFunctionalMemory: agentIsSystemLuca,
+      includeMnemos: agentIsSystemLuca,
+      includeSkills: agentIsSystemLuca,
+      includeEmotionalState: agentIsSystemLuca,
+      includeBeliefs: agentIsSystemLuca,
+    });
+    logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
-    // Load emotional state, beliefs, and memories in parallel
-    const [emotionalState, beliefsResult, mnemosResult, identityResult, pendingRevisionsResult, skillsResult, hypomnemaLucaResult, hypomnemaAnimaResult, hypomnemaVektorResult] = await Promise.allSettled([
-      loadEmotionalState(supabase, userId),
-      supabase.from("beliefs").select("content, confidence, confidence_tier, domain")
-        .eq("user_id", userId).eq("active", true)
-        .order("confidence", { ascending: false }).limit(8),
-      (async () => {
-        try {
-          const mnemos = new MnemosEngine(supabase, userId);
-          return await mnemos.retrieve(message, { limit: 5, spread_activation: true, api_key: apiKey });
-        } catch { return []; }
-      })(),
-      agentIsSystemLuca ? loadOrCreateLucaIdentity(supabase, userId, agentId) : Promise.resolve(null),
-      agentIsSystemLuca ? loadPendingRevisions(supabase, userId, thread_id) : Promise.resolve([]),
-      agentIsSystemLuca ? loadRelevantAgentSkills(supabase, userId, agentId, message) : Promise.resolve([]),
-      // Hypomnema — interior state. Always-load. Empty on first contact = safe.
-      // Read path stays on regardless of MEMORY_AUGMENTATION_ENABLED — empty data is benign,
-      // and once writes start backfilling entries we want them surfaced immediately.
-      loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
-      loadHypomnema(supabase, userId, "anima").catch(() => ({ block: "", count: 0, rendered: 0 })),
-      loadHypomnema(supabase, userId, "vektor").catch(() => ({ block: "", count: 0, rendered: 0 })),
-    ]);
+    const siblingContinuity = agentIsSystemLuca
+      ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, message, apiKey)
+      : { anima: null, vektor: null };
 
-    // Format emotional context
-    const emotionalData = emotionalState.status === "fulfilled" ? emotionalState.value : null;
-    const emotionalBlock = formatEmotionalPrompt(emotionalData);
-
-    // Format beliefs context
-    let beliefsBlock = "";
-    if (beliefsResult.status === "fulfilled" && (beliefsResult.value.data || []).length > 0) {
-      const beliefs = beliefsResult.value.data || [];
-      const beliefLines = beliefs.map((b: { content: string; confidence: number; confidence_tier?: string; domain?: string }) =>
-        `- [${b.confidence.toFixed(2)} ${b.confidence_tier || ''}] ${b.content}`
-      );
-      beliefsBlock = `\nBeliefs you've formed from observing and reflecting (reference naturally when relevant):\n${beliefLines.join("\n")}`;
-    }
-
-    // Format memory context
-    let memoryContext = "";
-    if (mnemosResult.status === "fulfilled" && mnemosResult.value.length > 0) {
-      const memorySnippets = mnemosResult.value
-        .map((m: { engram: { content: string } }) => `- ${m.engram.content.slice(0, 200)}`)
-        .join("\n");
-      memoryContext = `\n\nRelevant memories about this person:\n${memorySnippets}`;
-    }
-
-    const identityDocs = identityResult.status === "fulfilled" ? identityResult.value : null;
-    const pendingRevisions = pendingRevisionsResult.status === "fulfilled" ? pendingRevisionsResult.value : [];
-    const pendingRevisionsBlock = formatPendingRevisionsPrompt(pendingRevisions || []);
-    const relevantSkills = skillsResult.status === "fulfilled" ? skillsResult.value : [];
-    const skillsBlock = formatAgentSkillsPrompt(relevantSkills || []);
-    const hypomnemaLucaBlock = hypomnemaLucaResult.status === "fulfilled" ? hypomnemaLucaResult.value.block : "";
-    const hypomnemaAnimaBlock = hypomnemaAnimaResult.status === "fulfilled" ? hypomnemaAnimaResult.value.block : "";
-    const hypomnemaVektorBlock = hypomnemaVektorResult.status === "fulfilled" ? hypomnemaVektorResult.value.block : "";
-
-    // Thread gap detection — if returning to an idle conversation
-    let continuityNote = "";
-    if (history && history.length > 0) {
-      const lastMsg = history[history.length - 1];
-      const lastMsgTime = new Date(lastMsg.created_at || Date.now()).getTime();
-      const gapHours = (Date.now() - lastMsgTime) / 3_600_000;
-      if (gapHours > 24) {
-        const gapDays = Math.floor(gapHours / 24);
-        continuityNote = `\n\n[Note: This conversation has been idle for ${gapDays} day${gapDays > 1 ? 's' : ''}. Briefly acknowledge picking back up — reference the last topic naturally, like resuming a conversation with a friend. Don't be heavy-handed.]`;
-      }
-    }
+    const history = continuity.history;
+    const emotionalBlock = continuity.emotionalBlock;
+    const beliefsBlock = continuity.beliefsBlock;
+    const pendingRevisions = continuity.pendingRevisions;
+    const continuityNote = continuity.continuityNote;
+    const hypomnemaAnimaBlock = siblingContinuity.anima?.hypomnema.block || "";
+    const hypomnemaVektorBlock = siblingContinuity.vektor?.hypomnema.block || "";
 
     // L12 — crisis classification on the user message (system-Luca path only).
     let crisisDirective = "";
@@ -324,20 +307,16 @@ serve(async (req) => {
     // their own prompt verbatim — the user expects the agent to behave per their config.
     const enrichedSystemPrompt = agentIsSystemLuca
       ? buildLucaSystemPrompt({
-          emotionalBlock,
-          beliefsBlock,
-          memoryContext,
-          soulMd: identityDocs?.soulMd,
-          selfModel: identityDocs?.selfModel,
-          userModel: identityDocs?.userModel,
-          convictions: identityDocs?.convictions,
-          skillsBlock,
-          pendingRevisions: pendingRevisionsBlock,
-          hypomnemaBlock: hypomnemaLucaBlock,
-          continuityNote,
+          ...buildLucaPromptPartsFromContinuity(continuity, {
+            crisisDirective,
+          }),
           crisisDirective,
         })
-      : agentPrompt + continuityNote;
+      : [
+          agentPrompt,
+          continuity.hypomnema.block,
+          continuityNote,
+        ].filter(Boolean).join("\n\n");
 
     // Build base messages array
     const baseMessages: any[] = [
@@ -415,17 +394,9 @@ serve(async (req) => {
           // are locked-SOUL only in Phase 1 with optional context layered on.
           const systemParts: CharacterSystemParts = {
             luca: {
-              emotionalBlock,
-              beliefsBlock,
-              memoryContext,
-              soulMd: identityDocs?.soulMd,
-              selfModel: identityDocs?.selfModel,
-              userModel: identityDocs?.userModel,
-              convictions: identityDocs?.convictions,
-              skillsBlock,
-              pendingRevisions: pendingRevisionsBlock,
-              hypomnemaBlock: hypomnemaLucaBlock,
-              continuityNote,
+              ...buildLucaPromptPartsFromContinuity(continuity, {
+                crisisDirective,
+              }),
               crisisDirective,
             },
             anima: {
@@ -433,7 +404,7 @@ serve(async (req) => {
               extraContext: crisisDirective || undefined,
             },
             vektor: {
-              userModel: identityDocs?.userModel,
+              userModel: continuity.identityDocs?.userModel,
               hypomnemaBlock: hypomnemaVektorBlock,
               continuityNote,
             },

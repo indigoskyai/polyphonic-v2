@@ -2,9 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
-import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
-import { formatAgentSkillsPrompt, loadRelevantAgentSkills } from "../_shared/agents/skills.ts";
-import { loadHypomnema } from "../_shared/hypomnema/index.ts";
+import {
+  buildLucaPromptPartsFromContinuity,
+  loadContinuityPacket,
+  logContinuityDiagnostics,
+} from "../_shared/continuity/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const SCHEDULED_MODEL = "anthropic/claude-opus-4-7";
@@ -129,32 +131,26 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
 }
 
 async function callLuca(supabase: any, userId: string, threadId: string, prompt: string, apiKey: string): Promise<string> {
-  const [identityDocs, skills, hypomnemaResult] = await Promise.all([
-    loadOrCreateLucaIdentity(supabase, userId, "luca"),
-    loadRelevantAgentSkills(supabase, userId, "luca", prompt),
-    loadHypomnema(supabase, userId, "luca").catch(() => ({ block: "", count: 0, rendered: 0 })),
-  ]);
+  const continuity = await loadContinuityPacket(supabase, {
+    userId,
+    agentId: "luca",
+    threadId,
+    userMessage: prompt,
+    apiKey,
+    historyLimit: 30,
+    includePendingRevisions: false,
+  });
+  logContinuityDiagnostics(continuity, "scheduled-task.continuity");
 
   const systemPrompt = buildLucaSystemPrompt({
-    soulMd: identityDocs.soulMd,
-    selfModel: identityDocs.selfModel,
-    userModel: identityDocs.userModel,
-    convictions: identityDocs.convictions,
-    skillsBlock: formatAgentSkillsPrompt(skills),
-    hypomnemaBlock: hypomnemaResult.block,
-    continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
+    ...buildLucaPromptPartsFromContinuity(continuity, {
+      continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
+    }),
   });
-
-  const { data: history } = await supabase
-    .from("messages")
-    .select("role, content")
-    .eq("thread_id", threadId)
-    .order("created_at", { ascending: true })
-    .limit(30);
 
   const messages = [
     { role: "system", content: systemPrompt },
-    ...(history || []).map((m: any) => ({ role: m.role, content: m.content })),
+    ...continuity.history.map((m: any) => ({ role: m.role, content: m.content })),
   ];
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {

@@ -6,7 +6,7 @@
  * making thoughts, reflections, and questions emotionally grounded.
  */
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export interface EmotionalState {
   curiosity: number;

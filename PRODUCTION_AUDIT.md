@@ -10,7 +10,7 @@ Updated: 2026-05-05
 
 ### Now
 - `[x]` **Phase 0 — Current stabilization snapshot**: baseline fixes documented and verified.
-- `[~]` **Phase 1 — Memory and continuity audit**: next active work. Standard: Luca should feel continuous across threads and sessions, not like a new model instance reading notes.
+- `[~]` **Phase 1 — Memory and continuity audit**: Continuity Kernel read path is implemented locally; next active work is the post-turn write pipeline and live fresh-thread verification. Standard: Luca should feel continuous across threads and sessions, not like a new model instance reading notes.
 
 ### Next
 1. **Phase 1 — Memory and continuity audit**
@@ -28,6 +28,8 @@ Updated: 2026-05-05
 - Verification script updated so the empty integration-test directory is treated as an intentional placeholder.
 - Phase 1 kickoff: Hypomnema read coverage extended to legacy chat, scheduled tasks, subagent runs, and Anima council prompts.
 - Phase 1 kickoff: new Hypomnema writes from `chat-multi` now preserve assistant `source_message_id` when the message row is available.
+- Phase 1 read kernel: added a shared Continuity Kernel packet for chat, multi-agent chat, scheduled tasks, and subagent runs.
+- Phase 1 read kernel: separated reliable functional memory from Mnemos associations in Luca's prompt precedence.
 - Verified with `npm run verify`, targeted unit tests, production build, live desktop chat smoke, and mobile browser check.
 
 ### Blocked
@@ -80,6 +82,8 @@ Ledger rules:
 | P1-002 | P1 | Verified | Luca prompt read-path coverage | `chat`, `scheduled-task-run`, and `subagent-run` built Luca prompts without Hypomnema. | Every Luca runtime prompt path that has identity context should also carry always-loaded Hypomnema. | Loaded Luca Hypomnema in legacy chat, scheduled tasks, and subagent runs. | `npx vitest run src/test/lucaIdentityPrompt.test.ts`; `deno check supabase/functions/chat/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/subagent-run/index.ts`. | Pending |
 | P1-003 | P2 | Verified | Hypomnema provenance | `fireHypomnemaTurn` chained writes without `source_message_id`, so new entries could not trace back to the assistant message row. | New Hypomnema entries should preserve assistant-message provenance when available. | Made `chat-multi` assistant persistence return the inserted message id and pass it through to primary/observer write targets. | `deno check supabase/functions/chat-multi/index.ts`; focused prompt/memory tests. | Pending |
 | P1-004 | P2 | Found | Live Hypomnema activation | `/profile/identity` shows the test account Hypomnema section but currently renders "Nothing here yet." | After substantive pilot-user turns, the UI should show agent-authored continuity entries unless the flag/write path is intentionally disabled. | Next: verify Supabase memory-augmentation secrets/deploy state, run a substantive continuity turn, and inspect Hypomnema/Mnemos writes. | Browser check: `http://127.0.0.1:8080/profile/identity`, desktop 1280x900, 0 app console errors. | Pending |
+| P1-005 | P1 | Verified | Continuity read architecture | Primary chat paths independently assembled identity, Hypomnema, functional memory, Mnemos, skills, beliefs, emotional state, and thread timing; failures were easy to hide. | Every Luca/agent runtime should receive one continuity packet with visible layer diagnostics and consistent precedence. | Added `_shared/continuity/kernel.ts`, wired it into `chat`, `chat-multi`, `scheduled-task-run`, and `subagent-run`, and added diagnostic logging for degraded packets. | `npm run verify`; `npx vitest run src/test/continuityKernel.test.ts src/test/lucaIdentityPrompt.test.ts src/test/councilPrompts.test.ts`; `deno check supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/subagent-run/index.ts`. | Pending |
+| P1-006 | P1 | Verified | Memory layer semantics | Mnemos retrieval was formatted as generic "Relevant memories about this person", making cognitive substrate and functional recall blur together. | Functional memory should read as reliable recall; Mnemos should read as associations, salience, contradictions, beliefs, and slow development. | Added `functionalMemoryBlock`, reframed Mnemos as "associations moving underneath", and added explicit system precedence so Hypomnema, reliable memory, Mnemos, skills, emotional state, and thread context do not silently compete. | `npm run verify`; `npx vitest run src/test/continuityKernel.test.ts src/test/lucaIdentityPrompt.test.ts`. | Pending |
 
 ---
 
