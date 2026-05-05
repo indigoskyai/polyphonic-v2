@@ -232,7 +232,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
       return;
     }
     clearLoadError('engrams');
-    set({ engrams: (data ?? []).map((row) => normalizeEngramRow(row as Record<string, unknown>)) });
+    set({ engrams: ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => normalizeEngramRow(row)) });
   },
 
   loadConnections: async (userId) => {
