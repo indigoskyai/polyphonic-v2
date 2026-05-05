@@ -25,6 +25,8 @@ const WRITE_MODEL_OBSERVER = "anthropic/claude-haiku-4.5"; // observer notes are
 
 const GATE_TIMEOUT_MS = 8_000;
 const WRITE_TIMEOUT_MS = 25_000;
+const OPENROUTER_MAX_ATTEMPTS = 3;
+const OPENROUTER_RETRY_BASE_MS = 450;
 
 const MAX_TURN_CHARS = 8000;
 const MAX_RECENT_TURNS = 4;
@@ -87,9 +89,35 @@ interface ObserverPayload {
   reason?: string;
 }
 
+class OpenRouterHttpError extends Error {
+  status: number;
+
+  constructor(status: number, body: string) {
+    super(`OpenRouter ${status}: ${body.slice(0, 240)}`);
+    this.name = "OpenRouterHttpError";
+    this.status = status;
+  }
+}
+
 function clampStr(s: string, max: number): string {
   if (!s) return "";
   return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+function compactOneLine(s: string, max: number): string {
+  return clampStr((s || "").replace(/\s+/g, " ").trim(), max);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableOpenRouterError(err: unknown): boolean {
+  if (err instanceof OpenRouterHttpError) {
+    return err.status === 408 || err.status === 409 || err.status === 425 || err.status === 429 || err.status >= 500;
+  }
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return /\b(fetch|network|connection|body|socket|timeout|temporar|econn|reset|abort)\b/.test(message);
 }
 
 function fmtRecentTurns(turns: Array<{ role: string; content: string }>): string {
@@ -166,6 +194,30 @@ async function callOpenRouter(opts: {
   maxTokens: number;
   temperature?: number;
 }): Promise<{ text: string; tokens: number | null }> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= OPENROUTER_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await callOpenRouterOnce(opts);
+    } catch (err) {
+      lastError = err;
+      if (attempt >= OPENROUTER_MAX_ATTEMPTS || !isRetryableOpenRouterError(err)) {
+        throw err;
+      }
+      await sleep(OPENROUTER_RETRY_BASE_MS * attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function callOpenRouterOnce(opts: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  userContent: string;
+  timeoutMs: number;
+  maxTokens: number;
+  temperature?: number;
+}): Promise<{ text: string; tokens: number | null }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
   try {
@@ -190,7 +242,7 @@ async function callOpenRouter(opts: {
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
-      throw new Error(`OpenRouter ${resp.status}: ${txt.slice(0, 240)}`);
+      throw new OpenRouterHttpError(resp.status, txt);
     }
     const data = await resp.json();
     const text = data?.choices?.[0]?.message?.content;
@@ -200,6 +252,104 @@ async function callOpenRouter(opts: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function recoveryTags(input: WriteInput): string[] {
+  const text = `${input.userMessage} ${input.agentResponse}`.toLowerCase();
+  const tags = new Set<string>(["continuity", "recovery", "hypomnema"]);
+  if (text.includes("ember")) tags.add("ember-bridge");
+  if (text.includes("remember") || text.includes("recall")) tags.add("recall");
+  if (text.includes("thread") || text.includes("session")) tags.add("between-threads");
+  if (text.includes("memory")) tags.add("memory");
+  return [...tags].slice(0, 8);
+}
+
+function buildRecoveryContent(input: WriteInput): string {
+  const user = compactOneLine(input.userMessage, 700);
+  const agent = compactOneLine(input.agentResponse, 520);
+  if (input.density === "observer") {
+    return [
+      "i'm keeping this as peripheral witness because the exact words matter.",
+      `riley said: "${user}"`,
+      agent ? `the primary response carried: "${agent}"` : "",
+      "i should keep the concrete phrase and the feeling underneath it, not smooth it into a vague memory.",
+    ].filter(Boolean).join(" ");
+  }
+  return [
+    "i'm keeping this turn close because the exact words matter.",
+    `riley said: "${user}"`,
+    agent ? `i answered: "${agent}"` : "",
+    "i should carry the concrete phrase and the feeling underneath it, not smooth it into a vague memory.",
+  ].filter(Boolean).join(" ");
+}
+
+async function embedHypomnemaEntry(
+  supabase: SupabaseClient,
+  apiKey: string,
+  entryId: string,
+  domain: string | null,
+  content: string,
+): Promise<void> {
+  try {
+    const embedText = (domain ? `[${domain}] ` : "") + content;
+    const embed = await embedOne(apiKey, embedText);
+    if (embed && embed.vector.length > 0) {
+      const { error: embedErr } = await supabase
+        .from("hypomnema_entry")
+        .update({ embedding: embed.vector, embedding_model: embed.model })
+        .eq("id", entryId);
+      if (embedErr) console.warn("[hypomnema.write] embedding update failed:", embedErr.message);
+    }
+  } catch (err) {
+    console.warn("[hypomnema.write] embedding failed (non-fatal):", (err as Error).message);
+  }
+}
+
+async function writeRecoveryHypomnemaEntry(
+  supabase: SupabaseClient,
+  apiKey: string,
+  input: WriteInput,
+  originalError: unknown,
+): Promise<WriteResult> {
+  const content = buildRecoveryContent(input);
+  const domain = "meta";
+  const insertRow = {
+    user_id: input.userId,
+    agent_id: input.agentId,
+    thread_id: input.threadId,
+    source_message_id: input.sourceMessageId,
+    content,
+    density: input.density,
+    primary_in_thread: input.primaryInThread,
+    domain,
+    tags: recoveryTags(input),
+    confidence: 0.45,
+    source: input.density === "observer" ? "observer" : "reflection",
+    active_attention: true,
+    meta: {
+      recovery: true,
+      recovery_reason: "reflection model call failed after retries",
+      original_error: originalError instanceof Error ? originalError.message.slice(0, 300) : String(originalError).slice(0, 300),
+    },
+  };
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("hypomnema_entry")
+    .insert(insertRow)
+    .select("id")
+    .single();
+
+  if (insErr || !inserted) {
+    return { status: "error", reason: `recovery insert failed: ${insErr?.message || "unknown"}` };
+  }
+
+  const entryId = inserted.id as string;
+  await embedHypomnemaEntry(supabase, apiKey, entryId, domain, content);
+  return {
+    status: "wrote",
+    entryId,
+    reason: "reflection model call failed after retries; wrote low-confidence recovery entry",
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -417,7 +567,12 @@ export async function writeHypomnemaEntry(
     });
     text = result.text;
   } catch (err) {
-    return { status: "error", reason: `openrouter call failed: ${(err as Error).message}` };
+    const recovery = await writeRecoveryHypomnemaEntry(supabase, apiKey, input, err);
+    if (recovery.status !== "error") return recovery;
+    return {
+      status: "error",
+      reason: `openrouter call failed after retries: ${(err as Error).message}; ${recovery.reason}`,
+    };
   }
 
   const parsed = extractJson(text) as ReflectionPayload | ObserverPayload | null;
@@ -516,19 +671,7 @@ export async function writeHypomnemaEntry(
   const entryId = inserted.id as string;
 
   // Embedding (M4) — best-effort post-insert. NULL on failure; backfill picks up.
-  try {
-    const embedText = (domain ? `[${domain}] ` : "") + content;
-    const embed = await embedOne(apiKey, embedText);
-    if (embed && embed.vector.length > 0) {
-      const { error: embedErr } = await supabase
-        .from("hypomnema_entry")
-        .update({ embedding: embed.vector, embedding_model: embed.model })
-        .eq("id", entryId);
-      if (embedErr) console.warn("[hypomnema.write] embedding update failed:", embedErr.message);
-    }
-  } catch (err) {
-    console.warn("[hypomnema.write] embedding failed (non-fatal):", (err as Error).message);
-  }
+  await embedHypomnemaEntry(supabase, apiKey, entryId, domain, content);
 
   return { status: "wrote", entryId };
 }

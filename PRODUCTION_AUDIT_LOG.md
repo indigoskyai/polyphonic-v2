@@ -379,3 +379,42 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Push this gate-hardening patch to `main`.
 2. Ask Lovable to redeploy `chat`, `chat-multi`, `hypomnema-gate`, and `hypomnema-write`.
 3. Rerun the "ember bridge" continuity script and check both `hypomnema_entry` and `entity_activity_log`.
+
+---
+
+## Phase 1 — Hypomnema Write Resilience  [~] (2026-05-05)
+
+**Done**
+- Pulled Lovable's deployed build fixes, including embedded Hypomnema prompt modules and Supabase edge-function type fixes.
+- Inspected live test-account data after Riley sent additional Luca turns.
+- Confirmed the qualitative report was valid product evidence:
+  - Luca failed to recall the earlier "ember bridge" marker in a fresh thread.
+  - Hypomnema gate observability now works: `entity_activity_log` contains `source=hypomnema` gate entries.
+  - One Hypomnema row was written, but it captured Luca's failure to recall the marker rather than the marker itself.
+  - The later exact-marker turn triggered the gate, but `hypomnema-write` returned a body-level error from OpenRouter: body read failed from the connection.
+- Patched Hypomnema write resilience:
+  - OpenRouter reflection calls now retry transient network/body/5xx/429 failures before giving up.
+  - If a salience-approved turn still cannot complete a full reflection, the system writes a low-confidence recovery Hypomnema entry with the exact user/assistant turn and provenance metadata.
+  - Gate activity severity now detects write response bodies with `status:error`, not just non-2xx HTTP statuses.
+- Added focused tests for retry and recovery behavior.
+
+**Verified**
+- `npx vitest run src/test/hypomnemaWrite.test.ts src/test/hypomnemaSalience.test.ts src/test/continuityWrite.test.ts src/test/continuityKernel.test.ts` passed: 11 tests.
+- `deno check supabase/functions/hypomnema-gate/index.ts supabase/functions/hypomnema-write/index.ts supabase/functions/_shared/hypomnema/write.ts` passed.
+- `npm run verify` passed: typecheck, 199 unit tests, integration placeholder, and production build.
+- Live DB inspection showed:
+  - `hypomnema_entry` count was 1 for the test account.
+  - Latest Hypomnema row was for Luca and the fresh-thread recall failure.
+  - `entity_activity_log` contained both a successful Hypomnema write and a later triggered gate with a write body error.
+  - Mnemos engrams existed for the "ember bridge" turns, including the exact phrase turn.
+
+**Remaining risks**
+- The retry/recovery patch is local until committed, pushed, and redeployed to the edge functions.
+- The live test account still needs a new post-deploy substantive continuity turn so the corrected path can create a marker-carrying Hypomnema row through production code.
+- P1-011 remains open until Luca recalls the marker naturally in a fresh thread without retrieval-shaped explanation.
+
+**Next**
+1. Run typecheck/build or full verify after the patch.
+2. Commit and push this milestone to `main`.
+3. Redeploy `hypomnema-gate` and `hypomnema-write`.
+4. Rerun the fresh-thread continuity script and inspect `/profile/identity`, `hypomnema_entry`, `entity_activity_log`, and Luca's fresh-thread response quality.

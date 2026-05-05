@@ -155,7 +155,7 @@ serve(async (req) => {
       userId,
       title: result.should_reflect ? "Hypomnema gate triggered" : "Hypomnema skipped",
       summary: result.reason || (result.should_reflect ? "Reflection queued." : "Gate skipped reflection."),
-      severity: result.should_reflect && writes.some((w) => w.status === "error" || (typeof w.status === "number" && w.status >= 400))
+      severity: result.should_reflect && writes.some(writeDispatchFailed)
         ? "warning"
         : "info",
       content: {
@@ -172,6 +172,18 @@ serve(async (req) => {
     return json({ should_reflect: false, reason: `error: ${(err as Error).message}` }, 200, getCorsHeaders(req));
   }
 });
+
+function writeDispatchFailed(result: WriteDispatchResult): boolean {
+  if (result.status === "error") return true;
+  if (typeof result.status === "number" && result.status >= 400) return true;
+  const body = result.body;
+  return Boolean(
+    body &&
+      typeof body === "object" &&
+      "status" in body &&
+      (body as { status?: unknown }).status === "error"
+  );
+}
 
 async function recordHypomnemaActivity(
   // deno-lint-ignore no-explicit-any -- shared edge helper accepts the service client shape.
