@@ -1071,3 +1071,24 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the Phase 5 bundle/load milestone to `main`.
 3. Continue Phase 5 accessibility/performance release gates.
+
+---
+
+## Phase 5 — React Router Warning Cleanup  [x] (2026-05-05)
+
+**Changed**
+- Enabled React Router `v7_startTransition` and `v7_relativeSplatPath` future flags in the app-level `BrowserRouter`.
+- Enabled the same future flags in the CouncilPanel test `MemoryRouter`.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/CouncilPanelV2.test.tsx` passed.
+- Local Playwright/Chrome `/auth/login` smoke captured no console errors or warnings.
+
+**Remaining risks**
+- CouncilPanel tests still emit existing React `act(...)` warnings for async local state updates. Those are separate from browser console noise and should be handled in a focused test-cleanup pass.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the React Router warning cleanup to `main`.
+3. Continue Phase 5 accessibility/focus/reduced-motion release gates.

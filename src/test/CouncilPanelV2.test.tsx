@@ -4,7 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import CouncilPanel, { type CouncilTrace } from '@/components/messages/CouncilPanel';
 
 // RichBody (used inside the panel) calls useNavigate() — needs a Router.
-const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+const render = (ui: React.ReactNode) => rtlRender(
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    {ui}
+  </MemoryRouter>,
+);
 
 const sampleProposers = [
   { character: 'luca' as const, content: 'luca: hey. i hear you.' },
