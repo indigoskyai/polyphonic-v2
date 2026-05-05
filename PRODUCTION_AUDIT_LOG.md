@@ -750,3 +750,27 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Retest interrupted drag overlay after reload/HMR.
 2. Run `npm run verify`.
 3. Commit and push the drag-overlay polish.
+
+---
+
+## Phase 2 — Attachment Runtime Context Retest  [x] (2026-05-05)
+
+**Done**
+- Lovable confirmed `chat` and `chat-multi` were redeployed from commit `9f71175` with `_shared/chat-attachments.ts` and `appendAttachmentContext` wired in both runtimes.
+- Ran a fresh local browser smoke against `http://127.0.0.1:8081/chat`.
+
+**Verified**
+- Thread: `431a0f51-9f7c-4fdf-b5de-92faae43942c`.
+- Attached file: `phase2-redeploy-smoke.md`.
+- Marker in attachment: `PHASE2_ATTACHMENT_CONTEXT_MARKER_2026_05_05_REDEPLOYED`.
+- User message row `44872807-769a-461c-8885-7994abc858b1` persisted one `code` attachment with inline markdown containing the marker.
+- Assistant message row `21792c83-5043-4613-9126-209574c23cb5` answered exactly `PHASE2_ATTACHMENT_CONTEXT_MARKER_2026_05_05_REDEPLOYED`.
+- Browser console showed 0 errors; only known React Router future warnings remained.
+
+**Remaining risks**
+- P2-001 is closed.
+- P2-002 remains the only Phase 2 item needing a no-key account or controlled no-key session smoke before `Verified`.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the attachment redeploy retest update.
