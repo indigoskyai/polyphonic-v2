@@ -811,3 +811,19 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push the Phase 2 closeout tracker update.
 2. Begin Phase 3 surface-by-surface product QA.
+
+---
+
+## Phase 3 — Scope Adjustment  [x] (2026-05-05)
+
+**Changed**
+- Reframed Phase 3 as functional surface-by-surface QA.
+- Explicitly scoped Phase 3 to functionality, interaction patterns, layout mechanics, responsive behavior, animation/motion behavior, performance signals, accessibility basics, state handling, and error/loading behavior.
+- Explicitly excluded subjective artistic/aesthetic redesign from Phase 3 unless it materially blocks usability, legibility, layout integrity, motion clarity, or task completion.
+
+**Why**
+- Riley will handle the separate artistic visual-design pass.
+- Phase 3 should still cover movement, layout, responsiveness, animation quality, and performance because those directly affect product polish and usability.
+
+**Next**
+1. Start Phase 3 with route-by-route browser QA under this scope.
