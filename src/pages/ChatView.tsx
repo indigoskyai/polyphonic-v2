@@ -1382,11 +1382,16 @@ export default function ChatView() {
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
               assistant message that mirrors it, to avoid a duplicate flash. */}
           {messages.map((msg, i) => {
+            // Hide the persisted last assistant message while the streaming
+            // bubble is still mounted, regardless of exact content match.
+            // Recency + role + agent is the dedupe key — content can drift
+            // when the chairman emits a revised body after the stub queued.
             const isLastAssistant =
-              lingeringStream != null &&
+              (isStreaming || lingeringStream != null) &&
               i === messages.length - 1 &&
               msg.role === 'assistant' &&
-              msg.content === lingeringStream;
+              (msg.agent ?? null) === (activeAgentId ?? null) &&
+              Date.now() - new Date(msg.created_at).getTime() < 60_000;
             if (isLastAssistant) return null;
 
             // B.2 — permission_request branch: render inline card instead of msg-row
