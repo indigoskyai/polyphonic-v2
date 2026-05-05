@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authRedirectTo, signInWithGoogle } from '@/lib/authFlow';
+import { authRedirectTo, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -29,6 +29,20 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
     const { error, redirected } = await signInWithGoogle();
+    if (error) {
+      setError(error);
+      setLoading(false);
+      return;
+    }
+    if (!redirected) {
+      navigate('/chat');
+    }
+  };
+
+  const handleApple = async () => {
+    setError('');
+    setLoading(true);
+    const { error, redirected } = await signInWithApple();
     if (error) {
       setError(error);
       setLoading(false);
