@@ -1010,6 +1010,12 @@ html {
   position: relative;
 }
 .send-btn:hover { background: var(--overlay-active); color: var(--text-body); }
+.send-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+  background: transparent;
+  color: var(--text-ghost);
+}
 .send-btn svg { width: 13px; height: 13px; }
 .send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .send-btn .send-icon { transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
@@ -1069,6 +1075,14 @@ html {
   .agent-pill {
     padding: 3px 6px;
     font-size: 10px;
+  }
+
+  .att-chips-row {
+    padding: 8px 9px 0;
+  }
+
+  .att-chip-name {
+    max-width: 132px;
   }
 
   .ensemble-pill {
@@ -5814,7 +5828,9 @@ html {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 12px 0;
+  padding: 10px 12px 0;
+  position: relative;
+  z-index: 2;
 }
 .att-chip {
   display: inline-flex;
@@ -5824,7 +5840,12 @@ html {
   background: var(--overlay-hover);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  min-width: 0;
+  max-width: 100%;
 }
+.att-chip[data-status="uploading"] { opacity: 0.72; }
+.att-chip[data-status="ready"] { border-color: rgba(140, 168, 156, 0.28); }
+.att-chip[data-status="error"] { border-color: rgba(201, 92, 92, 0.42); color: var(--danger); }
 .att-chip-icon {
   width: 13px;
   height: 13px;
@@ -5835,6 +5856,11 @@ html {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-primary);
+  min-width: 0;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .att-chip-size {
   font-family: var(--font-mono);
@@ -5859,6 +5885,47 @@ html {
   color: var(--text-primary);
 }
 .att-chip-remove svg { width: 9px; height: 9px; }
+
+.att-error {
+  position: relative;
+  z-index: 2;
+  padding: 7px 14px 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--danger);
+}
+
+.chat-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attach-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-ghost);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  flex: 0 0 auto;
+}
+.attach-btn:hover {
+  color: var(--text-tertiary);
+  background: var(--overlay-hover);
+}
+.attach-btn svg {
+  width: 13px;
+  height: 13px;
+}
 
 .drag-overlay {
   position: absolute;

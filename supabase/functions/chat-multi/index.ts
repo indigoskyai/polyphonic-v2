@@ -40,6 +40,7 @@ import {
 } from "../_shared/agents/council-prompts.ts";
 import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
+import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -176,7 +177,7 @@ serve(async (req) => {
 
     const userId = user.id;
     const body = await req.json();
-    const { thread_id, message, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
+    const { thread_id, message, attachments, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
       return new Response(JSON.stringify({ error: "Invalid request" }), {
@@ -184,6 +185,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const messageWithAttachments = appendAttachmentContext(message, attachments);
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -250,7 +253,7 @@ serve(async (req) => {
       userId,
       agentId,
       threadId: thread_id,
-      userMessage: message,
+      userMessage: messageWithAttachments,
       apiKey,
       historyLimit: 50,
       includeIdentity: agentIsSystemLuca,
@@ -264,7 +267,7 @@ serve(async (req) => {
     logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
     const siblingContinuity = agentIsSystemLuca
-      ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, message, apiKey)
+      ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, messageWithAttachments, apiKey)
       : { anima: null, vektor: null };
 
     const history = continuity.history;
@@ -324,7 +327,7 @@ serve(async (req) => {
         baseMessages.push({ role: msg.role, content: msg.content });
       }
     }
-    baseMessages.push({ role: "user", content: message });
+    baseMessages.push({ role: "user", content: messageWithAttachments });
 
     const toolMessages = await runToolPlanner(thread_id, authHeader, baseMessages.slice(1));
     if (toolMessages.length > 0) {
@@ -348,7 +351,7 @@ serve(async (req) => {
         supabase,
         thread_id,
         userId,
-        message,
+        messageWithAttachments,
         corsHeaders,
         agentId,
         authHeader,
@@ -413,7 +416,7 @@ serve(async (req) => {
             characters: [...COUNCIL_CHARACTERS],
             systemParts,
             history: history || [],
-            userMessage: message,
+            userMessage: messageWithAttachments,
             toolMessages,
           });
           for (const inp of proposerInputs) {
@@ -496,7 +499,7 @@ serve(async (req) => {
             send({ type: "crosstalk_starting" });
             const crosstalkInputs = buildCrosstalkInputs({
               drafts: proposerDrafts.map((d) => ({ character: d.character, content: d.content })),
-              userMessage: message,
+              userMessage: messageWithAttachments,
               toolContext,
               systemParts,
             });
@@ -556,7 +559,7 @@ serve(async (req) => {
 
           const refusalEnabled = (Deno.env.get("COUNCIL_REFUSAL_ENABLED") || "").toLowerCase() === "true";
           const chairmanPrompt = buildChairmanCouncilPrompt({
-            userMessage: message,
+            userMessage: messageWithAttachments,
             drafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
             toolContext,
             refusalEnabled,
@@ -625,7 +628,7 @@ serve(async (req) => {
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
             );
-            await autoTitleThread(supabase, thread_id, message, fallbackContent, apiKey!);
+            await autoTitleThread(supabase, thread_id, messageWithAttachments, fallbackContent, apiKey!);
             const fallbackObservers = collectObservers({
               primaryAgentId: agentId,
               councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
@@ -636,7 +639,7 @@ serve(async (req) => {
               threadId: thread_id,
               agentId,
               userId,
-              userMessage: message,
+              userMessage: messageWithAttachments,
               agentResponse: fallbackContent,
               sourceMessageId: fallbackMessageId,
               apiKey,
@@ -820,7 +823,7 @@ serve(async (req) => {
             .eq("id", thread_id);
 
           // Auto-title (fire and forget)
-          autoTitleThread(supabase, thread_id, message, synthesizedContent, apiKey!).catch(
+          autoTitleThread(supabase, thread_id, messageWithAttachments, synthesizedContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
 
@@ -836,7 +839,7 @@ serve(async (req) => {
             threadId: thread_id,
             agentId,
             userId,
-            userMessage: message,
+            userMessage: messageWithAttachments,
             agentResponse: synthesizedContent,
             sourceMessageId: synthesizedMessageId,
             apiKey,

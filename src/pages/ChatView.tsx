@@ -12,16 +12,16 @@ import { useDrawerStore } from '@/stores/drawerStore';
 import EchoField from '@/components/EchoField';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
+import AttachmentChip from '@/components/attachments/AttachmentChip';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
-import MessageAttachment from '@/components/attachments/MessageAttachment';
-import ImagePreview from '@/components/attachments/ImagePreview';
-import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
+import { useAttachmentStore, type Attachment } from '@/stores/attachmentStore';
+import type { MessageAttachment as PersistedAttachment } from '@/stores/threadStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
@@ -30,6 +30,15 @@ import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
+import {
+  CHAT_ATTACHMENT_BUCKET,
+  inferAttachmentLanguage,
+  inferAttachmentType,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  safeAttachmentFileName,
+  shouldInlineCodeAttachment,
+} from '@/lib/chatAttachments';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -447,6 +456,13 @@ export default function ChatView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingAttachments = useAttachmentStore((s) => s.pending);
+  const addAttachments = useAttachmentStore((s) => s.add);
+  const removeAttachment = useAttachmentStore((s) => s.remove);
+  const clearAttachments = useAttachmentStore((s) => s.clear);
+  const setAttachmentStatus = useAttachmentStore((s) => s.setStatus);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   // Lingering streaming snapshot — keeps the streaming bubble mounted
   // after isStreaming flips to false, until the typewriter has caught up.
@@ -732,6 +748,111 @@ export default function ChatView() {
     if (ta.style.height !== next) ta.style.height = next;
   };
 
+  const queueAttachmentFiles = useCallback((filesLike: FileList | File[] | null | undefined) => {
+    const files = Array.from(filesLike || []);
+    if (files.length === 0) return;
+
+    const remaining = Math.max(0, MAX_CHAT_ATTACHMENTS - pendingAttachments.length);
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+
+    for (const file of files) {
+      if (accepted.length >= remaining) {
+        rejected.push(`${file.name}: attachment limit reached`);
+        continue;
+      }
+      if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+        rejected.push(`${file.name}: max 10 MB`);
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    if (accepted.length > 0) addAttachments(accepted);
+    setAttachmentError(rejected.length > 0 ? rejected.slice(0, 2).join(' · ') : null);
+  }, [addAttachments, pendingAttachments.length]);
+
+  const uploadPendingAttachments = useCallback(async (threadForUpload: string): Promise<PersistedAttachment[]> => {
+    if (!user || pendingAttachments.length === 0) return [];
+
+    const { supabase } = await import('@/integrations/supabase/client');
+    const uploaded: PersistedAttachment[] = [];
+
+    for (const attachment of pendingAttachments) {
+      if (!attachment.file) continue;
+      setAttachmentStatus(attachment.id, 'uploading');
+      try {
+        const safeName = safeAttachmentFileName(attachment.name);
+        const path = `${user.id}/${threadForUpload}/${crypto.randomUUID()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(CHAT_ATTACHMENT_BUCKET)
+          .upload(path, attachment.file, {
+            contentType: attachment.mime,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: signed, error: signedError } = await supabase.storage
+          .from(CHAT_ATTACHMENT_BUCKET)
+          .createSignedUrl(path, 60 * 60 * 24 * 30);
+
+        if (signedError || !signed?.signedUrl) {
+          throw signedError || new Error('Could not create attachment link');
+        }
+
+        const meta: Record<string, unknown> = {
+          name: attachment.name,
+          size: attachment.size,
+          mime: attachment.mime,
+          bucket: CHAT_ATTACHMENT_BUCKET,
+          path,
+          signed_expires_at: new Date(Date.now() + 60 * 60 * 24 * 30 * 1000).toISOString(),
+        };
+
+        const type = inferAttachmentType(attachment.file);
+        if (type === 'code' && shouldInlineCodeAttachment(attachment.file)) {
+          meta.lang = inferAttachmentLanguage(attachment.name, attachment.mime);
+          meta.code = await attachment.file.text();
+        }
+
+        const persisted: PersistedAttachment = {
+          type,
+          url: signed.signedUrl,
+          meta,
+        };
+        uploaded.push(persisted);
+        setAttachmentStatus(attachment.id, 'ready', { url: signed.signedUrl, path });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Upload failed';
+        setAttachmentStatus(attachment.id, 'error', { error: message });
+        throw new Error(`Could not attach ${attachment.name}: ${message}`);
+      }
+    }
+
+    return uploaded;
+  }, [pendingAttachments, setAttachmentStatus, user]);
+
+  const renderPendingAttachments = () => {
+    if (pendingAttachments.length === 0 && !attachmentError) return null;
+    return (
+      <>
+        {pendingAttachments.length > 0 && (
+          <div className="att-chips-row">
+            {pendingAttachments.map((attachment: Attachment) => (
+              <AttachmentChip
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={() => removeAttachment(attachment.id)}
+              />
+            ))}
+          </div>
+        )}
+        {attachmentError && <div className="att-error">{attachmentError}</div>}
+      </>
+    );
+  };
+
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming) return;
 
@@ -834,13 +955,15 @@ export default function ChatView() {
     }
   }, [input, user, currentThreadId, guardianStreaming]);
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || !user || isStreaming) return;
+  const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
+    const sourceText = typeof options?.text === 'string' ? options.text : input;
+    const replayAttachments = options?.attachments ?? null;
+    if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming) return;
 
     // Dismiss welcome back on first message
     if (welcomeBack) setWelcomeBack(null);
 
-    const messageText = input.trim();
+    const messageText = sourceText.trim() || 'Uploaded attachments.';
     inputCaptureRef.current = messageText;
 
     let tid = currentThreadId;
@@ -849,17 +972,48 @@ export default function ChatView() {
       navigate(`/chat/${tid}`, { replace: true });
     }
 
-    addMessage({
-      thread_id: tid, user_id: user.id, role: 'user', content: messageText,
-      model: null, agent: null, thinking_content: null, tokens_used: null, bookmarked: false,
-    });
+    let uploadedAttachments: PersistedAttachment[] = replayAttachments ?? [];
+    try {
+      if (!replayAttachments) {
+        uploadedAttachments = await uploadPendingAttachments(tid);
+      }
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Attachment upload failed');
+      return;
+    }
 
     // Save to DB
     const { supabase } = await import('@/integrations/supabase/client');
-    await supabase.from('messages').insert({ thread_id: tid, user_id: user.id, role: 'user', content: messageText });
+    const { error: insertUserError } = await supabase.from('messages').insert({
+      thread_id: tid,
+      user_id: user.id,
+      role: 'user',
+      content: messageText,
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+    });
+    if (insertUserError) {
+      addMessage({
+        thread_id: tid, user_id: user.id, role: 'assistant',
+        content: 'Could not save your message. Please try again.',
+        model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+        kind: 'agent_error',
+        metadata: { agent: activeAgentId, message: 'Could not save your message.', detail: insertUserError.message },
+      } as any);
+      return;
+    }
 
-    setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    addMessage({
+      thread_id: tid, user_id: user.id, role: 'user', content: messageText,
+      model: null, agent: null, thinking_content: null, tokens_used: null, bookmarked: false,
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+    });
+
+    if (!options?.text) {
+      setInput('');
+      clearAttachments();
+      setAttachmentError(null);
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    }
 
     // Stream response
     setStreaming(true);
@@ -880,7 +1034,13 @@ export default function ChatView() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ thread_id: tid, message: messageText, reasoning_effort: thinkingEffort, ensemble: ensembleActive }),
+        body: JSON.stringify({
+          thread_id: tid,
+          message: messageText,
+          attachments: uploadedAttachments,
+          reasoning_effort: thinkingEffort,
+          ensemble: ensembleActive,
+        }),
         signal: controller.signal,
       });
 
@@ -1113,7 +1273,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts]);
+  }, [input, pendingAttachments.length, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, clearAttachments]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1243,9 +1403,8 @@ export default function ChatView() {
     e.preventDefault();
     dragDepthRef.current = 0;
     setIsDragging(false);
-    // TODO: wire file upload + attachments pipeline once Message model
-    // has an `attachments` field (B.7 blocker).
-  }, []);
+    queueAttachmentFiles(e.dataTransfer?.files);
+  }, [queueAttachmentFiles]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
@@ -1291,6 +1450,17 @@ export default function ChatView() {
           {/* Centered input */}
           <div style={{ width: '100%', maxWidth: 600, animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both' }}>
             <div className={`input-shell${focused ? ' focused' : ''}`}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="chat-file-input"
+                onChange={(e) => {
+                  queueAttachmentFiles(e.currentTarget.files);
+                  e.currentTarget.value = '';
+                }}
+              />
+              {renderPendingAttachments()}
               <div className="input-row">
                 <textarea
                   ref={textareaRef}
@@ -1306,6 +1476,17 @@ export default function ChatView() {
               </div>
               <div className="input-footer">
                 <div className="agent-pills">
+                  <button
+                    type="button"
+                    className="attach-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                    title="Attach files"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6.5 8.5l3.6-3.6a2.2 2.2 0 113.1 3.1l-5.4 5.4a3.4 3.4 0 01-4.8-4.8l5.2-5.2" />
+                    </svg>
+                  </button>
                   <AgentPicker
                     activeAgentId={activeAgentId}
                     onChange={(id) => {
@@ -1340,7 +1521,8 @@ export default function ChatView() {
                 </select>
                 <button
                   className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
-                  onClick={sendMessage}
+                  onClick={() => sendMessage()}
+                  disabled={!input.trim() && pendingAttachments.length === 0}
                 >
                   <span className="send-icon">
                     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -1470,7 +1652,10 @@ export default function ChatView() {
                       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
                       if (prevUser) {
                         setInput(prevUser.content);
-                        setTimeout(() => sendMessage(), 0);
+                        void sendMessage({
+                          text: prevUser.content,
+                          attachments: (prevUser.attachments || []) as PersistedAttachment[],
+                        });
                       }
                     }}
                     onViewLogs={() => {
@@ -1671,6 +1856,16 @@ export default function ChatView() {
       {/* Input zone */}
       <div className="input-zone">
         <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}`}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="chat-file-input"
+            onChange={(e) => {
+              queueAttachmentFiles(e.currentTarget.files);
+              e.currentTarget.value = '';
+            }}
+          />
           {/* Guardian Alcove */}
           <div className={`alcove-panel${alcoveOpen ? ' open' : ''}`}>
             <div className="alcove-inner">
@@ -1720,6 +1915,8 @@ export default function ChatView() {
             </div>
           </div>
 
+          {!alcoveOpen && renderPendingAttachments()}
+
           {/* Textarea */}
           <div className="input-row">
             <textarea
@@ -1738,6 +1935,19 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer">
             <div className="agent-pills">
+              {!alcoveOpen && (
+                <button
+                  type="button"
+                  className="attach-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6.5 8.5l3.6-3.6a2.2 2.2 0 113.1 3.1l-5.4 5.4a3.4 3.4 0 01-4.8-4.8l5.2-5.2" />
+                  </svg>
+                </button>
+              )}
               <AgentPicker
                 activeAgentId={activeAgentId}
                 onChange={(id) => {
@@ -1775,7 +1985,8 @@ export default function ChatView() {
 
             <button
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
-              onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : sendMessage)}
+              onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
+              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? !input.trim() : (!input.trim() && pendingAttachments.length === 0))}
             >
               <span className="send-icon">
                 <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">

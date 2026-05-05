@@ -578,3 +578,42 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run the final verification gate for this docs closeout.
 2. Commit and push the Phase 1 closeout tracker update to `main`.
 3. Resume with Phase 2 core chat and agent experience.
+
+---
+
+## Phase 2 — Attachments and Retry Kickoff  [~] (2026-05-05)
+
+**Found**
+- `ChatView` had attachment UI primitives but the actual drop handler still ended in a TODO.
+- Existing pieces were present but disconnected: `attachmentStore`, attachment chips, message attachment renderers, `messages.attachments`, and the private `chat-attachments` bucket.
+- Agent-error retry set the composer text and immediately called `sendMessage`; because React state updates are async, retry could silently reuse stale input or no-op.
+
+**Changed**
+- Wired paperclip and drag/drop file queueing in the chat composer.
+- Uploaded queued files to the private `chat-attachments` bucket under the signed-in user's folder.
+- Persisted uploaded attachment metadata on the user message.
+- Rendered pending chips in the composer and final attachments in the message body.
+- Added code/text attachment excerpts to the prompt context without exposing signed URLs.
+- Added `_shared/chat-attachments.ts` so `chat` and `chat-multi` can append attachment context at runtime after deploy.
+- Changed agent-error retry to resend the intended prior user turn directly, preserving prior message attachments when available.
+
+**Verified**
+- `npx vitest run src/test/chatAttachments.test.ts src/test/threadStore.test.ts` passed: 8 tests.
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts supabase/functions/_shared/chat-attachments.ts` passed.
+- `npm run verify` passed: 207 unit tests, integration placeholder, and production build.
+- Local browser smoke on `http://127.0.0.1:8081/chat`:
+  - Dragged `output/playwright/phase2-attachment-probe.md` onto the empty chat state.
+  - Composer showed the pending markdown attachment chip.
+  - Sent a message in thread `4b98accf-5ca3-4d2d-9695-522b599f9833`.
+  - User bubble rendered the markdown code preview.
+- Authenticated DB check confirmed the user message has one `code` attachment with private storage path metadata and inline markdown excerpt.
+
+**Remaining risks**
+- The local frontend called the currently deployed remote `chat-multi`, so Luca's live response still said no attachment reached the model. This is expected until Lovable/Supabase redeploys `chat` and `chat-multi` with `_shared/chat-attachments.ts`.
+- Need staged post-deploy retest before marking P2-001 `Verified`.
+
+**Next**
+1. Commit and push this first Phase 2 milestone to `main`.
+2. Ask Lovable to redeploy `chat` and `chat-multi`.
+3. Rerun the attachment smoke in staged preview and confirm Luca can summarize the attached probe file from the runtime context.

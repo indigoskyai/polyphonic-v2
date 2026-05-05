@@ -17,6 +17,7 @@ import {
 } from "../_shared/agents/crisis.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
+import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -52,7 +53,7 @@ serve(async (req) => {
 
     const userId = user.id;
     const body = await req.json();
-    const { thread_id, message, model: modelOverride } = body;
+    const { thread_id, message, model: modelOverride, attachments } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
       return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
@@ -60,6 +61,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const messageWithAttachments = appendAttachmentContext(message, attachments);
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -114,7 +117,7 @@ serve(async (req) => {
       userId,
       agentId: "luca",
       threadId: thread_id,
-      userMessage: message,
+      userMessage: messageWithAttachments,
       apiKey,
       historyLimit: 50,
     });
@@ -166,7 +169,7 @@ serve(async (req) => {
       }
     }
     // Add the new user message
-    openRouterMessages.push({ role: "user", content: message });
+    openRouterMessages.push({ role: "user", content: messageWithAttachments });
 
     const toolMessages = await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1));
     if (toolMessages.length > 0) {
@@ -297,7 +300,7 @@ serve(async (req) => {
           }
 
           // Auto-title if thread has no title (fire and forget)
-          autoTitleThread(supabase, thread_id, message, fullContent, apiKey!).catch(
+          autoTitleThread(supabase, thread_id, messageWithAttachments, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
           queueContinuityTurnWrites({
@@ -305,7 +308,7 @@ serve(async (req) => {
             userId,
             threadId: thread_id,
             agentId: "luca",
-            userMessage: message,
+            userMessage: messageWithAttachments,
             agentResponse: fullContent,
             sourceMessageId: insertedMessage?.id ?? null,
             apiKey,

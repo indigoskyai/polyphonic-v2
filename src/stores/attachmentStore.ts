@@ -8,8 +8,11 @@ export interface Attachment {
   size: number;
   mime: string;
   status: AttachmentStatus;
+  file?: File;
   url?: string;
   thumbnail?: string;
+  path?: string;
+  error?: string;
 }
 
 interface AttachmentState {
@@ -36,6 +39,7 @@ export const useAttachmentStore = create<AttachmentState>((set) => ({
         size: f.size,
         mime: f.type || 'application/octet-stream',
         status: 'pending',
+        file: f,
       })),
     ],
   })),
