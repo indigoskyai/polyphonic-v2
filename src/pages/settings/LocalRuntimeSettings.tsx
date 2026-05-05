@@ -129,6 +129,7 @@ export default function LocalRuntimeSettings() {
           OpenClaw runtime and dials Polyphonic over an outbound secure connection — no inbound port required.
         </p>
         <div
+          className="runtime-install-card"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -143,7 +144,7 @@ export default function LocalRuntimeSettings() {
             marginBottom: 8,
           }}
         >
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="runtime-install-command" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {INSTALL_CMD}
           </span>
           <button

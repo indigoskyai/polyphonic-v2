@@ -50,11 +50,11 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
+          <input aria-label="Email" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
             className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none"
             style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
             required />
-          <input type="password" placeholder="Password (min 6 chars)" value={password} onChange={(e) => setPassword(e.target.value)}
+          <input aria-label="Password" type="password" placeholder="Password (min 6 chars)" value={password} onChange={(e) => setPassword(e.target.value)}
             className="w-full h-10 px-3.5 text-sm rounded-[var(--radius-md)] outline-none"
             style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
             minLength={6} required />

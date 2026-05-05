@@ -48,6 +48,7 @@ export default function LoginPage() {
 
         <form onSubmit={forgotMode ? handleForgot : handleLogin} className="flex flex-col gap-4">
           <input
+            aria-label="Email"
             type="email"
             placeholder="Email"
             value={email}
@@ -63,6 +64,7 @@ export default function LoginPage() {
           />
           {!forgotMode && (
             <input
+              aria-label="Password"
               type="password"
               placeholder="Password"
               value={password}

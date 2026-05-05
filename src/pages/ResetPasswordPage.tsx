@@ -66,6 +66,7 @@ export default function ResetPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <input
+              aria-label="New password"
               type="password"
               placeholder="New password"
               value={password}
@@ -77,6 +78,7 @@ export default function ResetPasswordPage() {
               autoFocus
             />
             <input
+              aria-label="Confirm new password"
               type="password"
               placeholder="Confirm new password"
               value={confirm}

@@ -3339,6 +3339,50 @@ html {
   .mic-bar { transform: scaleY(0.7); }
 }
 
+@media (max-width: 767px) {
+  .group-stage {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 18px 14px;
+    padding: 34px 20px;
+    overflow-x: visible;
+  }
+
+  .agent-card {
+    width: 84px;
+    flex: 0 0 84px;
+    gap: 9px;
+  }
+
+  .agent-portrait {
+    width: 84px;
+    height: 84px;
+  }
+
+  .agent-glyph {
+    font-size: 30px;
+  }
+
+  .agent-name {
+    font-size: 10px;
+  }
+
+  .agent-halo {
+    inset: -6px;
+  }
+
+  .queue-indicator {
+    position: static;
+    flex: 1 1 100%;
+    align-self: center;
+    max-width: 220px;
+  }
+
+  .transcript {
+    padding: 14px 20px;
+  }
+}
+
 /* ======================================================================
    PHASE 11 — MULTI-AGENT COMMS PRIMITIVES
    (mc- prefix to avoid collision with existing .msg-row/.thinking-dots/
@@ -5197,6 +5241,150 @@ html {
 .agent-chev {
   color: var(--text-ghost);
   font-family: var(--font-mono);
+}
+
+.settings-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.runtime-install-command {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .settings-page-header {
+    padding: 24px 24px 0 !important;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .settings-row-control {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .settings-row-control > * {
+    max-width: 100%;
+  }
+
+  .agent-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 14px 16px;
+  }
+
+  .agent-identity {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .agent-identity > div {
+    min-width: 0;
+  }
+
+  .agent-identity-name,
+  .agent-identity-role,
+  .agent-model,
+  .agent-status-label,
+  .agent-uptime {
+    overflow-wrap: anywhere;
+  }
+
+  .agent-model {
+    grid-column: 1;
+  }
+
+  .agent-status {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .agent-uptime {
+    grid-column: 1;
+    text-align: left;
+  }
+
+  .agent-chev,
+  .agent-row > button[aria-label^="Delete"] {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .runtime-install-card {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .runtime-install-command {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .profile-page-frame {
+    padding: 32px 28px 64px !important;
+    max-width: none !important;
+    width: 100%;
+  }
+
+  .profile-page-frame h1 {
+    font-size: 34px !important;
+    line-height: 1.06 !important;
+  }
+
+  .profile-identity-grid,
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .profile-identity-aside {
+    position: static !important;
+    padding-top: 8px !important;
+  }
+
+  .profile-skill-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px !important;
+  }
+
+  .profile-skill-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .profile-skill-edit-row {
+    flex-wrap: wrap;
+  }
+
+  .profile-skill-edit-row input {
+    flex: 1 1 220px;
+  }
+
+  .profile-skill-meta {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .profile-schedule-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .profile-schedule-task-row {
+    flex-wrap: wrap;
+  }
+
+  .profile-schedule-task-row > .min-w-0 {
+    flex-basis: 100%;
+  }
 }
 
 /* Detail header + env switcher */
@@ -7252,6 +7440,151 @@ html {
 /* Activity stream rows (uses m-activity-* but in a list) */
 .s-activity-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 24px; }
 
+@media (max-width: 767px) {
+  .r2-folio {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 12px 24px 0;
+    line-height: 1.5;
+  }
+
+  .r2-folio-left,
+  .r2-folio-right,
+  .m-hero-eye,
+  .s-hero-eye {
+    flex-wrap: wrap;
+    gap: 7px 10px;
+    min-width: 0;
+  }
+
+  .m-hero {
+    padding: 26px 28px 24px;
+  }
+
+  .m-hero-title,
+  .s-hero-title {
+    font-size: 30px;
+    line-height: 1.08;
+  }
+
+  .m-hero-sub,
+  .s-hero-sub {
+    font-size: 14px;
+  }
+
+  .m-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 28px 28px;
+    gap: 12px;
+  }
+
+  .m-p-state,
+  .m-p-pulse,
+  .m-p-streams,
+  .m-p-beliefs,
+  .m-p-activity {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+
+  .m-panel {
+    padding: 16px;
+  }
+
+  .m-grid > .m-panel {
+    grid-column: 1 / -1 !important;
+  }
+
+  .m-panel-head,
+  .m-pulse-foot,
+  .m-belief-row-head,
+  .m-belief-foot,
+  .s-row-meta,
+  .s-belief-head,
+  .s-belief-foot {
+    flex-wrap: wrap;
+  }
+
+  .m-panel-aside,
+  .m-activity-time,
+  .s-row-meta .salience {
+    margin-left: 0;
+  }
+
+  .m-state-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .m-state-svg-wrap {
+    min-height: 220px;
+  }
+
+  .m-pulse-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .m-pulse-stat:nth-child(2)::after {
+    display: none;
+  }
+
+  .m-pulse-label,
+  .m-state-row,
+  .m-belief-domain,
+  .m-activity-type,
+  .m-activity-time,
+  .s-row-meta,
+  .s-belief-domain,
+  .s-belief-revised {
+    overflow-wrap: anywhere;
+  }
+
+  .m-streams-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .m-stream {
+    min-height: auto;
+  }
+
+  .m-activity-row {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .m-activity-time {
+    grid-column: 2;
+    padding-top: 0;
+  }
+
+  .s-stream-inner {
+    padding: 0 28px 28px;
+  }
+
+  .s-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .s-search {
+    width: 100%;
+  }
+
+  .s-segment {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .s-row-content,
+  .s-belief-content,
+  .m-belief-content,
+  .m-activity-summary {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ── Round-2 Mnemos surfaces (Memories / Engrams / Beliefs / Graph) ── */
 
 /* Type chip (episodic / semantic / procedural / belief / fact / preference / etc.) */
@@ -7377,6 +7710,49 @@ html {
   font-family: var(--font-sans); font-size: 13px;
   color: var(--text-primary); letter-spacing: var(--track-body);
   line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .s-stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .s-stat {
+    min-width: 0;
+    padding: 16px 18px;
+  }
+
+  .s-stat:nth-child(2n) {
+    border-right: none;
+  }
+
+  .s-stat:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .s-stat-label,
+  .s-stat-delta {
+    overflow-wrap: anywhere;
+  }
+
+  .s-panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .s-panel {
+    min-width: 0;
+    padding: 18px;
+  }
+
+  .s-panel-eye,
+  .s-cand-meta {
+    flex-wrap: wrap;
+  }
+
+  .s-cand-meta .conf {
+    margin-left: 0;
+  }
 }
 
 /* Belief tier label headers (instead of card grids) */

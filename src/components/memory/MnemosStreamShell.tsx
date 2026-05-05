@@ -73,8 +73,9 @@ export default function MnemosStreamShell({
             {onQueryChange && (
               <label className="s-search">
                 <span className="s-search-glyph">⌕</span>
-                <input
-                  type="text"
+	                <input
+	                  aria-label="Search memory"
+	                  type="text"
                   placeholder={searchPlaceholder}
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}

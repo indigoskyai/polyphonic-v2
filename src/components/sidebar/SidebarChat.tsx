@@ -23,6 +23,7 @@ export default function SidebarChat() {
       {/* Search */}
       <div style={{ padding: '0 8px 8px' }}>
         <input
+          aria-label="Search threads"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search threads..."

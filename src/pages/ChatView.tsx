@@ -1564,19 +1564,21 @@ export default function ChatView() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                  className="chat-file-input"
-                  onChange={(e) => {
-                    resetDragState();
-                    queueAttachmentFiles(e.currentTarget.files);
-                    e.currentTarget.value = '';
-                  }}
-                />
+                aria-label="Attachment file picker"
+                className="chat-file-input"
+                onChange={(e) => {
+                  resetDragState();
+                  queueAttachmentFiles(e.currentTarget.files);
+                  e.currentTarget.value = '';
+                }}
+              />
               {renderModelKeyNotice()}
               {renderPendingAttachments()}
               <div className="input-row">
                 <textarea
                   ref={textareaRef}
                   className="input-textarea"
+                  aria-label="Message Luca"
                   value={input}
                   onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
                   onFocus={() => setFocused(true)}
@@ -1623,6 +1625,7 @@ export default function ChatView() {
                   )}
                 </div>
                 <select
+                  aria-label="Thinking effort"
                   value={thinkingEffort}
                   onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
                   className="effort-select"
@@ -1632,6 +1635,8 @@ export default function ChatView() {
                   <option value="high">Deep</option>
                 </select>
                 <button
+                  type="button"
+                  aria-label="Send message"
                   className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
                   onClick={() => sendMessage()}
                   disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
@@ -1968,6 +1973,7 @@ export default function ChatView() {
             ref={fileInputRef}
             type="file"
             multiple
+            aria-label="Attachment file picker"
             className="chat-file-input"
             onChange={(e) => {
               resetDragState();
@@ -1985,7 +1991,7 @@ export default function ChatView() {
                   <div className="alcove-sep" />
                   <div className="alcove-status">observing your conversation</div>
                   <div className="alcove-spacer" />
-                  <button className="alcove-close" onClick={() => setAlcoveOpen(false)}>
+                  <button className="alcove-close" onClick={() => setAlcoveOpen(false)} aria-label="Close observer">
                     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4" /></svg>
                   </button>
                 </div>
@@ -2032,6 +2038,7 @@ export default function ChatView() {
             <textarea
               ref={textareaRef}
               className="input-textarea"
+              aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
               value={input}
               onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
               onFocus={() => setFocused(true)}
@@ -2084,6 +2091,7 @@ export default function ChatView() {
 
             {/* Thinking effort selector */}
             <select
+              aria-label="Thinking effort"
               value={thinkingEffort}
               onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
               className="effort-select"
@@ -2094,6 +2102,8 @@ export default function ChatView() {
             </select>
 
             <button
+              type="button"
+              aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
               disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}

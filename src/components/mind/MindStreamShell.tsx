@@ -63,6 +63,7 @@ export default function MindStreamShell({
           <label className="s-search">
             <span className="s-search-glyph">⌕</span>
             <input
+              aria-label="Search stream"
               type="text"
               placeholder={searchPlaceholder}
               value={query}

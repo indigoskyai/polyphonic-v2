@@ -8,16 +8,44 @@ export default function CanvasPanel() {
   const loadOne = useArtifactStore((s) => s.loadOne);
   const current = useArtifactStore((s) => s.current);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (artifactId) loadOne(artifactId);
+    let cancelled = false;
+    setSourceOpen(false);
+    setLoadError(null);
+
+    if (!artifactId) {
+      setStatus('missing');
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setStatus('loading');
+    loadOne(artifactId)
+      .then((artifact) => {
+        if (cancelled) return;
+        setStatus(artifact ? 'ready' : 'missing');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Could not load artifact', error);
+        setLoadError(error instanceof Error ? error.message : String(error));
+        setStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [artifactId, loadOne]);
 
-  const artifact = current as Artifact | null;
+  const artifact = status === 'ready' ? (current as Artifact | null) : null;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 1120 }}>
+      <div className="profile-page-frame" style={{ padding: '44px 48px 80px', maxWidth: 1120 }}>
         <div className="flex items-start justify-between gap-6" style={{ marginBottom: 28 }}>
           <div>
             <div
@@ -65,8 +93,16 @@ export default function CanvasPanel() {
           )}
         </div>
 
-        {!artifact ? (
+        {status === 'idle' || status === 'loading' ? (
           <p style={{ color: 'var(--text-ghost)', fontSize: 14 }}>Loading artifact...</p>
+        ) : status === 'missing' ? (
+          <p style={{ color: 'var(--text-ghost)', fontSize: 14, lineHeight: 1.7 }}>
+            Artifact not found. It may have been deleted or may belong to another thread.
+          </p>
+        ) : status === 'error' ? (
+          <p style={{ color: 'var(--danger)', fontSize: 14, lineHeight: 1.7 }}>
+            Could not load this artifact{loadError ? `: ${loadError}` : '.'}
+          </p>
         ) : sourceOpen ? (
           <pre
             style={{

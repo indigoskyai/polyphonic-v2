@@ -37,6 +37,7 @@ export default function AppearanceSettings() {
         <SettingRow label="Font size" description="Message text size">
           <div className="flex items-center gap-3 shrink-0">
             <input
+              aria-label="Message font size"
               type="range"
               min={12}
               max={18}

@@ -107,10 +107,10 @@ function SkillRow({
         padding: '28px 0 32px',
       }}
     >
-      <div className="flex items-start justify-between gap-6">
+      <div className="profile-skill-head flex items-start justify-between gap-6">
         <div className="min-w-0 flex-1">
           {editing ? (
-            <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
+            <div className="profile-skill-edit-row flex items-center gap-2" style={{ marginBottom: 10 }}>
               <input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
@@ -153,7 +153,7 @@ function SkillRow({
             {skill.description}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="profile-skill-actions flex items-center gap-2">
           <IconButton label="Rename skill" onClick={() => setEditing(true)} disabled={busy}>
             <Pencil size={15} />
           </IconButton>
@@ -200,7 +200,7 @@ function SkillRow({
       </div>
 
       <div
-        className="grid gap-4"
+        className="profile-skill-meta grid gap-4"
         style={{
           gridTemplateColumns: 'repeat(auto-fit, minmax(140px, max-content))',
           marginTop: 18,
@@ -271,7 +271,7 @@ export default function ProfileSkillsView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 980 }}>
+      <div className="profile-page-frame" style={{ padding: '44px 48px 80px', maxWidth: 980 }}>
         <div style={{ marginBottom: 36 }}>
           <div
             style={{

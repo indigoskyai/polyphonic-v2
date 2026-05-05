@@ -251,7 +251,7 @@ export default function ProfileIdentityView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 1280 }}>
+      <div className="profile-page-frame" style={{ padding: '44px 48px 80px', maxWidth: 1280 }}>
         <div style={{ marginBottom: 36 }}>
           <div
             style={{
@@ -290,7 +290,7 @@ export default function ProfileIdentityView() {
         </div>
 
         <div
-          className="grid gap-10"
+          className="profile-identity-grid grid gap-10"
           style={{ gridTemplateColumns: 'minmax(0, 1fr) 280px' }}
         >
           <div>
@@ -307,7 +307,7 @@ export default function ProfileIdentityView() {
             )}
           </div>
 
-          <aside style={{ paddingTop: 28, position: 'sticky', top: 0 }}>
+          <aside className="profile-identity-aside" style={{ paddingTop: 28, position: 'sticky', top: 0 }}>
             <div
               style={{
                 fontFamily: 'var(--font-mono)',

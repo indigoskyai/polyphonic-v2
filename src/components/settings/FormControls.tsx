@@ -9,7 +9,7 @@ import React from 'react';
 
 export function PageHeader({ folio, title, description }: { folio: string; title: string; description?: string }) {
   return (
-    <div style={{ padding: '24px 32px 0' }}>
+    <div className="settings-page-header" style={{ padding: '24px 32px 0' }}>
       <div
         style={{
           fontFamily: 'var(--font-mono)',
@@ -72,10 +72,10 @@ export function SettingRow({
 }) {
   return (
     <div
-      className="flex justify-between items-center mb-3"
+      className="settings-row flex justify-between items-center mb-3"
       style={{ borderRadius: 'var(--radius-md)', padding: '12px 0', gap: 16 }}
     >
-      <div className="flex-1 min-w-0">
+      <div className="settings-row-copy flex-1 min-w-0">
         <div
           style={{
             fontSize: 14,
@@ -92,7 +92,7 @@ export function SettingRow({
           </div>
         )}
       </div>
-      {children}
+      <div className="settings-row-control">{children}</div>
     </div>
   );
 }

@@ -122,7 +122,7 @@ export default function ProfileScheduleView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 980 }}>
+      <div className="profile-page-frame" style={{ padding: '44px 48px 80px', maxWidth: 980 }}>
         <div style={{ marginBottom: 34 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', color: 'var(--text-ghost)', textTransform: 'uppercase', marginBottom: 12 }}>
             § L8 / schedule
@@ -133,23 +133,23 @@ export default function ProfileScheduleView() {
         </div>
 
         <section style={{ borderTop: '1px solid var(--border-faint)', padding: '24px 0 28px' }}>
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(180px, 1fr) 140px 120px 120px' }}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" style={fieldStyle} />
-            <select value={cadence} onChange={(e) => setCadence(e.target.value as any)} style={fieldStyle}>
+          <div className="profile-schedule-form-grid grid gap-3" style={{ gridTemplateColumns: 'minmax(180px, 1fr) 140px 120px 120px' }}>
+            <input aria-label="Task name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" style={fieldStyle} />
+            <select aria-label="Task cadence" value={cadence} onChange={(e) => setCadence(e.target.value as any)} style={fieldStyle}>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="cron">Cron</option>
             </select>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={fieldStyle} />
+            <input aria-label="Task time" type="time" value={time} onChange={(e) => setTime(e.target.value)} style={fieldStyle} />
             {cadence === 'weekly' ? (
-              <select value={day} onChange={(e) => setDay(e.target.value)} style={fieldStyle}>
+              <select aria-label="Task day" value={day} onChange={(e) => setDay(e.target.value)} style={fieldStyle}>
                 {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             ) : cadence === 'cron' ? (
-              <input value={cron} onChange={(e) => setCron(e.target.value)} style={fieldStyle} />
+              <input aria-label="Cron expression" value={cron} onChange={(e) => setCron(e.target.value)} style={fieldStyle} />
             ) : <span />}
           </div>
-          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Prompt" style={{ ...fieldStyle, width: '100%', minHeight: 92, marginTop: 12, paddingTop: 10 }} />
+          <textarea aria-label="Task prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Prompt" style={{ ...fieldStyle, width: '100%', minHeight: 92, marginTop: 12, paddingTop: 10 }} />
           <button type="button" onClick={createTask} style={primaryButtonStyle}>Create task</button>
         </section>
 
@@ -161,7 +161,7 @@ export default function ProfileScheduleView() {
               Nothing scheduled yet. Luca is quiet until you ask for a rhythm.
             </p>
           ) : tasks.map((task) => (
-            <div key={task.id} className="flex items-start gap-4" style={{ padding: '20px 0', borderBottom: '1px solid var(--border-faint)' }}>
+            <div key={task.id} className="profile-schedule-task-row flex items-start gap-4" style={{ padding: '20px 0', borderBottom: '1px solid var(--border-faint)' }}>
               <div className="min-w-0 flex-1">
                 <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 18 }}>{task.name}</h2>
                 <p style={{ margin: '8px 0 0', color: 'var(--text-body)', fontSize: 14, lineHeight: 1.6 }}>{task.prompt}</p>

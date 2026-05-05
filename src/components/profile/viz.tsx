@@ -659,7 +659,7 @@ export function PlateSection({ label, count, children }: {
 
 export function StatusStrip({ items }: { items: Array<{ label: string; value: string }> }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '8px 0', borderBottom: `1px solid ${INK_FAINT}` }}>
+    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 24px', padding: '8px 0', borderBottom: `1px solid ${INK_FAINT}` }}>
       {items.map((item, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 9, color: INK_GHOST, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{item.label}</span>

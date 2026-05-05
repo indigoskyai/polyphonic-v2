@@ -839,3 +839,56 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 
 **Next**
 1. Include typography checks in every route-by-route Phase 3 browser pass.
+
+---
+
+## Phase 3 — Functional Surface QA Closeout  [x] (2026-05-05)
+
+**Done**
+- Completed the Phase 3 route-by-route functional QA pass against the authenticated local app at `http://127.0.0.1:8081`.
+- Kept the scope functional: interaction patterns, layout mechanics, typography legibility/hierarchy, responsive behavior, motion safety, loading/error states, console health, and visible control labels.
+- Excluded `/_mobile` from acceptance because it is an internal preview route, not the product surface.
+- Filtered the intentionally parked offscreen drawer from overflow reporting so the evidence reflects visible user-facing layout only.
+
+**Changed**
+- Repaired mobile layout mechanics for:
+  - Mnemos overview stat strip and panel grid
+  - Mind/Profile round-2 panel grids, inline panel spans, and metadata wrapping
+  - Profile identity, skills, schedule, and workspace columns
+  - Shared settings rows and agent-list rows
+  - Local-runtime install command wrapping
+  - Group-session stage wrapping
+- Fixed `/canvas/:artifactId` missing-artifact handling so missing/deleted artifacts show a stable "Artifact not found" state instead of crashing the renderer.
+- Added visible-control labels across chat composer controls, sidebar/stream search fields, schedule form fields, auth fields, and appearance font-size control.
+
+**Verified**
+- `npm run build` passed after fixes.
+- Targeted mobile Playwright sweep for the previously broken routes passed with 0 errors and 0 visible overflow:
+  - `/memory`
+  - `/profile`
+  - `/group`
+  - `/canvas/00000000-0000-0000-0000-000000000000`
+  - `/profile/identity`
+  - `/profile/skills`
+  - `/profile/schedule`
+  - `/settings/appearance`
+  - `/settings/local-runtime`
+- Final Playwright acceptance sweep covered 54 desktop/mobile/public route checks and reported:
+  - `blockingCount: 0`
+  - 0 runtime/page errors
+  - 0 visible overflow
+  - 0 unlabeled visible controls
+- `npm run verify` passed: typecheck, unit tests, integration placeholder, and production build.
+- Evidence files:
+  - `output/phase3/route-sweep-final.json`
+  - `output/phase3/route-sweep-final-summary.json`
+  - `output/phase3/screens_final/*`
+  - `output/phase3/screens_targeted/*`
+
+**Remaining risks**
+- Phase 3 has no active blockers.
+- Known residual release risks remain deferred to Phase 5: bundle chunk-size warnings, full lint baseline debt, React Router future warnings, and deeper accessibility/performance budgets.
+
+**Next**
+1. Commit and push the Phase 3 closeout.
+2. Begin Phase 4 reliability, security, and background systems.

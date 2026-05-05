@@ -78,7 +78,7 @@ export default function WorkspaceView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 1080 }}>
+      <div className="profile-page-frame workspace-page-frame" style={{ padding: '44px 48px 80px', maxWidth: 1080 }}>
         <div className="flex items-start justify-between gap-6" style={{ marginBottom: 36 }}>
           <div>
             <div
@@ -126,7 +126,7 @@ export default function WorkspaceView() {
           </button>
         </div>
 
-        <div className="grid gap-8" style={{ gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)' }}>
+        <div className="workspace-grid grid gap-8" style={{ gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)' }}>
           <section style={{ borderTop: '1px solid var(--border-faint)', paddingTop: 18 }}>
             {loading ? (
               <p style={{ color: 'var(--text-ghost)', fontSize: 14 }}>Loading workspace...</p>
