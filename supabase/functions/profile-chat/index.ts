@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { AppError, AuthError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 
 const MODEL = "google/gemini-2.5-pro";
 
@@ -87,14 +88,14 @@ function extractRelevantExcerpt(text: string, topic: string, maxChars = 2500): s
 Deno.serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
+  const corsHeaders = getCorsHeaders(req);
+  const requestId = newRequestId();
+  const fail = (err: unknown) => errorResponse(err, corsHeaders, requestId);
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return fail(new AuthError("Missing authorization"));
     }
 
     const supabase = createClient(
@@ -109,26 +110,17 @@ Deno.serve(async (req) => {
     );
     const { data: { user }, error: authError } = await anonClient.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
     if (!lovableKey) {
-      return new Response(JSON.stringify({ error: "Lovable AI not configured" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return fail(new UpstreamUnavailableError("Lovable AI not configured"));
     }
 
     const { messages: incoming } = await req.json();
     if (!Array.isArray(incoming) || incoming.length === 0) {
-      return new Response(JSON.stringify({ error: "messages required" }), {
-        status: 400,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return fail(new ValidationError("messages required"));
     }
 
     // Load profile + raw passes
@@ -139,10 +131,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!profile) {
-      return new Response(
-        JSON.stringify({ error: "No psychological profile yet. Generate one from /profile first." }),
-        { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-      );
+      return fail(new ValidationError("No psychological profile yet. Generate one from /profile first."));
     }
 
     const rawPasses: Record<string, string> = (profile.raw_analysis as any) || {};
@@ -200,10 +189,10 @@ Deno.serve(async (req) => {
         if (aiRes.status === 402) msg = "Lovable AI credits exhausted. Add credits in Settings → Workspace → Usage.";
         else if (aiRes.status === 429) msg = "Rate limit reached. Please wait a moment.";
         else msg = `AI error: ${errText.slice(0, 200)}`;
-        return new Response(JSON.stringify({ error: msg }), {
-          status: aiRes.status === 402 || aiRes.status === 429 ? aiRes.status : 500,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
+        if (aiRes.status === 429) {
+          return fail(new AppError("rate_limited", msg, 429, { status: aiRes.status }));
+        }
+        return fail(new UpstreamUnavailableError(msg, { status: aiRes.status }));
       }
 
       const data = await aiRes.json();
@@ -286,16 +275,10 @@ Deno.serve(async (req) => {
         content: finalContent,
         citations: collectedCitations,
       }),
-      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("profile-chat error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      }
-    );
+    return fail(e);
   }
 });

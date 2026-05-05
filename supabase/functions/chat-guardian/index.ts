@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 
 const GUARDIAN_PROMPT = `You are the Guardian — an observer presence in this conversation. You have been watching everything that was said between the user and Luca. You see the full thread.
 
@@ -29,15 +30,14 @@ serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
   const corsHeaders = getCorsHeaders(req);
+  const requestId = newRequestId();
+  const fail = (err: unknown) => errorResponse(err, corsHeaders, requestId);
 
   try {
     // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -49,10 +49,7 @@ serve(async (req) => {
     });
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const userId = user.id;
@@ -60,10 +57,7 @@ serve(async (req) => {
     const { thread_id, message } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new ValidationError("Invalid request"));
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -72,10 +66,7 @@ serve(async (req) => {
     const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
     const apiKey: string | null = userKeyData || null;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new MissingApiKeyError());
     }
 
     // Get user's default model for Guardian
@@ -178,7 +169,12 @@ serve(async (req) => {
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
             console.error("Guardian model error:", orResponse.status, errBody);
-            send({ type: "error", text: `Guardian error (${orResponse.status}). Please try again.` });
+            send({
+              type: "error",
+              text: `Guardian error (${orResponse.status}). Please try again.`,
+              code: "upstream_unavailable",
+              request_id: requestId,
+            });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -186,7 +182,7 @@ serve(async (req) => {
 
           const reader = orResponse.body?.getReader();
           if (!reader) {
-            send({ type: "error", text: "No response stream" });
+            send({ type: "error", text: "No response stream", code: "upstream_unavailable", request_id: requestId });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -255,7 +251,7 @@ serve(async (req) => {
           send({ type: "done", model: usedModel, tokens_used: tokensUsed });
         } catch (err) {
           console.error("Guardian stream error:", err);
-          send({ type: "error", text: "Stream interrupted" });
+          send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
         } finally {
           clearInterval(heartbeat);
           controller.close();
@@ -273,9 +269,6 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Chat-guardian error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return fail(err);
   }
 });

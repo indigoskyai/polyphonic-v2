@@ -19,7 +19,7 @@ describe('Phase 4 reliability guardrails', () => {
     expect(firstModelCallIndex).toBeGreaterThan(-1);
     expect(quotaCheckIndex).toBeLessThan(keyDecryptIndex);
     expect(quotaCheckIndex).toBeLessThan(firstModelCallIndex);
-    expect(source).toContain('code: "quota_exceeded"');
+    expect(source).toContain('new AppError("quota_exceeded"');
   });
 
   it('requires an exact service-role bearer for mnemos digest service mode', () => {
@@ -68,5 +68,33 @@ describe('Phase 4 reliability guardrails', () => {
     });
 
     expect(missingAuthMarkers).toEqual([]);
+  });
+
+  it('keeps user-visible edge functions on structured error envelopes', () => {
+    const jsonFunctions = [
+      'supabase/functions/chat/index.ts',
+      'supabase/functions/chat-multi/index.ts',
+      'supabase/functions/chat-guardian/index.ts',
+      'supabase/functions/observer-chat/index.ts',
+      'supabase/functions/profile-chat/index.ts',
+    ];
+
+    for (const file of jsonFunctions) {
+      const source = readRepoFile(file);
+      expect(source, file).toContain('../_shared/errors.ts');
+      expect(source, file).toContain('newRequestId()');
+      expect(source, file).toContain('errorResponse(');
+      expect(source, file).not.toMatch(/JSON\.stringify\(\{\s*error:\s*"Internal error"/);
+    }
+
+    for (const file of [
+      'supabase/functions/chat/index.ts',
+      'supabase/functions/chat-multi/index.ts',
+      'supabase/functions/chat-guardian/index.ts',
+    ]) {
+      const source = readRepoFile(file);
+      expect(source, file).toContain('request_id: requestId');
+      expect(source, file).toContain('code: "upstream_');
+    }
   });
 });

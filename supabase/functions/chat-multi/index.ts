@@ -42,6 +42,7 @@ import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -149,15 +150,14 @@ serve(async (req) => {
   if (preflightResponse) return preflightResponse;
 
   const corsHeaders = getCorsHeaders(req);
+  const requestId = newRequestId();
+  const fail = (err: unknown) => errorResponse(err, corsHeaders, requestId);
 
   try {
     // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -170,10 +170,7 @@ serve(async (req) => {
     });
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const userId = user.id;
@@ -181,10 +178,7 @@ serve(async (req) => {
     const { thread_id, message, attachments, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new ValidationError("Invalid request"));
     }
 
     const messageWithAttachments = appendAttachmentContext(message, attachments);
@@ -198,10 +192,7 @@ serve(async (req) => {
     } catch (qErr) {
       const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
       if (isQuota) {
-        return new Response(JSON.stringify({ error: qErr.message, code: "quota_exceeded" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return fail(new AppError("quota_exceeded", qErr.message, 429));
       }
       throw qErr;
     }
@@ -233,12 +224,7 @@ serve(async (req) => {
     const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData : null) || null;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({
-        error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic.",
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new MissingApiKeyError("No API key configured. Add your OpenRouter key in Settings to use Polyphonic."));
     }
 
     // Load the thread's bound agent
@@ -372,6 +358,7 @@ serve(async (req) => {
         authHeader,
         pendingRevisions || [],
         toolMessages,
+        requestId,
       );
     }
 
@@ -481,7 +468,12 @@ serve(async (req) => {
           const path = decidePathFromProposers(proposerOutcomes);
 
           if (path.kind === "none") {
-            send({ type: "error", text: "All council proposers failed." });
+            send({
+              type: "error",
+              text: "All council proposers failed.",
+              code: "upstream_unavailable",
+              request_id: requestId,
+            });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -671,7 +663,7 @@ serve(async (req) => {
 
           const reader = orResponse.body?.getReader();
           if (!reader) {
-            send({ type: "error", text: "No chairman stream" });
+            send({ type: "error", text: "No chairman stream", code: "upstream_unavailable", request_id: requestId });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -867,7 +859,7 @@ serve(async (req) => {
           send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
         } catch (err) {
           console.error("Multi-model stream error:", err);
-          send({ type: "error", text: "Stream interrupted" });
+          send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
         } finally {
           clearInterval(heartbeat);
           controller.close();
@@ -885,10 +877,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Chat-multi function error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return fail(err);
   }
 });
 
@@ -1285,6 +1274,7 @@ async function singleModelStream(
   pendingRevisions: PendingRevision[] = [],
   // deno-lint-ignore no-explicit-any
   toolMessages: any[] = [],
+  requestId: string = newRequestId(),
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1322,14 +1312,19 @@ async function singleModelStream(
           } catch {
             if (errText) message = errText.slice(0, 240);
           }
-          send({ type: "error", text: message });
+          send({ type: "error", text: message, code: "upstream_unavailable", request_id: requestId });
           controller.close();
           clearInterval(heartbeat);
           return;
         }
 
         const reader = orResponse.body?.getReader();
-        if (!reader) { send({ type: "error", text: "No stream" }); controller.close(); clearInterval(heartbeat); return; }
+        if (!reader) {
+          send({ type: "error", text: "No stream", code: "upstream_unavailable", request_id: requestId });
+          controller.close();
+          clearInterval(heartbeat);
+          return;
+        }
 
         const decoder = new TextDecoder();
         let fullContent = "";
@@ -1397,7 +1392,7 @@ async function singleModelStream(
         send({ type: "done", model: usedModel, tokens_used: tokensUsed });
       } catch (err) {
         console.error("Single-model stream error:", err);
-        send({ type: "error", text: "Stream interrupted" });
+        send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
       } finally {
         clearInterval(heartbeat);
         controller.close();

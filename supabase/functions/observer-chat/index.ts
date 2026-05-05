@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { OBSERVER_SOUL, OBSERVER_CHAT_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
+import { AuthError, MissingApiKeyError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -13,13 +14,13 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  const requestId = newRequestId();
+  const fail = (err: unknown) => errorResponse(err, corsHeaders, requestId);
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -31,25 +32,19 @@ serve(async (req) => {
     });
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const { thread_id, message } = await req.json();
     if (!thread_id || !message || typeof message !== "string" || message.length > 4000) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new ValidationError("Invalid request"));
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new MissingApiKeyError("No API key configured."));
     }
 
     // Persist the user's question first
@@ -140,18 +135,14 @@ serve(async (req) => {
     if (!orResponse.ok) {
       const errText = await orResponse.text().catch(() => "");
       console.error("observer-chat model error:", orResponse.status, errText.slice(0, 300));
-      return new Response(JSON.stringify({ error: `Model error (${orResponse.status})` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new UpstreamUnavailableError(`Model error (${orResponse.status})`, { status: orResponse.status }));
     }
 
     const data = await orResponse.json();
     const reply = (data?.choices?.[0]?.message?.content || "").trim();
 
     if (!reply) {
-      return new Response(JSON.stringify({ error: "Empty reply" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new UpstreamUnavailableError("Empty reply"));
     }
 
     await supabase.from("observer_chat_messages").insert({
@@ -166,8 +157,6 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("observer-chat error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
+    return fail(err);
   }
 });

@@ -983,7 +983,6 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the Phase 4 model-key milestone to `main`.
 3. Continue the user-visible edge error-envelope sweep.
-2. Decide later whether to add explicit config blocks for all functions after hosted deploy behavior is confirmed.
 
 ---
 
@@ -1016,3 +1015,32 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 
 **Next**
 1. Continue user-visible edge error-envelope sweep.
+
+---
+
+## Phase 4 — User-Visible Edge Error Envelopes  [x] (2026-05-05)
+
+**Changed**
+- Moved the primary user-visible edge failure paths onto `_shared/errors.ts`:
+  - `chat`
+  - `chat-multi`
+  - `chat-guardian`
+  - `observer-chat`
+  - `profile-chat`
+- Added `missing_api_key` as a structured edge error code.
+- Added `code` and `request_id` fields to streaming error events in chat, multi-chat, and Guardian.
+- Added a Phase 4 regression test so these high-traffic functions keep the shared envelope and request-ID plumbing.
+
+**Verified**
+- `deno check` passed for all five updated edge functions.
+- `npx vitest run src/test/phase4Reliability.test.ts src/test/edgeError.test.ts` passed: 13 tests.
+
+**Remaining risks**
+- The broader edge-function estate still has raw `{ error }` responses in lower-traffic/admin/background functions.
+- Hosted last-5xx function-log metrics remain blocked on Lovable/Supabase logs.
+
+**Next**
+1. Run `npx tsc --noEmit`.
+2. Run `npm run verify`.
+3. Commit and push the edge-envelope milestone to `main`.
+4. Continue the lower-traffic edge-envelope sweep or move into Phase 5 gates.

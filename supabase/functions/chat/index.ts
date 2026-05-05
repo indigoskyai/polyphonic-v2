@@ -18,21 +18,21 @@ import {
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
+import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
 
   const corsHeaders = getCorsHeaders(req);
+  const requestId = newRequestId();
+  const fail = (err: unknown) => errorResponse(err, corsHeaders, requestId);
 
   try {
     // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -45,10 +45,7 @@ serve(async (req) => {
     });
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new AuthError());
     }
 
     const userId = user.id;
@@ -56,10 +53,7 @@ serve(async (req) => {
     const { thread_id, message, model: modelOverride, attachments } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new ValidationError("Invalid request"));
     }
 
     const messageWithAttachments = appendAttachmentContext(message, attachments);
@@ -85,10 +79,7 @@ serve(async (req) => {
     } catch (qErr) {
       const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
       if (isQuota) {
-        return new Response(JSON.stringify({ error: qErr.message, code: "quota_exceeded" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return fail(new AppError("quota_exceeded", qErr.message, 429));
       }
       throw qErr;
     }
@@ -107,10 +98,7 @@ serve(async (req) => {
     const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData.trim() : null) || null;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. Add your OpenRouter key in Settings to use Polyphonic." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return fail(new MissingApiKeyError("No API key configured. Add your OpenRouter key in Settings to use Polyphonic."));
     }
 
     const continuity = await loadContinuityPacket(supabase, {
@@ -210,7 +198,12 @@ serve(async (req) => {
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
             console.error("OpenRouter error:", orResponse.status, errBody);
-            send({ type: "error", text: `Model error (${orResponse.status}). Please try again.` });
+            send({
+              type: "error",
+              text: `Model error (${orResponse.status}). Please try again.`,
+              code: "upstream_unavailable",
+              request_id: requestId,
+            });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -218,7 +211,7 @@ serve(async (req) => {
 
           const reader = orResponse.body?.getReader();
           if (!reader) {
-            send({ type: "error", text: "No response stream" });
+            send({ type: "error", text: "No response stream", code: "upstream_unavailable", request_id: requestId });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -324,7 +317,7 @@ serve(async (req) => {
           });
         } catch (err) {
           console.error("Stream error:", err);
-          send({ type: "error", text: "Stream interrupted" });
+          send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
         } finally {
           clearInterval(heartbeat);
           controller.close();
@@ -342,10 +335,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Chat function error:", err);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return fail(err);
   }
 });
 

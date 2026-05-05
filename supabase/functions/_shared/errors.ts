@@ -8,6 +8,7 @@ export type ErrorCode =
   | "not_found"
   | "rate_limited"
   | "quota_exceeded"
+  | "missing_api_key"
   | "upstream_unavailable"
   | "upstream_error"
   | "internal_error"
@@ -45,6 +46,11 @@ export class QuotaExceededError extends AppError {
     super("quota_exceeded", `Daily quota exceeded for ${scope} (${current}/${limit})`, 429, {
       scope, limit, current,
     });
+  }
+}
+export class MissingApiKeyError extends AppError {
+  constructor(message = "No API key configured. Add your OpenRouter key in Settings.") {
+    super("missing_api_key", message, 400);
   }
 }
 export class UpstreamUnavailableError extends AppError {

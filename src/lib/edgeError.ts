@@ -26,6 +26,7 @@ export async function parseEdgeError(resp: Response): Promise<EdgeError> {
 export function friendlyMessage(err: EdgeError): string {
   switch (err.code) {
     case "quota_exceeded": return "You've hit today's usage limit. Try again tomorrow.";
+    case "missing_api_key": return "No model API key configured. Open Settings -> Models to add your OpenRouter key.";
     case "upstream_unavailable": return "The model provider is having trouble. Please retry in a moment.";
     case "unauthorized": return "Please sign in again.";
     case "validation_error": return err.message;

@@ -35,6 +35,9 @@ describe('friendlyMessage', () => {
   it('rewrites quota_exceeded', () => {
     expect(friendlyMessage({ message: 'x', code: 'quota_exceeded' })).toMatch(/usage limit/i);
   });
+  it('rewrites missing_api_key', () => {
+    expect(friendlyMessage({ message: 'x', code: 'missing_api_key' })).toMatch(/model api key/i);
+  });
   it('rewrites upstream_unavailable', () => {
     expect(friendlyMessage({ message: 'x', code: 'upstream_unavailable' })).toMatch(/provider/i);
   });
