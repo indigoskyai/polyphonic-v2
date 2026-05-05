@@ -41,6 +41,7 @@ import {
 import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
+import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -180,7 +181,7 @@ serve(async (req) => {
     const { thread_id, message, attachments, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), {
+      return new Response(JSON.stringify({ error: "Invalid request", code: "validation_error" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -190,6 +191,20 @@ serve(async (req) => {
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Daily quota — keep the primary multi-agent runtime aligned with legacy chat.
+    try {
+      await checkAndIncrement(userId, "chat-message");
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        return new Response(JSON.stringify({ error: qErr.message, code: "quota_exceeded" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw qErr;
+    }
 
     // Get user settings
     const { data: settings } = await supabase

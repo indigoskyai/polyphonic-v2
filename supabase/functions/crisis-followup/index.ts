@@ -11,6 +11,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { trackCronJob } from "../_shared/cronHealth.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 
 const FOLLOWUP_BATCH = 10;
@@ -31,27 +32,29 @@ serve(async (req) => {
       return json({ error: "service_role only" }, 401, corsHeaders);
     }
 
-    const supabase = createClient(url, serviceRole);
-    const now = new Date().toISOString();
+    return await trackCronJob("crisis-followup", async () => {
+      const supabase = createClient(url, serviceRole);
+      const now = new Date().toISOString();
 
-    const { data: due, error } = await supabase
-      .from("crisis_events")
-      .select("id, user_id, thread_id, message_id, crisis_level, flags, followup_due_at, created_at")
-      .eq("followup_queued", true)
-      .eq("crisis_level", "acute")
-      .is("followup_completed_at", null)
-      .lte("followup_due_at", now)
-      .order("followup_due_at", { ascending: true })
-      .limit(FOLLOWUP_BATCH);
+      const { data: due, error } = await supabase
+        .from("crisis_events")
+        .select("id, user_id, thread_id, message_id, crisis_level, flags, followup_due_at, created_at")
+        .eq("followup_queued", true)
+        .eq("crisis_level", "acute")
+        .is("followup_completed_at", null)
+        .lte("followup_due_at", now)
+        .order("followup_due_at", { ascending: true })
+        .limit(FOLLOWUP_BATCH);
 
-    if (error) return json({ error: error.message }, 500, corsHeaders);
+      if (error) throw new Error(error.message);
 
-    const results: Array<Record<string, unknown>> = [];
-    for (const event of due || []) {
-      results.push(await processFollowup(supabase, url, serviceRole, event));
-    }
+      const results: Array<Record<string, unknown>> = [];
+      for (const event of due || []) {
+        results.push(await processFollowup(supabase, url, serviceRole, event));
+      }
 
-    return json({ ok: true, processed: results.length, results }, 200, corsHeaders);
+      return json({ ok: true, processed: results.length, results }, 200, corsHeaders);
+    });
   } catch (err) {
     console.error("crisis-followup fatal:", err);
     return json({ error: "Internal error" }, 500, getCorsHeaders(req));

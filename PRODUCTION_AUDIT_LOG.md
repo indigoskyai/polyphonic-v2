@@ -892,3 +892,36 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push the Phase 3 closeout.
 2. Begin Phase 4 reliability, security, and background systems.
+
+---
+
+## Phase 4 — Reliability/Security Kickoff  [x] (2026-05-05)
+
+**Done**
+- Ran a static Phase 4 source inventory across edge functions, migrations, cron declarations, and RLS policy definitions.
+- Confirmed the local source tree contains 70 edge-function directories and 53 explicit function config entries.
+- Confirmed the migration source creates 75 public tables with RLS enabled; every detected table has policy coverage except `idempotency_keys`, which is explicitly service-role only.
+- Confirmed password-recovery public routes in a local browser pass: `/reset-password` shows the invalid/expired-link state, `/auth/login` exposes forgot-password mode, and no browser errors were logged.
+
+**Changed**
+- Added daily `chat-message` quota enforcement to `chat-multi`, the primary chat runtime, before model-key decrypt/model calls. Quota failures now return the standard `quota_exceeded` code.
+- Wrapped `scheduled-task-run` and `crisis-followup` with shared `trackCronJob` so success/failure lands in `cron_health`.
+- Tightened `mnemos-digest-build` service-mode detection from substring matching to exact `Bearer <service-role>` matching.
+- Added `src/test/phase4Reliability.test.ts` to lock these reliability guardrails.
+
+**Verified**
+- `npx vitest run src/test/phase4Reliability.test.ts` passed.
+- `npx vitest run src/test/phase4Reliability.test.ts src/test/edgeError.test.ts` passed.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/mnemos-digest-build/index.ts supabase/functions/scheduled-task-run/index.ts supabase/functions/crisis-followup/index.ts` passed.
+- `npx tsc --noEmit` passed.
+- Local Playwright/Chrome password-recovery smoke reported `{ resetShowsInvalidExpired: true, forgotButton: true, emailVisible: true, errors: [] }`.
+
+**Remaining risks**
+- Hosted last-5xx-in-7d counts and last-24h cron success rates are blocked on Lovable/Supabase hosted log or production DB access.
+- Many edge functions still return raw `{ error }` responses instead of the full standardized envelope. The most user-visible paths are functional, but the envelope sweep remains part of Phase 4.
+- `supabase/config.toml` has 53 explicit function blocks while the repo has 70 function directories; missing blocks need a deploy-posture review before changing defaults.
+
+**Next**
+1. Continue Phase 4 with edge-auth/config posture review for the 17 missing function config entries.
+2. Sweep edge error envelopes on user-visible functions.
+3. Verify hosted cron health after Lovable/Supabase deploy context is available.

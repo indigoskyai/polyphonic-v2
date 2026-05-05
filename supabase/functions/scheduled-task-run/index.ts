@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { trackCronJob } from "../_shared/cronHealth.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import {
   buildLucaPromptPartsFromContinuity,
@@ -24,30 +25,32 @@ serve(async (req) => {
       return json({ error: "service_role only" }, 401, corsHeaders);
     }
 
-    const body = await req.json().catch(() => ({}));
-    const supabase = createClient(url, serviceRole);
-    const now = new Date().toISOString();
+    return await trackCronJob("scheduled-task-run", async () => {
+      const body = await req.json().catch(() => ({}));
+      const supabase = createClient(url, serviceRole);
+      const now = new Date().toISOString();
 
-    const query = supabase
-      .from("scheduled_tasks")
-      .select("*")
-      .eq("enabled", true)
-      .lte("next_run_at", now)
-      .order("next_run_at", { ascending: true })
-      .limit(5);
+      const query = supabase
+        .from("scheduled_tasks")
+        .select("*")
+        .eq("enabled", true)
+        .lte("next_run_at", now)
+        .order("next_run_at", { ascending: true })
+        .limit(5);
 
-    const { data: tasks, error } = body.task_id
-      ? await supabase.from("scheduled_tasks").select("*").eq("id", body.task_id).limit(1)
-      : await query;
+      const { data: tasks, error } = body.task_id
+        ? await supabase.from("scheduled_tasks").select("*").eq("id", body.task_id).limit(1)
+        : await query;
 
-    if (error) return json({ ok: false, error: error.message }, 500, corsHeaders);
+      if (error) throw new Error(error.message);
 
-    const results = [];
-    for (const task of tasks || []) {
-      results.push(await runTask(supabase, url, serviceRole, task));
-    }
+      const results = [];
+      for (const task of tasks || []) {
+        results.push(await runTask(supabase, url, serviceRole, task));
+      }
 
-    return json({ ok: true, ran: results.length, results }, 200, corsHeaders);
+      return json({ ok: true, ran: results.length, results }, 200, corsHeaders);
+    });
   } catch (err) {
     console.error("scheduled-task-run error:", err);
     return json({ error: "Internal error" }, 500, getCorsHeaders(req));

@@ -108,7 +108,8 @@ serve(async (req) => {
 
   // Distinguish service-role (cron) vs user invocation
   const authHeader = req.headers.get("Authorization") ?? "";
-  const isServiceRole = authHeader.includes(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "__none__");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
 
   let body: { user_id?: string; force?: boolean } = {};
   try { body = await req.json(); } catch { /* empty body ok */ }
