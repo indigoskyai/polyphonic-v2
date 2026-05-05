@@ -4,6 +4,7 @@ import {
   buildThreadContinuityNote,
   formatFunctionalMemoryBlock,
   formatMnemosAssociationsBlock,
+  loadFunctionalMemories,
   loadContinuityPacket,
   type ContinuityLoaders,
   type FunctionalMemory,
@@ -37,6 +38,24 @@ function engram(content: string, engram_type: Engram['engram_type'] = 'semantic'
       updated_at: '2026-05-01T00:00:00.000Z',
     },
   };
+}
+
+function functionalMemorySupabaseStub({
+  matched = [],
+  durable = [],
+}: {
+  matched?: any[];
+  durable?: any[];
+}) {
+  return {
+    rpc: async () => ({ data: matched, error: null }),
+    from: () => ({
+      select() { return this; },
+      eq() { return this; },
+      order() { return this; },
+      limit() { return Promise.resolve({ data: durable, error: null }); },
+    }),
+  } as any;
 }
 
 describe('Continuity Kernel read path', () => {
@@ -185,6 +204,93 @@ describe('Continuity Kernel read path', () => {
     expect(functional).toContain('Riley prefers direct');
     expect(mnemos).toContain('associations moving underneath');
     expect(mnemos).toContain('not treat them as verified transcript facts');
+  });
+
+  it('filters low-similarity functional memories from generic fresh-thread catchup prompts', async () => {
+    const supabase = functionalMemorySupabaseStub({
+      matched: [
+        {
+          id: 'openclaw-low-match',
+          content: 'Riley is conducting a new OpenClaw memory experiment on an isolated Mac Mini.',
+          memory_type: 'commitment',
+          confidence: 0.7,
+          similarity: 0.19,
+        },
+      ],
+      durable: [
+        {
+          id: 'old-ui-pref',
+          content: 'Riley wanted an ASCII interface for an older Anima concept.',
+          memory_type: 'preference',
+          confidence: 0.85,
+          updated_at: '2026-04-22T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const memories = await loadFunctionalMemories(
+      supabase,
+      'u1',
+      'Luca, fresh thread. What are you already sitting with from where we just left off?',
+    );
+
+    expect(memories).toHaveLength(0);
+    expect(formatFunctionalMemoryBlock(memories)).toBe('');
+  });
+
+  it('keeps specific functional recall when the prompt names the relevant subject', async () => {
+    const supabase = functionalMemorySupabaseStub({
+      matched: [
+        {
+          id: 'openclaw-specific',
+          content: 'Riley is conducting a new OpenClaw memory experiment on an isolated Mac Mini.',
+          memory_type: 'commitment',
+          confidence: 0.7,
+          similarity: 0.19,
+        },
+      ],
+      durable: [],
+    });
+
+    const memories = await loadFunctionalMemories(
+      supabase,
+      'u1',
+      'Where did we leave the OpenClaw experiment?',
+    );
+
+    expect(memories).toHaveLength(1);
+    expect(memories[0].content).toContain('OpenClaw');
+  });
+
+  it('always carries pinned functional memories without allowing random durable fallback', async () => {
+    const supabase = functionalMemorySupabaseStub({
+      matched: [],
+      durable: [
+        {
+          id: 'pinned-user-pref',
+          content: 'Riley prefers direct, concrete critique.',
+          memory_type: 'preference',
+          confidence: 0.91,
+          pinned: true,
+          updated_at: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          id: 'old-unrelated',
+          content: 'Riley wanted an ASCII interface for an older Anima concept.',
+          memory_type: 'preference',
+          confidence: 0.85,
+          updated_at: '2026-04-22T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const memories = await loadFunctionalMemories(
+      supabase,
+      'u1',
+      'Luca, fresh thread. What are you already sitting with?',
+    );
+
+    expect(memories.map((memory) => memory.id)).toEqual(['pinned-user-pref']);
   });
 
   it('builds a natural continuity note only after a meaningful gap', () => {

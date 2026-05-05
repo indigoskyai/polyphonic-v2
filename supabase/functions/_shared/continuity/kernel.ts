@@ -29,6 +29,9 @@ type SupabaseLike = {
   rpc?: (fn: string, params?: Record<string, unknown>) => any;
 };
 
+const MIN_MATCH_SIMILARITY = 0.28;
+const MIN_GENERIC_CATCHUP_SIMILARITY = 0.32;
+
 export type ContinuityLayer =
   | "history"
   | "identity"
@@ -415,6 +418,7 @@ export async function loadFunctionalMemories(
   limit = 8,
 ): Promise<FunctionalMemory[]> {
   const byId = new Map<string, FunctionalMemory>();
+  const genericCatchup = isGenericCatchupQuery(query);
 
   if (query.trim().length >= 3 && typeof supabase.rpc === "function") {
     const { data, error } = await supabase.rpc("match_memories", {
@@ -425,7 +429,10 @@ export async function loadFunctionalMemories(
     if (error) throw new Error(`match_memories failed: ${error.message || String(error)}`);
     for (const row of data || []) {
       if (!row?.id || !row?.content) continue;
-      byId.set(String(row.id), normalizeFunctionalMemory(row, "match"));
+      const normalized = normalizeFunctionalMemory(row, "match");
+      if (shouldIncludeMatchedMemory(normalized, query, genericCatchup)) {
+        byId.set(normalized.id, normalized);
+      }
     }
   }
 
@@ -451,7 +458,7 @@ export async function loadFunctionalMemories(
       });
       continue;
     }
-    if (normalized.pinned || normalized.is_watchlist || normalized.confidence >= 0.72 || byId.size < limit) {
+    if (shouldIncludeDurableMemory(normalized, query, genericCatchup)) {
       byId.set(normalized.id, normalized);
     }
   }
@@ -522,6 +529,103 @@ function sortFunctionalMemories(a: FunctionalMemory, b: FunctionalMemory): numbe
   return score(b) - score(a);
 }
 
+function shouldIncludeMatchedMemory(memory: FunctionalMemory, query: string, genericCatchup: boolean): boolean {
+  if (memory.pinned || memory.is_watchlist) return true;
+  const similarity = memory.similarity ?? 0;
+  const threshold = genericCatchup ? MIN_GENERIC_CATCHUP_SIMILARITY : MIN_MATCH_SIMILARITY;
+  if (similarity >= threshold) return true;
+  return hasSpecificLexicalOverlap(memory, query);
+}
+
+function shouldIncludeDurableMemory(memory: FunctionalMemory, query: string, genericCatchup: boolean): boolean {
+  if (memory.pinned || memory.is_watchlist) return true;
+  if (genericCatchup) return false;
+  if (memory.needs_confirmation && memory.confidence < 0.82) return false;
+  if (memory.confidence < 0.72) return false;
+  return hasSpecificLexicalOverlap(memory, query);
+}
+
+function isGenericCatchupQuery(query: string): boolean {
+  const normalized = query.toLowerCase();
+  return (
+    /\b(fresh|new)\s+(thread|chat|conversation|session)\b/.test(normalized) ||
+    /\b(where|what).{0,40}\b(left off|just left|already sitting|sitting with|carrying|carried)\b/.test(normalized) ||
+    /\b(pick up|continue).{0,40}\b(where|from|what).{0,40}\b(left off|we were)\b/.test(normalized)
+  );
+}
+
+function hasSpecificLexicalOverlap(memory: FunctionalMemory, query: string): boolean {
+  const queryTokens = specificTokens(query);
+  if (queryTokens.length === 0) return false;
+  const memoryTokens = new Set(specificTokens([
+    memory.content,
+    memory.summary || "",
+    memory.memory_type,
+    ...(memory.tags || []),
+  ].join(" ")));
+  let matches = 0;
+  let hasDistinctiveSingleton = false;
+  for (const token of queryTokens) {
+    if (!memoryTokens.has(token)) continue;
+    matches += 1;
+    if (token.length >= 8) hasDistinctiveSingleton = true;
+  }
+  return matches >= 2 || hasDistinctiveSingleton;
+}
+
+function specificTokens(text: string): string[] {
+  const stop = new Set([
+    "about",
+    "actually",
+    "again",
+    "already",
+    "also",
+    "answer",
+    "anything",
+    "because",
+    "being",
+    "brief",
+    "carried",
+    "carries",
+    "carry",
+    "chat",
+    "conversation",
+    "could",
+    "current",
+    "explain",
+    "fresh",
+    "from",
+    "honest",
+    "just",
+    "left",
+    "luca",
+    "mechanics",
+    "memory",
+    "mention",
+    "model",
+    "natural",
+    "naturally",
+    "please",
+    "recall",
+    "remember",
+    "session",
+    "should",
+    "sitting",
+    "specific",
+    "thread",
+    "what",
+    "where",
+    "with",
+    "without",
+    "would",
+  ]);
+  return Array.from(new Set(
+    text
+      .toLowerCase()
+      .match(/[a-z0-9][a-z0-9-]{2,}/g) || [],
+  )).filter((token) => !stop.has(token));
+}
+
 function recencyScore(iso: string): number {
   const ts = new Date(iso).getTime();
   if (!Number.isFinite(ts)) return 0;
@@ -546,7 +650,7 @@ export function formatFunctionalMemoryBlock(memories: FunctionalMemory[]): strin
   return [
     "\n## what i reliably remember",
     "",
-    "Use this as durable recall about the user or their world. If a line is tentative, stale, or needs confirmation, treat it gently and ask when it matters.",
+    "Use this as durable recall only when it directly helps the current user intent. If a line is merely available, tentative, stale, or needs confirmation, do not volunteer it.",
     ...lines,
   ].join("\n");
 }

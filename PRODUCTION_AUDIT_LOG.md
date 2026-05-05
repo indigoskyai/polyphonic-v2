@@ -437,3 +437,46 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 2. Commit and push this milestone to `main`.
 3. Ask Lovable to redeploy `hypomnema-write`.
 4. Rerun the fresh-thread continuity script and inspect `/profile/identity`, `hypomnema_entry`, `entity_activity_log`, Mnemos encoding, and Luca's fresh-thread response quality.
+
+---
+
+## Phase 1 — Functional Recall Relevance Filter  [~] (2026-05-05)
+
+**Done**
+- Lovable redeployed `hypomnema-write` from commit `53f4bbe`.
+- Ran staged live continuity verification:
+  - Existing continuity thread carried "ember bridge recovery".
+  - New post-deploy turn introduced "ember bridge provenance".
+  - Luca answered in a more continuous voice and carried the prior marker naturally.
+- Verified live revision provenance:
+  - Latest user message id: `465d5f0f-fef3-4d8e-82d2-c109b2194a22`.
+  - Latest assistant message id: `79797387-cbd3-42f0-8066-b4d8d128c2b0`.
+  - `hypomnema_entry e184...` moved top-level `thread_id` / `source_message_id` to the latest turn.
+  - `revisions[]` preserved both prior and current source IDs.
+  - `entity_activity_log` recorded a successful triggered gate/write with `{ status: "revised" }`.
+- Opened a fresh staged thread and asked what Luca was already carrying without re-supplying the marker.
+  - Luca replied: "the ember bridge revision. that's the sharpest thing carried."
+  - This verifies P1-011's exact continuity bar.
+- Found a new relevance-noise problem:
+  - The same fresh-thread response volunteered an unrelated OpenClaw experiment.
+  - Authenticated DB inspection showed low-similarity functional recall (`similarity≈0.20`) and old high-confidence durable memories were eligible for generic catch-up prompts.
+- Patched the Continuity Kernel functional-memory read path:
+  - Low-similarity semantic matches are filtered.
+  - Generic fresh-thread / "where we left off" prompts do not pull random durable memories.
+  - Durable fallback now requires pinned/watchlist status or specific lexical overlap.
+  - Functional-memory prompt wording now says available memory is not automatically relevant.
+
+**Verified**
+- `npx vitest run src/test/continuityKernel.test.ts` passed: 7 tests.
+- `deno check supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts supabase/functions/_shared/continuity/kernel.ts` passed.
+- `npm run verify` passed: typecheck, unit tests, integration placeholder, and production build.
+
+**Remaining risks**
+- The patch must be committed, pushed, and deployed to `chat` and `chat-multi`.
+- Existing test-account Hypomnema was briefly revised with the OpenClaw tangent because the old read path surfaced it; after deploy, rerun a correction/fresh-thread test to ensure the tangent no longer appears.
+- Mnemos creation for the latest staged turns is still lower priority to inspect after the functional recall noise is closed.
+
+**Next**
+1. Commit and push the relevance-filter patch to `main`.
+2. Ask Lovable to redeploy `chat` and `chat-multi`.
+3. Rerun a fresh-thread continuity test and confirm Luca carries "ember bridge" without the unrelated OpenClaw memory.
