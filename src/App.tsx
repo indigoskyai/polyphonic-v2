@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,33 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import LoginPage from "./pages/LoginPage";
-import SignupPage from "./pages/SignupPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import ChatView from "./pages/ChatView";
-import DashboardView from "./pages/DashboardView";
-import MemoryView from "./pages/MemoryView";
-import MindView from "./pages/MindView";
-import JournalView from "./pages/JournalView";
-import ImportView from "./pages/ImportView";
-import ProfileView from "./pages/ProfileView";
-import ProfileIdentityView from "./pages/ProfileIdentityView";
-import ProfileSkillsView from "./pages/ProfileSkillsView";
-import ProfileRevisionsView from "./pages/ProfileRevisionsView";
-import ProfileScheduleView from "./pages/ProfileScheduleView";
-import GroupSession from "./pages/GroupSession";
-import CheckpointsView from "./pages/CheckpointsView";
-import WorkspaceView from "./pages/WorkspaceView";
-import AgentsList from "./pages/settings/AgentsList";
-import AgentDetail from "./pages/settings/AgentDetail";
-import SettingsPlaceholder from "./pages/settings/SettingsPlaceholder";
-import GeneralSettings from "./pages/settings/GeneralSettings";
-import ModelsSettings from "./pages/settings/ModelsSettings";
-import AppearanceSettings from "./pages/settings/AppearanceSettings";
-import AccountSettings from "./pages/settings/AccountSettings";
-import LocalRuntimeSettings from "./pages/settings/LocalRuntimeSettings";
-import Onboarding from "./pages/Onboarding";
-import MobilePreview from "./pages/MobilePreview";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
 import Rail from "./components/Rail";
@@ -54,12 +27,39 @@ import UndoToast from "./components/subagents/UndoToast";
 import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
-import CanvasPanel from "./components/canvas/CanvasPanel";
-import PublicProfileView from "./pages/PublicProfileView";
-import PublicProfileSettings from "./pages/settings/PublicProfileSettings";
 import { useIsMobile } from "./hooks/use-mobile";
 
 const queryClient = new QueryClient();
+
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const ChatView = lazy(() => import("./pages/ChatView"));
+const MemoryView = lazy(() => import("./pages/MemoryView"));
+const MindView = lazy(() => import("./pages/MindView"));
+const JournalView = lazy(() => import("./pages/JournalView"));
+const ImportView = lazy(() => import("./pages/ImportView"));
+const ProfileView = lazy(() => import("./pages/ProfileView"));
+const ProfileIdentityView = lazy(() => import("./pages/ProfileIdentityView"));
+const ProfileSkillsView = lazy(() => import("./pages/ProfileSkillsView"));
+const ProfileRevisionsView = lazy(() => import("./pages/ProfileRevisionsView"));
+const ProfileScheduleView = lazy(() => import("./pages/ProfileScheduleView"));
+const GroupSession = lazy(() => import("./pages/GroupSession"));
+const CheckpointsView = lazy(() => import("./pages/CheckpointsView"));
+const WorkspaceView = lazy(() => import("./pages/WorkspaceView"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const MobilePreview = lazy(() => import("./pages/MobilePreview"));
+const PublicProfileView = lazy(() => import("./pages/PublicProfileView"));
+const AgentsList = lazy(() => import("./pages/settings/AgentsList"));
+const AgentDetail = lazy(() => import("./pages/settings/AgentDetail"));
+const SettingsPlaceholder = lazy(() => import("./pages/settings/SettingsPlaceholder"));
+const GeneralSettings = lazy(() => import("./pages/settings/GeneralSettings"));
+const ModelsSettings = lazy(() => import("./pages/settings/ModelsSettings"));
+const AppearanceSettings = lazy(() => import("./pages/settings/AppearanceSettings"));
+const AccountSettings = lazy(() => import("./pages/settings/AccountSettings"));
+const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSettings"));
+const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
+const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
 
 function AuthInit({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
@@ -103,6 +103,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
   if (!user) return <Navigate to="/auth/login" replace />;
   return <>{children}</>;
+}
+
+function RouteFallback() {
+  return (
+    <div
+      className="flex h-screen items-center justify-center"
+      style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}
+      aria-label="Loading page"
+    >
+      Loading...
+    </div>
+  );
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -228,50 +240,52 @@ const App = () => (
       <BrowserRouter>
         <AuthInit>
           <FirstRunGate>
-          <Routes>
-            <Route path="/" element={<RootRedirect />} />
-            <Route path="/auth/login" element={<LoginPage />} />
-            <Route path="/auth/signup" element={<SignupPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            {/* Public profile (no app shell, no auth required) */}
-            <Route path="/u/:handle" element={<PublicProfileView mode="view" />} />
-            <Route path="/u/:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
-            {/* Legacy/pretty @-prefixed URLs: redirect to /u/:handle since React Router v6 has issues parsing the @ prefix attached to a param. */}
-            <Route path="/@:handle" element={<PublicProfileView mode="view" />} />
-            <Route path="/@:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
-            <Route path="/settings/public-profile" element={<ProtectedRoute><AppShell><PublicProfileSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
-            <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
-            <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
-            <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
-            <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
-            <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
-            <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
-            <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
-            <Route path="/profile/revisions" element={<ProtectedRoute><AppShell><ProfileRevisionsView /></AppShell></ProtectedRoute>} />
-            <Route path="/profile/schedule" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
-            <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
-            <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
-            <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
-            <Route path="/canvas/:artifactId" element={<ProtectedRoute><AppShell><CanvasPanel /></AppShell></ProtectedRoute>} />
-            <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
-            <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/general" element={<ProtectedRoute><AppShell><GeneralSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/models" element={<ProtectedRoute><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/routines" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
-            <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
-            <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-            <Route path="/_mobile" element={<MobilePreview />} />
-            <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<RootRedirect />} />
+                <Route path="/auth/login" element={<LoginPage />} />
+                <Route path="/auth/signup" element={<SignupPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                {/* Public profile (no app shell, no auth required) */}
+                <Route path="/u/:handle" element={<PublicProfileView mode="view" />} />
+                <Route path="/u/:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
+                {/* Legacy/pretty @-prefixed URLs: redirect to /u/:handle since React Router v6 has issues parsing the @ prefix attached to a param. */}
+                <Route path="/@:handle" element={<PublicProfileView mode="view" />} />
+                <Route path="/@:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
+                <Route path="/settings/public-profile" element={<ProtectedRoute><AppShell><PublicProfileSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+                <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+                <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
+                <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
+                <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
+                <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
+                <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
+                <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
+                <Route path="/profile/revisions" element={<ProtectedRoute><AppShell><ProfileRevisionsView /></AppShell></ProtectedRoute>} />
+                <Route path="/profile/schedule" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
+                <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
+                <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
+                <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
+                <Route path="/canvas/:artifactId" element={<ProtectedRoute><AppShell><CanvasPanel /></AppShell></ProtectedRoute>} />
+                <Route path="/settings" element={<Navigate to="/settings/agents" replace />} />
+                <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/general" element={<ProtectedRoute><AppShell><GeneralSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/models" element={<ProtectedRoute><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/routines" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+                <Route path="/_mobile" element={<MobilePreview />} />
+                <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </FirstRunGate>
         </AuthInit>
       </BrowserRouter>

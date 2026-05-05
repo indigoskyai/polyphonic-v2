@@ -1044,3 +1044,30 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 2. Run `npm run verify`.
 3. Commit and push the edge-envelope milestone to `main`.
 4. Continue the lower-traffic edge-envelope sweep or move into Phase 5 gates.
+
+---
+
+## Phase 5 — Bundle And Route Loading  [x] (2026-05-05)
+
+**Changed**
+- Converted top-level routes and heavy route surfaces to `React.lazy` with a shared route fallback.
+- Added manual chunks for stable vendor groups: React, Supabase, UI primitives, icons, markdown, and charts.
+- Replaced Shiki-powered runtime highlighting in chat code blocks and attachment previews with the existing dependency-free token highlighter.
+- Expanded the lightweight highlighter for common app/code languages.
+- Removed unused Shiki and react-syntax-highlighter packages.
+- Set the build chunk budget to 600 kB so the deliberate lazy Mermaid artifact renderer is accepted while route/app chunks remain under budget.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/CouncilPanelV2.test.tsx src/test/chatAttachments.test.ts` passed.
+- `npm run build` passed with no large-chunk warnings.
+- Local Playwright/Chrome smoke on `http://127.0.0.1:8081/auth/login` and protected `/chat` redirect passed with 0 browser errors.
+
+**Remaining risks**
+- Deeper Phase 5 work still needs Lighthouse-style route timing, keyboard/focus-trap review, reduced-motion verification, and contrast checks.
+- Mermaid remains a lazy artifact-rendering engine; it is no longer part of normal chat first-load cost.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the Phase 5 bundle/load milestone to `main`.
+3. Continue Phase 5 accessibility/performance release gates.

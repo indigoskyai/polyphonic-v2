@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, WrapText, Download, Maximize2, X } from 'lucide-react';
-import { highlightSync, normalizeLang, onHighlighterReady } from './highlighter';
+import { highlight as highlightSyntax } from './syntaxHighlight';
 import { getCachedHighlight, setCachedHighlight } from './highlightCache';
 
 const ART_GLYPHS = /[╭╮╰╯─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋█▀▄▌▐░▒▓◆◇○●◐◑▲▼◀▶★☆✦✧⬢⬡]/;
@@ -22,12 +22,31 @@ interface Props {
 
 const COLLAPSE_THRESHOLD = 28; // lines
 
+const ALIAS: Record<string, string> = {
+  shell: 'sh',
+  bash: 'sh',
+  zsh: 'sh',
+  py: 'python',
+  rs: 'rust',
+  rb: 'ruby',
+  cs: 'csharp',
+  md: 'markdown',
+  yml: 'yaml',
+  text: 'plaintext',
+  txt: 'plaintext',
+  plain: 'plaintext',
+};
+
+function normalizeLang(lang: string | null | undefined): string {
+  const l = (lang || '').toLowerCase().trim();
+  return ALIAS[l] || l || 'plaintext';
+}
+
 export default function CodeBlock({ lang, source, streaming = false }: Props) {
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [hlVersion, setHlVersion] = useState(0);
 
   // Lock body scroll + ESC to close while fullscreen
   useEffect(() => {
@@ -39,28 +58,25 @@ export default function CodeBlock({ lang, source, streaming = false }: Props) {
     return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
   }, [fullscreen]);
 
-  // Re-render when shiki finishes loading (or a new lang gets loaded)
-  useEffect(() => onHighlighterReady(() => setHlVersion((n) => n + 1)), []);
-
   const isArt = !lang && looksLikeArt(source);
   const normalized = lang ? normalizeLang(lang) : '';
   const lineCount = source.split('\n').length;
   const collapsible = !streaming && lineCount > COLLAPSE_THRESHOLD;
 
   // Highlight strategy:
-  //   - while streaming: skip Shiki entirely (return null → plain <pre>).
+  //   - while streaming: skip highlighting entirely (return null -> plain <pre>).
   //     Re-highlighting a growing buffer per token is the #1 source of
   //     code-block flicker. The closing fence is what flips us back.
-  //   - completed blocks: check the LRU cache first; only call Shiki
-  //     once per unique (lang, source) pair, then memoize the result.
+  //   - completed blocks: use the dependency-free token highlighter and cache
+  //     once per unique (lang, source) pair.
   const html = useMemo(() => {
     if (isArt || !lang || streaming) return null;
     const cached = getCachedHighlight(normalized, source);
     if (cached !== undefined) return cached;
-    const out = highlightSync(source, normalized);
+    const out = highlightSyntax(source, normalized);
     setCachedHighlight(normalized, source, out);
     return out;
-  }, [source, lang, normalized, isArt, streaming, hlVersion]);
+  }, [source, lang, normalized, isArt, streaming]);
 
   const copy = async () => {
     try {

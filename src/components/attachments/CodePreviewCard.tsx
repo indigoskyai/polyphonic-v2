@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { highlightSync as highlight } from '@/components/rich/highlighter';
+import { highlight } from '@/components/rich/syntaxHighlight';
 
 interface Props {
   code: string;

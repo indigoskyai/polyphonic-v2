@@ -8,8 +8,13 @@ const KEYWORDS: Record<string, RegExp> = {
   js: /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|new|this|super|typeof|instanceof|in|of|null|undefined|true|false|try|catch|finally|throw|import|export|from|default|as|async|await|yield|static|get|set)\b/g,
   ts: /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|new|this|super|typeof|instanceof|in|of|null|undefined|true|false|try|catch|finally|throw|import|export|from|default|as|async|await|yield|static|get|set|interface|type|enum|namespace|declare|public|private|protected|readonly|abstract|implements|keyof|never|unknown|any|void)\b/g,
   tsx: /\b(const|let|var|function|return|if|else|for|while|class|extends|new|this|typeof|instanceof|null|undefined|true|false|try|catch|throw|import|export|from|default|async|await|interface|type|enum|namespace|declare|readonly|abstract|implements)\b/g,
+  jsx: /\b(const|let|var|function|return|if|else|for|while|class|extends|new|this|typeof|instanceof|null|undefined|true|false|try|catch|throw|import|export|from|default|async|await)\b/g,
   json: /\b(true|false|null)\b/g,
   sh: /\b(if|then|else|elif|fi|for|in|do|done|while|case|esac|function|return|exit|export|unset|echo|cd|pwd|ls|cat|grep|awk|sed)\b/g,
+  python: /\b(def|class|return|if|elif|else|for|while|try|except|finally|with|as|import|from|pass|break|continue|yield|lambda|async|await|True|False|None|and|or|not|in|is)\b/g,
+  rust: /\b(fn|let|mut|pub|impl|trait|struct|enum|match|if|else|while|for|loop|return|use|mod|crate|self|Self|async|await|move|const|static|ref|where|true|false|Option|Result|Some|None|Ok|Err)\b/g,
+  go: /\b(func|package|import|return|if|else|for|range|switch|case|default|defer|go|select|chan|struct|interface|map|var|const|type|true|false|nil)\b/g,
+  yaml: /\b(true|false|null|yes|no|on|off)\b/gi,
   css: /\b(important|inherit|initial|unset|auto|none|hidden|visible|block|flex|grid|inline|inline-block|absolute|relative|fixed|sticky|static)\b/g,
   html: /\b(html|head|body|div|span|h1|h2|h3|h4|h5|h6|p|a|img|ul|ol|li|table|tr|td|th|form|input|button|script|style|link|meta|title)\b/g,
   sql: /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|GROUP|BY|ORDER|HAVING|UNION|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|INDEX|DROP|ALTER|AS|AND|OR|NOT|NULL|IS|IN|LIKE|BETWEEN|EXISTS|CASE|WHEN|THEN|ELSE|END|DISTINCT|LIMIT|OFFSET|TRUE|FALSE)\b/gi,
@@ -30,10 +35,10 @@ function tokensForLang(source: string, lang: string): Token[] {
   const tokens: Token[] = [];
   // Comments
   const commentPatterns: RegExp[] = [];
-  if (['js', 'ts', 'tsx', 'css'].includes(lang)) {
+  if (['js', 'jsx', 'ts', 'tsx', 'css', 'rust', 'go'].includes(lang)) {
     commentPatterns.push(/\/\/[^\n]*/g);
     commentPatterns.push(/\/\*[\s\S]*?\*\//g);
-  } else if (lang === 'sh') {
+  } else if (['sh', 'python', 'yaml'].includes(lang)) {
     commentPatterns.push(/#[^\n]*/g);
   } else if (lang === 'sql') {
     commentPatterns.push(/--[^\n]*/g);
@@ -49,11 +54,11 @@ function tokensForLang(source: string, lang: string): Token[] {
 
   // Strings
   const stringPatterns: RegExp[] = [];
-  if (['js', 'ts', 'tsx', 'json', 'sh', 'css', 'sql'].includes(lang)) {
+  if (['js', 'jsx', 'ts', 'tsx', 'json', 'sh', 'python', 'rust', 'go', 'yaml', 'css', 'sql'].includes(lang)) {
     stringPatterns.push(/"(?:[^"\\]|\\.)*"/g);
     stringPatterns.push(/'(?:[^'\\]|\\.)*'/g);
   }
-  if (['js', 'ts', 'tsx'].includes(lang)) {
+  if (['js', 'jsx', 'ts', 'tsx'].includes(lang)) {
     stringPatterns.push(/`(?:[^`\\]|\\.)*`/g);
   }
   stringPatterns.forEach((p) => {
@@ -76,12 +81,20 @@ function tokensForLang(source: string, lang: string): Token[] {
   }
 
   // Functions (js/ts/tsx only)
-  if (['js', 'ts', 'tsx'].includes(lang)) {
+  if (['js', 'jsx', 'ts', 'tsx', 'go', 'rust'].includes(lang)) {
     const fn = /\b([a-zA-Z_]\w*)\s*\(/g;
     let m: RegExpExecArray | null;
     while ((m = fn.exec(source)) !== null) {
       if (tokens.some((t) => m!.index >= t.start && m!.index < t.end)) continue;
       tokens.push({ start: m.index, end: m.index + m[1].length, cls: 'syntax-function' });
+    }
+  }
+  if (lang === 'python') {
+    const fn = /\bdef\s+([a-zA-Z_]\w*)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = fn.exec(source)) !== null) {
+      if (tokens.some((t) => m!.index + 4 >= t.start && m!.index + 4 < t.end)) continue;
+      tokens.push({ start: m.index + 4, end: m.index + 4 + m[1].length, cls: 'syntax-function' });
     }
   }
 
