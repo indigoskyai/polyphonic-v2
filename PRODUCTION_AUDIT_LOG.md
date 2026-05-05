@@ -688,3 +688,35 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push this Phase 2 verification milestone to `main`.
 3. Continue Phase 2 only for remaining deploy/no-key blocked items if the necessary environment becomes available; otherwise move the blocked items forward with explicit evidence.
+
+---
+
+## Phase 2 — Observer Stop-Control Hardening  [x] (2026-05-05)
+
+**Found**
+- The composer stop button is shared by main chat streaming and Observer alcove streaming.
+- Main Luca streams had an abort controller; Observer `chat-guardian` requests did not.
+- Result: if the user hit stop while Observer was streaming, the UI could clear only after the network stream finished.
+
+**Changed**
+- Added a dedicated Observer abort controller.
+- Passed the controller signal into `chat-guardian` fetch.
+- Updated the shared stop handler to cancel Observer streaming first when the alcove stream is active.
+- Suppressed the generic "connection lost" message for intentional Observer aborts.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- Local code audit confirms `guardianAbortRef` is set, aborted, and cleared on completion.
+- Local Playwright Observer cancellation smoke:
+  - Submitted a deliberately long Observer prompt in the alcove.
+  - Confirmed the send button entered streaming state.
+  - Pressed stop after stream start.
+  - Confirmed streaming state and cursor cleared immediately, input stayed empty, and no generic connection-loss message appeared.
+  - Browser console showed 0 errors with only known React Router future warnings.
+
+**Remaining risks**
+- No remaining risk for P2-009.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push this stop-control patch.

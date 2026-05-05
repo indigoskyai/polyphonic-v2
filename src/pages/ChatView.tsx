@@ -459,6 +459,7 @@ export default function ChatView() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const guardianAbortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingAttachments = useAttachmentStore((s) => s.pending);
@@ -961,6 +962,8 @@ export default function ChatView() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
+      const controller = new AbortController();
+      guardianAbortRef.current = controller;
       const resp = await fetch(`${supabaseUrl}/functions/v1/chat-guardian`, {
         method: 'POST',
         headers: {
@@ -968,6 +971,7 @@ export default function ChatView() {
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({ thread_id: tid, message: messageText }),
+        signal: controller.signal,
       });
 
       if (!resp.ok) {
@@ -1027,11 +1031,14 @@ export default function ChatView() {
 
       // Fallback: stream ended without a `done` event
       commitFinal(fullContent);
-    } catch (e) {
-      setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        setGuardianMessages((prev) => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.' }]);
+      }
     } finally {
       setGuardianStreaming(false);
       setGuardianStreamingContent('');
+      guardianAbortRef.current = null;
       loadThreads();
     }
   }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing]);
@@ -1422,6 +1429,13 @@ export default function ChatView() {
   );
 
   const stopStreaming = useCallback(async () => {
+    if (guardianStreaming) {
+      guardianAbortRef.current?.abort();
+      setGuardianStreaming(false);
+      setGuardianStreamingContent('');
+      return;
+    }
+
     abortRef.current?.abort();
     // Persist partial content so cancellation survives reload.
     const partial = streamingContent;
@@ -1447,7 +1461,7 @@ export default function ChatView() {
         });
       } catch (e) { console.warn('persist canceled stream failed', e); }
     }
-  }, [streamingContent, streamingThinking, currentThreadId, user, activeAgentId, addMessage]);
+  }, [guardianStreaming, streamingContent, streamingThinking, currentThreadId, user, activeAgentId, addMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
