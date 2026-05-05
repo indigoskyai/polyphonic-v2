@@ -61,18 +61,21 @@ function useSmoothTypewriter(target: string, active = true) {
       return;
     }
 
+    // Detect a brand-new message (target no longer extends prior target):
+    // reset the buffer and EMA so cadence doesn't start mid-curve.
     if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
       if (!target.startsWith(prevTargetRef.current)) {
         displayedRef.current = '';
         setDisplayed('');
         gapEmaRef.current = 0;
+        lastTickRef.current = 0;
       }
     }
     prevTargetRef.current = target;
 
     const tick = (now: number) => {
       if (!lastTickRef.current) lastTickRef.current = now;
-      const elapsed = now - lastTickRef.current;
+      const elapsed = Math.min(now - lastTickRef.current, 64); // clamp huge frames
       lastTickRef.current = now;
 
       const tgt = targetRef.current;
@@ -80,15 +83,13 @@ function useSmoothTypewriter(target: string, active = true) {
       const gap = tgt.length - curLen;
 
       if (gap > 0) {
-        // Smooth the gap so cadence rises/falls gracefully
-        gapEmaRef.current = gapEmaRef.current * 0.7 + gap * 0.3;
+        // Smoothed gap with EMA so cadence rises and falls gracefully.
+        gapEmaRef.current = gapEmaRef.current * 0.8 + gap * 0.2;
         const smoothedGap = gapEmaRef.current;
 
-        // Cadence tiers — capped at ~600 cps so even huge bursts read as
-        // confident typing rather than a paste.
-        let charsPerMs = 0.22;                   // base ~220 cps
-        if (smoothedGap > 60)   charsPerMs = 0.36;  // ~360 cps
-        if (smoothedGap > 200)  charsPerMs = 0.60;  // ~600 cps cap
+        // Continuous cadence curve: 180 cps base, ramps to ~520 cps cap.
+        // sqrt-ish curve avoids the staircase from a tiered switch.
+        const charsPerMs = Math.min(0.52, 0.18 + Math.sqrt(smoothedGap) * 0.024);
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
@@ -97,14 +98,24 @@ function useSmoothTypewriter(target: string, active = true) {
           displayedRef.current = next;
           setDisplayed(next);
         }
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // Caught up — go idle. We re-arm via the effect when target grows.
+        lastTickRef.current = 0;
+        rafRef.current = 0;
       }
-
-      rafRef.current = requestAnimationFrame(tick);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    // Only start the loop if there's actually work to do; otherwise the
+    // next target change re-runs this effect and starts it then.
+    if (displayedRef.current.length < target.length) {
+      rafRef.current = requestAnimationFrame(tick);
+    } else {
+      displayedRef.current = target;
+      setDisplayed(target);
+    }
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       lastTickRef.current = 0;
     };
   }, [active, target]);
