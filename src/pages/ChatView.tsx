@@ -164,10 +164,25 @@ function StreamingText({
     return () => clearTimeout(t);
   }, [settled, onSettled]);
 
-  // Memoize the parsed markdown tree so it doesn't reparse on every keystroke unnecessarily
+  // Throttle markdown reparse: re-render the tree only when the displayed
+  // text grew by ≥8 chars, crossed a markdown boundary (newline / fence /
+  // list marker), or finished settling. Cuts reparse cost dramatically on
+  // long replies and keeps the typewriter at 60fps.
+  const lastTreeLenRef = useRef(0);
+  const treeSourceLen = useMemo(() => {
+    const prev = lastTreeLenRef.current;
+    const cur = displayed.length;
+    if (cur === 0) { lastTreeLenRef.current = 0; return 0; }
+    if (settled || !isStreaming) { lastTreeLenRef.current = cur; return cur; }
+    if (cur - prev >= 8) { lastTreeLenRef.current = cur; return cur; }
+    const tail = displayed.slice(prev);
+    if (/[\n`*_>#-]/.test(tail)) { lastTreeLenRef.current = cur; return cur; }
+    return prev;
+  }, [displayed, settled, isStreaming]);
+
   const tree = useMemo(
-    () => <RichBody source={displayed} streaming />,
-    [displayed]
+    () => <RichBody source={displayed.slice(0, treeSourceLen)} streaming />,
+    [displayed, treeSourceLen]
   );
 
   return (
