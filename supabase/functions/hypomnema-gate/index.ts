@@ -40,6 +40,12 @@ interface ChainWriteTarget {
   your_contribution?: string;
 }
 
+interface WriteDispatchResult {
+  agent_id: string;
+  status: number | "error";
+  body: unknown;
+}
+
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
@@ -64,14 +70,29 @@ serve(async (req) => {
       return json({ should_reflect: false, reason: "empty turn input" }, 200, corsHeaders);
     }
 
+    const supabase = createClient(url, serviceRole);
+
     if (!isMemoryAugmentationEnabled(userId)) {
+      await recordHypomnemaActivity(supabase, {
+        userId,
+        title: "Hypomnema skipped",
+        summary: "Memory augmentation disabled.",
+        severity: "warning",
+        content: { should_reflect: false, reason: "memory augmentation disabled" },
+      });
       return json({ should_reflect: false, reason: "memory augmentation disabled" }, 200, corsHeaders);
     }
 
-    const supabase = createClient(url, serviceRole);
     const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
     const apiKey = typeof keyData === "string" ? keyData.trim() : "";
     if (!apiKey) {
+      await recordHypomnemaActivity(supabase, {
+        userId,
+        title: "Hypomnema skipped",
+        summary: "No OpenRouter key available for the user.",
+        severity: "warning",
+        content: { should_reflect: false, reason: "no api key" },
+      });
       return json({ should_reflect: false, reason: "no api key" }, 200, corsHeaders);
     }
 
@@ -82,11 +103,13 @@ serve(async (req) => {
     });
 
     // Chain to hypomnema-write if requested and gate triggered.
-    // Fire-and-forget — chat-multi already returned to the user.
+    // This gate itself runs in a background finalization task, so awaiting the
+    // write here gives us inspectable success/failure without delaying chat.
+    let writes: WriteDispatchResult[] = [];
     if (result.should_reflect && body.chain_write) {
       const targets = Array.isArray(body.chain_write) ? body.chain_write : [body.chain_write];
       const writeBaseUrl = `${url}/functions/v1/hypomnema-write`;
-      for (const target of targets) {
+      writes = await Promise.all(targets.map(async (target): Promise<WriteDispatchResult> => {
         const writeBody: Record<string, unknown> = {
           user_id: userId,
           agent_id: target.agent_id,
@@ -103,23 +126,77 @@ serve(async (req) => {
           if (target.primary_response) writeBody.primary_response = target.primary_response;
           if (target.your_contribution) writeBody.your_contribution = target.your_contribution;
         }
-        fetch(writeBaseUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceRole}`,
-          },
-          body: JSON.stringify(writeBody),
-        }).catch((e) => console.warn(`[hypomnema-gate] write dispatch (${target.agent_id}) failed:`, e));
-      }
+        try {
+          const resp = await fetch(writeBaseUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceRole}`,
+            },
+            body: JSON.stringify(writeBody),
+          });
+          const responseBody = await resp.json().catch(async () => ({ raw: await resp.text().catch(() => "") }));
+          if (!resp.ok) {
+            console.warn(`[hypomnema-gate] write dispatch (${target.agent_id}) returned ${resp.status}:`, responseBody);
+          }
+          return { agent_id: target.agent_id, status: resp.status, body: responseBody };
+        } catch (e) {
+          console.warn(`[hypomnema-gate] write dispatch (${target.agent_id}) failed:`, e);
+          return {
+            agent_id: target.agent_id,
+            status: "error",
+            body: e instanceof Error ? e.message : String(e),
+          };
+        }
+      }));
     }
 
-    return json(result, 200, corsHeaders);
+    await recordHypomnemaActivity(supabase, {
+      userId,
+      title: result.should_reflect ? "Hypomnema gate triggered" : "Hypomnema skipped",
+      summary: result.reason || (result.should_reflect ? "Reflection queued." : "Gate skipped reflection."),
+      severity: result.should_reflect && writes.some((w) => w.status === "error" || (typeof w.status === "number" && w.status >= 400))
+        ? "warning"
+        : "info",
+      content: {
+        should_reflect: result.should_reflect,
+        reason: result.reason,
+        weight: result.weight,
+        writes,
+      },
+    });
+
+    return json({ ...result, writes }, 200, corsHeaders);
   } catch (err) {
     console.error("[hypomnema-gate] error:", err);
     return json({ should_reflect: false, reason: `error: ${(err as Error).message}` }, 200, getCorsHeaders(req));
   }
 });
+
+async function recordHypomnemaActivity(
+  // deno-lint-ignore no-explicit-any -- shared edge helper accepts the service client shape.
+  supabase: any,
+  opts: {
+    userId: string;
+    title: string;
+    summary: string;
+    severity: "info" | "warning" | "error";
+    content: Record<string, unknown>;
+  },
+): Promise<void> {
+  await supabase.from("entity_activity_log").insert({
+    user_id: opts.userId,
+    activity_type: "hypomnema_gate",
+    title: opts.title,
+    summary: opts.summary,
+    source: "hypomnema",
+    severity: opts.severity,
+    surface_to_user: false,
+    content: opts.content,
+  }).then(({ error }: { error?: { message?: string } | null }) => {
+    if (error) console.warn("[hypomnema-gate] activity log failed:", error.message);
+  });
+}
 
 function json(body: unknown, status: number, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {

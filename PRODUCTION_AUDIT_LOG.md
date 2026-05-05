@@ -353,3 +353,29 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Enable or verify memory augmentation for the test account in Supabase/Lovable and deploy the latest edge functions if the hosted functions are stale.
 2. Rerun the fresh-thread continuity script and confirm Hypomnema entries appear in `/profile/identity`.
 3. Once Hypomnema is live, tune Luca's continuity voice away from explicit retrieval language and toward direct lived carry-over.
+
+---
+
+## Phase 1 — Hypomnema Gate Hardening  [~] (2026-05-05)
+
+**Done**
+- Reran the live continuity script after Lovable enabled `MEMORY_AUGMENTATION_ENABLED=true`.
+- The new "ember bridge" turn wrote a Mnemos engram and produced a strong Luca response in the fresh thread, but the account still had 0 Hypomnema entries.
+- Patched the gate/write path:
+  - Explicit continuity-carry turns now deterministically pass the Hypomnema salience gate.
+  - `hypomnema-gate` awaits chained `hypomnema-write` calls and returns per-agent write results.
+  - Gate/write decisions are persisted to `entity_activity_log` with `source=hypomnema` so failures are inspectable.
+  - Shared function dispatch now throws on non-2xx responses instead of reporting a failed call as merely queued.
+
+**Verified**
+- `npx vitest run src/test/hypomnemaSalience.test.ts src/test/continuityWrite.test.ts` passed.
+- `deno check supabase/functions/hypomnema-gate/index.ts supabase/functions/_shared/hypomnema/write.ts supabase/functions/_shared/continuity/write.ts` passed.
+
+**Remaining risks**
+- This patch must be deployed before the live Hypomnema write can be retested.
+- Browser console surfaced duplicate React key warnings during the live send flow; database inspection showed one user row and one assistant row in the tested thread, so this looks like a UI key/realtime warning to investigate in Phase 2 unless it recurs as visible duplication.
+
+**Next**
+1. Push this gate-hardening patch to `main`.
+2. Ask Lovable to redeploy `chat`, `chat-multi`, `hypomnema-gate`, and `hypomnema-write`.
+3. Rerun the "ember bridge" continuity script and check both `hypomnema_entry` and `entity_activity_log`.

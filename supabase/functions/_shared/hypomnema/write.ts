@@ -17,6 +17,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPrompt } from "./prompts.ts";
 import { embedOne } from "../embeddings.ts";
+import { detectContinuityCarrySignal } from "./salience.ts";
 
 const GATE_MODEL = "anthropic/claude-haiku-4.5";
 const WRITE_MODEL_PRIMARY = "anthropic/claude-sonnet-4.6";
@@ -209,6 +210,16 @@ export async function runSalienceGate(
   apiKey: string,
   input: GateInput,
 ): Promise<GateResult> {
+  const continuitySignal = detectContinuityCarrySignal(input);
+  if (continuitySignal) {
+    return {
+      should_reflect: true,
+      reason: continuitySignal,
+      weight: 0.9,
+      raw: "deterministic_continuity_signal",
+    };
+  }
+
   const promptTemplate = await loadPrompt("salience_gate");
   const systemPrompt = fillPlaceholders(promptTemplate, {
     INJECT_USER_MESSAGE: clampStr(input.userMessage, MAX_TURN_CHARS),

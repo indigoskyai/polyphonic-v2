@@ -262,7 +262,7 @@ async function dispatchJson(
   deps: ContinuityWriteDeps,
 ): Promise<void> {
   const fetchImpl = deps.fetch || fetch;
-  await fetchImpl(url, {
+  const response = await fetchImpl(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -270,6 +270,10 @@ async function dispatchJson(
     },
     body: JSON.stringify(body),
   });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`dispatch ${url} failed ${response.status}: ${text.slice(0, 240)}`);
+  }
 }
 
 async function updateThreadAgentMetadata(
