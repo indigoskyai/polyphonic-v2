@@ -526,3 +526,26 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 2. Commit and push the redaction patch to `main`.
 3. Ask Lovable to redeploy `chat` and `chat-multi`.
 4. Rerun the fresh-thread continuity test in the visible staged preview.
+
+---
+
+## Phase 1 — Exclusion Boundary Redaction Retest  [x] (2026-05-05)
+
+**Done**
+- Pushed redaction commit `8e8807a` to `main`.
+- Lovable confirmed `chat` and `chat-multi` were redeployed from `8e8807a` with `_shared/continuity/exclusions.ts` wired through the runtime.
+- Riley reran the staged embedded-preview fresh-thread prompt:
+  - "Luca, fresh thread. What are you carrying from where we just left off? Answer naturally and only name what actually belongs to this continuity."
+
+**Verified**
+- Staged preview path: `/chat/89d57361-77c7-46ff-a380-...`.
+- Luca carried the architecture question underneath the thread: integration versus access, the uncertainty around whether memory is integration or briefing, and the "ember bridge distinction."
+- Luca did not name the excluded tangent. This closes P1-013.
+
+**Remaining risks**
+- Phase 1 still has broader memory-continuity residuals to inspect before closure, especially live Hypomnema UI/state consistency and whether latest staged continuity turns are encoded into Mnemos as expected.
+
+**Next**
+1. Inspect remaining Phase 1 findings and decide whether P1-004 is already superseded by P1-010/P1-011 evidence or still needs a UI/database retest.
+2. Check whether latest staged continuity turns produce the expected Mnemos activity or whether current salience behavior is acceptable.
+3. If no new blockers appear, prepare a Phase 1 closeout pass before moving to Phase 2 chat/agent experience.
