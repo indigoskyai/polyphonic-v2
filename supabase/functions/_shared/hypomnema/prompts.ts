@@ -1,13 +1,18 @@
 /**
  * Hypomnema prompt loader.
  *
- * Loads markdown prompt files from this directory at runtime via Deno.readTextFile
- * relative to this module's URL. Cached after first read.
- *
- * The prompts themselves live in `./prompts/*.md` and are mirrored from
- * `docs/memory/prompts/` (the canonical source). Update both when iterating
- * on voice — the docs/ copy is the spec, this copy is what runs.
+ * Prompts are embedded at build time as TS constants (see ./prompts/*.ts) because
+ * edge function deploys do not bundle adjacent .md files. The .md copies in this
+ * directory remain the human-editable source; the .ts files mirror them and are
+ * what runs. Update both when iterating on voice — or regenerate the .ts files
+ * from the .md files.
  */
+
+import challenge from "./prompts/challenge.ts";
+import graduation from "./prompts/graduation.ts";
+import observerNote from "./prompts/observer_note.ts";
+import reflection from "./prompts/reflection.ts";
+import salienceGate from "./prompts/salience_gate.ts";
 
 export type PromptName =
   | "reflection"
@@ -16,14 +21,14 @@ export type PromptName =
   | "graduation"
   | "challenge";
 
-const cache = new Map<PromptName, string>();
+const PROMPTS: Record<PromptName, string> = {
+  reflection,
+  observer_note: observerNote,
+  salience_gate: salienceGate,
+  graduation,
+  challenge,
+};
 
-export async function loadPrompt(name: PromptName): Promise<string> {
-  const cached = cache.get(name);
-  if (cached) return cached;
-
-  const url = new URL(`./prompts/${name}.md`, import.meta.url);
-  const text = await Deno.readTextFile(url);
-  cache.set(name, text);
-  return text;
+export function loadPrompt(name: PromptName): Promise<string> {
+  return Promise.resolve(PROMPTS[name]);
 }
