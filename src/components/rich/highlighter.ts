@@ -46,14 +46,11 @@ async function getHighlighter(): Promise<HighlighterCore | null> {
   if (!highlighterPromise) {
     highlighterPromise = (async () => {
       try {
-        console.log('[hl] loading shiki…');
         const shiki = await import('shiki');
-        console.log('[hl] shiki module loaded');
         const hl = await shiki.createHighlighter({
           themes: ['github-dark-dimmed'],
           langs: ['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'bash', 'python', 'markdown'],
         });
-        console.log('[hl] highlighter ready');
         (globalThis as any).__shikiHl = hl;
         ['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'bash', 'python', 'markdown'].forEach((l) => loadedLangs.add(l));
         notify();

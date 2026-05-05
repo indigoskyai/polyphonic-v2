@@ -97,4 +97,23 @@ describe('threadStore.addMessage de-dupe', () => {
     });
     expect(useThreadStore.getState().messages).toHaveLength(2);
   });
+
+  it('patches an existing message locally', () => {
+    useThreadStore.setState({
+      messages: [{
+        id: 'm1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+        content: 'permission needed', model: null, agent: 'luca',
+        thinking_content: null, tokens_used: null, bookmarked: false,
+        kind: 'permission_request',
+        metadata: { permission_status: 'pending' },
+        created_at: new Date().toISOString(),
+      }],
+    });
+
+    useThreadStore.getState().patchMessage('m1', {
+      metadata: { permission_status: 'approved' },
+    });
+
+    expect(useThreadStore.getState().messages[0].metadata).toEqual({ permission_status: 'approved' });
+  });
 });

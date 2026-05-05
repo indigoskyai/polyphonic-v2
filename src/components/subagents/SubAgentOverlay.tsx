@@ -22,6 +22,7 @@ function formatDuration(start: number | null, end: number | null): string {
 
 export default function SubAgentOverlay() {
   const parentAgent = useSubAgentStore((s) => s.overlayOpenForParent);
+  const overlayThreadId = useSubAgentStore((s) => s.overlayThreadId);
   const agents = useSubAgentStore((s) => s.agents);
   const events = useSubAgentStore((s) => s.events);
   const selectedId = useSubAgentStore((s) => s.selectedAgentId);
@@ -42,8 +43,10 @@ export default function SubAgentOverlay() {
   }, [parentAgent, close]);
 
   const children = useMemo(
-    () => Object.values(agents).filter((a) => a.parentAgent === parentAgent).sort((a, b) => a.family.localeCompare(b.family)),
-    [agents, parentAgent],
+    () => Object.values(agents)
+      .filter((a) => a.parentAgent === parentAgent && (!overlayThreadId || a.threadId === overlayThreadId))
+      .sort((a, b) => a.family.localeCompare(b.family)),
+    [agents, parentAgent, overlayThreadId],
   );
 
   if (!parentAgent) return null;
@@ -91,7 +94,11 @@ export default function SubAgentOverlay() {
         <h3 className="overlay-section-title">Event log</h3>
         <ol className="overlay-events">
           {events
-            .filter((e) => !e.agentId || agents[e.agentId]?.parentAgent === parentAgent)
+            .filter((e) => {
+              if (!e.agentId) return true;
+              const agent = agents[e.agentId];
+              return agent?.parentAgent === parentAgent && (!overlayThreadId || agent.threadId === overlayThreadId);
+            })
             .slice(0, 40)
             .map((e, idx) => {
               const age = idx < 5 ? 'fresh' : idx < 15 ? 'aged' : 'ancient';

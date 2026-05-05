@@ -48,6 +48,7 @@ interface ThreadState {
   subscribeMessages: (threadId: string) => () => void;
   createThread: (userId: string, agentId?: string) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'>) => void;
+  patchMessage: (id: string, patch: Partial<Message>) => void;
   setStreaming: (s: boolean) => void;
   setStreamingContent: (c: string) => void;
   setStreamingThinking: (t: string) => void;
@@ -190,6 +191,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       created_at: new Date().toISOString(),
     };
     set({ messages: [...existing, message] });
+  },
+
+  patchMessage: (id, patch) => {
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    }));
   },
 
   setStreaming: (s) => set({ isStreaming: s }),

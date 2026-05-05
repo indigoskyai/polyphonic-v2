@@ -25,6 +25,7 @@ describe('subAgentStore remote sync', () => {
       agents: {},
       events: [],
       overlayOpenForParent: null,
+      overlayThreadId: null,
       selectedAgentId: null,
       pendingCancel: null,
     });
@@ -77,5 +78,15 @@ describe('subAgentStore remote sync', () => {
     start(row({ status: 'running', progress: 0.5 }));
     const after = useSubAgentStore.getState().agents['remote-11111111-1111-1111-1111-111111111111'];
     expect(after).toBe(before);
+  });
+
+  it('records overlay thread scope when opened from a chat strip', () => {
+    useSubAgentStore.getState().openOverlay('luca', 'remote-a', 'thread-2');
+    expect(useSubAgentStore.getState().overlayOpenForParent).toBe('luca');
+    expect(useSubAgentStore.getState().selectedAgentId).toBe('remote-a');
+    expect(useSubAgentStore.getState().overlayThreadId).toBe('thread-2');
+
+    useSubAgentStore.getState().closeOverlay();
+    expect(useSubAgentStore.getState().overlayThreadId).toBeNull();
   });
 });

@@ -21,7 +21,7 @@ export default function SubAgentRow({ parentAgent, threadId }: Props) {
     <div className="sa-row" role="group" aria-label={`${parentAgent} sub-agents`}>
       {list.map((agent, i) => (
         <span key={agent.id} style={{ animationDelay: `${i * 120}ms` } as React.CSSProperties}>
-          <SubAgentIndicator agent={agent} onClick={() => openOverlay(parentAgent, agent.id)} />
+          <SubAgentIndicator agent={agent} onClick={() => openOverlay(parentAgent, agent.id, threadId)} />
         </span>
       ))}
     </div>

@@ -21,7 +21,7 @@ import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
 import { useAttachmentStore, type Attachment } from '@/stores/attachmentStore';
-import type { MessageAttachment as PersistedAttachment } from '@/stores/threadStore';
+import type { Message, MessageAttachment as PersistedAttachment } from '@/stores/threadStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
@@ -373,6 +373,8 @@ function FreshMsgRow({ children, className = 'msg-row', style }: {
 }
 
 /* ─── Main ChatView ─── */
+type ModelKeyStatus = 'checking' | 'present' | 'missing' | 'unknown';
+
 export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
@@ -392,6 +394,7 @@ export default function ChatView() {
   const setCurrentThread = useThreadStore((s) => s.setCurrentThread);
   const createThread = useThreadStore((s) => s.createThread);
   const addMessage = useThreadStore((s) => s.addMessage);
+  const patchMessage = useThreadStore((s) => s.patchMessage);
   const setStreaming = useThreadStore((s) => s.setStreaming);
   const setStreamingContent = useThreadStore((s) => s.setStreamingContent);
   const setStreamingThinking = useThreadStore((s) => s.setStreamingThinking);
@@ -422,6 +425,7 @@ export default function ChatView() {
   const [ensembleArmed, setEnsembleArmed] = useState(false);
   const [ensembleLocked, setEnsembleLocked] = useState(false);
   const ensembleActive = ensembleArmed || ensembleLocked;
+  const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
@@ -463,6 +467,36 @@ export default function ChatView() {
   const clearAttachments = useAttachmentStore((s) => s.clear);
   const setAttachmentStatus = useAttachmentStore((s) => s.setStatus);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const modelKeyMissing = modelKeyStatus === 'missing';
+
+  useEffect(() => {
+    if (!user) {
+      setModelKeyStatus('unknown');
+      return;
+    }
+
+    let canceled = false;
+    setModelKeyStatus('checking');
+    (async () => {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data, error } = await supabase
+          .from('user_api_keys')
+          .select('key_preview')
+          .maybeSingle();
+        if (canceled) return;
+        if (error) {
+          setModelKeyStatus('unknown');
+          return;
+        }
+        setModelKeyStatus(data?.key_preview ? 'present' : 'missing');
+      } catch {
+        if (!canceled) setModelKeyStatus('unknown');
+      }
+    })();
+
+    return () => { canceled = true; };
+  }, [user?.id]);
 
   // Lingering streaming snapshot — keeps the streaming bubble mounted
   // after isStreaming flips to false, until the typewriter has caught up.
@@ -853,6 +887,52 @@ export default function ChatView() {
     );
   };
 
+  const renderModelKeyNotice = () => {
+    if (!modelKeyMissing || alcoveOpen) return null;
+    return (
+      <div className="composer-key-warning" role="status">
+        <span>No model key connected.</span>
+        <button type="button" onClick={() => navigate('/settings/models')}>Open Models</button>
+      </div>
+    );
+  };
+
+  const resolvePermissionMessage = useCallback(async (
+    msg: Message,
+    status: 'approved' | 'denied',
+    remember = false,
+  ) => {
+    if (!user) return;
+    const currentMeta = ((msg.metadata as Record<string, unknown> | null) || {});
+    const nextMeta = {
+      ...currentMeta,
+      permission_status: status,
+      permission_remember: remember,
+      permission_resolved_at: new Date().toISOString(),
+      permission_error: null,
+    };
+    patchMessage(msg.id, { metadata: nextMeta });
+
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { error } = await supabase
+        .from('messages')
+        .update({ metadata: nextMeta })
+        .eq('id', msg.id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not record permission response';
+      patchMessage(msg.id, {
+        metadata: {
+          ...currentMeta,
+          permission_status: 'pending',
+          permission_error: message,
+        },
+      });
+    }
+  }, [patchMessage, user]);
+
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming) return;
 
@@ -958,6 +1038,7 @@ export default function ChatView() {
   const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
     const replayAttachments = options?.attachments ?? null;
+    if (modelKeyMissing) return;
     if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming) return;
 
     // Dismiss welcome back on first message
@@ -1273,7 +1354,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, pendingAttachments.length, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, clearAttachments]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, clearAttachments]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1380,9 +1461,8 @@ export default function ChatView() {
     return useThreadStore.getState().threads.find(t => t.id === currentThreadId)?.title;
   }, [currentThreadId, messages]);
 
-  // B.6 — drag-and-drop overlay. Overlay is visible while user drags a file
-  // over the ChatView. Actual upload handler is a TODO — attachments schema
-  // not yet on the Message model (see AUDIT_PASS.md Open questions).
+  // Drag-and-drop overlay. File drops queue into the same pending attachment
+  // path as the paperclip control.
   const [isDragging, setIsDragging] = useState(false);
   const dragDepthRef = useRef(0);
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -1460,6 +1540,7 @@ export default function ChatView() {
                   e.currentTarget.value = '';
                 }}
               />
+              {renderModelKeyNotice()}
               {renderPendingAttachments()}
               <div className="input-row">
                 <textarea
@@ -1471,7 +1552,7 @@ export default function ChatView() {
                   onBlur={() => setFocused(false)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+                  placeholder={modelKeyMissing ? 'Add a model key to start chatting…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer">
@@ -1522,7 +1603,7 @@ export default function ChatView() {
                 <button
                   className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
                   onClick={() => sendMessage()}
-                  disabled={!input.trim() && pendingAttachments.length === 0}
+                  disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
                 >
                   <span className="send-icon">
                     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -1623,13 +1704,10 @@ export default function ChatView() {
                     title={md.title || 'Permission needed'}
                     body={md.body || msg.content}
                     details={md.details}
-                    onApprove={(remember) => {
-                      // TODO: wire to edge function once permission-action exists
-                      console.log('permission approved', { messageId: msg.id, remember });
-                    }}
-                    onDeny={() => {
-                      console.log('permission denied', { messageId: msg.id });
-                    }}
+                    status={(md.permission_status as 'pending' | 'approved' | 'denied' | undefined) || 'pending'}
+                    error={typeof md.permission_error === 'string' ? md.permission_error : undefined}
+                    onApprove={(remember) => { void resolvePermissionMessage(msg, 'approved', remember); }}
+                    onDeny={() => { void resolvePermissionMessage(msg, 'denied'); }}
                   />
                 </div>
               );
@@ -1651,7 +1729,6 @@ export default function ChatView() {
                       const idx = messages.findIndex((m) => m.id === msg.id);
                       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
                       if (prevUser) {
-                        setInput(prevUser.content);
                         void sendMessage({
                           text: prevUser.content,
                           attachments: (prevUser.attachments || []) as PersistedAttachment[],
@@ -1915,6 +1992,7 @@ export default function ChatView() {
             </div>
           </div>
 
+          {!alcoveOpen && renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
 
           {/* Textarea */}
@@ -1928,7 +2006,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? 'Ask the Observer...' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to continue…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -1986,7 +2064,7 @@ export default function ChatView() {
             <button
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
-              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? !input.trim() : (!input.trim() && pendingAttachments.length === 0))}
+              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? !input.trim() : (modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
             >
               <span className="send-icon">
                 <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">

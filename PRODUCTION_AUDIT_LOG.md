@@ -617,3 +617,41 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push this first Phase 2 milestone to `main`.
 2. Ask Lovable to redeploy `chat` and `chat-multi`.
 3. Rerun the attachment smoke in staged preview and confirm Luca can summarize the attached probe file from the runtime context.
+
+---
+
+## Phase 2 — Core Chat Sweep  [~] (2026-05-05)
+
+**Found**
+- Missing-key UX was reactive instead of preventive: users without a model key could create a thread and save a user message before seeing the key error.
+- Permission request cards had approve/deny controls that only logged to the console.
+- Agent-error retry still copied the failed prior user turn into the composer even though the resend now happens directly.
+- Sub-agent overlay filtering was parent-agent scoped but not thread-scoped, leaving room for stale lanes from older threads.
+- Rich content debug logs could print Shiki lifecycle messages, and markdown tables had no narrow-screen overflow protection.
+
+**Changed**
+- Added composer-level model-key status, a missing-key notice, settings shortcut, disabled send state, and a pre-send guard.
+- Wired permission cards to persist `permission_status`, `permission_remember`, and resolution metadata on the message row, with visible approved/denied/error states.
+- Removed retry's composer overwrite so retry does not disturb an in-progress user draft.
+- Scoped sub-agent overlay lanes/events to the thread that opened the strip.
+- Removed Shiki debug console logs and made markdown tables horizontally scrollable on narrow screens.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/edgeError.test.ts src/test/threadStore.test.ts` passed: 13 tests after thread-store patch coverage.
+- `npx vitest run src/test/subAgentStore.test.ts src/test/threadStore.test.ts` passed: 12 tests.
+- `npx vitest run src/test/CouncilPanelV2.test.tsx src/test/subAgentStore.test.ts src/test/threadStore.test.ts` passed: 26 tests. Known React Router future warnings and CouncilPanel `act(...)` warnings remain.
+- `npm run verify` passed: full typecheck, 209 unit tests, integration placeholder, and production build.
+- Local Playwright desktop smoke on `http://127.0.0.1:8081/chat/d610e341-4bd9-4b56-9532-b3c385ef3763` streamed the expected assistant response `streaming ok`.
+- Local Playwright mobile check at `390x844` confirmed the composer and attachment chip fit without overlap.
+- Browser console showed 0 errors; only known React Router future warnings appeared.
+
+**Remaining risks**
+- P2-001 still needs Lovable/Supabase redeploy of `chat` and `chat-multi` before live model-context attachment verification.
+- P2-002 missing-key branch still needs a no-key account or controlled no-key smoke before marking `Verified`.
+- P2-003 permission-card resolution still needs a live generated permission request before marking `Verified`.
+- CouncilPanel test `act(...)` warnings remain a test-harness debt, not a runtime failure.
+
+**Next**
+1. Commit and push this Phase 2 core chat sweep milestone.
+2. Continue Phase 2 with council-mode live smoke, observer/guardian error UX, and deeper markdown/code/table visual checks in a real message.

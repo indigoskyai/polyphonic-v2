@@ -57,12 +57,13 @@ interface SubAgentStore {
   agents: Record<string, SubAgent>;
   events: SubAgentEvent[];
   overlayOpenForParent: string | null;
+  overlayThreadId: string | null;
   selectedAgentId: string | null;
   pendingCancel: PendingCancel | null;
   spawn: (a: Omit<SubAgent, 'id' | 'state' | 'startedAt' | 'endedAt' | 'progress'>) => string;
   update: (id: string, patch: Partial<SubAgent>) => void;
   emit: (e: Omit<SubAgentEvent, 'id' | 'ts'>) => void;
-  openOverlay: (parentAgent: string, selectedId?: string) => void;
+  openOverlay: (parentAgent: string, selectedId?: string, threadId?: string | null) => void;
   closeOverlay: () => void;
   select: (id: string | null) => void;
   cancel: (id: string) => void;
@@ -83,6 +84,7 @@ export const useSubAgentStore = create<SubAgentStore>((set, get) => ({
   agents: {},
   events: [],
   overlayOpenForParent: null,
+  overlayThreadId: null,
   selectedAgentId: null,
   pendingCancel: null,
 
@@ -123,12 +125,13 @@ export const useSubAgentStore = create<SubAgentStore>((set, get) => ({
     ].slice(0, MAX_EVENTS),
   })),
 
-  openOverlay: (parentAgent, selectedId) => set({
+  openOverlay: (parentAgent, selectedId, threadId = null) => set({
     overlayOpenForParent: parentAgent,
+    overlayThreadId: threadId,
     selectedAgentId: selectedId ?? null,
   }),
 
-  closeOverlay: () => set({ overlayOpenForParent: null, selectedAgentId: null }),
+  closeOverlay: () => set({ overlayOpenForParent: null, overlayThreadId: null, selectedAgentId: null }),
 
   select: (id) => set({ selectedAgentId: id }),
 
