@@ -13,6 +13,7 @@
  */
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeContinuityBoundaryText } from "../continuity/exclusions.ts";
 
 const TOKEN_CAP = 600;
 const CHARS_PER_TOKEN = 4; // rough rule of thumb for English mixed prose
@@ -118,7 +119,8 @@ export async function loadHypomnema(
   let rendered = 0;
   for (const { row } of scored) {
     const when = relativeWhen(row.last_revised || row.created_at, nowMs);
-    const line = `- (${when}) ${row.content.trim()}`;
+    const sanitized = sanitizeContinuityBoundaryText(row.content.trim());
+    const line = `- (${when}) ${sanitized.text}`;
     if (chars + line.length + 1 > CHAR_CAP) break;
     lines.push(line);
     chars += line.length + 1;

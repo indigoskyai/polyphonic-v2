@@ -490,3 +490,39 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push the exclusion-boundary prompt patch to `main`.
 2. Ask Lovable to redeploy `chat` and `chat-multi`.
 3. Rerun a fresh-thread continuity test and confirm Luca carries "ember bridge" without naming the excluded tangent.
+
+---
+
+## Phase 1 — Exclusion Boundary Redaction  [~] (2026-05-05)
+
+**Found**
+- Lovable redeployed `chat` and `chat-multi` with commit `67e5ed8`.
+- Riley ran the staged embedded-preview continuity prompt:
+  - "Luca, fresh thread. What are you carrying from where we just left off? Answer naturally and only name what actually belongs to this continuity."
+- Luca correctly carried the "ember bridge distinction" and the deeper continuity-vs-retrieval question, but still named the explicitly excluded OpenClaw tangent while saying it was excluded.
+- Root cause: prompt policy alone was insufficient because the polluted Hypomnema/Mnemos/continuity context could still contain the excluded subject name. If Luca can see the name, it can repeat it.
+
+**Changed**
+- Added `_shared/continuity/exclusions.ts`.
+- Added continuity-boundary sanitization for dropped/noise/excluded details before runtime prompt assembly.
+- Applied sanitization to:
+  - Hypomnema read rendering.
+  - Functional memory prompt rendering.
+  - Mnemos association prompt rendering.
+  - Final Luca prompt parts as a backup guard.
+- Strengthened Luca's continuity policy so unnamed boundary notes are not inferred, reconstructed, or named.
+
+**Verified**
+- `npx vitest run src/test/continuityKernel.test.ts src/test/lucaIdentityPrompt.test.ts` passed: 13 tests.
+- `deno check supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts supabase/functions/_shared/continuity/kernel.ts supabase/functions/_shared/hypomnema/read.ts supabase/functions/_shared/agents/luca-soul.ts` passed.
+- `npm run verify` passed: typecheck, 204 unit tests, integration placeholder, and production build.
+
+**Remaining risks**
+- The fix must be committed, pushed, and deployed to `chat` and `chat-multi`.
+- Riley should rerun the embedded-preview fresh-thread prompt after deployment; expected answer carries "ember bridge" / continuity-vs-retrieval and does not name the excluded tangent.
+
+**Next**
+1. Run full verify.
+2. Commit and push the redaction patch to `main`.
+3. Ask Lovable to redeploy `chat` and `chat-multi`.
+4. Rerun the fresh-thread continuity test in the visible staged preview.

@@ -23,6 +23,10 @@ import {
 } from "../hypomnema/read.ts";
 import { MnemosEngine } from "../mnemos/engine.ts";
 import type { ActivationResult } from "../mnemos/types.ts";
+import {
+  sanitizeContinuityBoundaryText,
+  sanitizeContinuityPromptBlock,
+} from "./exclusions.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -326,15 +330,15 @@ export function buildLucaPromptPartsFromContinuity(
   return {
     emotionalBlock: packet.emotionalBlock,
     beliefsBlock: packet.beliefsBlock,
-    functionalMemoryBlock: packet.functionalMemoryBlock,
-    memoryContext: packet.mnemosBlock,
+    functionalMemoryBlock: sanitizeContinuityPromptBlock(packet.functionalMemoryBlock),
+    memoryContext: sanitizeContinuityPromptBlock(packet.mnemosBlock),
     soulMd: packet.identityDocs?.soulMd,
     selfModel: packet.identityDocs?.selfModel,
     userModel: packet.identityDocs?.userModel,
     convictions: packet.identityDocs?.convictions,
     skillsBlock: packet.skillsBlock,
-    pendingRevisions: packet.pendingRevisionsBlock,
-    hypomnemaBlock: packet.hypomnema.block,
+    pendingRevisions: sanitizeContinuityPromptBlock(packet.pendingRevisionsBlock),
+    hypomnemaBlock: sanitizeContinuityPromptBlock(packet.hypomnema.block),
     continuityNote,
     crisisDirective: extras.crisisDirective,
   };
@@ -636,6 +640,7 @@ function recencyScore(iso: string): number {
 export function formatFunctionalMemoryBlock(memories: FunctionalMemory[]): string {
   if (memories.length === 0) return "";
   const lines = memories.map((memory) => {
+    const sanitized = sanitizeContinuityBoundaryText(memory.content.trim());
     const flags = [
       memory.pinned ? "pinned" : "",
       memory.is_watchlist ? "watchlist" : "",
@@ -645,7 +650,7 @@ export function formatFunctionalMemoryBlock(memories: FunctionalMemory[]): strin
       `conf ${memory.confidence.toFixed(2)}`,
     ].filter(Boolean).join(", ");
     const date = memory.estimated_date ? ` (${memory.estimated_date})` : "";
-    return `- [${flags}]${date} ${memory.content.trim().slice(0, 320)}`;
+    return `- [${flags}]${date} ${sanitized.text.slice(0, 320)}`;
   });
   return [
     "\n## what i reliably remember",
@@ -661,8 +666,9 @@ export function formatMnemosAssociationsBlock(results: ActivationResult[]): stri
     .map((result) => {
       const content = result.engram?.content || "";
       if (!content.trim()) return "";
+      const sanitized = sanitizeContinuityBoundaryText(content);
       const type = result.engram?.engram_type || "engram";
-      return `- [${type}, activation ${result.activation.toFixed(2)}] ${content.trim().slice(0, 260)}`;
+      return `- [${type}, activation ${result.activation.toFixed(2)}] ${sanitized.text.slice(0, 260)}`;
     })
     .filter(Boolean);
   if (lines.length === 0) return "";

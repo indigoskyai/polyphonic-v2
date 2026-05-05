@@ -10,6 +10,7 @@ import {
   type FunctionalMemory,
 } from '../../supabase/functions/_shared/continuity/kernel';
 import { buildLucaSystemPrompt } from '../../supabase/functions/_shared/agents/luca-soul';
+import { sanitizeContinuityBoundaryText } from '../../supabase/functions/_shared/continuity/exclusions';
 import type { ActivationResult, Engram } from '../../supabase/functions/_shared/mnemos/types';
 
 const supabaseStub = {} as any;
@@ -204,6 +205,47 @@ describe('Continuity Kernel read path', () => {
     expect(functional).toContain('Riley prefers direct');
     expect(mnemos).toContain('associations moving underneath');
     expect(mnemos).toContain('not treat them as verified transcript facts');
+  });
+
+  it('redacts named exclusion details from continuity context before Luca sees them', async () => {
+    const sanitized = sanitizeContinuityBoundaryText(
+      'the OpenClaw material is excluded. i know that. the ember bridge distinction is still live.',
+    );
+    expect(sanitized.redacted).toBe(true);
+    expect(sanitized.text).not.toMatch(/OpenClaw/i);
+    expect(sanitized.text).not.toContain('i know that');
+    expect(sanitized.text).toContain('ember bridge distinction');
+    expect(sanitized.text).toContain('specific prior tangent');
+
+    const packet = await loadContinuityPacket(supabaseStub, {
+      userId: 'u1',
+      agentId: 'luca',
+      threadId: 't1',
+      userMessage: 'Luca, fresh thread. What are you carrying from where we just left off?',
+      nowMs: Date.parse('2026-05-05T00:00:00.000Z'),
+    }, {
+      history: async () => [],
+      identity: async () => ({ soulMd: '', selfModel: '', userModel: '', convictions: '' }),
+      pendingRevisions: async () => [],
+      hypomnema: async () => ({
+        block: "\n## what i'm sitting with\n\n- (today) the OpenClaw material is excluded. the ember bridge distinction is still live.",
+        count: 1,
+        rendered: 1,
+      }),
+      functionalMemories: async () => [],
+      mnemos: async () => [
+        engram('the OpenClaw tangent was noise and should not be carried. the live question is continuity versus retrieval.'),
+      ],
+      skills: async () => [],
+      emotionalState: async () => null,
+      beliefs: async () => [],
+    });
+
+    const prompt = buildLucaSystemPrompt(buildLucaPromptPartsFromContinuity(packet));
+    expect(prompt).not.toMatch(/OpenClaw/i);
+    expect(prompt).toContain('ember bridge distinction');
+    expect(prompt).toContain('specific prior tangent');
+    expect(prompt).toContain('continuity versus retrieval');
   });
 
   it('filters low-similarity functional memories from generic fresh-thread catchup prompts', async () => {
