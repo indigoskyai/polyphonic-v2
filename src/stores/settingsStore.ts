@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 
-interface Settings {
+export interface Settings {
   default_model: string;
   synthesis_style: string;
   stream_responses: boolean;
@@ -25,7 +25,7 @@ interface SettingsState extends Settings {
   updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => Promise<void>;
 }
 
-const defaults: Settings = {
+export const defaultSettings: Settings = {
   default_model: 'anthropic/claude-opus-4-7',
   synthesis_style: 'conversational',
   stream_responses: true,
@@ -51,7 +51,7 @@ const defaults: Settings = {
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  ...defaults,
+  ...defaultSettings,
   loaded: false,
 
   loadSettings: async (userId) => {
@@ -61,7 +61,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       .eq('user_id', userId)
       .single();
     if (data) {
-      set({ ...defaults, ...data, loaded: true });
+      set({ ...defaultSettings, ...data, loaded: true });
     } else {
       set({ loaded: true });
     }

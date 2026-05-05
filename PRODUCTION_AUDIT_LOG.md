@@ -1184,3 +1184,29 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Run `npm run verify`.
 2. Commit and push the contrast-token milestone to `main`.
 3. Continue Phase 5 route-timing and final launch checklist gates.
+
+---
+
+## Phase 4 — Google Auth Entry Points and Logout Cleanup  [x] (2026-05-05)
+
+**Changed**
+- Added a shared auth redirect/OAuth helper for Supabase Google sign-in.
+- Added "Continue with Google" to login and signup screens without changing the existing email/password flow.
+- Reused the shared redirect builder for password recovery and email signup callbacks.
+- Added `resetClientSessionStores()` and wired sign-out to clear account-scoped client stores plus realtime channels.
+- Added visible sign-out progress/error state in account settings.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/authFlow.test.ts src/test/sessionReset.test.ts` passed.
+- Local browser smoke on `http://127.0.0.1:8081/auth/login`, `/auth/signup`, and `/reset-password` covered desktop plus 390px mobile auth surfaces with 0 console warnings/errors and 0 visible overflow.
+- Browser screenshots written to `output/playwright/auth-login-desktop.png`, `auth-login-mobile.png`, `auth-signup-mobile.png`, and `auth-reset-mobile.png`.
+
+**Remaining risks**
+- Hosted Google OAuth is not green until Lovable/Supabase confirms provider credentials, redirect allowlist, and real signup/login round trips.
+- Real transactional email recovery still needs hosted email delivery verification.
+
+**Next**
+1. Run `npm run verify`.
+2. Commit and push the auth provider/logout milestone to `main`.
+3. Fold Lovable's hosted auth report into the launch checklist when it returns.

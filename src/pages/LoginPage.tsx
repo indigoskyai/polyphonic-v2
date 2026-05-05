@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable';
+import { authRedirectTo, signInWithGoogle } from '@/lib/authFlow';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -28,7 +28,7 @@ export default function LoginPage() {
     if (!email) { setError('Enter your email above first.'); return; }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: authRedirectTo('/reset-password'),
     });
     setLoading(false);
     // Avoid email-enumeration: never reveal whether the address is registered.
@@ -37,17 +37,16 @@ export default function LoginPage() {
   };
 
   const handleGoogle = async () => {
-    setError(''); setInfo('');
+    setError('');
+    setInfo('');
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth('google', {
-      redirect_uri: `${window.location.origin}/chat`,
-    });
-    if (result.error) {
-      setError(result.error.message ?? 'Google sign-in failed');
+    const { error, redirected } = await signInWithGoogle();
+    if (error) {
+      setError(error);
       setLoading(false);
       return;
     }
-    if (!result.redirected) {
+    if (!redirected) {
       navigate('/chat');
     }
   };
@@ -115,6 +114,50 @@ export default function LoginPage() {
               ? (forgotMode ? 'Sending…' : 'Signing in...')
               : (forgotMode ? 'Send reset link' : 'Sign in')}
           </button>
+          {!forgotMode && (
+            <>
+              <div
+                aria-hidden="true"
+                className="flex items-center gap-3"
+                style={{ color: 'var(--text-ghost)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+              >
+                <span className="h-px flex-1" style={{ background: 'var(--border-faint)' }} />
+                <span>or</span>
+                <span className="h-px flex-1" style={{ background: 'var(--border-faint)' }} />
+              </div>
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={loading}
+                aria-label="Continue with Google"
+                className="h-10 text-sm font-medium rounded-[var(--radius-md)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                style={{
+                  background: 'var(--bg-void)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-sans)',
+                  opacity: loading ? 0.55 : 1,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                  }}
+                >
+                  G
+                </span>
+                Continue with Google
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => { setForgotMode((v) => !v); setError(''); setInfo(''); }}
@@ -124,21 +167,6 @@ export default function LoginPage() {
             {forgotMode ? 'Back to sign in' : 'Forgot password?'}
           </button>
         </form>
-
-        {!forgotMode && (
-          <>
-            <div className="my-4 text-[10px] text-center" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>OR</div>
-            <button
-              type="button"
-              onClick={handleGoogle}
-              disabled={loading}
-              className="w-full h-10 text-sm font-medium rounded-[var(--radius-md)] cursor-pointer"
-              style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
-            >
-              Continue with Google
-            </button>
-          </>
-        )}
 
         <p className="mt-6 text-xs text-center" style={{ color: 'var(--text-ghost)' }}>
           No account?{' '}

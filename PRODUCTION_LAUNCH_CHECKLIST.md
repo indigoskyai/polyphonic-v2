@@ -20,9 +20,9 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 
 ## Auth
 - [ ] Email signup → confirmation → login round-trip green on staging
-- [ ] Google OAuth signup → login round-trip green on staging
+- [ ] Google OAuth signup → login round-trip green on staging (repo UI/helper wired; hosted provider config/report pending)
 - [ ] Forgot-password → email → `/reset-password` → new password → login green
-- [ ] Logout fully clears client state (no stale data on next user's login)
+- [ ] Logout fully clears client state (repo-side reset verified locally; staging smoke pending)
 
 ## Functional
 - [ ] Every route in app loads without console errors on a fresh account

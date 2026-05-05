@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { resetClientSessionStores } from '@/stores/sessionReset';
 
 interface AuthState {
   session: Session | null;
@@ -16,7 +17,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
   initialize: () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          resetClientSessionStores();
+        }
         set({ session, user: session?.user ?? null, loading: false });
       }
     );
@@ -26,7 +30,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     return () => subscription.unsubscribe();
   },
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ session: null, user: null });
+    const { error } = await supabase.auth.signOut();
+    resetClientSessionStores();
+    set({ session: null, user: null, loading: false });
+    if (error) throw error;
   },
 }));
