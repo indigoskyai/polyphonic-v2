@@ -125,6 +125,21 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {!forgotMode && (
+          <>
+            <div className="my-4 text-[10px] text-center" style={{ color: 'var(--text-ghost)', letterSpacing: '0.08em' }}>OR</div>
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={loading}
+              className="w-full h-10 text-sm font-medium rounded-[var(--radius-md)] cursor-pointer"
+              style={{ background: 'var(--bg-void)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
+            >
+              Continue with Google
+            </button>
+          </>
+        )}
+
         <p className="mt-6 text-xs text-center" style={{ color: 'var(--text-ghost)' }}>
           No account?{' '}
           <Link to="/auth/signup" className="underline" style={{ color: 'var(--text-tertiary)' }}>
