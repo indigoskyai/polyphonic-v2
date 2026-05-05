@@ -774,3 +774,40 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Run `npm run verify`.
 2. Commit and push the attachment redeploy retest update.
+
+---
+
+## Phase 2 — Closeout Verification  [x] (2026-05-05)
+
+**Done**
+- Closed the last Phase 2 verification gaps after the attachment edge redeploy.
+- Verified missing-key UX without mutating the real OpenRouter key by copying the authenticated local browser profile into a temporary Playwright profile and intercepting only the `user_api_keys` read as empty.
+- Re-ran drag-overlay cleanup verification after reload with a synthetic file drag path.
+
+**Verified**
+- No-key controlled browser session:
+  - `user_api_keys` reads intercepted: `1`.
+  - `chat-multi` calls: `0`.
+  - `chat-guardian` calls: `0`.
+  - Console errors: `0`.
+  - Main chat placeholder: `Add a model key to continue...`.
+  - Observer placeholder: `Add a model key to ask Observer...`.
+  - Send button stayed disabled before and after typing in both main chat and Observer.
+  - Screenshot: `output/playwright/phase2-no-key-controlled-session-thread.png`.
+- Drag overlay browser smoke:
+  - File `dragenter` showed `.drag-overlay[data-visible=true]`.
+  - Global `dragend` cleared the overlay.
+  - A second file `dragenter` showed it again.
+  - Browser `blur` cleared it again.
+  - Console errors: `0`.
+  - Screenshot: `output/playwright/phase2-drag-overlay-reset.png`.
+- `npm run verify` passed: typecheck, 209 unit tests, integration placeholder, and production build.
+- P2-001 through P2-010 are now `Verified`.
+
+**Remaining risks**
+- Phase 2 has no active blockers.
+- Known residual release risks remain deferred: full lint baseline debt, chunk-size warnings, and React Router future warnings.
+
+**Next**
+1. Commit and push the Phase 2 closeout tracker update.
+2. Begin Phase 3 surface-by-surface product QA.
