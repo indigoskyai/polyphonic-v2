@@ -22,10 +22,12 @@ export default function MemoryView() {
   const mode = useViewTabStore((s) => s.mnemosMode);
   const user = useAuthStore((s) => s.user);
   const loadAll = useMemoryStore((s) => s.loadAll);
+  const loadErrors = useMemoryStore((s) => s.loadErrors);
+  const loadErrorEntries = Object.entries(loadErrors);
 
   useEffect(() => {
     if (user) loadAll(user.id);
-  }, [user]);
+  }, [user, loadAll]);
 
   return (
     <div
@@ -42,6 +44,23 @@ export default function MemoryView() {
           className="flex-1 overflow-y-auto"
           style={{ padding: mode === 'browse' && activeTab === 'Graph' ? 0 : undefined }}
         >
+          {loadErrorEntries.length > 0 && (
+            <div
+              role="status"
+              style={{
+                margin: '16px 24px 0',
+                padding: '12px 14px',
+                border: '1px solid var(--border-faint)',
+                borderRadius: 8,
+                background: 'var(--surface-raised)',
+                color: 'var(--text-soft)',
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              Memory layer load issue: {loadErrorEntries.map(([layer]) => layer).join(', ')}.
+            </div>
+          )}
           {mode === 'digest' ? (
             <DailyDigest />
           ) : (

@@ -323,3 +323,33 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Push the write-path milestone to `main`.
 2. Use browser verification for the fresh-thread continuity script and inspect memory surfaces/database writes.
+
+---
+
+## Phase 1 — Live Continuity + Memory UI Verification  [~] (2026-05-05)
+
+**Done**
+- Ran the fresh-thread continuity script against the local app.
+- Confirmed a substantive continuity seed turn wrote a new active Mnemos engram.
+- Opened a fresh thread and asked a natural follow-up; Luca recalled the memory-system simplification and the "amber loom" phrase without explaining memory mechanics.
+- Hardened `/memory` Mnemos loading:
+  - Engram UI queries now select only rendered fields instead of substrate-heavy columns.
+  - Nullable engram rows are normalized before reaching cards, graph, sidebar, or realtime updates.
+  - Per-layer memory load errors are recorded and surfaced on the Memory page instead of silently becoming empty states.
+  - `loadAll` now loads reliable functional memories along with engrams, connections, and beliefs.
+
+**Verified**
+- `npx vitest run src/test/memoryStore.test.ts` passed.
+- `npx tsc --noEmit` passed.
+- Authenticated database inspection showed 925 Mnemos engrams, 481 functional memories, 31 beliefs, and 0 Hypomnema entries for the test account.
+- Browser `/memory` at `http://127.0.0.1:8080/memory` showed 500 loaded engrams, the latest "amber loom" formation, no false "No engrams yet" empty state, no visible memory load issue banner, and only known React Router future-flag warnings.
+- Browser `/profile/identity` still shows the Hypomnema section empty.
+
+**Found**
+- Mnemos is carrying cross-thread continuity today, but the recalled answer still had a slightly mechanical explanation shape. This should improve once Hypomnema is active because the present-continuity layer can bias Luca toward sitting-with rather than retrieval-shaped narration.
+- Live Hypomnema activation is blocked by deployed backend state: the gate/write functions are service-role only and feature-flagged by `MEMORY_AUGMENTATION_ENABLED` / `MEMORY_AUGMENTATION_USER_ALLOWLIST`; this workspace does not have Supabase CLI/service-secret access to inspect logs, deploy edge functions, or enable the flag.
+
+**Next**
+1. Enable or verify memory augmentation for the test account in Supabase/Lovable and deploy the latest edge functions if the hosted functions are stale.
+2. Rerun the fresh-thread continuity script and confirm Hypomnema entries appear in `/profile/identity`.
+3. Once Hypomnema is live, tune Luca's continuity voice away from explicit retrieval language and toward direct lived carry-over.

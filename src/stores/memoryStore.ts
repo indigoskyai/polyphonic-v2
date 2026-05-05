@@ -1,6 +1,31 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 
+const ENGRAM_STATES = ['active', 'consolidating', 'dormant', 'archived'] as const;
+const ENGRAM_TYPES = ['episodic', 'semantic', 'procedural', 'belief'] as const;
+
+type MemoryLoadLayer = 'memories' | 'engrams' | 'connections' | 'beliefs';
+
+export const ENGRAM_UI_SELECT = [
+  'id',
+  'user_id',
+  'content',
+  'engram_type',
+  'strength',
+  'stability',
+  'accessibility',
+  'emotional_valence',
+  'emotional_arousal',
+  'surprise_score',
+  'source_context',
+  'tags',
+  'state',
+  'last_accessed_at',
+  'access_count',
+  'created_at',
+  'updated_at',
+].join(',');
+
 export interface Engram {
   id: string;
   user_id: string;
@@ -81,9 +106,11 @@ interface MemoryState {
   selectedEngram: Engram | null;
   filters: MemoryFilters;
   loading: boolean;
+  loadErrors: Partial<Record<MemoryLoadLayer, string>>;
   setSelectedEngram: (engram: Engram | null) => void;
   setFilters: (filters: Partial<MemoryFilters>) => void;
   setMemories: (memories: Memory[]) => void;
+  clearLoadErrors: () => void;
   loadEngrams: (userId: string) => Promise<void>;
   loadConnections: (userId: string) => Promise<void>;
   loadBeliefs: (userId: string) => Promise<void>;
@@ -95,18 +122,87 @@ interface MemoryState {
   removeConnection: (id: string) => void;
 }
 
-export const useMemoryStore = create<MemoryState>((set, get) => ({
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback;
+}
+
+function tagsOrEmpty(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : [];
+}
+
+function isEngramState(value: unknown): value is Engram['state'] {
+  return typeof value === 'string' && (ENGRAM_STATES as readonly string[]).includes(value);
+}
+
+function isEngramType(value: unknown): value is Engram['engram_type'] {
+  return typeof value === 'string' && (ENGRAM_TYPES as readonly string[]).includes(value);
+}
+
+export function normalizeEngramRow(row: Record<string, unknown>): Engram {
+  const now = new Date().toISOString();
+
+  return {
+    id: String(row.id ?? ''),
+    user_id: String(row.user_id ?? ''),
+    content: String(row.content ?? ''),
+    engram_type: isEngramType(row.engram_type) ? row.engram_type : 'episodic',
+    strength: numberOr(row.strength, 0),
+    stability: numberOr(row.stability, 0),
+    accessibility: numberOr(row.accessibility, 0),
+    emotional_valence: numberOr(row.emotional_valence, 0),
+    emotional_arousal: numberOr(row.emotional_arousal, 0),
+    surprise_score: numberOr(row.surprise_score, 0),
+    source_context: (row.source_context && typeof row.source_context === 'object' && !Array.isArray(row.source_context))
+      ? row.source_context as Record<string, unknown>
+      : {},
+    tags: tagsOrEmpty(row.tags),
+    state: isEngramState(row.state) ? row.state : 'active',
+    last_accessed_at: stringOr(row.last_accessed_at, stringOr(row.created_at, now)),
+    access_count: numberOr(row.access_count, 0),
+    created_at: stringOr(row.created_at, now),
+    updated_at: stringOr(row.updated_at, stringOr(row.created_at, now)),
+  };
+}
+
+function formatLoadError(error: { message?: string; code?: string; details?: string; hint?: string } | null): string {
+  if (!error) return 'Unknown load failure.';
+  return [error.message, error.code, error.details, error.hint].filter(Boolean).join(' ');
+}
+
+export const useMemoryStore = create<MemoryState>((set, get) => {
+  const setLoadError = (layer: MemoryLoadLayer, error: { message?: string; code?: string; details?: string; hint?: string } | null) => {
+    const message = formatLoadError(error);
+    console.warn(`[memoryStore] ${layer} load failed: ${message}`);
+    set((state) => ({ loadErrors: { ...state.loadErrors, [layer]: message } }));
+  };
+
+  const clearLoadError = (layer: MemoryLoadLayer) => {
+    set((state) => {
+      if (!state.loadErrors[layer]) return {};
+      const next = { ...state.loadErrors };
+      delete next[layer];
+      return { loadErrors: next };
+    });
+  };
+
+  return ({
   engrams: [],
   connections: [],
   beliefs: [],
   memories: [],
   selectedEngram: null,
   loading: false,
+  loadErrors: {},
   filters: { engram_type: null, state: null, sort: 'recency', search: '' },
 
   setSelectedEngram: (engram) => set({ selectedEngram: engram }),
   setFilters: (partial) => set({ filters: { ...get().filters, ...partial } }),
   setMemories: (memories) => set({ memories }),
+  clearLoadErrors: () => set({ loadErrors: {} }),
 
   loadMemories: async (userId) => {
     const { data, error } = await supabase
@@ -116,17 +212,27 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(1000);
-    if (!error && data) set({ memories: data as Memory[] });
+    if (error) {
+      setLoadError('memories', error);
+      return;
+    }
+    clearLoadError('memories');
+    set({ memories: (data ?? []) as Memory[] });
   },
 
   loadEngrams: async (userId) => {
     const { data, error } = await supabase
       .from('engrams')
-      .select('*')
+      .select(ENGRAM_UI_SELECT)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(500);
-    if (!error && data) set({ engrams: data as Engram[] });
+    if (error) {
+      setLoadError('engrams', error);
+      return;
+    }
+    clearLoadError('engrams');
+    set({ engrams: (data ?? []).map((row) => normalizeEngramRow(row as Record<string, unknown>)) });
   },
 
   loadConnections: async (userId) => {
@@ -135,7 +241,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       .select('*')
       .eq('user_id', userId)
       .limit(2000);
-    if (!error && data) set({ connections: data as Connection[] });
+    if (error) {
+      setLoadError('connections', error);
+      return;
+    }
+    clearLoadError('connections');
+    set({ connections: (data ?? []) as Connection[] });
   },
 
   loadBeliefs: async (userId) => {
@@ -144,17 +255,26 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       .select('*')
       .eq('user_id', userId)
       .order('confidence', { ascending: false });
-    if (!error && data) set({ beliefs: data as Belief[] });
+    if (error) {
+      setLoadError('beliefs', error);
+      return;
+    }
+    clearLoadError('beliefs');
+    set({ beliefs: (data ?? []) as Belief[] });
   },
 
   loadAll: async (userId) => {
     set({ loading: true });
-    await Promise.all([
-      get().loadEngrams(userId),
-      get().loadConnections(userId),
-      get().loadBeliefs(userId),
-    ]);
-    set({ loading: false });
+    try {
+      await Promise.all([
+        get().loadMemories(userId),
+        get().loadEngrams(userId),
+        get().loadConnections(userId),
+        get().loadBeliefs(userId),
+      ]);
+    } finally {
+      set({ loading: false });
+    }
   },
 
   upsertEngram: (e) => {
@@ -179,4 +299,5 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
   removeConnection: (id) => set({ connections: get().connections.filter((c) => c.id !== id) }),
-}));
+  });
+});

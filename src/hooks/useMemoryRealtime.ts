@@ -6,7 +6,7 @@
  */
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemoryStore, type Engram, type Connection } from '@/stores/memoryStore';
+import { normalizeEngramRow, useMemoryStore, type Connection } from '@/stores/memoryStore';
 
 export function useMemoryRealtime(userId: string | undefined) {
   const upsertEngram = useMemoryStore((s) => s.upsertEngram);
@@ -27,7 +27,7 @@ export function useMemoryRealtime(userId: string | undefined) {
             const id = (payload.old as { id?: string })?.id;
             if (id) removeEngram(id);
           } else {
-            const row = payload.new as Engram;
+            const row = normalizeEngramRow(payload.new as Record<string, unknown>);
             if (row?.id) upsertEngram(row);
           }
         }
