@@ -10,11 +10,13 @@ describe('OpenRouter Agent SDK runtime gate', () => {
   it('keeps the SDK path Luca-only, feature-gated, and before the legacy tool planner', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
 
-    const gateIndex = source.indexOf('if (agentIsSystemLuca && isOpenRouterAgentRuntimeEnabled(userId))');
+    const gateIndex = source.indexOf('if (agentIsSystemLuca && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
     const legacyPlannerIndex = source.indexOf('const toolMessages = await runToolPlanner');
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');
     expect(source).toContain('openRouterAgentSdkStream({');
+    expect(source).toContain('agent_mode: agentMode');
+    expect(source).toContain('const sdkRuntimeRequested');
     expect(gateIndex).toBeGreaterThan(-1);
     expect(legacyPlannerIndex).toBeGreaterThan(-1);
     expect(gateIndex).toBeLessThan(legacyPlannerIndex);
@@ -45,5 +47,15 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).not.toContain('workspace_file');
     expect(source).not.toContain('local filesystem');
     expect(source).not.toContain('terminal');
+  });
+
+  it('keeps agent runtime opt-in from the composer so normal chat stays fast', () => {
+    const source = readRepoFile('src/pages/ChatView.tsx');
+
+    expect(source).toContain('const [agentModeArmed, setAgentModeArmed] = useState(false)');
+    expect(source).toContain("agent_mode: agentModeActive ? 'agent' : 'chat'");
+    expect(source).toContain('agentModePillClass');
+    expect(source).toContain('>agent</button>');
+    expect(source).toContain("Message Luca (agent)");
   });
 });

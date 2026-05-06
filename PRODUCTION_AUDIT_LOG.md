@@ -1487,3 +1487,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push to `main`.
 2. Ask Lovable to redeploy `chat-multi` and set `OPENROUTER_AGENT_SDK_ENABLED=true` only when ready for staged tool-call smoke.
+
+---
+
+## Agent Runtime UX — Fast Chat Default  [x] (2026-05-06)
+
+**Changed**
+- Added an explicit Agent composer pill for Luca so the OpenRouter Agent SDK path is opt-in per message.
+- `chat-multi` now requires both the hosted `OPENROUTER_AGENT_SDK_ENABLED=true` flag and a request-level agent mode before entering the SDK loop.
+- Regular Luca messages now send `agent_mode:"chat"` and keep the faster legacy planner/single-model/council fallback path.
+- The Agent pill auto-disarms after a streamed turn and clears if the user switches away from Luca.
+- Deduped thread rows in the shared thread store so the sidebar does not emit duplicate-key warnings after local thread creation/reload races.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/_shared/agent-runtime/openrouter-agent.ts` passed.
+- `npx vitest run src/test/openRouterAgentRuntime.test.ts src/test/threadStore.test.ts --reporter=verbose` passed: 10 tests.
+- Local browser smoke against `http://127.0.0.1:8080/chat` captured normal send as `agent_mode:"chat"` and Agent-pill send as `agent_mode:"agent"`, with `ensemble:false` for both and no console errors/warnings after thread dedupe.
+- Screenshot artifact: `output/playwright/agent-mode-pill-armed-after-dedupe.png`.
+- `npm run verify` passed: typecheck, 245 unit tests, empty integration placeholder, production build, and launch-payload gate at 299.6 KiB gzip.
+
+**Remaining risks**
+- Hosted staging needs the updated `chat-multi` deploy before the response-time improvement is visible there.
+- Browser smoke should confirm normal chat is fast with the hosted flag still enabled, and Agent-pill chat still enters the SDK runtime.
+
+**Next**
+1. Commit and push to `main`.
+2. Ask Lovable to redeploy `chat-multi` and frontend from latest main.
+3. Hosted smoke: normal chat should be fast; Agent-pill chat should show runtime/tool activity when it uses tools.

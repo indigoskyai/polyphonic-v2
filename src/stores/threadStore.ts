@@ -64,6 +64,15 @@ const STREAM_STUB_DEDUPE_WINDOW_MS = 60_000;
 const isLocalStreamStub = (message: Pick<Message, 'metadata'>) =>
   message.metadata?.local_stream_stub === true;
 
+export const dedupeThreadsById = (threads: Thread[]): Thread[] => {
+  const seen = new Set<string>();
+  return threads.filter((thread) => {
+    if (!thread?.id || seen.has(thread.id)) return false;
+    seen.add(thread.id);
+    return true;
+  });
+};
+
 export const useThreadStore = create<ThreadState>((set, get) => ({
   threads: [],
   currentThreadId: null,
@@ -77,7 +86,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       .from('threads')
       .select('*')
       .order('updated_at', { ascending: false });
-    if (data) set({ threads: data as Thread[] });
+    if (data) set({ threads: dedupeThreadsById(data as Thread[]) });
   },
 
   setCurrentThread: (id) => set({ currentThreadId: id }),
@@ -158,7 +167,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       .single();
     if (data) {
       const thread = data as Thread;
-      set((s) => ({ threads: [thread, ...s.threads], currentThreadId: thread.id, messages: [] }));
+      set((s) => ({
+        threads: dedupeThreadsById([thread, ...s.threads]),
+        currentThreadId: thread.id,
+        messages: [],
+      }));
       return thread.id;
     }
     throw new Error('Failed to create thread');

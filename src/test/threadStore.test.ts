@@ -15,7 +15,30 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { useThreadStore } from '@/stores/threadStore';
+import { dedupeThreadsById, useThreadStore } from '@/stores/threadStore';
+
+describe('threadStore thread list helpers', () => {
+  it('dedupes repeated thread rows before sidebar rendering', () => {
+    const base = {
+      user_id: 'u1',
+      title: 'Thread',
+      pinned: false,
+      heat: 'warm',
+      agent_id: 'luca',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    expect(dedupeThreadsById([
+      { ...base, id: 't1' },
+      { ...base, id: 't1', title: 'Duplicate' },
+      { ...base, id: 't2' },
+    ])).toEqual([
+      { ...base, id: 't1' },
+      { ...base, id: 't2' },
+    ]);
+  });
+});
 
 describe('threadStore.addMessage de-dupe', () => {
   beforeEach(() => {

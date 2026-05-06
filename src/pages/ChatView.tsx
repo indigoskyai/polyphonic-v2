@@ -435,6 +435,8 @@ export default function ChatView() {
   const [ensembleArmed, setEnsembleArmed] = useState(false);
   const [ensembleLocked, setEnsembleLocked] = useState(false);
   const ensembleActive = ensembleArmed || ensembleLocked;
+  const [agentModeArmed, setAgentModeArmed] = useState(false);
+  const agentModeActive = agentModeArmed && activeAgentId === 'luca';
   const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
@@ -1175,6 +1177,7 @@ export default function ChatView() {
           attachments: uploadedAttachments,
           reasoning_effort: thinkingEffort,
           ensemble: ensembleActive,
+          agent_mode: agentModeActive ? 'agent' : 'chat',
         }),
         signal: controller.signal,
       });
@@ -1408,7 +1411,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1416,8 +1419,17 @@ export default function ChatView() {
     if (prevStreamingRef.current && !isStreaming && ensembleArmed) {
       setEnsembleArmed(false);
     }
+    if (prevStreamingRef.current && !isStreaming && agentModeArmed) {
+      setAgentModeArmed(false);
+    }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, ensembleArmed]);
+  }, [isStreaming, ensembleArmed, agentModeArmed]);
+
+  useEffect(() => {
+    if (activeAgentId !== 'luca' && agentModeArmed) {
+      setAgentModeArmed(false);
+    }
+  }, [activeAgentId, agentModeArmed]);
 
   // Sync default ensemble preference → lock flag (persistent, not auto-disarming).
   // When user flips the setting off in Settings, also clear the lock so ensemble
@@ -1465,12 +1477,23 @@ export default function ChatView() {
   };
 
   const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
+  const agentModePillClass = `ensemble-pill agent-mode-pill${agentModeActive ? ' armed' : ''}`;
   const EnsembleIcon = () => (
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2}>
       <circle cx={3} cy={3.5} r={1.3} fill="currentColor" />
       <circle cx={11} cy={4} r={1.3} fill="currentColor" />
       <circle cx={7} cy={10.5} r={1.3} fill="currentColor" />
       <path d="M3 3.5 L11 4 L7 10.5 Z" opacity={0.45} />
+    </svg>
+  );
+  const AgentModeIcon = () => (
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 1.6v2.1" />
+      <path d="M7 10.3v2.1" />
+      <path d="M1.6 7h2.1" />
+      <path d="M10.3 7h2.1" />
+      <circle cx={7} cy={7} r={2.7} />
+      <path d="M5.7 7.1l.8.8 1.9-2" opacity={0.8} />
     </svg>
   );
 
@@ -1632,7 +1655,7 @@ export default function ChatView() {
                   onBlur={() => setFocused(false)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={modelKeyMissing ? 'Add a model key to start chatting…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+                  placeholder={modelKeyMissing ? 'Add a model key to start chatting…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer">
@@ -1663,6 +1686,12 @@ export default function ChatView() {
                   {activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
+                      <button
+                        type="button"
+                        className={agentModePillClass}
+                        onClick={() => setAgentModeArmed((v) => !v)}
+                        title="Use Luca's web-safe agent runtime for this message. Best for research, tool use, multi-step planning, and context checks."
+                      ><AgentModeIcon />agent</button>
                       <button
                         className={ensemblePillClass}
                         onClick={toggleEnsemble}
@@ -2102,7 +2131,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? (modelKeyMissing ? 'Add a model key to ask Observer…' : 'Ask the Observer...') : modelKeyMissing ? 'Add a model key to continue…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? (modelKeyMissing ? 'Add a model key to ask Observer…' : 'Ask the Observer...') : modelKeyMissing ? 'Add a model key to continue…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 
@@ -2137,6 +2166,12 @@ export default function ChatView() {
               {!alcoveOpen && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
+                  <button
+                    type="button"
+                    className={agentModePillClass}
+                    onClick={() => setAgentModeArmed((v) => !v)}
+                    title="Use Luca's web-safe agent runtime for this message. Best for research, tool use, multi-step planning, and context checks."
+                  ><AgentModeIcon />agent</button>
                   <button
                     className={ensemblePillClass}
                     onClick={toggleEnsemble}

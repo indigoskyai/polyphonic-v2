@@ -180,7 +180,16 @@ serve(async (req) => {
 
     const userId = user.id;
     const body = await req.json();
-    const { thread_id, message, attachments, reasoning_effort: effortOverride, ensemble: ensembleOverride } = body;
+    const {
+      thread_id,
+      message,
+      attachments,
+      reasoning_effort: effortOverride,
+      ensemble: ensembleOverride,
+      agent_mode: agentMode,
+      agent_runtime: agentRuntime,
+      use_agent_runtime: useAgentRuntime,
+    } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
       return fail(new ValidationError("Invalid request"));
@@ -220,6 +229,10 @@ serve(async (req) => {
       .filter((model): model is string => !!model);
     const synthesisModel = normalizeModelId(settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL) || DEFAULT_SYNTHESIS_MODEL;
     const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
+    const sdkRuntimeRequested =
+      agentMode === "agent" ||
+      agentRuntime === "openrouter_agent_sdk" ||
+      useAgentRuntime === true;
 
     // Get user's OpenRouter API key (required — no platform fallback)
     const { data: userKeyData, error: userKeyErr } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
@@ -335,7 +348,7 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-    if (agentIsSystemLuca && isOpenRouterAgentRuntimeEnabled(userId)) {
+    if (agentIsSystemLuca && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],

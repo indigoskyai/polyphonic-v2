@@ -1497,6 +1497,10 @@ html {
   color: var(--text-body);
   background: var(--overlay-hover);
 }
+.agent-mode-pill.armed {
+  color: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 11%, transparent);
+}
 .ensemble-pill.locked {
   color: var(--text-primary);
   background: var(--overlay-active);
