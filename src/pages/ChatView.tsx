@@ -1826,7 +1826,7 @@ export default function ChatView() {
           transition: 'opacity 400ms var(--ease-out)',
         }}
       >
-        <div className="chat-message-column">
+        <div className="chat-message-column" key={currentThreadId || 'fresh'}>
 
           {/* Live activity context strip — only renders when there's actually
               live activity to surface (sub-agents working, or agent-to-agent

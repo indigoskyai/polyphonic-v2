@@ -5,6 +5,7 @@
  * Digest → DailyDigest, the user-facing daily review of today's engram formations.
  */
 import { useEffect } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
@@ -16,6 +17,7 @@ import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
 import MnemosOverview from '@/components/memory/MnemosOverview';
 import MnemosModeToggle from '@/components/memory/MnemosModeToggle';
 import DailyDigest from '@/components/memory/DailyDigest';
+import Pill from '@/components/ui/luca/Pill';
 
 export default function MemoryView() {
   const activeTab = useViewTabStore((s) => s.memoryTab);
@@ -56,9 +58,23 @@ export default function MemoryView() {
                 color: 'var(--text-soft)',
                 fontSize: 12,
                 lineHeight: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
               }}
             >
-              Memory layer load issue: {loadErrorEntries.map(([layer]) => layer).join(', ')}.
+              <span>
+                Memory layer load issue: {loadErrorEntries.map(([layer]) => layer).join(', ')}.
+              </span>
+              <Pill
+                icon={<RotateCcw size={12} strokeWidth={1.8} />}
+                onClick={() => { if (user) void loadAll(user.id); }}
+                aria-label="Retry loading memory"
+              >
+                retry
+              </Pill>
             </div>
           )}
           <div key={`${mode}:${activeTab}`} className="tab-transition-panel">

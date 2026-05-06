@@ -31,6 +31,8 @@ import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
 import { useIsMobile } from "./hooks/use-mobile";
+import BootScreen from "./components/skeletons/BootScreen";
+import { pickRouteSkeleton } from "./components/skeletons/RouteSkeleton";
 
 const queryClient = new QueryClient();
 
@@ -115,32 +117,24 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuthStore();
-  if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
+  if (loading) return <BootScreen />;
   if (!user) return <Navigate to="/auth/login" replace />;
   return <>{children}</>;
 }
 
 function RouteFallback() {
-  return (
-    <div
-      className="flex h-screen items-center justify-center"
-      style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}
-      aria-label="Loading page"
-    >
-      Loading...
-    </div>
-  );
+  return <BootScreen />;
 }
 
 function PanelRouteFallback() {
+  const location = useLocation();
   return (
     <div
-      className="route-panel-fallback flex-1 min-h-0 min-w-0"
+      className="flex-1 min-h-0 min-w-0 flex flex-col"
       aria-label="Loading section"
       role="status"
     >
-      <div className="route-panel-fallback__line" />
-      <div className="route-panel-fallback__line route-panel-fallback__line--short" />
+      {pickRouteSkeleton(location.pathname)}
     </div>
   );
 }
@@ -269,7 +263,7 @@ function DrawerRouter() {
 
 function RootRedirect() {
   const { user, loading } = useAuthStore();
-  if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
+  if (loading) return <BootScreen />;
   return <Navigate to={user ? "/chat" : "/auth/login"} replace />;
 }
 

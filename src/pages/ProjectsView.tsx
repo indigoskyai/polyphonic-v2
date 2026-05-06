@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Archive, FolderKanban, MessageCircle, Plus, Save, X } from 'lucide-react';
+import { Archive, FolderKanban, MessageCircle, Plus, RotateCcw, Save, X } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useProjectStore, threadsForProject, type Project } from '@/stores/projectStore';
 import { useThreadStore, type Thread } from '@/stores/threadStore';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import Pill from '@/components/ui/luca/Pill';
 
 function threadTitle(thread: Thread) {
   return thread.title || 'New conversation';
@@ -200,7 +201,16 @@ export default function ProjectsView() {
               {projectsLoading ? (
                 <p style={emptyStyle}>Loading projects...</p>
               ) : projectsError ? (
-                <p style={errorStyle}>{projectsError}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+                  <p style={errorStyle}>{projectsError}</p>
+                  <Pill
+                    icon={<RotateCcw size={12} strokeWidth={1.8} />}
+                    onClick={() => { void loadProjects(); }}
+                    aria-label="Retry loading projects"
+                  >
+                    retry
+                  </Pill>
+                </div>
               ) : projects.length === 0 ? (
                 <p style={emptyStyle}>No projects yet. Create one to start grouping threads.</p>
               ) : (

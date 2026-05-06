@@ -112,7 +112,18 @@ export default function EchoField({
     let lastFrameTime = 0;
     let time = 0;
 
+    // Frame-rate cap — particle field is decorative; capping at ~30fps gives
+    // mid-range mobile devices headroom for streaming/scroll work without any
+    // perceivable change to the visualization.
+    const FRAME_MIN_MS = 33; // ≈ 30fps
+
     function render(ts: number) {
+      if (lastFrameTime !== 0 && ts - lastFrameTime < FRAME_MIN_MS) {
+        if (!prefersReducedMotion) {
+          animRef.current = requestAnimationFrame(render);
+        }
+        return;
+      }
       const dt = Math.min(0.05, (ts - lastFrameTime) * 0.001);
       lastFrameTime = ts;
       time = ts;

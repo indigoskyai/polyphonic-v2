@@ -344,6 +344,17 @@ html {
 *:focus { outline: none; }
 *:focus-visible { box-shadow: var(--focus-ring); border-radius: inherit; }
 
+/* Smooth focus-ring entry across inputs, textareas, and form controls so the
+   ring eases in instead of snapping. Targets only form-like elements to avoid
+   surprising other components that already manage their own focus visuals. */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  transition: box-shadow var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+
 @layer base {
   * { @apply border-border; }
   body {
@@ -784,6 +795,151 @@ html {
 .route-panel-fallback__line--short {
   width: min(220px, 32vw);
   animation-delay: 120ms;
+}
+
+/* ─── Skeleton primitives — content-shaped loaders for Suspense fallbacks ─── */
+@keyframes skeletonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skel {
+  position: relative;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--text-primary) 6%, transparent) 0%,
+      color-mix(in srgb, var(--text-primary) 14%, transparent) 50%,
+      color-mix(in srgb, var(--text-primary) 6%, transparent) 100%
+    );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1800ms linear infinite;
+  will-change: background-position;
+}
+
+.skel--block { border-radius: 12px; }
+.skel--circle { border-radius: 50%; }
+
+.route-skeleton {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 24px 28px 28px;
+  gap: 18px;
+  animation: routeStageIn 220ms var(--ease-out) both;
+  will-change: opacity, transform;
+}
+
+.route-skeleton__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.route-skeleton__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.route-skeleton__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-skeleton__bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-faint);
+  border-radius: 14px;
+  background: var(--surface-1);
+  max-width: 70%;
+}
+
+.route-skeleton__bubble--right {
+  margin-left: auto;
+  background: var(--surface-2);
+}
+
+.route-skeleton__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.route-skeleton__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-faint);
+  border-radius: 14px;
+  background: var(--surface-1);
+  min-height: 120px;
+}
+
+.route-skeleton__composer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-faint);
+  border-radius: 18px;
+  background: var(--surface-1);
+  min-height: 56px;
+}
+
+/* ─── Boot screen — branded fallback for top-level Suspense + auth-pending ─── */
+@keyframes bootBreathe {
+  0%, 100% { opacity: 0.32; transform: scale(0.94); }
+  50%      { opacity: 0.78; transform: scale(1.0); }
+}
+
+@keyframes bootScreenIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.boot-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg-deep);
+  color: var(--text-tertiary);
+  gap: 18px;
+  animation: bootScreenIn 220ms var(--ease-out) both;
+}
+
+.boot-screen__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-primary) 70%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--text-primary) 30%, transparent);
+  animation: bootBreathe 1600ms var(--ease-premium) infinite;
+  will-change: opacity, transform;
+}
+
+.boot-screen__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-whisper);
+  opacity: 0.7;
 }
 
 .rail-nav-icon {
@@ -1813,6 +1969,12 @@ html {
   margin: 0 auto;
   padding: 0 32px;
   box-sizing: border-box;
+  /* Thread-switch dissolve: the column is keyed on threadId in ChatView, so
+     swapping threads remounts this element. The fade smooths the brief
+     loading-empty window between unmount and the new thread's messages
+     populating from the store. */
+  animation: viewFadeIn 240ms var(--ease-premium) both;
+  will-change: opacity;
 }
 
 .chat-empty-center {
@@ -2139,7 +2301,7 @@ html {
 }
 .pill:disabled { opacity: 0.45; cursor: not-allowed; }
 .pill:not(:disabled):hover { transform: translateY(-1px); }
-.pill:not(:disabled):active { transform: translateY(0); }
+.pill:not(:disabled):active { transform: translateY(0) scale(0.98); }
 .pill__icon { display: inline-flex; align-items: center; }
 .pill__icon svg { width: 13px; height: 13px; stroke-width: 1.6; }
 
