@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useObserverStore, type ObserverNote } from '@/stores/observerStore';
 import { useAuthStore } from '@/stores/authStore';
-import { DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection, DrawerSectionLabel } from '@/components/ui/luca';
+import { DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from '@/components/ui/luca';
 
 const KIND_COLOR: Record<ObserverNote['kind'], string> = {
   concern: 'rgba(192, 132, 65, 0.85)',   // ochre
@@ -63,34 +63,53 @@ export default function ObserverDrawer() {
     <>
       <DrawerHeader>
         <DrawerTitle>Observer</DrawerTitle>
-        <span className="observer-lock-chip">resident · locked</span>
+        <span style={{
+          fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+          letterSpacing: 'var(--track-meta)', color: 'var(--text-ghost)',
+          padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 999,
+          marginLeft: 8,
+        }}>
+          resident · locked
+        </span>
         <DrawerEscChip />
         <DrawerCloseBtn onClick={close} />
       </DrawerHeader>
       <DrawerBody>
         <DrawerSection>
-          <DrawerSectionLabel>Notes</DrawerSectionLabel>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 8 }}>Notes</div>
           {notes.length === 0 ? (
-            <p className="drawer-copy drawer-copy--muted">
+            <p style={{ color: 'var(--text-ghost)', fontSize: 12, lineHeight: 1.6 }}>
               No observations yet. The Observer is watching this conversation. Notes will appear here as patterns and signals emerge.
             </p>
           ) : (
-            <div className="observer-note-list">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {notes.map((n) => (
-                <div key={n.id} className="observer-note-card" style={{ borderLeftColor: KIND_COLOR[n.kind] }}>
-                  <div className="observer-note-meta">
+                <div key={n.id} style={{
+                  padding: '8px 10px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-faint)',
+                  borderLeft: `2px solid ${KIND_COLOR[n.kind]}`,
+                  borderRadius: 6,
+                }}>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+                    letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 4,
+                  }}>
                     <span>{n.kind} · {timeAgo(n.created_at)}</span>
                     <button
-                      type="button"
-                      className="observer-pin-btn"
                       onClick={() => togglePin(n.id)}
-                      data-pinned={n.pinned ? 'true' : undefined}
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: n.pinned ? 'var(--text-body)' : 'var(--text-whisper)',
+                        fontSize: 10, padding: 0,
+                      }}
                       title={n.pinned ? 'Unpin' : 'Pin'}
                     >
                       {n.pinned ? '● pinned' : '○ pin'}
                     </button>
                   </div>
-                  <div className="observer-note-body">
+                  <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-body)' }}>
                     {n.content}
                   </div>
                 </div>
@@ -100,28 +119,38 @@ export default function ObserverDrawer() {
         </DrawerSection>
 
         <DrawerSection>
-          <DrawerSectionLabel>Ask Observer</DrawerSectionLabel>
-          <div className="observer-chat-list">
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 8 }}>Ask Observer</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto', marginBottom: 8 }}>
             {chat.length === 0 && (
-              <p className="drawer-copy drawer-copy--muted">
+              <p style={{ color: 'var(--text-ghost)', fontSize: 12 }}>
                 Ask the Observer anything about this thread.
               </p>
             )}
             {chat.map((m) => (
-              <div key={m.id} className="observer-chat-card" data-role={m.role === 'user' ? 'user' : 'observer'}>
-                <div className="observer-note-meta">
+              <div key={m.id} style={{
+                padding: '8px 10px',
+                background: m.role === 'user' ? 'transparent' : 'var(--bg-surface)',
+                border: m.role === 'user' ? '1px dashed var(--border-faint)' : '1px solid var(--border-faint)',
+                borderRadius: 6,
+                fontSize: 12, lineHeight: 1.55, color: 'var(--text-body)',
+                whiteSpace: 'pre-wrap',
+              }}>
+                <div style={{
+                  fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+                  letterSpacing: 'var(--track-meta)', color: 'var(--text-whisper)', marginBottom: 4,
+                }}>
                   {m.role === 'user' ? 'you' : 'observer'} · {timeAgo(m.created_at)}
                 </div>
-                <div className="observer-chat-body">{m.content}</div>
+                {m.content}
               </div>
             ))}
             {asking && (
-              <div className="observer-thinking-state">
+              <div style={{ fontSize: 11, color: 'var(--text-ghost)', fontStyle: 'italic' }}>
                 Observer is thinking…
               </div>
             )}
           </div>
-          <form onSubmit={handleSubmit} className="observer-ask-form">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 6 }}>
             <textarea
               ref={inputRef}
               value={input}
@@ -134,13 +163,27 @@ export default function ObserverDrawer() {
               }}
               placeholder="What do you see here?"
               rows={2}
-              className="observer-ask-input"
+              style={{
+                flex: 1, resize: 'none',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-faint)',
+                borderRadius: 6, padding: '6px 8px',
+                color: 'var(--text-body)', fontSize: 12,
+                fontFamily: 'var(--font-sans)', outline: 'none',
+              }}
               disabled={asking || !threadId}
             />
             <button
               type="submit"
               disabled={asking || !input.trim() || !threadId}
-              className="observer-ask-button"
+              style={{
+                padding: '6px 12px', borderRadius: 999,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-body)', fontSize: 11, cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)',
+                opacity: (asking || !input.trim()) ? 0.5 : 1,
+              }}
             >
               Ask
             </button>

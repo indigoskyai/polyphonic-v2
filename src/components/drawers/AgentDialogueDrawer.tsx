@@ -59,8 +59,13 @@ function StatusPill({ status }: { status: AgentConsultation['status'] }) {
     'var(--text-tertiary)';
   return (
     <span
-      className="agent-dialogue-status"
-      style={{ color: colour }}
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        letterSpacing: 'var(--track-mono)',
+        textTransform: 'uppercase',
+        color: colour,
+      }}
     >
       {text}
     </span>
@@ -69,12 +74,25 @@ function StatusPill({ status }: { status: AgentConsultation['status'] }) {
 
 function ConsultationItem({ consult }: { consult: AgentConsultation }) {
   return (
-    <article className="agent-dialogue-item">
+    <article
+      style={{
+        borderTop: '1px solid var(--border-faint)',
+        padding: '20px 0 22px',
+      }}
+    >
       <div
         className="flex items-baseline justify-between"
-        style={{ gap: 10 }}
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: 'var(--track-mono)',
+          color: 'var(--text-ghost)',
+          textTransform: 'uppercase',
+          marginBottom: 14,
+          gap: 10,
+        }}
       >
-        <span className="agent-dialogue-meta">
+        <span>
           <span style={{ color: NEUTRAL_TINT }}>{agentLabel(consult.from_agent)}</span>
           {' → '}
           <span style={{ color: NEUTRAL_TINT }}>{agentLabel(consult.to_agent)}</span>
@@ -84,28 +102,56 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
         <StatusPill status={consult.status} />
       </div>
 
-      <div className="agent-dialogue-stack">
-        <div className="agent-dialogue-quote">
-          <div className="agent-dialogue-label">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            borderLeft: '2px solid var(--border-subtle)',
+            paddingLeft: 12,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              letterSpacing: 'var(--track-mono)',
+              color: 'var(--text-ghost)',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
             {agentLabel(consult.from_agent)} asked
           </div>
-          <p className="drawer-copy">
+          <p style={{ margin: 0, color: 'var(--text-body)', fontSize: 13.5, lineHeight: 1.6 }}>
             {consult.question}
           </p>
         </div>
 
-        <div className="agent-dialogue-quote">
-          <div className="agent-dialogue-label">
+        <div
+          style={{
+            borderLeft: '2px solid var(--border-subtle)',
+            paddingLeft: 12,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              letterSpacing: 'var(--track-mono)',
+              color: 'var(--text-ghost)',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
             {agentLabel(consult.to_agent)} {consult.status === 'pending' ? 'is thinking' : 'said'}
           </div>
           {consult.response ? (
             <RichBody source={consult.response} className="rich-body--compact" />
           ) : consult.status === 'failed' ? (
-            <p className="drawer-copy drawer-copy--muted">
+            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13.5, lineHeight: 1.6 }}>
               {consult.error || 'No response captured.'}
             </p>
           ) : (
-            <p className="drawer-copy drawer-copy--muted drawer-copy--italic">
+            <p style={{ margin: 0, color: 'var(--text-ghost)', fontSize: 13.5, lineHeight: 1.6, fontStyle: 'italic' }}>
               waiting for {agentLabel(consult.to_agent)}…
             </p>
           )}
@@ -141,7 +187,7 @@ export default function AgentDialogueDrawer() {
       <DrawerBody>
         {consultations.length === 0 ? (
           <DrawerSection>
-            <p className="drawer-copy drawer-copy--muted">
+            <p style={{ color: 'var(--text-ghost)', fontSize: 13, lineHeight: 1.7 }}>
               When Luca reaches out to Anima or Vektor for a perspective during this conversation, the back-and-forth shows up here.
             </p>
           </DrawerSection>
