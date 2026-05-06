@@ -148,7 +148,7 @@ export function profileRankedValues(value: unknown): NormalizedRankedValue[] {
         divergence_narrative: isProfileRecord(item) ? profileText(item.divergence_narrative) || undefined : undefined,
       };
     })
-    .filter((item): item is NormalizedRankedValue => item !== null);
+    .filter((item: NormalizedRankedValue | null): item is NormalizedRankedValue => item !== null);
 }
 
 export type NormalizedRelationship = {
