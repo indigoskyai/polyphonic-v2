@@ -114,7 +114,7 @@ export function profileTagItems(value: unknown): Array<{ label: string; count?: 
         || profileNumber(record.frequency, NaN);
       return Number.isFinite(count) ? { label, count } : { label };
     })
-    .filter((item): item is { label: string; count?: number } => item !== null);
+    .filter((item): item is { label: string; count: number } | { label: string; count?: undefined } => item !== null);
 }
 
 export type NormalizedRankedValue = {
