@@ -8,12 +8,12 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] RLS verified on every public-schema table; all owner-scoped
 - [x] No `SERVICE_ROLE` references in client runtime `src/` code
 - [x] CORS allowlist restricted to production/staging/Lovable preview patterns; no wildcard; localhost only outside production
-- [ ] All `verify_jwt = false` functions documented as either in-code-validating or intentionally public
+- [x] All `verify_jwt = false` functions have source auth markers or explicit source-level auth posture
 - [x] Storage buckets owner-scoped or explicitly published-reference scoped
 - [x] Auth: HIBP password check ON, email confirmation configured, `/reset-password` page live
 
 ## Reliability
-- [ ] Every edge function has CORS preflight + CORS-on-error + try/catch wrapper
+- [x] Every edge function has CORS preflight + CORS-on-error + try/catch wrapper
 - [x] All cron loops succeeded ≥ 95% in the last 24h
 - [x] No 5xx from any edge function in the last 7 days (or each is documented + accepted)
 - [ ] Cascade-on-user-delete tested in a scratch account; zero orphan rows

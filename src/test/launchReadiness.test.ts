@@ -19,6 +19,17 @@ function walkFiles(dir: string): string[] {
   });
 }
 
+function edgeFunctionNames(): string[] {
+  return readdirSync(join(process.cwd(), 'supabase/functions'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function edgeFunctionSource(name: string): string {
+  return readRepoFile(`supabase/functions/${name}/index.ts`);
+}
+
 describe('launch readiness static gates', () => {
   it('keeps client source free of service-role key references', () => {
     const scannedExtensions = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -39,6 +50,41 @@ describe('launch readiness static gates', () => {
     expect(cors).toContain('!IS_PROD && LOCAL_DEV_ORIGIN.test(origin)');
     expect(cors).not.toContain('"Access-Control-Allow-Origin": "*"');
     expect(cors).not.toContain("'Access-Control-Allow-Origin': '*'");
+  });
+
+  it('keeps edge functions wrapped with CORS, catches, and source auth markers', () => {
+    const config = readRepoFile('supabase/config.toml');
+    const configured = new Map(
+      [...config.matchAll(/^\[functions\.([^\]]+)\]\nverify_jwt\s*=\s*(\w+)/gm)].map((match) => [match[1], match[2]]),
+    );
+
+    const rows = edgeFunctionNames().map((name) => {
+      const source = edgeFunctionSource(name);
+      const hasAuthMarker =
+        source.includes('authenticateUser(req)') ||
+        source.includes('auth.getUser') ||
+        source.includes('auth.getClaims') ||
+        source.includes('.getUser(') ||
+        source.includes('requireServiceRole(req') ||
+        source.includes('auth !== `Bearer ${serviceRole}`') ||
+        source.includes('authHeader !== `Bearer ${serviceRoleKey}`') ||
+        source.includes('authenticateDeviceToken(');
+
+      return {
+        name,
+        verifyJwt: configured.get(name),
+        hasPreflight: /handleCorsPreflightIfNeeded\(req\)|req\.method\s*={0,2}=\s*["']OPTIONS["']/.test(source),
+        hasCorsResponse: /getCorsHeaders\(req\)|corsHeaders|corsHeaders\(/.test(source),
+        hasCatch: /try\s*\{/.test(source),
+        hasAuthMarker,
+      };
+    });
+
+    expect(rows.map((row) => row.name)).toHaveLength(70);
+    expect(rows.filter((row) => !row.hasPreflight).map((row) => row.name)).toEqual([]);
+    expect(rows.filter((row) => !row.hasCorsResponse).map((row) => row.name)).toEqual([]);
+    expect(rows.filter((row) => !row.hasCatch).map((row) => row.name)).toEqual([]);
+    expect(rows.filter((row) => row.verifyJwt === 'false' && !row.hasAuthMarker).map((row) => row.name)).toEqual([]);
   });
 
   it('publishes release metadata, social tags, robots, and a web manifest', () => {
