@@ -43,6 +43,11 @@ import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import {
+  isOpenRouterAgentRuntimeEnabled,
+  openRouterAgentSdkStream,
+} from "../_shared/agent-runtime/openrouter-agent.ts";
+import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -329,6 +334,32 @@ serve(async (req) => {
       }
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
+
+    if (agentIsSystemLuca && isOpenRouterAgentRuntimeEnabled(userId)) {
+      const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
+      const singleModel = normalizeModelId(
+        settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
+      ) || DEFAULT_ENSEMBLE[0];
+
+      return openRouterAgentSdkStream({
+        messages: baseMessages,
+        model: singleModel,
+        apiKey,
+        supabase,
+        supabaseUrl,
+        serviceRoleKey: supabaseServiceKey,
+        threadId: thread_id,
+        userId,
+        userMessage: messageWithAttachments,
+        agentId,
+        authHeader,
+        continuity,
+        pendingRevisions: pendingRevisions || [],
+        mcpTools,
+        corsHeaders,
+        requestId,
+      });
+    }
 
     const toolMessages = await runToolPlanner(thread_id, authHeader, baseMessages.slice(1));
     if (toolMessages.length > 0) {

@@ -1458,3 +1458,32 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Continue with RLS policy inventory or hosted auth smoke, whichever is unblocked first.
 2. Start performance/accessibility launch measurements for `/chat` and `/mind`.
+
+---
+
+## Agentic Web Runtime — OpenRouter Agent SDK Gate  [x] (2026-05-06)
+
+**Changed**
+- Added a thin OpenRouter Agent SDK adapter as the web-safe inner loop for Luca, gated by `OPENROUTER_AGENT_SDK_ENABLED` and optional `OPENROUTER_AGENT_SDK_USER_ALLOWLIST`.
+- Wired the gated path into `chat-multi` before the legacy tool planner, so flag-off behavior continues through the existing planner, single-model stream, or council path.
+- Kept Polyphonic ownership of Luca's continuity packet, message persistence, activity trace, and memory writeback.
+- Added initial SDK tools for `memory_read`, `web_search`, `read_url`, and remote MCP registrations; intentionally did not add local filesystem, terminal, or local-machine tools.
+- Runtime emits normalized SSE events for runtime start, tool start/progress/result, thinking, content, and done; tool results are logged to `entity_activity_log` with `thread_id` so the right drawer can show them.
+- Added static regression tests proving the SDK path is Luca-only, feature-gated, web-safe, and fallback-preserving.
+
+**Verified**
+- Official OpenRouter Agent SDK package check: `@openrouter/agent@0.5.0`.
+- Local Deno compatibility spike imported `OpenRouter`, `tool`, `stepCountIs`, and `maxCost`.
+- `deno check supabase/functions/_shared/agent-runtime/openrouter-agent.ts supabase/functions/chat-multi/index.ts` passed.
+- `npx vitest run src/test/openRouterAgentRuntime.test.ts --reporter=verbose` passed.
+- `npx vitest run src/test/phase4Reliability.test.ts src/test/launchReadiness.test.ts --reporter=verbose` passed.
+- `npm run verify` passed: typecheck, 243 unit tests, empty integration placeholder, production build, and launch-payload gate at 299.5 KiB gzip.
+
+**Remaining risks**
+- The SDK runtime is deliberately off by default until Lovable enables the flag and redeploys `chat-multi`.
+- Live hosted tool-call smoke still needs the flag enabled and a real Luca turn after deploy.
+- If the SDK's Responses-style stream behaves differently for a selected OpenRouter model, the existing chat path remains the fallback by leaving the flag off.
+
+**Next**
+1. Commit and push to `main`.
+2. Ask Lovable to redeploy `chat-multi` and set `OPENROUTER_AGENT_SDK_ENABLED=true` only when ready for staged tool-call smoke.
