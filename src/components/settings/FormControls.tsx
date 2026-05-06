@@ -2,45 +2,48 @@ import React from 'react';
 
 /* ======================================================================
    Shared form primitives for settings surfaces.
-   Extracted from the original SettingsView so each new settings page
-   (General, Models, Appearance, Account, etc.) can render the same
-   monochromatic, mono-eyebrow controls without duplication.
+
+   Refactored to match the polyphonic v2 settings design language:
+   - No glow / no inset white strokes / no breathing animations
+   - Pure white overlays at calibrated opacities
+   - Surface-step active states for cards and segment controls
+   - Editorial typography with tight tracking on small text
+   - Switzer 500 weight for load-bearing labels, 400 for prose
+
+   See polyphonic-settings-handoff/02-design-system-spec.md for full spec.
    ====================================================================== */
 
-export function PageHeader({ folio, title, description }: { folio: string; title: string; description?: string }) {
+/* ─────────────────────────────────────────────────────────────────────
+   PageHeader — eyebrow + display title + brief description
+   Used at the top of every settings page (inside .set-head wrapper).
+   ───────────────────────────────────────────────────────────────────── */
+
+export function PageHeader({
+  folio,
+  title,
+  description,
+}: {
+  folio: string;
+  title: string;
+  description?: string;
+}) {
   return (
-    <div className="settings-page-header" style={{ padding: '24px 32px 0' }}>
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
-          letterSpacing: 'var(--track-folio)',
-          color: 'var(--text-ghost)',
-          textTransform: 'uppercase',
-          marginBottom: 8,
-        }}
-      >
-        {folio}
+    <div className="set-head">
+      <div className="set-head-eye">
+        <span className="num">{folio}</span>
       </div>
-      <h1 className="cp-page-title" style={{ marginBottom: description ? 8 : 24 }}>
-        {title}
-      </h1>
-      {description && (
-        <p
-          style={{
-            fontSize: 13,
-            lineHeight: 1.6,
-            color: 'var(--text-body)',
-            maxWidth: 640,
-            marginBottom: 24,
-          }}
-        >
-          {description}
-        </p>
-      )}
+      <h1 className="set-head-title">{title}</h1>
+      {description && <p className="set-head-sub">{description}</p>}
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   SectionTitle — section eye + title + optional description.
+   Replaces the legacy SectionTitle which was just a mono caps eyebrow.
+   For backward compatibility, when called with just children it renders
+   as the legacy eyebrow style. New code should use Section instead.
+   ───────────────────────────────────────────────────────────────────── */
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -50,8 +53,8 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
         fontSize: 10,
         fontWeight: 500,
         textTransform: 'uppercase',
-        letterSpacing: 'var(--track-meta)',
-        color: 'var(--text-ghost)',
+        letterSpacing: 'var(--track-folio)',
+        color: 'var(--text-soft)',
         marginBottom: 16,
         marginTop: 32,
       }}
@@ -60,6 +63,10 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   SettingRow — label/desc on left, control on right.
+   ───────────────────────────────────────────────────────────────────── */
 
 export function SettingRow({
   label,
@@ -71,31 +78,19 @@ export function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="settings-row flex justify-between items-center mb-3"
-      style={{ borderRadius: 'var(--radius-md)', padding: '12px 0', gap: 16 }}
-    >
-      <div className="settings-row-copy flex-1 min-w-0">
-        <div
-          style={{
-            fontSize: 14,
-            color: 'var(--text-primary)',
-            fontWeight: 450,
-            marginBottom: description ? 4 : 0,
-          }}
-        >
-          {label}
-        </div>
-        {description && (
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-            {description}
-          </div>
-        )}
+    <div className="set-row">
+      <div className="set-row-copy">
+        <div className="set-row-label">{label}</div>
+        {description && <div className="set-row-desc">{description}</div>}
       </div>
-      <div className="settings-row-control">{children}</div>
+      <div className="set-row-control">{children}</div>
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Toggle — flat surface step on, ink knob, no glow.
+   ───────────────────────────────────────────────────────────────────── */
 
 export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
   return (
@@ -107,10 +102,10 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) 
       style={{
         width: 36,
         height: 18,
-        background: 'var(--bg-surface)',
-        border: `1px solid ${on ? 'var(--border-focus)' : 'var(--border)'}`,
-        borderRadius: 'var(--radius-xl)',
-        transition: 'all 300ms var(--ease-out)',
+        background: on ? 'var(--surface-3)' : 'transparent',
+        border: `1px solid ${on ? 'var(--border-strong)' : 'var(--border)'}`,
+        borderRadius: 999,
+        transition: 'all 180ms var(--ease-out)',
       }}
       onClick={onChange}
       onKeyDown={(e) => {
@@ -123,16 +118,31 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) 
       <div
         className="absolute rounded-full"
         style={{
-          width: 14,
-          height: 14,
-          top: 1,
-          left: on ? 19 : 1,
-          background: on ? 'var(--text-body)' : 'var(--text-tertiary)',
-          transition: 'all 300ms var(--ease-out)',
+          width: 12,
+          height: 12,
+          top: 2,
+          left: on ? 20 : 2,
+          background: on ? 'var(--ink)' : 'var(--text-tertiary)',
+          transition: 'all 180ms var(--ease-out)',
         }}
       />
     </div>
   );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   RadioGroup — bordered card variant.
+   Each option is a tappable card with optional hint description.
+   Selection is communicated via surface step + filled radio circle,
+   no glow.
+
+   options can be either string[] (legacy) or { value, label, hint }[].
+   ───────────────────────────────────────────────────────────────────── */
+
+interface RadioOption {
+  value: string;
+  label: string;
+  hint?: string;
 }
 
 export function RadioGroup({
@@ -140,41 +150,107 @@ export function RadioGroup({
   value,
   onChange,
 }: {
-  options: string[];
+  options: string[] | RadioOption[];
   value: string;
   onChange: (v: string) => void;
 }) {
+  // Normalize to RadioOption[]
+  const normalized: RadioOption[] = options.map((o) =>
+    typeof o === 'string' ? { value: o.toLowerCase(), label: o } : o,
+  );
+
   return (
-    <div className="flex flex-col gap-2">
-      {options.map((opt) => {
-        const v = opt.toLowerCase();
-        const active = value === v;
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {normalized.map((opt) => {
+        const active = value === opt.value;
         return (
           <div
-            key={opt}
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => onChange(v)}
+            key={opt.value}
+            role="radio"
+            aria-checked={active}
+            tabIndex={0}
+            onClick={() => onChange(opt.value)}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                onChange(opt.value);
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              cursor: 'pointer',
+              padding: '12px 14px',
+              background: active ? 'var(--surface-2)' : 'var(--surface-1)',
+              border: `1px solid ${active ? 'var(--border)' : 'var(--border-faint)'}`,
+              borderRadius: 'var(--radius-md, 10px)',
+              transition: 'background 180ms var(--ease-out), border-color 180ms var(--ease-out)',
+            }}
+            onMouseEnter={(e) => {
+              if (!active) {
+                e.currentTarget.style.background = 'var(--surface-2)';
+                e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!active) {
+                e.currentTarget.style.background = 'var(--surface-1)';
+                e.currentTarget.style.borderColor = 'var(--border-faint)';
+              }
+            }}
           >
             <div
               style={{
                 width: 16,
                 height: 16,
                 borderRadius: '50%',
-                border: `2px solid ${active ? 'var(--border-focus)' : 'var(--border-dim)'}`,
-                background: 'var(--bg-surface)',
+                border: `1.5px solid ${active ? 'var(--ink)' : 'var(--border-strong)'}`,
+                background: 'transparent',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'border-color var(--dur-fast) var(--ease-out)',
+                flexShrink: 0,
+                transition: 'border-color 180ms var(--ease-out)',
               }}
             >
               {active && (
                 <div
-                  style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-body)' }}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: 'var(--ink)',
+                  }}
                 />
               )}
             </div>
-            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  color: active ? 'var(--ink)' : 'var(--text-primary)',
+                  letterSpacing: 'var(--track-body-tight)',
+                }}
+              >
+                {opt.label}
+              </span>
+              {opt.hint && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 12,
+                    color: active ? 'var(--text-soft)' : 'var(--text-tertiary)',
+                    letterSpacing: 'var(--track-body-tight)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {opt.hint}
+                </span>
+              )}
+            </div>
           </div>
         );
       })}
@@ -182,16 +258,22 @@ export function RadioGroup({
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   TextInput — refined input, 40px tall, mono-friendly.
+   ───────────────────────────────────────────────────────────────────── */
+
 export function TextInput({
   value,
   onChange,
   placeholder,
   type = 'text',
+  mono = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  type?: 'text' | 'password';
+  type?: 'text' | 'password' | 'email';
+  mono?: boolean;
 }) {
   return (
     <input
@@ -202,18 +284,19 @@ export function TextInput({
       style={{
         height: 40,
         width: '100%',
-        background: 'var(--bg-surface)',
+        background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '0 12px',
-        fontSize: 13,
+        borderRadius: 'var(--radius-md, 10px)',
+        padding: '0 14px',
+        fontSize: mono ? 12.5 : 13.5,
         color: 'var(--text-primary)',
-        fontFamily: 'var(--font-sans)',
+        fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+        letterSpacing: 'var(--track-body-tight)',
         outline: 'none',
-        transition: 'border-color var(--dur-fast) var(--ease-out)',
+        transition: 'border-color 180ms var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-focus)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -222,16 +305,22 @@ export function TextInput({
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   TextArea — refined multi-line input.
+   ───────────────────────────────────────────────────────────────────── */
+
 export function TextArea({
   value,
   onChange,
   placeholder,
   rows = 4,
+  mono = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
+  mono?: boolean;
 }) {
   return (
     <textarea
@@ -241,20 +330,21 @@ export function TextArea({
       onChange={(e) => onChange(e.target.value)}
       style={{
         width: '100%',
-        background: 'var(--bg-surface)',
+        background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '10px 12px',
-        fontSize: 13,
+        borderRadius: 'var(--radius-md, 10px)',
+        padding: '12px 14px',
+        fontSize: mono ? 12.5 : 13.5,
         color: 'var(--text-primary)',
-        fontFamily: 'var(--font-sans)',
+        fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+        letterSpacing: 'var(--track-body-tight)',
         outline: 'none',
         resize: 'vertical',
-        lineHeight: 1.5,
-        transition: 'border-color var(--dur-fast) var(--ease-out)',
+        lineHeight: 1.55,
+        transition: 'border-color 180ms var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-focus)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -262,6 +352,10 @@ export function TextArea({
     />
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   SelectInput — refined select.
+   ───────────────────────────────────────────────────────────────────── */
 
 export function SelectInput({
   value,
@@ -280,16 +374,24 @@ export function SelectInput({
       onChange={(e) => onChange(e.target.value)}
       style={{
         height: 40,
-        background: 'var(--bg-surface)',
+        background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '0 12px',
-        fontSize: 13,
+        borderRadius: 'var(--radius-md, 10px)',
+        padding: '0 14px',
+        fontSize: 13.5,
         color: 'var(--text-primary)',
         fontFamily: 'var(--font-sans)',
+        letterSpacing: 'var(--track-body-tight)',
         cursor: 'pointer',
         minWidth: width,
         outline: 'none',
+        transition: 'border-color 180ms var(--ease-out)',
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border)';
       }}
     >
       {options.map((o) => (
@@ -301,34 +403,34 @@ export function SelectInput({
   );
 }
 
-export function DangerButton({ label, onClick }: { label: string; onClick: () => void }) {
+/* ─────────────────────────────────────────────────────────────────────
+   DangerButton — rose-tinted destructive action.
+   ───────────────────────────────────────────────────────────────────── */
+
+export function DangerButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="cursor-pointer"
-      style={{
-        height: 38,
-        background: 'var(--bg-surface)',
-        color: '#f87171',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-        padding: '0 16px',
-        fontSize: 13,
-        fontFamily: 'var(--font-sans)',
-        transition: 'background var(--dur-fast) var(--ease-out)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'rgba(248,113,113,0.08)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--bg-surface)';
-      }}
+      disabled={disabled}
+      className="set-btn danger"
     >
       {label}
     </button>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   GhostButton — tertiary action.
+   ───────────────────────────────────────────────────────────────────── */
 
 export function GhostButton({
   label,
@@ -344,33 +446,54 @@ export function GhostButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="cursor-pointer"
-      style={{
-        height: 38,
-        background: 'transparent',
-        color: 'var(--text-tertiary)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-        padding: '0 16px',
-        fontSize: 13,
-        fontFamily: 'var(--font-sans)',
-        opacity: disabled ? 0.4 : 1,
-        transition: 'all var(--dur-fast) var(--ease-out)',
-      }}
+      className="set-btn"
     >
       {label}
     </button>
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   PrimaryButton — primary action (sticky save footers etc).
+   ───────────────────────────────────────────────────────────────────── */
+
+export function PrimaryButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="set-btn primary"
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ConfirmDialog — modal confirmation for destructive actions.
+   ───────────────────────────────────────────────────────────────────── */
+
 export function ConfirmDialog({
   title,
   message,
+  confirmLabel = 'Confirm',
+  destructive = true,
   onConfirm,
   onCancel,
 }: {
   title: string;
   message: string;
+  confirmLabel?: string;
+  destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -379,7 +502,8 @@ export function ConfirmDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.6)',
+        background: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -390,48 +514,45 @@ export function ConfirmDialog({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-md)',
-          padding: 24,
-          maxWidth: 400,
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md, 10px)',
+          padding: 28,
+          maxWidth: 440,
           width: '90%',
         }}
       >
         <div
-          style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 8 }}
+          style={{
+            fontFamily: 'var(--font-grotesque)',
+            fontSize: 18,
+            fontWeight: 500,
+            color: 'var(--ink)',
+            letterSpacing: 'var(--track-tight)',
+            marginBottom: 10,
+          }}
         >
           {title}
         </div>
         <div
           style={{
+            fontFamily: 'var(--font-sans)',
             fontSize: 13,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-            marginBottom: 20,
+            color: 'var(--text-body)',
+            letterSpacing: 'var(--track-body-tight)',
+            lineHeight: 1.55,
+            marginBottom: 24,
           }}
         >
           {message}
         </div>
-        <div className="flex justify-end gap-3">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <GhostButton label="Cancel" onClick={onCancel} />
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="cursor-pointer"
-            style={{
-              height: 38,
-              padding: '0 16px',
-              background: 'rgba(248,113,113,0.88)',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 13,
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-sans)',
-            }}
-          >
-            Confirm
-          </button>
+          {destructive ? (
+            <DangerButton label={confirmLabel} onClick={onConfirm} />
+          ) : (
+            <PrimaryButton label={confirmLabel} onClick={onConfirm} />
+          )}
         </div>
       </div>
     </div>

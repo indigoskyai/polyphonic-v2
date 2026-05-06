@@ -1,53 +1,77 @@
-import ComingSoonCover from '@/components/common/ComingSoonCover';
+import { Section } from '@/components/settings/Section';
+import {
+  ComingSoonBlock,
+  HandlePreview,
+} from '@/components/settings/AccountRow';
+import {
+  SettingsPage,
+  AgentDot,
+} from '@/components/settings/SettingsPage';
+import { useClock } from '@/components/settings/useClock';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function PublicProfileSettings() {
-  return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div style={{ padding: '44px 48px 80px', maxWidth: 720 }}>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: 'var(--track-meta)',
-            color: 'var(--text-ghost)',
-            textTransform: 'uppercase',
-            marginBottom: 12,
-          }}
-        >
-          § settings / public profile
-        </div>
-        <h1
-          style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: 42,
-            fontWeight: 450,
-            letterSpacing: '-0.02em',
-            lineHeight: 1,
-            color: 'var(--text-primary)',
-            margin: 0,
-            marginBottom: 8,
-          }}
-        >
-          Public profile
-        </h1>
-        <p style={{ color: 'var(--text-soft)', fontSize: 14, marginBottom: 32, lineHeight: 1.55 }}>
-          A public canvas at <span style={{ fontFamily: 'var(--font-mono)' }}>polyphonic.app/@yourhandle</span> where you can share artifacts, files, and notes. Visitors will pan and zoom to explore.
-        </p>
+  const user = useAuthStore((s) => s.user);
+  const handle =
+    user?.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_-]/g, '') ??
+    'yourhandle';
 
-        <div
-          style={{
-            border: '1px solid var(--border-faint)',
-            borderRadius: 14,
-            background: 'var(--surface-1)',
-            padding: '24px 22px',
-          }}
-        >
-          <ComingSoonCover
-            title="Social intelligence"
-            subtitle="Handle claiming, public profiles, and the canvas editor are on the roadmap. We'll let you know when they're ready."
-          />
+  const time = useClock();
+
+  return (
+    <SettingsPage
+      folio={{
+        left: (
+          <>
+            <span>
+              <AgentDot /> luca
+            </span>
+            <span>
+              profile · <span className="v">public</span>
+            </span>
+          </>
+        ),
+        right: (
+          <>
+            <span>not yet shipped</span>
+            <span>{time}</span>
+          </>
+        ),
+      }}
+    >
+      <div className="set-head">
+        <div className="set-head-eye">
+          <span className="num">§ 04 / 01</span>
+          <span>·</span>
+          <span className="v">Social intelligence</span>
         </div>
+        <h1 className="set-head-title">Public profile</h1>
+        <p className="set-head-sub">
+          A public canvas where you can share artifacts, files, and notes.
+          Visitors will pan and zoom to explore. Coming soon — handles are
+          reserved by sign-up order.
+        </p>
       </div>
-    </div>
+
+      <div className="set-body">
+        <Section
+          number="01"
+          name="Reserved"
+          title="Your handle"
+          desc="Your handle is reserved and ready. The public canvas will live at the URL below once handle claiming and the canvas editor ship."
+        >
+          <HandlePreview domain="polyphonic.app/@" handle={handle} />
+        </Section>
+
+        <Section number="02" name="Roadmap" title="When this ships">
+          <ComingSoonBlock
+            title="Social intelligence is on the way"
+            body="Public profiles, the canvas editor, handle claiming, and visitor analytics will all ship together as one cohesive surface. We'd rather wait until it's good than ship a placeholder. We'll let you know the moment it's ready."
+            actionLabel="Notify me when ready"
+            onAction={() => {}}
+          />
+        </Section>
+      </div>
+    </SettingsPage>
   );
 }

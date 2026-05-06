@@ -2,7 +2,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from '@/hooks/use-toast';
-import { PageHeader, SectionTitle } from '@/components/settings/FormControls';
+import { Section } from '@/components/settings/Section';
+import { CodeBlock, PairCodeDisplay } from '@/components/settings/CodeBlock';
+import { DeviceRow } from '@/components/settings/DeviceRow';
+import {
+  SettingsPage,
+  AgentDot,
+} from '@/components/settings/SettingsPage';
+import { useClock } from '@/components/settings/useClock';
 
 interface Device {
   id: string;
@@ -13,6 +20,11 @@ interface Device {
   bridge_version: string | null;
   is_default: boolean;
   connected?: boolean;
+}
+
+interface PairingCodeResponse {
+  code: string;
+  expires_at: string;
 }
 
 const INSTALL_CMD = 'curl -fsSL https://get.polyphonic.dev/bridge | sh';
@@ -37,12 +49,14 @@ export default function LocalRuntimeSettings() {
   const [issuingCode, setIssuingCode] = useState(false);
   const [now, setNow] = useState(Date.now());
 
+  const time = useClock();
+
   const loadDevices = useCallback(async () => {
-    // Phase 0 (interim): direct table query under RLS. Will switch to
-    // openclaw-status edge function in Phase 4.
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('openclaw_devices')
-      .select('id, name, platform, status, last_seen_at, bridge_version, is_default')
+      .select(
+        'id, name, platform, status, last_seen_at, bridge_version, is_default',
+      )
       .order('created_at', { ascending: false });
     if (error) {
       console.error(error);
@@ -68,14 +82,12 @@ export default function LocalRuntimeSettings() {
     return () => clearInterval(t);
   }, [user, loadDevices]);
 
-  // Tick for code countdown
   useEffect(() => {
     if (!pairExpiresAt) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [pairExpiresAt]);
 
-  // Auto-clear expired code
   useEffect(() => {
     if (pairExpiresAt && now > pairExpiresAt) {
       setPairCode(null);
@@ -86,225 +98,159 @@ export default function LocalRuntimeSettings() {
   const issuePairingCode = async () => {
     setIssuingCode(true);
     try {
-      const { data, error } = await supabase.functions.invoke('openclaw-pair', {
-        body: { action: 'issue' },
-      });
+      const { data, error } = await supabase.functions.invoke<PairingCodeResponse>(
+        'openclaw-pair',
+        { body: { action: 'issue' } },
+      );
       if (error) throw error;
+      if (!data) throw new Error('Pairing response was empty.');
       setPairCode(data.code);
       setPairExpiresAt(new Date(data.expires_at).getTime());
-      toast({ title: 'Pairing code ready', description: 'Enter it in Polyphonic Bridge within 10 minutes.' });
-    } catch (e: any) {
-      toast({ title: 'Could not issue code', description: e.message ?? String(e), variant: 'destructive' });
+      toast({
+        title: 'Pairing code ready',
+        description: 'Enter it in Polyphonic Bridge within 10 minutes.',
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({
+        title: 'Could not issue code',
+        description: message,
+        variant: 'destructive',
+      });
     } finally {
       setIssuingCode(false);
     }
   };
 
-  const copyInstall = () => {
-    navigator.clipboard.writeText(INSTALL_CMD);
-    toast({ title: 'Copied install command' });
-  };
-
-  const copyCode = () => {
-    if (pairCode) {
-      navigator.clipboard.writeText(pairCode);
-      toast({ title: 'Copied pairing code' });
-    }
-  };
-
-  const remainingSec = pairExpiresAt ? Math.max(0, Math.floor((pairExpiresAt - now) / 1000)) : 0;
+  const onlineCount = devices.filter((d) => d.connected).length;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <PageHeader
-        folio="§ 09 / LOCAL RUNTIME"
-        title="Local runtime"
-        description="Run your Polyphonic agents on your own machine via Polyphonic Bridge. Conversations stream live to the app; transcripts sync to your account so you can read them anywhere."
-      />
-
-      <div style={{ padding: '0 32px 80px', maxWidth: 720 }}>
-        <SectionTitle>Install Polyphonic Bridge</SectionTitle>
-        <p style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 14 }}>
-          Run this once on the machine that should host your agents. The bridge supervises a local
-          OpenClaw runtime and dials Polyphonic over an outbound secure connection — no inbound port required.
-        </p>
-        <div
-          className="runtime-install-card"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '12px 14px',
-            border: '1px solid var(--border-faint)',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--bg-deep)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: 'var(--text-primary)',
-            marginBottom: 8,
-          }}
-        >
-          <span className="runtime-install-command" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {INSTALL_CMD}
-          </span>
-          <button
-            onClick={copyInstall}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              letterSpacing: 'var(--track-meta)',
-              textTransform: 'uppercase',
-              padding: '6px 12px',
-              borderRadius: 999,
-              border: '1px solid var(--border-faint)',
-              background: 'transparent',
-              color: 'var(--text-body)',
-              cursor: 'pointer',
-            }}
-          >
-            Copy
-          </button>
+    <SettingsPage
+      folio={{
+        left: (
+          <>
+            <span>
+              <AgentDot /> luca
+            </span>
+            <span>
+              settings · <span className="v">local runtime</span>
+            </span>
+            <span>
+              {devices.length} device{devices.length === 1 ? '' : 's'}
+            </span>
+          </>
+        ),
+        right: (
+          <>
+            <span>{onlineCount} online</span>
+            <span>{time}</span>
+          </>
+        ),
+      }}
+    >
+      <div className="set-head">
+        <div className="set-head-eye">
+          <span className="num">§ 09 / 07</span>
+          <span>·</span>
+          <span className="v">OpenClaw bridge</span>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--text-ghost)', lineHeight: 1.5 }}>
-          A native desktop app is on the roadmap. The CLI bridge today uses the same protocol the desktop app will.
+        <h1 className="set-head-title">Local runtime</h1>
+        <p className="set-head-sub">
+          Run agents on your own machine. Install the Polyphonic Bridge, pair
+          this device, and see all connected runtimes at a glance.
         </p>
+      </div>
 
-        <SectionTitle>Pair this device</SectionTitle>
-        {!pairCode ? (
-          <div>
-            <p style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 14 }}>
-              Generate a 6-digit code, then run <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)' }}>polyphonic-bridge pair</code> on
-              your machine and paste the code when prompted.
-            </p>
-            <button
-              onClick={issuePairingCode}
-              disabled={issuingCode}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                letterSpacing: 'var(--track-meta)',
-                textTransform: 'uppercase',
-                padding: '10px 18px',
-                borderRadius: 999,
-                border: '1px solid var(--border-faint)',
-                background: 'var(--text-primary)',
-                color: 'var(--bg-deep)',
-                cursor: issuingCode ? 'wait' : 'pointer',
-                opacity: issuingCode ? 0.6 : 1,
-              }}
-            >
-              {issuingCode ? 'Generating…' : 'Generate pairing code'}
-            </button>
-          </div>
-        ) : (
-          <div
+      <div className="set-body">
+        <Section
+          number="01"
+          name="Install"
+          title="Polyphonic Bridge"
+          desc="One command installs the bridge daemon on macOS, Linux, and WSL. The bridge runs in the background and connects this workspace to your local models and tools."
+        >
+          <CodeBlock code={INSTALL_CMD} prompt="$" />
+          <p
             style={{
-              padding: 20,
-              border: '1px solid var(--border-faint)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-deep)',
+              margin: 0,
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              letterSpacing: 'var(--track-body-tight)',
+              lineHeight: 1.5,
             }}
           >
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                letterSpacing: 'var(--track-folio)',
-                color: 'var(--text-ghost)',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-              }}
-            >
-              Pairing code · expires in {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}
-            </div>
-            <div
-              onClick={copyCode}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 36,
-                letterSpacing: '0.4em',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                userSelect: 'all',
-                marginBottom: 8,
-              }}
-            >
-              {pairCode}
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-ghost)' }}>
-              Click the code to copy. The list below will populate automatically once your bridge connects.
-            </p>
-          </div>
-        )}
-
-        <SectionTitle>Devices</SectionTitle>
-        {loading ? (
-          <p style={{ fontSize: 12, color: 'var(--text-ghost)' }}>Loading…</p>
-        ) : devices.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--text-ghost)', lineHeight: 1.6 }}>
-            No devices paired yet. Generate a code above, then run the bridge on your machine.
+            Once installed, return here and use the pairing code below to
+            authorize this workspace.
           </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, border: '1px solid var(--border-faint)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-            {devices.map((d) => (
-              <div
-                key={d.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  padding: '14px 16px',
-                  background: 'var(--canvas)',
-                  borderBottom: '1px solid var(--border-faint)',
-                }}
-              >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: d.connected || d.status === 'online' ? '#7BC97B' : 'var(--text-ghost)',
-                    boxShadow: d.connected || d.status === 'online' ? '0 0 8px #7BC97B' : 'none',
-                  }}
+        </Section>
+
+        <Section
+          number="02"
+          name="Pair"
+          title="Pair this device"
+          desc="Enter this code in your bridge terminal to authorize. Codes expire in ten minutes for security."
+        >
+          <PairCodeDisplay
+            code={pairCode}
+            expiresAt={pairExpiresAt}
+            now={now}
+            issuing={issuingCode}
+            onIssue={issuePairingCode}
+          />
+        </Section>
+
+        <Section
+          number="03"
+          name={`Devices · ${devices.length} paired`}
+          title="Connected runtimes"
+          desc="All devices currently authorized to run agents on your behalf. Revoke at any time to immediately invalidate."
+        >
+          {loading && devices.length === 0 ? (
+            <div
+              style={{
+                padding: 32,
+                textAlign: 'center',
+                color: 'var(--text-tertiary)',
+                fontSize: 13,
+                fontFamily: 'var(--font-sans)',
+              }}
+            >
+              Loading devices…
+            </div>
+          ) : devices.length === 0 ? (
+            <div
+              style={{
+                padding: 32,
+                textAlign: 'center',
+                color: 'var(--text-tertiary)',
+                fontSize: 13,
+                fontFamily: 'var(--font-sans)',
+                letterSpacing: 'var(--track-body-tight)',
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border-faint)',
+                borderRadius: 'var(--radius-md, 10px)',
+              }}
+            >
+              No devices paired yet. Install the bridge above and pair your
+              first device.
+            </div>
+          ) : (
+            <div style={{ margin: '0 -16px' }}>
+              {devices.map((d) => (
+                <DeviceRow
+                  key={d.id}
+                  name={d.name}
+                  platform={d.platform}
+                  lastSeen={fmtSeen(d.last_seen_at)}
+                  status={d.connected ? 'online' : d.status}
+                  version={d.bridge_version}
+                  isDefault={d.is_default}
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
-                    {d.name}
-                    {d.is_default && (
-                      <span
-                        style={{
-                          marginLeft: 10,
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 9,
-                          letterSpacing: 'var(--track-meta)',
-                          textTransform: 'uppercase',
-                          color: 'var(--text-ghost)',
-                          padding: '2px 8px',
-                          border: '1px solid var(--border-faint)',
-                          borderRadius: 999,
-                        }}
-                      >
-                        Default
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      letterSpacing: 'var(--track-meta)',
-                      color: 'var(--text-ghost)',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {d.platform || 'unknown'} · {d.bridge_version || 'unversioned'} · seen {fmtSeen(d.last_seen_at)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </Section>
       </div>
-    </div>
+    </SettingsPage>
   );
 }

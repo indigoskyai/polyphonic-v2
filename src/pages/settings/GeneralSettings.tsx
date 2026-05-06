@@ -1,12 +1,15 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
-  PageHeader,
-  SectionTitle,
-  SettingRow,
-  Toggle,
-  RadioGroup,
   SelectInput,
+  Toggle,
 } from '@/components/settings/FormControls';
+import { Section } from '@/components/settings/Section';
+import {
+  SettingsPage,
+  AgentDot,
+} from '@/components/settings/SettingsPage';
+import { useClock } from '@/components/settings/useClock';
+import { RadioGroup } from '@/components/settings/FormControls';
 
 const MODEL_OPTIONS = [
   { label: 'Claude Opus 4.7', value: 'anthropic/claude-opus-4-7' },
@@ -34,6 +37,29 @@ const MODEL_OPTIONS = [
   { label: 'Qwen3 Max', value: 'qwen/qwen3-max' },
 ];
 
+const SYNTHESIS_OPTIONS = [
+  {
+    value: 'conversational',
+    label: 'Conversational',
+    hint: 'Warm, plain-language replies. The default.',
+  },
+  {
+    value: 'technical',
+    label: 'Technical',
+    hint: 'Precise, code-fluent. Skips small talk.',
+  },
+  {
+    value: 'creative',
+    label: 'Creative',
+    hint: 'Reaches for metaphor, plays with structure.',
+  },
+  {
+    value: 'minimal',
+    label: 'Minimal',
+    hint: 'Shortest path to a useful answer.',
+  },
+];
+
 export default function GeneralSettings() {
   const {
     stream_responses,
@@ -44,47 +70,121 @@ export default function GeneralSettings() {
     updateSetting,
   } = useSettingsStore();
 
+  const time = useClock();
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <PageHeader
-        folio="§ 09 / GENERAL"
-        title="General"
-        description="Default model selection, synthesis style, and how responses are streamed back to you."
-      />
-
-      <div style={{ padding: '0 32px 80px', maxWidth: 720 }}>
-        <SectionTitle>Default model</SectionTitle>
-        <SelectInput
-          value={default_model}
-          onChange={(v) => updateSetting('default_model', v)}
-          options={MODEL_OPTIONS}
-          width="100%"
-        />
-
-        <SectionTitle>Synthesis style</SectionTitle>
-        <RadioGroup
-          options={['Conversational', 'Technical', 'Creative', 'Minimal']}
-          value={synthesis_style}
-          onChange={(v) => updateSetting('synthesis_style', v)}
-        />
-
-        <SectionTitle>Response behavior</SectionTitle>
-        <SettingRow label="Stream responses" description="Show tokens as they arrive">
-          <Toggle
-            on={stream_responses}
-            onChange={() => updateSetting('stream_responses', !stream_responses)}
-          />
-        </SettingRow>
-        <SettingRow label="Show thinking" description="Display the model's internal reasoning">
-          <Toggle
-            on={show_thinking}
-            onChange={() => updateSetting('show_thinking', !show_thinking)}
-          />
-        </SettingRow>
-        <SettingRow label="Auto-title threads" description="Generate titles from first message">
-          <Toggle on={auto_title} onChange={() => updateSetting('auto_title', !auto_title)} />
-        </SettingRow>
+    <SettingsPage
+      folio={{
+        left: (
+          <>
+            <span>
+              <AgentDot /> luca
+            </span>
+            <span>
+              settings · <span className="v">general</span>
+            </span>
+          </>
+        ),
+        right: (
+          <>
+            <span>{default_model.split('/').pop() ?? default_model}</span>
+            <span>{time}</span>
+          </>
+        ),
+      }}
+    >
+      <div className="set-head">
+        <div className="set-head-eye">
+          <span className="num">§ 09 / 01</span>
+          <span>·</span>
+          <span className="v">Default behavior</span>
+        </div>
+        <h1 className="set-head-title">General</h1>
+        <p className="set-head-sub">
+          Default model selection, synthesis style, and how responses are
+          streamed back to you.
+        </p>
       </div>
-    </div>
+
+      <div className="set-body">
+        <Section
+          number="01"
+          name="Default model"
+          title="Reasoning model"
+          desc="The model used for new threads when no agent-specific override exists."
+        >
+          <SelectInput
+            value={default_model}
+            onChange={(v) => updateSetting('default_model', v)}
+            options={MODEL_OPTIONS}
+            width="100%"
+          />
+        </Section>
+
+        <Section
+          number="02"
+          name="Synthesis style"
+          title="Voice & register"
+          desc="How responses sound. Affects tone, length, and structure across all agents."
+        >
+          <RadioGroup
+            options={SYNTHESIS_OPTIONS}
+            value={synthesis_style}
+            onChange={(v) => updateSetting('synthesis_style', v)}
+          />
+        </Section>
+
+        <Section
+          number="03"
+          name="Response behavior"
+          title="Streaming & display"
+          desc="How tokens render and threads are titled."
+        >
+          <div className="set-row">
+            <div className="set-row-copy">
+              <div className="set-row-label">Stream responses</div>
+              <div className="set-row-desc">
+                Show tokens as they arrive rather than waiting for the full
+                response.
+              </div>
+            </div>
+            <div className="set-row-control">
+              <Toggle
+                on={stream_responses}
+                onChange={() => updateSetting('stream_responses', !stream_responses)}
+              />
+            </div>
+          </div>
+          <div className="set-row">
+            <div className="set-row-copy">
+              <div className="set-row-label">Show thinking</div>
+              <div className="set-row-desc">
+                Display the model's internal reasoning when available.
+              </div>
+            </div>
+            <div className="set-row-control">
+              <Toggle
+                on={show_thinking}
+                onChange={() => updateSetting('show_thinking', !show_thinking)}
+              />
+            </div>
+          </div>
+          <div className="set-row">
+            <div className="set-row-copy">
+              <div className="set-row-label">Auto-title threads</div>
+              <div className="set-row-desc">
+                Generate thread titles from the first message.
+              </div>
+            </div>
+            <div className="set-row-control">
+              <Toggle
+                on={auto_title}
+                onChange={() => updateSetting('auto_title', !auto_title)}
+              />
+            </div>
+          </div>
+        </Section>
+      </div>
+    </SettingsPage>
   );
 }

@@ -30,9 +30,10 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
       style={{
         padding: '14px 16px 6px',
         fontFamily: 'var(--font-mono)',
-        fontSize: 9,
+        fontSize: 10,
+        fontWeight: 500,
         letterSpacing: 'var(--track-folio)',
-        color: 'var(--text-ghost)',
+        color: 'var(--text-soft)',
         textTransform: 'uppercase',
       }}
     >
@@ -52,7 +53,7 @@ export default function SidebarSettings() {
       <SidebarHeader folio="§ 09" title="Settings" />
       <div
         className="flex-1 overflow-y-auto"
-        style={{ padding: '0 8px', scrollbarWidth: 'none' }}
+        style={{ padding: '0 12px 12px' }}
       >
         <GroupLabel>Agents</GroupLabel>
         {AGENTS_GROUP.map((e) => (
