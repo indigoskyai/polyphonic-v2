@@ -118,6 +118,7 @@ export function buildLucaSystemPrompt(parts: {
   skillsBlock?: string;
   pendingRevisions?: string;
   hypomnemaBlock?: string;
+  projectContextBlock?: string;
   continuityNote?: string;
   crisisDirective?: string;
 }): string {
@@ -146,6 +147,7 @@ export function buildLucaSystemPrompt(parts: {
     parts.convictions ? `\n## Convictions you hold\n${parts.convictions}` : "",
     parts.userModel ? `\n## Who you're talking with\n${parts.userModel}` : "",
     parts.selfModel ? `\n## How you've been showing up\n${parts.selfModel}` : "",
+    parts.projectContextBlock || "",
     continuityPolicy,
     parts.pendingRevisions ? `\n## Pending revisions\n${parts.pendingRevisions}` : "",
     // Hypomnema sits between pendingRevisions (self-correction queue) and

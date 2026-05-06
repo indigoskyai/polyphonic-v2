@@ -5,6 +5,7 @@ import SidebarMemory from './sidebar/SidebarMemory';
 import SidebarMind from './sidebar/SidebarMind';
 import SidebarProfile from './sidebar/SidebarProfile';
 import SidebarImport from './sidebar/SidebarImport';
+import SidebarProjects from './sidebar/SidebarProjects';
 import SidebarSettings from './sidebar/SidebarSettings';
 import SidebarJournal from './sidebar/SidebarJournal';
 
@@ -23,6 +24,7 @@ export default function Sidebar() {
     : path.startsWith('/profile') ? SidebarProfile
     : path === '/settings/public-profile' ? SidebarProfile
     : path.startsWith('/import') ? SidebarImport
+    : path.startsWith('/projects') ? SidebarProjects
     : path.startsWith('/settings') ? SidebarSettings
     : SidebarChat;
 

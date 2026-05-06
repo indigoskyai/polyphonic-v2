@@ -20,6 +20,7 @@ import { useObservabilityStore } from '@/stores/observabilityStore';
 import { useObserverStore } from '@/stores/observerStore';
 import { usePermissionModalStore } from '@/stores/permissionModalStore';
 import { useProfileCanvasStore } from '@/stores/profileCanvasStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { defaultSettings, useSettingsStore } from '@/stores/settingsStore';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useThreadStore } from '@/stores/threadStore';
@@ -35,6 +36,7 @@ export function resetClientSessionStores(): void {
     streamingContent: '',
     streamingThinking: '',
   });
+  useProjectStore.setState({ projects: [], loading: false, error: null });
   useAttachmentStore.setState({ pending: [] });
   useMemoryStore.setState({
     engrams: [],

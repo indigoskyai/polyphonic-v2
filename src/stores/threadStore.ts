@@ -8,6 +8,7 @@ export interface Thread {
   pinned: boolean;
   heat: string;
   agent_id: string;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +47,7 @@ interface ThreadState {
   setCurrentThread: (id: string | null) => void;
   loadMessages: (threadId: string) => Promise<void>;
   subscribeMessages: (threadId: string) => () => void;
-  createThread: (userId: string, agentId?: string) => Promise<string>;
+  createThread: (userId: string, agentId?: string, projectId?: string | null) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'>) => void;
   patchMessage: (id: string, patch: Partial<Message>) => void;
   setStreaming: (s: boolean) => void;
@@ -55,6 +56,7 @@ interface ThreadState {
   updateThreadTitle: (threadId: string, title: string) => Promise<void>;
   updateThreadPinned: (threadId: string, pinned: boolean) => Promise<void>;
   updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
+  updateThreadProject: (threadId: string, projectId: string | null) => Promise<void>;
 }
 
 const normContent = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
@@ -159,10 +161,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     };
   },
 
-  createThread: async (userId, agentId = 'luca') => {
+  createThread: async (userId, agentId = 'luca', projectId = null) => {
     const { data } = await supabase
       .from('threads')
-      .insert({ user_id: userId, agent_id: agentId })
+      .insert({ user_id: userId, agent_id: agentId, project_id: projectId })
       .select()
       .single();
     if (data) {
@@ -234,6 +236,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await supabase.from('threads').update({ agent_id: agentId }).eq('id', threadId);
     set((s) => ({
       threads: s.threads.map((t) => (t.id === threadId ? { ...t, agent_id: agentId } : t)),
+    }));
+  },
+
+  updateThreadProject: async (threadId, projectId) => {
+    await supabase.from('threads').update({ project_id: projectId }).eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (t.id === threadId ? { ...t, project_id: projectId } : t)),
     }));
   },
 }));

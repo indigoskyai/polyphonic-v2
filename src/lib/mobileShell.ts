@@ -36,6 +36,10 @@ export function getMobileSurfaceMeta(
     return { title: 'Import', subtitle: 'Memory intake', contextAction: 'activity' };
   }
 
+  if (pathname.startsWith('/projects')) {
+    return { title: 'Projects', subtitle: 'Workspace context', contextAction: 'activity' };
+  }
+
   if (pathname.startsWith('/profile')) {
     return { title: 'Profile', subtitle: 'Psychological portrait', contextAction: 'activity' };
   }

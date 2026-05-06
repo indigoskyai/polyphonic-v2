@@ -31,6 +31,7 @@ const MAIN_ROUTES = [
   { label: 'Mind', path: '/mind', icon: Brain },
   { label: 'Profile', path: '/profile', icon: CircleUserRound },
   { label: 'Import', path: '/import', icon: Import },
+  { label: 'Projects', path: '/projects', icon: FolderKanban },
   { label: 'Workspace', path: '/workspace', icon: FolderKanban },
   { label: 'Group', path: '/group', icon: UsersRound },
   { label: 'Checkpoints', path: '/checkpoints', icon: CheckCircle2 },
@@ -38,7 +39,7 @@ const MAIN_ROUTES = [
 ];
 
 const QUICK_ROUTES = MAIN_ROUTES.filter((route) =>
-  ['/memory', '/mind', '/profile', '/import'].includes(route.path),
+  ['/memory', '/mind', '/projects', '/profile', '/import'].includes(route.path),
 );
 
 function isActiveRoute(pathname: string, path: string): boolean {

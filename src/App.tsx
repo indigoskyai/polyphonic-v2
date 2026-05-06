@@ -43,6 +43,7 @@ const MemoryView = lazy(() => import("./pages/MemoryView"));
 const MindView = lazy(() => import("./pages/MindView"));
 const JournalView = lazy(() => import("./pages/JournalView"));
 const ImportView = lazy(() => import("./pages/ImportView"));
+const ProjectsView = lazy(() => import("./pages/ProjectsView"));
 const ProfileView = lazy(() => import("./pages/ProfileView"));
 const ProfileIdentityView = lazy(() => import("./pages/ProfileIdentityView"));
 const ProfileSkillsView = lazy(() => import("./pages/ProfileSkillsView"));
@@ -279,6 +280,8 @@ const App = () => (
                 <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
                 <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
                 <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
+                <Route path="/projects" element={<ProtectedRoute><AppShell><ProjectsView /></AppShell></ProtectedRoute>} />
+                <Route path="/projects/:projectId" element={<ProtectedRoute><AppShell><ProjectsView /></AppShell></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><AppShell><ProfileView /></AppShell></ProtectedRoute>} />
                 <Route path="/profile/identity" element={<ProtectedRoute><AppShell><ProfileIdentityView /></AppShell></ProtectedRoute>} />
                 <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />

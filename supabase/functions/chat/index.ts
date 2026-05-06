@@ -19,6 +19,7 @@ import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -111,6 +112,9 @@ serve(async (req) => {
     });
     logContinuityDiagnostics(continuity, "chat.continuity");
     const history = continuity.history;
+    const projectContextBlock = formatProjectContextPrompt(
+      await loadProjectContextForThread(supabase, userId, thread_id),
+    );
 
     // L12 — crisis classification on the user message. Cheap model, fail-soft.
     const classification = await classifyCrisis(apiKey, history ?? [], message);
@@ -143,6 +147,7 @@ serve(async (req) => {
       ...buildLucaPromptPartsFromContinuity(continuity, {
         crisisDirective,
       }),
+      projectContextBlock,
       crisisDirective,
     });
 

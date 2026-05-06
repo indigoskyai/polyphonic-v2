@@ -47,6 +47,7 @@ const SETTINGS_STATIC: { id: string; title: string; subtitle: string; path: stri
   { id: 'settings-agents', title: 'Agents', subtitle: 'Per-agent configuration', path: '/settings/agents' },
   { id: 'settings-memory', title: 'Memory', subtitle: 'Memory browse and digest', path: '/memory' },
   { id: 'settings-import', title: 'Import', subtitle: 'Import conversation data', path: '/import' },
+  { id: 'settings-projects', title: 'Projects', subtitle: 'Thread workspaces and instructions', path: '/projects' },
   { id: 'settings-profile', title: 'Profile', subtitle: 'Your account', path: '/profile' },
 ];
 

@@ -25,6 +25,7 @@ describe('threadStore thread list helpers', () => {
       pinned: false,
       heat: 'warm',
       agent_id: 'luca',
+      project_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

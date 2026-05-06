@@ -28,6 +28,7 @@ import { useMemoryStore } from '@/stores/memoryStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useObservabilityStore } from '@/stores/observabilityStore';
 import { useObserverStore } from '@/stores/observerStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useThreadStore } from '@/stores/threadStore';
@@ -39,7 +40,7 @@ describe('resetClientSessionStores', () => {
 
   it('clears account-scoped client state after logout', () => {
     useThreadStore.setState({
-      threads: [{ id: 'thread-1', user_id: 'user-1', title: 'private', pinned: false, heat: 'cold', agent_id: 'luca', created_at: '', updated_at: '' }],
+      threads: [{ id: 'thread-1', user_id: 'user-1', title: 'private', pinned: false, heat: 'cold', agent_id: 'luca', project_id: 'project-1', created_at: '', updated_at: '' }],
       currentThreadId: 'thread-1',
       messages: [{
         id: 'message-1',
@@ -57,6 +58,11 @@ describe('resetClientSessionStores', () => {
       isStreaming: true,
       streamingContent: 'private stream',
       streamingThinking: 'private thought',
+    });
+    useProjectStore.setState({
+      projects: [{ id: 'project-1', user_id: 'user-1', name: 'Private project', description: null, instructions: null, color: 'neutral', icon: 'folder', pinned: false, archived: false, metadata: {}, created_at: '', updated_at: '' }],
+      loading: true,
+      error: 'private error',
     });
     useMemoryStore.setState({
       memories: [{ id: 'memory-1', content: 'private memory', memory_type: 'fact', confidence: 1, confidence_source: null, emotional_valence: null, emotional_intensity: null, detail_level: null, narrative_thread: null, tags: null, summary: null, staleness_risk: null, estimated_date: null, needs_confirmation: null, is_deleted: false, created_at: '', updated_at: '' }],
@@ -121,6 +127,7 @@ describe('resetClientSessionStores', () => {
       streamingContent: '',
       streamingThinking: '',
     });
+    expect(useProjectStore.getState()).toMatchObject({ projects: [], loading: false, error: null });
     expect(useMemoryStore.getState()).toMatchObject({
       memories: [],
       engrams: [],

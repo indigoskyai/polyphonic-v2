@@ -20,6 +20,7 @@ describe('mobile shell surface metadata', () => {
 
   it('labels core app surfaces with activity context', () => {
     expect(getMobileSurfaceMeta('/memory').title).toBe('Memory');
+    expect(getMobileSurfaceMeta('/projects').subtitle).toBe('Workspace context');
     expect(getMobileSurfaceMeta('/profile/identity').subtitle).toBe('Psychological portrait');
     expect(getMobileSurfaceMeta('/settings/models').contextAction).toBe('activity');
   });

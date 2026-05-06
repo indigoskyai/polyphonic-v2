@@ -1616,3 +1616,30 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Push the hotfix to `main` so Lovable staging picks it up.
 2. Smoke a real chat send on staging after deploy; the latest user turn should appear once in Luca's effective prompt.
+
+---
+
+## Projects MVP  [x] (2026-05-06)
+
+**Changed**
+- Added a focused Projects MVP as the first user/project organization layer before larger collaborative-agent work.
+- Added `public.projects` with owner RLS, archive state, project instructions, thread `project_id`, an ownership-validation trigger, and supporting indexes.
+- Added a project store and thread-store assignment/create-thread support so existing threads can be moved into projects and new project chats start already scoped.
+- Added `/projects` and `/projects/:projectId` with create/edit/archive, project instructions, project thread creation, and unassigned-thread assignment/removal.
+- Added desktop rail/sidebar, mobile drawer/header metadata, and command-palette reachability for Projects.
+- Added backend project context loading so `chat` and `chat-multi` inject active project name/description/instructions into Luca/custom-agent runtime prompts by thread id without touching chat-polish UI files.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/_shared/projects/context.ts supabase/functions/chat/index.ts supabase/functions/chat-multi/index.ts` passed.
+- `npx vitest run src/test/projectContext.test.ts src/test/projectStore.test.ts src/test/projectsMvp.test.ts src/test/mobileShell.test.ts src/test/threadStore.test.ts src/test/sessionReset.test.ts --reporter=verbose` passed: 6 files, 19 tests.
+- `npm run verify` passed: 44 test files, 258 tests, production build, and launch-payload gate at 301.2 KiB gzip.
+- Local browser protected-route smoke captured `/projects` redirecting cleanly to login while unauthenticated: `output/playwright/projects-mvp-protected-route.png`.
+
+**Remaining risks**
+- Hosted browser smoke for the actual `/projects` UI needs Lovable/Supabase to apply migration `20260506124500_projects_mvp.sql`.
+- This MVP intentionally does not add project files/RAG, shared projects, project agent membership, or local OpenClaw/Hermes bridge behavior.
+
+**Next**
+1. Commit and push to `main`.
+2. After Lovable staging applies the migration, smoke `/projects`: create project, add instructions, create project chat, assign/remove an existing thread, and confirm a project-scoped chat carries instructions.

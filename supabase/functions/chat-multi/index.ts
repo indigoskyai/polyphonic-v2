@@ -48,6 +48,7 @@ import {
   openRouterAgentSdkStream,
 } from "../_shared/agent-runtime/openrouter-agent.ts";
 import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
+import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -296,6 +297,9 @@ serve(async (req) => {
     const continuityNote = continuity.continuityNote;
     const hypomnemaAnimaBlock = siblingContinuity.anima?.hypomnema.block || "";
     const hypomnemaVektorBlock = siblingContinuity.vektor?.hypomnema.block || "";
+    const projectContextBlock = formatProjectContextPrompt(
+      await loadProjectContextForThread(supabase, userId, thread_id),
+    );
 
     // L12 — crisis classification on the user message (system-Luca path only).
     let crisisDirective = "";
@@ -329,10 +333,12 @@ serve(async (req) => {
           ...buildLucaPromptPartsFromContinuity(continuity, {
             crisisDirective,
           }),
+          projectContextBlock,
           crisisDirective,
         })
       : [
           agentPrompt,
+          projectContextBlock,
           continuity.hypomnema.block,
           continuityNote,
         ].filter(Boolean).join("\n\n");
@@ -443,15 +449,17 @@ serve(async (req) => {
               ...buildLucaPromptPartsFromContinuity(continuity, {
                 crisisDirective,
               }),
+              projectContextBlock,
               crisisDirective,
             },
             anima: {
               hypomnemaBlock: hypomnemaAnimaBlock,
-              extraContext: crisisDirective || undefined,
+              extraContext: [projectContextBlock, crisisDirective].filter(Boolean).join("\n\n") || undefined,
             },
             vektor: {
               userModel: continuity.identityDocs?.userModel,
               hypomnemaBlock: hypomnemaVektorBlock,
+              projectContextBlock,
               continuityNote,
             },
           };

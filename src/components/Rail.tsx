@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Archive } from 'lucide-react';
+import { Archive, FolderKanban } from 'lucide-react';
 import { useThreadStore } from '@/stores/threadStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
@@ -67,6 +67,7 @@ export default function Rail() {
     : location.pathname.startsWith('/mind') ? 'mind'
     : location.pathname.startsWith('/journal') ? 'journal'
     : location.pathname.startsWith('/import') ? 'import'
+    : location.pathname.startsWith('/projects') ? 'projects'
     : location.pathname.startsWith('/profile/identity') ? 'mind'
     : location.pathname.startsWith('/profile/revisions') ? 'mind'
     : location.pathname.startsWith('/profile/skills') ? 'settings'
@@ -126,6 +127,7 @@ export default function Rail() {
       <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
       <NavIcon icon="journal" active={activeView === 'journal'} onClick={() => navigate('/journal')} />
       <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
+      <NavIcon icon="projects" active={activeView === 'projects'} onClick={() => navigate('/projects')} />
       <NavIcon icon="profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
 
       {/* Notifications bell */}
@@ -182,6 +184,7 @@ function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onC
       {icon === 'mind' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M5 2.5c-1.7 0-3 1.3-3 3 0 .9.4 1.7 1 2.3-.6.5-1 1.3-1 2.2 0 .8.7 1.5 1.5 1.5h7c.8 0 1.5-.7 1.5-1.5 0-.9-.4-1.7-1-2.2.6-.6 1-1.4 1-2.3 0-1.7-1.3-3-3-3-.7 0-1.4.2-2 .7-.6-.5-1.3-.7-2-.7z"/><path d="M7 3.2v8.3"/></svg>}
       {icon === 'journal' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 1.5h6.5L11.5 3.5V12a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 .5-.5z"/><path d="M5 5h4M5 7.5h4M5 10h2.5"/></svg>}
       {icon === 'import' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M7 1v8M4 6l3 3 3-3"/><path d="M2 10v2h10v-2"/></svg>}
+      {icon === 'projects' && <FolderKanban size={14} strokeWidth={1.6} />}
       {icon === 'profile' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={4} r={2.5}/><path d="M2.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/></svg>}
       {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>}
     </div>
