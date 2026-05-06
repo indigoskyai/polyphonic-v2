@@ -229,49 +229,51 @@ export default function MindView() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
       <div className="flex-1 overflow-y-auto" style={{ padding: 0 }}>
-        {activeTab === 'Overview' && <MindOverview />}
-        {activeTab === 'Thoughts' && (
-          <StreamTab items={thoughts} cfg={{
-            num: '01', label: 'THOUGHTS STREAM', title: 'Thoughts', kindLabel: 'thought',
-            subtitle: (n) => `${n} thoughts. Live working stream — reflections, questions, observations as they happen.`,
-            searchPlaceholder: 'Search thoughts…',
-            empty: 'No thoughts yet.',
-          }} />
-        )}
-        {activeTab === 'Dreams' && (
-          <StreamTab items={dreams} cfg={{
-            num: '02', label: 'DREAMS STREAM', title: 'Dreams', kindLabel: 'dream', poetic: true,
-            subtitle: (n) => `${n} dreams. Memory consolidations that surface overnight.`,
-            searchPlaceholder: 'Search dreams…',
-            empty: 'No dreams yet.',
-          }} />
-        )}
-        {activeTab === 'Wanderings' && (
-          <StreamTab items={wanderings} cfg={{
-            num: '03', label: 'WANDERINGS STREAM', title: 'Wanderings', kindLabel: 'wandering',
-            subtitle: (n) => `${n} wanderings. Untethered drifts during idle.`,
-            searchPlaceholder: 'Search wanderings…',
-            empty: 'No wanderings yet.',
-          }} />
-        )}
-        {activeTab === 'Insights' && (
-          <StreamTab items={insights} cfg={{
-            num: '04', label: 'INSIGHTS STREAM', title: 'Insights', kindLabel: 'insight',
-            subtitle: (n) => `${n} insights. Patterns Luca crystallized across conversations.`,
-            searchPlaceholder: 'Search insights…',
-            empty: 'No insights crystallized yet.',
-          }} />
-        )}
-        {activeTab === 'Reflections' && (
-          <StreamTab items={reflections} cfg={{
-            num: '05', label: 'REFLECTIONS STREAM', title: 'Reflections', kindLabel: 'reflection',
-            subtitle: (n) => `${n} reflections. Deeper, persistent ideas about self and relationships.`,
-            searchPlaceholder: 'Search reflections…',
-            empty: 'No reflections yet.',
-          }} />
-        )}
-        {activeTab === 'Beliefs' && <BeliefsTab />}
-        {activeTab === 'Activity' && <ActivityTab />}
+        <div key={activeTab} className="tab-transition-panel">
+          {activeTab === 'Overview' && <MindOverview />}
+          {activeTab === 'Thoughts' && (
+            <StreamTab items={thoughts} cfg={{
+              num: '01', label: 'THOUGHTS STREAM', title: 'Thoughts', kindLabel: 'thought',
+              subtitle: (n) => `${n} thoughts. Live working stream — reflections, questions, observations as they happen.`,
+              searchPlaceholder: 'Search thoughts…',
+              empty: 'No thoughts yet.',
+            }} />
+          )}
+          {activeTab === 'Dreams' && (
+            <StreamTab items={dreams} cfg={{
+              num: '02', label: 'DREAMS STREAM', title: 'Dreams', kindLabel: 'dream', poetic: true,
+              subtitle: (n) => `${n} dreams. Memory consolidations that surface overnight.`,
+              searchPlaceholder: 'Search dreams…',
+              empty: 'No dreams yet.',
+            }} />
+          )}
+          {activeTab === 'Wanderings' && (
+            <StreamTab items={wanderings} cfg={{
+              num: '03', label: 'WANDERINGS STREAM', title: 'Wanderings', kindLabel: 'wandering',
+              subtitle: (n) => `${n} wanderings. Untethered drifts during idle.`,
+              searchPlaceholder: 'Search wanderings…',
+              empty: 'No wanderings yet.',
+            }} />
+          )}
+          {activeTab === 'Insights' && (
+            <StreamTab items={insights} cfg={{
+              num: '04', label: 'INSIGHTS STREAM', title: 'Insights', kindLabel: 'insight',
+              subtitle: (n) => `${n} insights. Patterns Luca crystallized across conversations.`,
+              searchPlaceholder: 'Search insights…',
+              empty: 'No insights crystallized yet.',
+            }} />
+          )}
+          {activeTab === 'Reflections' && (
+            <StreamTab items={reflections} cfg={{
+              num: '05', label: 'REFLECTIONS STREAM', title: 'Reflections', kindLabel: 'reflection',
+              subtitle: (n) => `${n} reflections. Deeper, persistent ideas about self and relationships.`,
+              searchPlaceholder: 'Search reflections…',
+              empty: 'No reflections yet.',
+            }} />
+          )}
+          {activeTab === 'Beliefs' && <BeliefsTab />}
+          {activeTab === 'Activity' && <ActivityTab />}
+        </div>
       </div>
     </div>
   );

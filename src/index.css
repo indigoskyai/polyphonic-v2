@@ -653,6 +653,27 @@ html {
   to { opacity: 1; }
 }
 
+@keyframes routeStageIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tabPanelIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes firstTurnMessageIn {
+  0% { opacity: 0; transform: translateY(18px) scale(0.985); }
+  58% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes firstTurnStatusPulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.86); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
 @keyframes settingsOverlayIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -707,6 +728,20 @@ html {
 
 .app-main {
   max-width: 100%;
+}
+
+.route-transition-stage {
+  animation: routeStageIn 240ms var(--ease-out) both;
+  will-change: opacity, transform;
+}
+
+.tab-transition-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  animation: tabPanelIn 220ms var(--ease-out) both;
+  will-change: opacity, transform;
 }
 
 .mobile-app-bar {
@@ -1709,6 +1744,69 @@ html {
   width: 100%;
   max-width: 600px;
   min-width: 0;
+}
+
+.chat-view--handoff .chat-header {
+  animation: tabPanelIn 240ms var(--ease-out) both;
+}
+
+.chat-view--handoff .chat-scroll-area {
+  scroll-behavior: smooth;
+}
+
+.first-turn-handoff-row {
+  padding-top: clamp(26px, 9vh, 96px);
+}
+
+.first-turn-handoff-body {
+  position: relative;
+}
+
+.first-turn-handoff-body::before {
+  content: '';
+  position: absolute;
+  inset: -14px -16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(244, 243, 240, 0.035), transparent 72%);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.first-turn-attachment-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+}
+
+.first-turn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+}
+
+.first-turn-status span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--luca-full);
+  animation: firstTurnStatusPulse 1.1s var(--ease-out) infinite;
 }
 
 /* Chat message hover subtle highlight */
@@ -7472,6 +7570,10 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .route-transition-stage,
+  .tab-transition-panel,
+  .first-turn-handoff-row,
+  .first-turn-status span,
   .m-drawer,
   .m-drawer-backdrop,
   .mobile-nav-drawer,

@@ -580,67 +580,69 @@ export default function ProfileView() {
             scrollbarColor: 'var(--border) transparent',
           }}
         >
-          <ProfileTabBoundary tab={activeTab} onRetry={loadData}>
-            {activeTab === 'Portrait' && (
-              <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
-            )}
-            {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
-            {activeTab === 'Communication' && (
-              <CommunicationMind
-                data={profile.communication_patterns}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Emotions' && (
-              <EmotionsMind
-                data={profile.emotional_landscape}
-                emotionalSeries={emotionalSeries}
-                memoryStats={memoryStats}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Values' && (
-              <ValuesMind
-                data={profile.values_hierarchy}
-                memoryStats={memoryStats}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Relationships' && (
-              <RelationshipsMind
-                data={profile.relational_dynamics}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Cognition' && (
-              <CognitionMind
-                data={profile.cognitive_tendencies}
-                byType={memoryStats?.byType}
-                engramTotal={engramSummary?.total}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Growth' && (
-              <GrowthMind
-                data={profile.growth_edges}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-            {activeTab === 'Shadow' && (
-              <ShadowMind
-                data={profile.shadow_patterns}
-                memoryStats={memoryStats}
-                updatedAt={profile.updated_at}
-                version={profile.version}
-              />
-            )}
-          </ProfileTabBoundary>
+          <div key={activeTab} className="tab-transition-panel">
+            <ProfileTabBoundary tab={activeTab} onRetry={loadData}>
+              {activeTab === 'Portrait' && (
+                <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
+              )}
+              {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
+              {activeTab === 'Communication' && (
+                <CommunicationMind
+                  data={profile.communication_patterns}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Emotions' && (
+                <EmotionsMind
+                  data={profile.emotional_landscape}
+                  emotionalSeries={emotionalSeries}
+                  memoryStats={memoryStats}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Values' && (
+                <ValuesMind
+                  data={profile.values_hierarchy}
+                  memoryStats={memoryStats}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Relationships' && (
+                <RelationshipsMind
+                  data={profile.relational_dynamics}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Cognition' && (
+                <CognitionMind
+                  data={profile.cognitive_tendencies}
+                  byType={memoryStats?.byType}
+                  engramTotal={engramSummary?.total}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Growth' && (
+                <GrowthMind
+                  data={profile.growth_edges}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+              {activeTab === 'Shadow' && (
+                <ShadowMind
+                  data={profile.shadow_patterns}
+                  memoryStats={memoryStats}
+                  updatedAt={profile.updated_at}
+                  version={profile.version}
+                />
+              )}
+            </ProfileTabBoundary>
+          </div>
         </div>
       </div>
 

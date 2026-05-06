@@ -1399,3 +1399,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Let Lovable staging refresh from the pushed `main` commit, then do a quick hosted mobile visual smoke.
 2. Resume Phase 4/5 launch gates.
+
+---
+
+## Phase 5 — Motion And Transition Polish  [x] (2026-05-05)
+
+**Changed**
+- Added a first-turn chat handoff so pressing send from an empty chat immediately stages the user's message and status before the new thread route lands.
+- Delayed first-thread navigation until the user message row is inserted, with safe composer restore if thread creation, attachment upload, or message insert fails.
+- Added shared protected-route enter motion and focused tab-panel enter motion for Memory, Mind, and Profile.
+- Suppressed the new route/tab/first-turn animations under `prefers-reduced-motion`.
+- Removed a Memory Engrams duplicate-key warning caused by repeated tag labels.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npm run verify` passed.
+- Local Playwright desktop first-turn smoke confirmed `.first-turn-handoff-row` appears with `firstTurnMessageIn` before the new thread route settles.
+- Local Playwright mobile 390x844 first-turn smoke confirmed the same handoff path, active mobile header, route animation, and no horizontal overflow.
+- Local Playwright route/tab sweep confirmed `routeStageIn` and `tabPanelIn` across `/memory`, `/mind`, `/profile`, `/import`, and `/settings/agents`.
+- Console captures after the Memory Engrams fix and final motion sweep recorded 0 errors and 0 warnings.
+- Browser artifacts include `output/playwright/motion-pass-first-turn-handoff-delayed.png`, `output/playwright/motion-pass-desktop-first-turn-handoff-captured.json`, `output/playwright/motion-pass-mobile-first-turn-handoff.json`, `output/playwright/motion-pass-memory-route.png`, `output/playwright/motion-pass-mind-tab.png`, `output/playwright/motion-pass-profile-tab.png`, `output/playwright/motion-pass-mobile-memory-route.png`, and `output/playwright/motion-pass-console-final.log`.
+
+**Remaining risks**
+- This pass tuned transition mechanics, timing, and containment. It does not replace a broader artistic visual-design pass.
+- The real first-turn handoff is intentionally brief when the backend is fast; the delayed smoke exists to prove the transitional state is present.
+
+**Next**
+1. Let Lovable staging refresh from the pushed `main` commit and do a quick hosted chat send visual smoke.
+2. Continue the remaining Phase 4/5 launch gates.

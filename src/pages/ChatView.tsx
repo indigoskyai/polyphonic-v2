@@ -375,6 +375,13 @@ function FreshMsgRow({ children, className = 'msg-row', style }: {
 
 /* ─── Main ChatView ─── */
 type ModelKeyStatus = 'checking' | 'present' | 'missing' | 'unknown';
+type FirstTurnHandoff = {
+  id: string;
+  text: string;
+  agentLabel: string;
+  attachmentCount: number;
+  startedAt: string;
+};
 
 export default function ChatView() {
   const { threadId } = useParams();
@@ -421,6 +428,7 @@ export default function ChatView() {
 
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
+  const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
   // Ensemble skill: armed = next message only; locked = persistent until toggled off
@@ -509,6 +517,12 @@ export default function ChatView() {
     [agents]
   );
   const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
+  useEffect(() => {
+    if (messages.length > 0 && firstTurnHandoff) {
+      setFirstTurnHandoff(null);
+    }
+  }, [firstTurnHandoff, messages.length]);
+
   useEffect(() => {
     if (isStreaming && streamingContent) {
       setLingeringStream(streamingContent);
@@ -1049,7 +1063,7 @@ export default function ChatView() {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
     const replayAttachments = options?.attachments ?? null;
     if (modelKeyMissing) return;
-    if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming) return;
+    if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming || firstTurnHandoff) return;
 
     // Dismiss welcome back on first message
     if (welcomeBack) setWelcomeBack(null);
@@ -1057,10 +1071,31 @@ export default function ChatView() {
     const messageText = sourceText.trim() || 'Uploaded attachments.';
     inputCaptureRef.current = messageText;
 
+    const isFirstTurn = !currentThreadId && messages.length === 0 && !options?.text;
+    if (isFirstTurn) {
+      setFirstTurnHandoff({
+        id: crypto.randomUUID(),
+        text: messageText,
+        agentLabel: currentAgentLabel,
+        attachmentCount: pendingAttachments.length + (replayAttachments?.length ?? 0),
+        startedAt: new Date().toISOString(),
+      });
+      setInput('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    }
+
     let tid = currentThreadId;
+    let createdThread = false;
     if (!tid) {
-      tid = await createThread(user.id, pendingAgentId);
-      navigate(`/chat/${tid}`, { replace: true });
+      try {
+        tid = await createThread(user.id, pendingAgentId);
+        createdThread = true;
+      } catch (err) {
+        setFirstTurnHandoff(null);
+        if (isFirstTurn && !options?.text) setInput(sourceText);
+        setAttachmentError(err instanceof Error ? err.message : 'Could not start a new conversation');
+        return;
+      }
     }
 
     let uploadedAttachments: PersistedAttachment[] = replayAttachments ?? [];
@@ -1069,6 +1104,8 @@ export default function ChatView() {
         uploadedAttachments = await uploadPendingAttachments(tid);
       }
     } catch (err) {
+      setFirstTurnHandoff(null);
+      if (isFirstTurn && !options?.text) setInput(sourceText);
       setAttachmentError(err instanceof Error ? err.message : 'Attachment upload failed');
       return;
     }
@@ -1083,6 +1120,8 @@ export default function ChatView() {
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
     });
     if (insertUserError) {
+      setFirstTurnHandoff(null);
+      if (isFirstTurn && !options?.text) setInput(sourceText);
       addMessage({
         thread_id: tid, user_id: user.id, role: 'assistant',
         content: 'Could not save your message. Please try again.',
@@ -1098,12 +1137,17 @@ export default function ChatView() {
       model: null, agent: null, thinking_content: null, tokens_used: null, bookmarked: false,
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
     });
+    setFirstTurnHandoff(null);
 
     if (!options?.text) {
       setInput('');
       clearAttachments();
       setAttachmentError(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    }
+
+    if (createdThread) {
+      navigate(`/chat/${tid}`, { replace: true });
     }
 
     // Stream response
@@ -1364,7 +1408,7 @@ export default function ChatView() {
       abortRef.current = null;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, isStreaming, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, clearAttachments]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1518,7 +1562,8 @@ export default function ChatView() {
     queueAttachmentFiles(e.dataTransfer?.files);
   }, [queueAttachmentFiles, resetDragState]);
 
-  const isEmpty = messages.length === 0 && !isStreaming;
+  const isFirstTurnHandoff = !!firstTurnHandoff && messages.length === 0 && !isStreaming;
+  const isEmpty = messages.length === 0 && !isStreaming && !firstTurnHandoff;
 
   return isEmpty ? (
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
@@ -1659,7 +1704,7 @@ export default function ChatView() {
     ) : (
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div
-      className="chat-view flex flex-col flex-1 min-h-0 overflow-hidden"
+      className={`chat-view flex flex-col flex-1 min-h-0 overflow-hidden${isFirstTurnHandoff ? ' chat-view--handoff' : ''}`}
       style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -1696,6 +1741,34 @@ export default function ChatView() {
               with the conversation flush against the natural top, not a
               16px gap of nothing. */}
           <ContextStrip />
+
+          {firstTurnHandoff && messages.length === 0 && (
+            <FreshMsgRow
+              className="msg-row first-turn-handoff-row"
+              style={{ animation: 'firstTurnMessageIn 360ms var(--ease-premium) both' }}
+            >
+              <div className="msg-sidehead">
+                {showTimestamps && (
+                  <div className="msg-time">
+                    {new Date(firstTurnHandoff.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </div>
+                )}
+                <div className="msg-author user">You</div>
+              </div>
+              <div className="msg-body first-turn-handoff-body">
+                <RichBody source={firstTurnHandoff.text} />
+                {firstTurnHandoff.attachmentCount > 0 && (
+                  <div className="first-turn-attachment-note">
+                    {firstTurnHandoff.attachmentCount} attachment{firstTurnHandoff.attachmentCount === 1 ? '' : 's'} preparing
+                  </div>
+                )}
+                <div className="first-turn-status" role="status">
+                  <span aria-hidden="true" />
+                  Opening the conversation with {firstTurnHandoff.agentLabel}
+                </div>
+              </div>
+            </FreshMsgRow>
+          )}
 
 
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
@@ -2090,7 +2163,7 @@ export default function ChatView() {
               aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
-              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
             >
               <span className="send-icon">
                 <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">

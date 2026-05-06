@@ -57,8 +57,8 @@ function EngramRow({ engram, selected, onClick }: { engram: Engram; selected: bo
       </div>
       {engram.tags.length > 0 && (
         <div className="s-row-tags">
-          {engram.tags.slice(0, 6).map((t) => (
-            <span key={t} className="s-row-tag">{t}</span>
+          {engram.tags.slice(0, 6).map((t, index) => (
+            <span key={`${t}-${index}`} className="s-row-tag">{t}</span>
           ))}
         </div>
       )}

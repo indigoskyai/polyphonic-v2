@@ -132,6 +132,7 @@ function RouteFallback() {
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const location = useLocation();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const loadNotifications = useNotificationStore((s) => s.load);
@@ -170,7 +171,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
       >
         <ConnectionBanner />
         <ImportProgressBanner />
-        {children}
+        <div
+          key={`${location.pathname}${location.search}`}
+          className="route-transition-stage flex-1 min-h-0 min-w-0 flex flex-col"
+        >
+          {children}
+        </div>
         {clockbarVisible && !isMobile && <Clockbar />}
       </div>
       {isMobile && <MobileNavDrawer />}

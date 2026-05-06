@@ -61,18 +61,20 @@ export default function MemoryView() {
               Memory layer load issue: {loadErrorEntries.map(([layer]) => layer).join(', ')}.
             </div>
           )}
-          {mode === 'digest' ? (
-            <DailyDigest />
-          ) : (
-            <>
-              {activeTab === 'Memories' && <MnemosOverview />}
-              {activeTab === 'Engrams' && <EngramsTab />}
-              {activeTab === 'Beliefs' && <BeliefsTab />}
-              {activeTab === 'Graph' && <GraphTab />}
-              {activeTab === 'Imports' && <ImportsTab />}
-              {activeTab === 'Settings' && <MemorySettingsPanel />}
-            </>
-          )}
+          <div key={`${mode}:${activeTab}`} className="tab-transition-panel">
+            {mode === 'digest' ? (
+              <DailyDigest />
+            ) : (
+              <>
+                {activeTab === 'Memories' && <MnemosOverview />}
+                {activeTab === 'Engrams' && <EngramsTab />}
+                {activeTab === 'Beliefs' && <BeliefsTab />}
+                {activeTab === 'Graph' && <GraphTab />}
+                {activeTab === 'Imports' && <ImportsTab />}
+                {activeTab === 'Settings' && <MemorySettingsPanel />}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
