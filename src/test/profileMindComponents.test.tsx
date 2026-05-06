@@ -13,7 +13,7 @@ describe('profile mind components', () => {
         <CommunicationMind
           data={{
             vocabulary_richness: 'High domain specificity.',
-            unique_signatures: [{ phrase: 'ember bridge', count: 3 }],
+            unique_signatures: [{ phrase: 'ember bridge', count: 3 } as any],
           }}
         />
         <ValuesMind
@@ -27,7 +27,7 @@ describe('profile mind components', () => {
           data={{ horizons: [{ direction: 'Toward integration', description: 'Let the insight become practice.' }] }}
         />
         <ShadowMind
-          data={{ blind_spots: [{ claim: 'Avoids direct grief', evidence: 'Repeated topic shifts' }] }}
+          data={{ blind_spots: [{ claim: 'Avoids direct grief', evidence: 'Repeated topic shifts' } as any] }}
           memoryStats={{ byTagNorm: { grief: 0.8 } }}
         />
       </>,
