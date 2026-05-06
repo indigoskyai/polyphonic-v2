@@ -2412,6 +2412,51 @@ export type Database = {
           },
         ]
       }
+      projects: {
+        Row: {
+          archived: boolean
+          color: string
+          created_at: string
+          description: string | null
+          icon: string
+          id: string
+          instructions: string | null
+          metadata: Json
+          name: string
+          pinned: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived?: boolean
+          color?: string
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          instructions?: string | null
+          metadata?: Json
+          name: string
+          pinned?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived?: boolean
+          color?: string
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          instructions?: string | null
+          metadata?: Json
+          name?: string
+          pinned?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       psychological_profile: {
         Row: {
           cognitive_tendencies: Json | null
@@ -2690,6 +2735,7 @@ export type Database = {
           participating_agent_ids: string[]
           pinned: boolean
           primary_agent_id: string
+          project_id: string | null
           title: string | null
           updated_at: string
           user_id: string
@@ -2702,6 +2748,7 @@ export type Database = {
           participating_agent_ids?: string[]
           pinned?: boolean
           primary_agent_id?: string
+          project_id?: string | null
           title?: string | null
           updated_at?: string
           user_id: string
@@ -2714,11 +2761,20 @@ export type Database = {
           participating_agent_ids?: string[]
           pinned?: boolean
           primary_agent_id?: string
+          project_id?: string | null
           title?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_api_keys: {
         Row: {
