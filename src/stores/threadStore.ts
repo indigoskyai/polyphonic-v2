@@ -164,7 +164,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   createThread: async (userId, agentId = 'luca', projectId = null) => {
     const { data } = await supabase
       .from('threads')
-      .insert({ user_id: userId, agent_id: agentId, project_id: projectId })
+      .insert({ user_id: userId, agent_id: agentId })
       .select()
       .single();
     if (data) {
