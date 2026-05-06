@@ -698,6 +698,17 @@ html {
 ::-webkit-scrollbar-thumb:hover { background: rgba(220, 219, 216, 0.12); }
 * { scrollbar-width: thin; scrollbar-color: rgba(220, 219, 216, 0.06) transparent; }
 
+.app-shell {
+  padding: var(--inset-gap);
+  gap: var(--inset-gap);
+  width: 100vw;
+  max-width: 100vw;
+}
+
+.app-main {
+  max-width: 100%;
+}
+
 
 
 /* ======================================================================
@@ -723,6 +734,28 @@ html {
   background: linear-gradient(to top, var(--canvas), transparent);
   pointer-events: none;
   z-index: -1;
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    width: 100dvw;
+    max-width: 100dvw;
+    height: 100dvh;
+    min-width: 0;
+  }
+
+  .app-main {
+    flex: 1 1 0;
+    width: calc(100dvw - var(--rail-width) - (var(--inset-gap) * 3));
+    min-width: 0;
+    max-width: calc(100dvw - var(--rail-width) - (var(--inset-gap) * 3));
+  }
+
+  .chat-view {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 .input-shell {
@@ -1172,6 +1205,57 @@ html {
 .chat-scroll-area {
   -webkit-overflow-scrolling: touch;
   overflow-anchor: auto;
+  padding: 32px 0;
+}
+
+.chat-header {
+  height: 48px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border-faint);
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-header-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 450;
+  letter-spacing: var(--track-body);
+  color: var(--text-body);
+}
+
+.chat-header-meta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+  color: var(--text-whisper);
+}
+
+.chat-message-column {
+  width: min(var(--message-max-width), 100%);
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+
+.chat-empty-center {
+  min-width: 0;
+  padding: 0 32px;
+}
+
+.chat-empty-composer {
+  width: 100%;
+  max-width: 600px;
+  min-width: 0;
 }
 
 /* Chat message hover subtle highlight */
@@ -1270,11 +1354,40 @@ html {
   letter-spacing: var(--track-body);
   color: var(--text-body);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .msg-body p { margin-bottom: 12px; }
 .msg-body p:last-child { margin-bottom: 0; }
 
 @media (max-width: 767px) {
+  .chat-scroll-area {
+    padding: 24px 0;
+  }
+
+  .chat-header {
+    height: 46px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .chat-header-title {
+    flex: 1 1 auto;
+    font-size: 12px;
+  }
+
+  .chat-header-meta {
+    display: none;
+  }
+
+  .chat-message-column {
+    width: 100%;
+    padding: 0 14px;
+  }
+
+  .chat-empty-center {
+    padding: 0 14px;
+  }
+
   .msg-row {
     grid-template-columns: 52px minmax(0, 1fr);
     gap: 12px;
@@ -1959,6 +2072,47 @@ html {
   flex: 1 1 auto;
   gap: 4px;
   min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .drawer {
+    top: var(--inset-gap);
+    right: var(--inset-gap);
+    bottom: var(--inset-gap);
+    width: calc(100dvw - (var(--inset-gap) * 2));
+    border-radius: var(--radius-inset);
+  }
+
+  .drawer-header {
+    align-items: flex-start;
+    padding: 14px 16px;
+  }
+
+  .drawer-title {
+    font-size: 23px;
+  }
+
+  .drawer-esc-chip {
+    display: none;
+  }
+
+  .drawer-close-btn {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+
+  .drawer-body {
+    padding-right: 0;
+  }
+
+  .drawer-section {
+    padding: 16px 18px;
+  }
+
+  .drawer-footer {
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+  }
 }
 
 /* ======================================================================
@@ -6280,6 +6434,8 @@ html {
 .img-prev[data-agent="anima"]  { background: linear-gradient(135deg, rgba(201, 124, 168, 0.10), var(--surface-2), rgba(201, 124, 168, 0.04)); }
 
 .code-prev {
+  width: 100%;
+  min-width: 0;
   max-width: 520px;
   background: var(--floor);
   border: 1px solid var(--border-subtle);
@@ -6297,6 +6453,7 @@ html {
   text-transform: uppercase;
 }
 .code-prev-lines {
+  min-width: 0;
   padding: 12px 14px;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -6306,7 +6463,13 @@ html {
   overflow: hidden;
   position: relative;
 }
-.code-prev-lines pre { margin: 0; white-space: pre-wrap; }
+.code-prev-lines pre {
+  margin: 0;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .code-prev-lines::after {
   content: '';
   position: absolute;

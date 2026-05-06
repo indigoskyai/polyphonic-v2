@@ -151,17 +151,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="h-screen flex overflow-hidden"
-      style={{
-        background: 'var(--floor)',
-        padding: 'var(--inset-gap)',
-        gap: 'var(--inset-gap)',
-      }}
+      className="app-shell h-screen flex overflow-hidden"
+      style={{ background: 'var(--floor)' }}
     >
       <Rail />
       {!isMobile && <Sidebar />}
       <div
-        className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+        className="app-main flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
         style={{
           background: 'var(--canvas)',
           border: '1px solid var(--border-faint)',
@@ -186,6 +182,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 function DrawerRouter() {
   const active = useDrawerStore((s) => s.active);
   const close = useDrawerStore((s) => s.close);
+  const isMobile = useIsMobile();
   const open = active !== null;
 
   const label =
@@ -200,8 +197,8 @@ function DrawerRouter() {
 
   // Memory detail floats over the page (no backdrop blur) so the graph
   // behind it remains visible. All other drawers keep the backdrop.
-  const showBackdrop = active !== 'memory-detail';
-  const drawerWidth = active === 'memory-detail' ? 320 : undefined;
+  const showBackdrop = active !== 'memory-detail' || isMobile;
+  const drawerWidth = active === 'memory-detail' && !isMobile ? 320 : undefined;
 
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop} width={drawerWidth}>

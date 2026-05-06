@@ -1521,14 +1521,14 @@ export default function ChatView() {
   return isEmpty ? (
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
       <div
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className="chat-view chat-view--empty flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="flex-1 flex flex-col items-center justify-center" style={{ padding: '0 32px' }}>
+        <div className="chat-empty-center flex-1 flex flex-col items-center justify-center">
           {/* Title + Echo particle field */}
           <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
             <EchoField
@@ -1558,7 +1558,7 @@ export default function ChatView() {
           </div>
 
           {/* Centered input */}
-          <div style={{ width: '100%', maxWidth: 600, animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both' }}>
+          <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both' }}>
             <div className={`input-shell${focused ? ' focused' : ''}`}>
               <input
                 ref={fileInputRef}
@@ -1657,7 +1657,7 @@ export default function ChatView() {
     ) : (
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div
-      className="flex flex-col flex-1 min-h-0 overflow-hidden"
+      className="chat-view flex flex-col flex-1 min-h-0 overflow-hidden"
       style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -1665,30 +1665,13 @@ export default function ChatView() {
       onDrop={handleDrop}
     >
       {/* Header — participant dot + title + subtle meta */}
-      <div className="flex items-center flex-shrink-0" style={{
-        height: 48,
-        padding: '0 28px',
-        borderBottom: '1px solid var(--border-faint)',
-        gap: 10,
-      }}>
+      <div className="chat-header flex items-center flex-shrink-0">
         <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--luca-full)', opacity: 0.78 }} />
-        <span style={{
-          fontFamily: 'var(--font-sans)',
-          fontSize: 12.5,
-          fontWeight: 450,
-          letterSpacing: 'var(--track-body)',
-          color: 'var(--text-body)',
-        }}>
+        <span className="chat-header-title">
           {threadTitle || 'New conversation'}
         </span>
         <div style={{ flex: 1 }} />
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
-          letterSpacing: 'var(--track-mono)',
-          textTransform: 'uppercase',
-          color: 'var(--text-whisper)',
-        }}>
+        <span className="chat-header-meta">
           luca · opus-4.7
         </span>
         <ThreadInfoButton />
@@ -1699,12 +1682,11 @@ export default function ChatView() {
         ref={scrollRef}
         className="flex-1 overflow-y-auto chat-scroll-area"
         style={{
-          padding: '32px 0',
           opacity: alcoveOpen ? 0.35 : 1,
           transition: 'opacity 400ms var(--ease-out)',
         }}
       >
-        <div style={{ maxWidth: 'var(--message-max-width)', margin: '0 auto', padding: '0 32px' }}>
+        <div className="chat-message-column">
 
           {/* Live activity context strip — only renders when there's actually
               live activity to surface (sub-agents working, or agent-to-agent

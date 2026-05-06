@@ -1337,3 +1337,37 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push this right-drawer milestone to `main`.
 2. Continue remaining Phase 4/5 launch gates unless Riley wants a dedicated mobile chat shell follow-up first.
+
+---
+
+## Phase 3/4 — Mobile Shell And Drawer Completion  [x] (2026-05-05)
+
+**Changed**
+- Kept the right drawer available on mobile, but adapted it into a near full-screen sheet with backdrop behavior instead of hiding the feature.
+- Constrained the mobile app shell and chat main column so chat routes stay inside the 390px viewport with the rail present.
+- Moved chat header/message-column sizing into reusable CSS classes and tightened mobile padding/typography behavior.
+- Added wrapping for long chat body tokens and attachment code previews so generated markers and code snippets cannot widen the mobile route.
+- Fixed thread-detail relative-time math so timestamps no longer show negative minute remainders.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npm run verify` passed: typecheck, 233 unit tests, empty integration placeholder, and production build.
+- Local Playwright 390x844 `/chat/431a0f51-9f7c-4fdf-b5de-92faae43942c` kept the header, messages, attachment preview, and composer inside the visible app frame.
+- Local Playwright 390x844 thread detail opened as a contained sheet with close/header/footer visible and no leaked global activity.
+- Local Playwright 390x844 `/memory` memory detail opened as a contained sheet with readable content and close/footer controls.
+- Local Playwright 1280x900 chat and thread-detail drawer still rendered as the intended desktop side drawer.
+- Browser console capture for the mobile/desktop drawer flows recorded 0 errors.
+- Browser artifacts:
+  - `output/playwright/mobile-chat-shell-final.md`
+  - `output/playwright/mobile-thread-drawer-final.png`
+  - `output/playwright/mobile-memory-drawer-final.png`
+  - `output/playwright/desktop-thread-drawer-final.png`
+  - `output/playwright/drawer-mobile-desktop-console-errors.log`
+
+**Remaining risks**
+- The `agent-inspector` drawer route is still a placeholder with no active opener found.
+- A broader mobile interaction pass can still tune ergonomics later, but the drawer/context capability is now present and contained on mobile.
+
+**Next**
+1. Commit and push this mobile drawer/shell completion to `main`.
+2. Resume remaining Phase 4/5 launch gates.
