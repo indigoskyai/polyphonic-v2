@@ -1438,19 +1438,22 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 - Added `public/site.webmanifest` and `public/sitemap.xml`; linked the sitemap from `robots.txt`.
 - Added `launchReadiness.test.ts` to guard client service-role absence, CORS no-wildcard posture, social metadata, robots, sitemap, and web manifest.
 - Extended the launch guardrail to enumerate all 70 edge-function directories and prove CORS preflight, CORS responses, try/catch coverage, and source auth markers for configured `verify_jwt=false` functions.
+- Added an automated initial-payload launch check that parses the built root document, gzips initially referenced JS/CSS assets, and fails above 500 KiB.
 - Updated the launch checklist for the static gates now covered by tests.
 
 **Verified**
 - `npx vitest run src/test/launchReadiness.test.ts src/test/corsAllowlist.test.ts` passed: 7 tests.
-- `npm run verify` passed: typecheck, 241 unit tests, empty integration placeholder, and production build.
+- `npm run check:launch-payload` passed: current built initial JS/CSS payload is 299.9 KiB gzip.
+- `npm run verify` passed: typecheck, 241 unit tests, empty integration placeholder, production build, and launch-payload gate.
 - Static service-role scan covers runtime `src` files and excludes tests.
 - Static CORS guard confirms production/staging/Lovable preview origins, non-production localhost gating, and no wildcard `Access-Control-Allow-Origin`.
 - Static edge-function guard confirms all 70 edge-function directories have preflight handling, response CORS, catch coverage, and source auth markers where `verify_jwt=false`.
 - Release metadata guard confirms `index.html`, `robots.txt`, `site.webmanifest`, and `sitemap.xml` are present and linked.
+- Initial payload guard confirms the root app shell stays below the 500 KiB gzip launch budget.
 
 **Remaining risks**
 - Google new-account/signup remains pending until Riley designs the signup surfaces.
-- Email signup confirmation, Apple OAuth, forgot-password email, logout hosted smoke, RLS policy review, edge-function auth documentation, and performance/accessibility launch gates remain open.
+- Email signup confirmation, Apple OAuth, forgot-password email, logout hosted smoke, RLS policy review, edge-function auth documentation, Lighthouse, graph performance, and accessibility launch gates remain open.
 
 **Next**
 1. Continue with RLS policy inventory or hosted auth smoke, whichever is unblocked first.

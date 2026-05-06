@@ -36,7 +36,7 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] Lighthouse Performance ≥ 80 on `/chat` and `/mind`
 - [ ] Lighthouse Accessibility ≥ 90 on `/chat` and `/mind`
 - [ ] Graph 60 fps at 1000 nodes; CPU sleeps when idle
-- [ ] Initial JS payload < 500 KB gzipped on `/chat` first paint
+- [x] Initial JS payload < 500 KB gzipped on `/chat` first paint
 
 ## Operations
 - [ ] Lovable Cloud PITR confirmed ON; restore rehearsed once
