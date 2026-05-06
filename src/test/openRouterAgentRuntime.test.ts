@@ -11,12 +11,14 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
 
     const gateIndex = source.indexOf('if (agentIsSystemLuca && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
-    const legacyPlannerIndex = source.indexOf('const toolMessages = await runToolPlanner');
+    const legacyPlannerIndex = source.indexOf('const toolMessages = shouldRunLegacyToolPlanner');
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');
     expect(source).toContain('openRouterAgentSdkStream({');
     expect(source).toContain('agent_mode: agentMode');
     expect(source).toContain('const sdkRuntimeRequested');
+    expect(source).toContain('const shouldRunLegacyToolPlanner');
+    expect(source).toContain('? await runToolPlanner(thread_id, authHeader, baseMessages.slice(1))');
     expect(gateIndex).toBeGreaterThan(-1);
     expect(legacyPlannerIndex).toBeGreaterThan(-1);
     expect(gateIndex).toBeLessThan(legacyPlannerIndex);

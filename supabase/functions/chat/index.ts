@@ -51,7 +51,20 @@ serve(async (req) => {
 
     const userId = user.id;
     const body = await req.json();
-    const { thread_id, message, model: modelOverride, attachments } = body;
+    const {
+      thread_id,
+      message,
+      model: modelOverride,
+      attachments,
+      agent_mode: agentMode,
+      agent_runtime: agentRuntime,
+      use_agent_runtime: useAgentRuntime,
+    } = body;
+    const shouldRunLegacyToolPlanner =
+      agentMode === "agent" ||
+      agentRuntime === "openrouter_agent_sdk" ||
+      agentRuntime === "legacy_tool_planner" ||
+      useAgentRuntime === true;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
       return fail(new ValidationError("Invalid request"));
@@ -164,7 +177,9 @@ serve(async (req) => {
     // Add the new user message
     openRouterMessages.push({ role: "user", content: messageWithAttachments });
 
-    const toolMessages = await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1));
+    const toolMessages = shouldRunLegacyToolPlanner
+      ? await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1))
+      : [];
     if (toolMessages.length > 0) {
       openRouterMessages.push(...toolMessages);
     }

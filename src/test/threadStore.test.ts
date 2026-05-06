@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const supabaseMock = vi.hoisted(() => ({
+  insert: vi.fn(),
+  nextInsertedThread: null as any,
+}));
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: () => ({
@@ -7,7 +12,14 @@ vi.mock('@/integrations/supabase/client', () => ({
         eq: () => ({ or: () => ({ order: () => Promise.resolve({ data: [] }) }) }),
         order: () => Promise.resolve({ data: [] }),
       }),
-      insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null }) }) }),
+      insert: (payload: unknown) => {
+        supabaseMock.insert(payload);
+        return {
+          select: () => ({
+            single: () => Promise.resolve({ data: supabaseMock.nextInsertedThread }),
+          }),
+        };
+      },
       update: () => ({ eq: () => Promise.resolve({}) }),
     }),
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
@@ -16,6 +28,19 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 import { dedupeThreadsById, useThreadStore } from '@/stores/threadStore';
+
+const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState>['threads'][number]> = {}) => ({
+  id: 'thread-1',
+  user_id: 'u1',
+  title: null,
+  pinned: false,
+  heat: 'warm',
+  agent_id: 'luca',
+  project_id: null,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  ...overrides,
+});
 
 describe('threadStore thread list helpers', () => {
   it('dedupes repeated thread rows before sidebar rendering', () => {
@@ -38,6 +63,35 @@ describe('threadStore thread list helpers', () => {
       { ...base, id: 't1' },
       { ...base, id: 't2' },
     ]);
+  });
+});
+
+describe('threadStore.createThread project scoping', () => {
+  beforeEach(() => {
+    supabaseMock.insert.mockClear();
+    supabaseMock.nextInsertedThread = makeThread();
+    useThreadStore.setState({ threads: [], currentThreadId: null, messages: [] });
+  });
+
+  it('omits project_id for ordinary new chats', async () => {
+    await useThreadStore.getState().createThread('u1', 'luca');
+
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      user_id: 'u1',
+      agent_id: 'luca',
+    });
+  });
+
+  it('includes project_id only for project-scoped chats', async () => {
+    supabaseMock.nextInsertedThread = makeThread({ id: 'thread-2', project_id: 'project-1' });
+
+    await useThreadStore.getState().createThread('u1', 'luca', 'project-1');
+
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      user_id: 'u1',
+      agent_id: 'luca',
+      project_id: 'project-1',
+    });
   });
 });
 

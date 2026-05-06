@@ -1593,3 +1593,33 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push to `main`.
 2. After Lovable staging applies the migration, smoke `/projects`: create project, add instructions, create project chat, assign/remove an existing thread, and confirm a project-scoped chat carries instructions.
+
+---
+
+## Chat Polish Rollback + Runtime Speed Repair  [x] (2026-05-06)
+
+**Changed**
+- Reverted `de22283 polish(chat): refine messaging motion and drawer typography` after hosted review showed the new reasoning renderer, drawer typography rewrites, streaming motion, and broad CSS pass made chat feel worse rather than more premium.
+- Kept the legitimate runtime repairs that happened before/after that pass, including Agent runtime trace event plumbing and current-turn prompt de-dupe.
+- Fixed normal Luca response latency by gating the legacy tool planner in both `chat` and `chat-multi`; ordinary `agent_mode: "chat"` sends now skip tool planning, while Agent mode and explicit runtime requests still use the SDK/legacy tool path.
+- Repaired Lovable's temporary `project_id` insert workaround by restoring generated project/thread types and making `createThread` include `project_id` only when a project-scoped chat is requested.
+
+**Finding map**
+- `CP-CHAT-012`: normal chat latency - verified.
+- `CP-CHAT-013`: chat polish rollback - verified.
+- `P6-004`: Projects deploy compatibility - verified.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts supabase/functions/_shared/projects/context.ts` passed.
+- `npx vitest run src/test/projectsMvp.test.ts src/test/threadStore.test.ts src/test/openRouterAgentRuntime.test.ts --reporter=verbose` passed: 3 files, 18 tests.
+- `npm run verify` passed: 43 unit-test files, 260 tests, empty integration placeholder, production build, and launch-payload gate at 300.7 KiB gzip.
+
+**Remaining risks**
+- Hosted staging still needs latest `main` redeployed so Riley can smoke normal-chat speed and Project creation against the live schema.
+- This intentionally rolls back the rushed polish pass; a future chat-polish session should start from the simpler stable UI and make smaller browser-verified changes.
+
+**Next**
+1. Push latest `main`.
+2. Ask Lovable to pull latest main and redeploy frontend, `chat`, and `chat-multi`.
+3. Hosted smoke: ordinary chat should respond without the Agent/tool-planner delay; Agent-pill chat should still show tool/runtime activity when tools are used; `/projects` should work after the migration is applied.

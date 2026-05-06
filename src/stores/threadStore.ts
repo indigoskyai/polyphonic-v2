@@ -162,9 +162,17 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   createThread: async (userId, agentId = 'luca', projectId = null) => {
+    const insertPayload: { user_id: string; agent_id: string; project_id?: string } = {
+      user_id: userId,
+      agent_id: agentId,
+    };
+    if (projectId) {
+      insertPayload.project_id = projectId;
+    }
+
     const { data } = await supabase
       .from('threads')
-      .insert({ user_id: userId, agent_id: agentId })
+      .insert(insertPayload)
       .select()
       .single();
     if (data) {

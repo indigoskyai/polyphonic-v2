@@ -39,4 +39,27 @@ describe('Projects MVP wiring', () => {
     expect(migration).toContain('validate_thread_project_owner');
     expect(migration).toContain('p.user_id = NEW.user_id');
   });
+
+  it('keeps generated project types and pre-migration ordinary chat compatibility', () => {
+    const types = readRepoFile('src/integrations/supabase/types.ts');
+    const threadStore = readRepoFile('src/stores/threadStore.ts');
+
+    expect(types).toContain('projects: {');
+    expect(types).toContain('project_id: string | null');
+    expect(types).toContain('threads_project_id_fkey');
+    expect(threadStore).toContain('if (projectId)');
+    expect(threadStore).toContain('insertPayload.project_id = projectId');
+  });
+
+  it('keeps legacy tool planning out of normal chat sends', () => {
+    const chat = readRepoFile('supabase/functions/chat/index.ts');
+    const multi = readRepoFile('supabase/functions/chat-multi/index.ts');
+
+    expect(chat).toContain('const shouldRunLegacyToolPlanner');
+    expect(chat).toContain('agentMode === "agent"');
+    expect(chat).toContain('const toolMessages = shouldRunLegacyToolPlanner');
+    expect(multi).toContain('const shouldRunLegacyToolPlanner');
+    expect(multi).toContain('agentMode === "agent"');
+    expect(multi).toContain('const toolMessages = shouldRunLegacyToolPlanner');
+  });
 });

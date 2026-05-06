@@ -234,6 +234,11 @@ serve(async (req) => {
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       useAgentRuntime === true;
+    const shouldRunLegacyToolPlanner =
+      agentMode === "agent" ||
+      agentRuntime === "openrouter_agent_sdk" ||
+      agentRuntime === "legacy_tool_planner" ||
+      useAgentRuntime === true;
 
     // Get user's OpenRouter API key (required — no platform fallback)
     const { data: userKeyData, error: userKeyErr } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
@@ -380,7 +385,9 @@ serve(async (req) => {
       });
     }
 
-    const toolMessages = await runToolPlanner(thread_id, authHeader, baseMessages.slice(1));
+    const toolMessages = shouldRunLegacyToolPlanner
+      ? await runToolPlanner(thread_id, authHeader, baseMessages.slice(1))
+      : [];
     if (toolMessages.length > 0) {
       baseMessages.push(...toolMessages);
     }
