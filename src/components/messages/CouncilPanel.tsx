@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import RichBody from '@/components/rich/RichBody';
 import { isCouncilDebugEnabled } from '@/lib/debug';
 
@@ -56,6 +57,20 @@ const CHARACTER_LABEL: Record<CouncilCharacter, string> = {
 // surface within the wider monochrome chat aesthetic.
 const MONO_TINT_PRIMARY = 'var(--text-tertiary)';
 const MONO_TINT_GHOST = 'var(--text-ghost)';
+const COUNCIL_VOICE_GRID_COLUMNS = 'repeat(auto-fit, minmax(260px, 1fr))';
+const COUNCIL_GRID_EXT = 'min(320px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - 680px) / 2))';
+const COUNCIL_GRID_SHIFT = `min(48px, ${COUNCIL_GRID_EXT})`;
+
+const councilVoiceGridWidthStyle: CSSProperties = {
+  marginLeft: `calc(-1 * (${COUNCIL_GRID_EXT} + ${COUNCIL_GRID_SHIFT}))`,
+  marginRight: `calc(-1 * (${COUNCIL_GRID_EXT} - ${COUNCIL_GRID_SHIFT}))`,
+};
+
+const councilVoiceGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: COUNCIL_VOICE_GRID_COLUMNS,
+  gap: 12,
+};
 
 type ViewMode = 'tabs' | 'compare';
 
@@ -481,6 +496,26 @@ function CharacterDraftCard({
   );
 }
 
+function CouncilVoiceGrid({
+  children,
+  testId,
+}: {
+  children: ReactNode;
+  testId?: string;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      style={{
+        ...councilVoiceGridWidthStyle,
+        ...councilVoiceGridStyle,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function CritiqueRow({
   critique,
   hasRevision,
@@ -689,38 +724,27 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
                 Extends symmetrically beyond the 720px message column on wide
                 viewports so columns have room to breathe (same trick the
                 legacy compare view used). */}
-            {(() => {
-              const ext = 'min(320px, max(0px, (100vw - var(--rail-width) - var(--sidebar-width) - 680px) / 2))';
-              const shift = `min(48px, ${ext})`;
-              return (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(auto-fit, minmax(260px, 1fr))`,
-                    gap: 12,
-                    marginLeft: `calc(-1 * (${ext} + ${shift}))`,
-                    marginRight: `calc(-1 * (${ext} - ${shift}))`,
-                  }}
-                >
-                  {drafts.map((d, i) => (
-                    <CharacterDraftCard
-                      key={`${d.character}-${i}`}
-                      character={d.character}
-                      content={d.content}
-                      source={d.source}
-                      compact
-                    />
-                  ))}
-                </div>
-              );
-            })()}
+            <CouncilVoiceGrid testId="council-current-drafts-grid">
+              {drafts.map((d, i) => (
+                <CharacterDraftCard
+                  key={`${d.character}-${i}`}
+                  character={d.character}
+                  content={d.content}
+                  source={d.source}
+                  compact
+                />
+              ))}
+            </CouncilVoiceGrid>
 
             {/* Optional: pre-cross-pollination first drafts. Available when both
                 proposer and crosstalk drafts exist (i.e. cross-pollination
                 actually ran); lets the user inspect what each character said
                 before being aware of the others. */}
             {proposers.length > 0 && crosstalk.length > 0 && (
-              <div style={{ marginTop: 14 }}>
+              <div
+                data-testid="council-first-drafts-lane"
+                style={{ marginTop: 14, ...councilVoiceGridWidthStyle }}
+              >
                 <button
                   onClick={() => setShowProposers(!showProposers)}
                   style={{
@@ -765,10 +789,9 @@ function CouncilV2Panel({ trace }: { trace: CouncilTrace }) {
                   <div style={{ overflowX: 'visible', overflowY: 'clip', minHeight: 0 }}>
                     <div style={{ paddingTop: 10 }}>
                       <div
+                        data-testid="council-first-drafts-grid"
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                          gap: 10,
+                          ...councilVoiceGridStyle,
                         }}
                       >
                         {proposers.map((p, i) => (
@@ -812,9 +835,9 @@ function CouncilLegacyPanel({ trace }: Props) {
   const [showRanking, setShowRanking] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
 
-  const variants = trace?.variants ?? [];
-  const aggregate = trace?.aggregate ?? [];
-  const rankings = trace?.rankings ?? [];
+  const variants = useMemo(() => trace.variants ?? [], [trace.variants]);
+  const aggregate = useMemo(() => trace.aggregate ?? [], [trace.aggregate]);
+  const rankings = trace.rankings ?? [];
 
   // Build {model -> rank} lookup. Ordered variants put the council favorite first.
   const rankByModel = useMemo(() => {

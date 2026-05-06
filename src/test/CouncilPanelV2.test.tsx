@@ -52,6 +52,23 @@ describe('CouncilPanel v2 — synthesize verdict', () => {
     render(<CouncilPanel trace={synthesizeTrace} />);
     expect(screen.getByText(/3 voices/i)).toBeInTheDocument();
   });
+
+  it('renders first drafts on the same wide three-voice grid as the current drafts', () => {
+    render(<CouncilPanel trace={synthesizeTrace} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /harmonized/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show first drafts/i }));
+
+    const currentGrid = screen.getByTestId('council-current-drafts-grid');
+    const firstDraftsLane = screen.getByTestId('council-first-drafts-lane');
+    const firstDraftsGrid = screen.getByTestId('council-first-drafts-grid');
+
+    expect(firstDraftsGrid.children).toHaveLength(3);
+    expect(firstDraftsGrid.style.gridTemplateColumns).toBe(currentGrid.style.gridTemplateColumns);
+    expect(firstDraftsGrid.style.gap).toBe(currentGrid.style.gap);
+    expect(firstDraftsLane.style.marginLeft).toBe(currentGrid.style.marginLeft);
+    expect(firstDraftsLane.style.marginRight).toBe(currentGrid.style.marginRight);
+  });
 });
 
 describe('CouncilPanel v2 — diverge verdict', () => {
