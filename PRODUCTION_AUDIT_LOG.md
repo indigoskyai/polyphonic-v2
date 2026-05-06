@@ -1623,3 +1623,35 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Push latest `main`.
 2. Ask Lovable to pull latest main and redeploy frontend, `chat`, and `chat-multi`.
 3. Hosted smoke: ordinary chat should respond without the Agent/tool-planner delay; Agent-pill chat should still show tool/runtime activity when tools are used; `/projects` should work after the migration is applied.
+
+---
+
+## Phase 5 — Navigation Performance + Smoothness Pass  [x] (2026-05-06)
+
+**Changed**
+- Added `scripts/audit-navigation-performance.mjs`, a repeatable Playwright navigation harness for desktop/mobile route timing, console warnings/errors, long tasks, shell fallback flashes, and screenshots.
+- Captured a baseline before app changes. The useful baseline finding was that Settings switches already clicked within target, but desktop rail switches could not be measured as real clicks because the rail icons were unlabeled non-button elements.
+- Added a shell-local `PanelRouteFallback` so lazy authenticated route loads keep the app shell/sidebar visible instead of falling through the whole-app fallback.
+- Added `src/lib/routePrefetch.ts` and wired rail/settings prefetch on hover, focus, and pointer down, plus idle warming for core Settings panels.
+- Converted desktop rail navigation and new-thread controls to semantic labeled buttons.
+- Tightened route/tab transition timing and rail navigation transitions to short transform/opacity/color/background changes rather than `transition: all`.
+
+**Verified**
+- Baseline: `output/playwright/perf-navigation-baseline-v2/navigation-audit.json`.
+- After fix: `output/playwright/perf-navigation-after-fix/navigation-audit.json`.
+- Gated after fix: `output/playwright/perf-navigation-after-fix-gated/navigation-audit.json` exited 0 with threshold enforcement enabled.
+- After-fix desktop rail click timings: Chat 137ms, Memory 146ms, Mind 125ms, Journal 155ms, Import 130ms, Projects 123ms, Profile 121ms, Settings 122ms; all 0 console errors/warnings, 0 fallback frames, 0 long tasks over 100ms.
+- After-fix desktop Settings click timings: Agents 131ms, General 114ms, Models 137ms, Appearance 113ms, Skills 121ms with 87ms max long task, Routines 131ms, Local runtime 280ms, Import/export 124ms, Account 114ms; all inside threshold with 0 console errors/warnings and 0 fallback frames.
+- Mobile screenshot artifact: `output/playwright/perf-navigation-after-fix/mobile-390x844.png`; desktop screenshot artifact: `output/playwright/perf-navigation-after-fix/desktop-1440x900.png`.
+- Reduced-motion check: `output/playwright/perf-navigation-after-fix/reduced-motion-check.json` reports `matchMedia=true`, route animation `none`, route transform `none`, and 0 console warnings/errors; screenshot `output/playwright/perf-navigation-after-fix/reduced-motion-mobile-390x844.png`.
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/navigationPerformance.test.ts --reporter=verbose` passed.
+- `npm run verify` passed: 44 unit-test files, 264 tests, production build, and launch-payload gate at 302.3 KiB gzip.
+
+**Remaining risks**
+- The audit script uses direct URL fallback for mobile route checks because mobile navigation is drawer-based rather than rail-based; the mobile screenshot/console path is still useful, but a later mobile-specific drawer timing harness would be cleaner.
+- Lighthouse route performance and broad accessibility gates remain separate Phase 5 launch checks.
+
+**Next**
+1. Commit and push to `main` so Lovable staging picks up the frontend navigation improvements.
+2. Continue Lighthouse route performance and broad accessibility launch checks.

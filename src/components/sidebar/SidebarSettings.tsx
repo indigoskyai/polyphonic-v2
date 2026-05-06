@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SidebarHeader from './SidebarHeader';
 import SidebarRow from './SidebarRow';
+import { prefetchCoreSettingsRoutes, prefetchRoute } from '@/lib/routePrefetch';
 
 interface Entry {
   key: string;
@@ -48,6 +50,12 @@ export default function SidebarSettings() {
   const isActive = (entryPath: string) =>
     path === entryPath || path.startsWith(entryPath + '/');
 
+  useEffect(() => {
+    prefetchCoreSettingsRoutes();
+  }, []);
+
+  const prime = (entryPath: string) => () => prefetchRoute(entryPath);
+
   return (
     <>
       <SidebarHeader folio="§ 09" title="Settings" />
@@ -62,6 +70,9 @@ export default function SidebarSettings() {
             label={e.label}
             active={isActive(e.path)}
             onClick={() => navigate(e.path)}
+            onFocus={prime(e.path)}
+            onPointerDown={prime(e.path)}
+            onPointerEnter={prime(e.path)}
           />
         ))}
 
@@ -72,6 +83,9 @@ export default function SidebarSettings() {
             label={e.label}
             active={isActive(e.path)}
             onClick={() => navigate(e.path)}
+            onFocus={prime(e.path)}
+            onPointerDown={prime(e.path)}
+            onPointerEnter={prime(e.path)}
           />
         ))}
       </div>

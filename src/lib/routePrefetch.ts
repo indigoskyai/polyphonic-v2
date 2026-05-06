@@ -1,0 +1,83 @@
+type RouteLoader = () => Promise<unknown>;
+
+const prefetched = new Map<string, Promise<unknown>>();
+
+const routeLoaders: Record<string, RouteLoader> = {
+  '/chat': () => import('@/pages/ChatView'),
+  '/memory': () => import('@/pages/MemoryView'),
+  '/mind': () => import('@/pages/MindView'),
+  '/journal': () => import('@/pages/JournalView'),
+  '/import': () => import('@/pages/ImportView'),
+  '/projects': () => import('@/pages/ProjectsView'),
+  '/profile': () => import('@/pages/ProfileView'),
+  '/settings/agents': () => import('@/pages/settings/AgentsList'),
+  '/settings/general': () => import('@/pages/settings/GeneralSettings'),
+  '/settings/models': () => import('@/pages/settings/ModelsSettings'),
+  '/settings/appearance': () => import('@/pages/settings/AppearanceSettings'),
+  '/settings/skills': () => import('@/pages/ProfileSkillsView'),
+  '/settings/routines': () => import('@/pages/ProfileScheduleView'),
+  '/settings/voice': () => import('@/pages/settings/SettingsPlaceholder'),
+  '/settings/local-runtime': () => import('@/pages/settings/LocalRuntimeSettings'),
+  '/settings/portability': () => import('@/pages/ImportView'),
+  '/settings/account': () => import('@/pages/settings/AccountSettings'),
+};
+
+const coreSettingsPaths = [
+  '/settings/agents',
+  '/settings/general',
+  '/settings/models',
+  '/settings/appearance',
+  '/settings/skills',
+  '/settings/routines',
+  '/settings/local-runtime',
+  '/settings/portability',
+  '/settings/account',
+];
+
+function normalizedPath(path: string): string | null {
+  if (path.startsWith('/chat/')) return '/chat';
+  if (path.startsWith('/projects/')) return '/projects';
+  if (path.startsWith('/settings/agents/')) return '/settings/agents';
+  const match = Object.keys(routeLoaders)
+    .sort((a, b) => b.length - a.length)
+    .find((candidate) => path === candidate || path.startsWith(`${candidate}/`));
+  return match ?? null;
+}
+
+function scheduleIdle(task: () => void) {
+  if (typeof window === 'undefined') return;
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(task, { timeout: 1000 });
+    return;
+  }
+  window.setTimeout(task, 80);
+}
+
+export function prefetchRoute(path: string) {
+  if (typeof window === 'undefined') return;
+  const key = normalizedPath(path);
+  if (!key || prefetched.has(key)) return;
+  const loader = routeLoaders[key];
+  if (!loader) return;
+
+  const request = loader().catch((error) => {
+    prefetched.delete(key);
+    if (import.meta.env.DEV) {
+      console.warn(`[route-prefetch] ${key}`, error);
+    }
+  });
+  prefetched.set(key, request);
+}
+
+export function prefetchCoreSettingsRoutes() {
+  scheduleIdle(() => {
+    for (const path of coreSettingsPaths) {
+      prefetchRoute(path);
+    }
+  });
+}
+
+export const navigationAuditRoutes = {
+  rail: ['/chat', '/memory', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/agents'],
+  settings: coreSettingsPaths,
+};

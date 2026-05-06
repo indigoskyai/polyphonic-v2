@@ -5,6 +5,9 @@ interface Props {
   active?: boolean;
   count?: number;
   onClick: () => void;
+  onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  onPointerDown?: React.PointerEventHandler<HTMLButtonElement>;
+  onPointerEnter?: React.PointerEventHandler<HTMLButtonElement>;
 }
 
 /**
@@ -17,13 +20,24 @@ interface Props {
  * If those rules don't exist in your codebase, the inline styles below
  * provide the canonical implementation.
  */
-export default function SidebarRow({ label, active, count, onClick }: Props) {
+export default function SidebarRow({
+  label,
+  active,
+  count,
+  onClick,
+  onFocus,
+  onPointerDown,
+  onPointerEnter,
+}: Props) {
   return (
     <button
       type="button"
       className="sidebar-row w-full flex items-center cursor-pointer text-left"
       data-active={active ? 'true' : undefined}
       onClick={onClick}
+      onFocus={onFocus}
+      onPointerDown={onPointerDown}
+      onPointerEnter={onPointerEnter}
       aria-current={active ? 'page' : undefined}
       style={{
         position: 'relative',

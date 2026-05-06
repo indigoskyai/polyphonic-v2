@@ -666,6 +666,11 @@ html {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes routeFallbackPulse {
+  from { opacity: 0.34; }
+  to { opacity: 0.68; }
+}
+
 @keyframes firstTurnMessageIn {
   0% { opacity: 0; transform: translateY(18px) scale(0.985); }
   58% { opacity: 1; }
@@ -745,7 +750,7 @@ html {
 }
 
 .route-transition-stage {
-  animation: routeStageIn 240ms var(--ease-out) both;
+  animation: routeStageIn 200ms var(--ease-out) both;
   will-change: opacity, transform;
 }
 
@@ -754,8 +759,65 @@ html {
   flex-direction: column;
   height: 100%;
   min-height: 100%;
-  animation: tabPanelIn 220ms var(--ease-out) both;
+  animation: tabPanelIn 190ms var(--ease-out) both;
   will-change: opacity, transform;
+}
+
+.route-panel-fallback {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  background: transparent;
+}
+
+.route-panel-fallback__line {
+  width: min(360px, 48vw);
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  opacity: 0.6;
+  animation: routeFallbackPulse 900ms var(--ease-in-out) infinite alternate;
+}
+
+.route-panel-fallback__line--short {
+  width: min(220px, 32vw);
+  animation-delay: 120ms;
+}
+
+.rail-nav-icon {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  outline: none;
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+
+.rail-nav-icon:hover {
+  background: var(--overlay-hover);
+  color: var(--text-secondary);
+}
+
+.rail-nav-icon:active {
+  transform: scale(0.96);
+}
+
+.rail-nav-icon:focus-visible {
+  outline: 1px solid var(--border-focus, var(--text-ghost));
+  outline-offset: 2px;
+}
+
+.rail-nav-icon[data-active="true"] {
+  background: var(--overlay-active);
+  color: var(--text-primary);
 }
 
 .mobile-app-bar {
@@ -7968,9 +8030,10 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .route-transition-stage,
-  .tab-transition-panel,
-  .first-turn-handoff-row,
+	  .route-transition-stage,
+	  .tab-transition-panel,
+	  .route-panel-fallback__line,
+	  .first-turn-handoff-row,
   .first-turn-status span,
   .m-drawer,
   .m-drawer-backdrop,

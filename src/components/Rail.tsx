@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
+import { prefetchRoute } from '@/lib/routePrefetch';
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -105,7 +106,7 @@ export default function Rail() {
           fontSize: 15,
           lineHeight: 1,
           paddingTop: 1,
-          transition: 'all var(--dur-fast) var(--ease-out)',
+          transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out)',
           animation: `breathe ${emotionalIndicator.breatheSpeed}s ease-in-out infinite`,
         }}
         onClick={toggleSidebar}
@@ -122,13 +123,13 @@ export default function Rail() {
       />
 
       {/* Nav icons */}
-      <NavIcon icon="chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
-      <NavIcon icon="memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
-      <NavIcon icon="mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
-      <NavIcon icon="journal" active={activeView === 'journal'} onClick={() => navigate('/journal')} />
-      <NavIcon icon="import" active={activeView === 'import'} onClick={() => navigate('/import')} />
-      <NavIcon icon="projects" active={activeView === 'projects'} onClick={() => navigate('/projects')} />
-      <NavIcon icon="profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
+      <NavIcon icon="chat" label="Open Chat" path="/chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
+      <NavIcon icon="memory" label="Open Memory" path="/memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
+      <NavIcon icon="mind" label="Open Mind" path="/mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
+      <NavIcon icon="journal" label="Open Journal" path="/journal" active={activeView === 'journal'} onClick={() => navigate('/journal')} />
+      <NavIcon icon="import" label="Open Import" path="/import" active={activeView === 'import'} onClick={() => navigate('/import')} />
+      <NavIcon icon="projects" label="Open Projects" path="/projects" active={activeView === 'projects'} onClick={() => navigate('/projects')} />
+      <NavIcon icon="profile" label="Open Profile" path="/profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
 
       {/* Notifications bell */}
       <button
@@ -150,17 +151,22 @@ export default function Rail() {
       <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-faint)', margin: '4px 0' }} />
 
       {/* New thread */}
-      <div
-        className="w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
-        style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 300, transition: 'all var(--dur-fast) var(--ease-out)' }}
+      <button
+        type="button"
+        className="rail-nav-icon w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
+        style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 300 }}
         onClick={handleNewThread}
         title="New thread"
+        aria-label="New thread"
+        onPointerEnter={() => prefetchRoute('/chat')}
+        onFocus={() => prefetchRoute('/chat')}
+        onPointerDown={() => prefetchRoute('/chat')}
       >
         +
-      </div>
+      </button>
 
       {/* Settings */}
-      <NavIcon icon="settings" active={settingsOpen} onClick={() => navigate('/settings/agents')} />
+      <NavIcon icon="settings" label="Open Settings" path="/settings/agents" active={settingsOpen} onClick={() => navigate('/settings/agents')} />
 
 
 
@@ -168,16 +174,37 @@ export default function Rail() {
   );
 }
 
-function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onClick: () => void }) {
+function NavIcon({
+  icon,
+  label,
+  path,
+  active,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  path: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const prime = () => prefetchRoute(path);
+
   return (
-    <div
-      className="w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
+    <button
+      type="button"
+      className="rail-nav-icon w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
+      data-active={active ? 'true' : undefined}
       style={{
         color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
         background: active ? 'var(--overlay-active)' : undefined,
-        transition: 'all var(--dur-fast) var(--ease-out)',
       }}
       onClick={onClick}
+      onPointerEnter={prime}
+      onFocus={prime}
+      onPointerDown={prime}
+      title={label.replace(/^Open /, '')}
+      aria-label={label}
+      aria-current={active ? 'page' : undefined}
     >
       {icon === 'chat' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 3h10v7H5L2 12V3z"/></svg>}
       {icon === 'memory' && <Archive size={14} strokeWidth={1.6} />}
@@ -187,6 +214,6 @@ function NavIcon({ icon, active, onClick }: { icon: string; active: boolean; onC
       {icon === 'projects' && <FolderKanban size={14} strokeWidth={1.6} />}
       {icon === 'profile' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={4} r={2.5}/><path d="M2.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/></svg>}
       {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>}
-    </div>
+    </button>
   );
 }

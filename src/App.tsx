@@ -17,6 +17,7 @@ import CommandPalette from "./components/palette/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
+import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
@@ -131,6 +132,19 @@ function RouteFallback() {
   );
 }
 
+function PanelRouteFallback() {
+  return (
+    <div
+      className="route-panel-fallback flex-1 min-h-0 min-w-0"
+      aria-label="Loading section"
+      role="status"
+    >
+      <div className="route-panel-fallback__line" />
+      <div className="route-panel-fallback__line route-panel-fallback__line--short" />
+    </div>
+  );
+}
+
 function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
@@ -150,6 +164,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
     const unsub = subscribeNotifications(user.id);
     return unsub;
   }, [user, loadNotifications, subscribeNotifications]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings')) {
+      prefetchCoreSettingsRoutes();
+    }
+  }, [location.pathname]);
 
   useSubagentRealtime();
 
@@ -172,12 +192,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
       >
         <ConnectionBanner />
         <ImportProgressBanner />
-        <div
-          key={`${location.pathname}${location.search}`}
-          className="route-transition-stage flex-1 min-h-0 min-w-0 flex flex-col"
-        >
-          {children}
-        </div>
+        <Suspense fallback={<PanelRouteFallback />}>
+          <div
+            key={`${location.pathname}${location.search}`}
+            className="route-transition-stage flex-1 min-h-0 min-w-0 flex flex-col"
+          >
+            {children}
+          </div>
+        </Suspense>
         {clockbarVisible && !isMobile && <Clockbar />}
       </div>
       {isMobile && <MobileNavDrawer />}
