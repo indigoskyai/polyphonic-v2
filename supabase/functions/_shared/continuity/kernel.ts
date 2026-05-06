@@ -148,6 +148,28 @@ export interface ContinuityLoaders {
   beliefs?: (supabase: SupabaseLike, userId: string) => Promise<ContinuityPacket["beliefs"]>;
 }
 
+function normalizeCurrentTurnText(value: string | null | undefined): string {
+  return String(value || "").replace(/\r\n/g, "\n").trim();
+}
+
+function isCurrentUserMessageInHistory(historyContent: string, userMessage: string): boolean {
+  const content = normalizeCurrentTurnText(historyContent);
+  const current = normalizeCurrentTurnText(userMessage);
+  if (!content || !current) return false;
+  return current === content || current.startsWith(`${content}\n\nAttached files:\n`);
+}
+
+export function removeCurrentUserMessageFromHistory(
+  history: ContinuityHistoryMessage[],
+  userMessage?: string,
+): ContinuityHistoryMessage[] {
+  if (!userMessage || history.length === 0) return history;
+  const last = history[history.length - 1];
+  if (last?.role !== "user") return history;
+  if (!isCurrentUserMessageInHistory(last.content, userMessage)) return history;
+  return history.slice(0, -1);
+}
+
 const EMPTY_IDENTITY: LucaIdentityDocs = {
   soulMd: "",
   selfModel: "",
@@ -412,7 +434,7 @@ async function loadThreadHistory(
     .order("created_at", { ascending: true })
     .limit(opts.historyLimit || 50);
   if (error) throw new Error(error.message || "history query failed");
-  return (data || []) as ContinuityHistoryMessage[];
+  return removeCurrentUserMessageFromHistory((data || []) as ContinuityHistoryMessage[], opts.userMessage);
 }
 
 export async function loadFunctionalMemories(

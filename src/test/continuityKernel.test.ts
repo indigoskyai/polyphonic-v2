@@ -6,6 +6,7 @@ import {
   formatMnemosAssociationsBlock,
   loadFunctionalMemories,
   loadContinuityPacket,
+  removeCurrentUserMessageFromHistory,
   type ContinuityLoaders,
   type FunctionalMemory,
 } from '../../supabase/functions/_shared/continuity/kernel';
@@ -60,6 +61,18 @@ function functionalMemorySupabaseStub({
 }
 
 describe('Continuity Kernel read path', () => {
+  it('removes the just-persisted current user message before model prompt assembly', () => {
+    const history = [
+      { id: 'm1', role: 'user', content: 'previous turn', created_at: '2026-05-06T10:00:00.000Z' },
+      { id: 'm2', role: 'assistant', content: 'previous answer', created_at: '2026-05-06T10:00:10.000Z' },
+      { id: 'm3', role: 'user', content: 'please check this', created_at: '2026-05-06T10:01:00.000Z' },
+    ];
+
+    expect(removeCurrentUserMessageFromHistory(history, 'please check this')).toEqual(history.slice(0, 2));
+    expect(removeCurrentUserMessageFromHistory(history, 'please check this\n\nAttached files:\n1. note.md (text/markdown)')).toEqual(history.slice(0, 2));
+    expect(removeCurrentUserMessageFromHistory(history, 'a different latest turn')).toEqual(history);
+  });
+
   it('assembles one packet with stable precedence-ready prompt parts', async () => {
     const loaders: ContinuityLoaders = {
       history: async () => [

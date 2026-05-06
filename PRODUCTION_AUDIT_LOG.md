@@ -1593,3 +1593,26 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push this UI-only polish milestone to `main`.
 2. Let Lovable staging refresh from GitHub.
 3. No Lovable prompt is needed unless staging fails to emit Agent SDK runtime activity payloads after the frontend deploy.
+
+---
+
+## Chat Send Runtime De-dupe Hotfix  [x] (2026-05-06)
+
+**Changed**
+- Fixed the runtime prompt path where a just-persisted user message could appear twice to Luca: once as loaded thread history and once as the live request message appended by `chat` / `chat-multi`.
+- Added `removeCurrentUserMessageFromHistory` in the continuity kernel so only the trailing matching user row is trimmed, preserving prior history and still allowing the current request to be appended exactly once.
+- Covered attachment-context sends by treating `message + "\n\nAttached files:"` as the same current user turn for history-trim purposes.
+- Added focused regression coverage under `CP-CHAT-011`.
+
+**Verified**
+- `npx vitest run src/test/continuityKernel.test.ts --reporter=verbose` passed: 1 file, 9 tests.
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/_shared/continuity/kernel.ts supabase/functions/chat-multi/index.ts supabase/functions/chat/index.ts` passed.
+- `npm run verify` passed after the patch.
+
+**Remaining risks**
+- This fixes the duplicated model-context turn. It does not change visible UI de-dupe behavior or message persistence.
+
+**Next**
+1. Push the hotfix to `main` so Lovable staging picks it up.
+2. Smoke a real chat send on staging after deploy; the latest user turn should appear once in Luca's effective prompt.
