@@ -11,6 +11,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Rail from "./components/Rail";
 import Sidebar from "./components/Sidebar";
 import Clockbar from "./components/Clockbar";
+import MobileAppBar from "./components/mobile/MobileAppBar";
+import MobileNavDrawer from "./components/mobile/MobileNavDrawer";
 import CommandPalette from "./components/palette/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
@@ -152,17 +154,18 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="app-shell h-screen flex overflow-hidden"
+      data-mobile={isMobile ? 'true' : undefined}
       style={{ background: 'var(--floor)' }}
     >
-      <Rail />
+      {isMobile ? <MobileAppBar /> : <Rail />}
       {!isMobile && <Sidebar />}
       <div
         className="app-main flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
         style={{
           background: 'var(--canvas)',
-          border: '1px solid var(--border-faint)',
-          borderRadius: 'var(--radius-inset)',
-          boxShadow: 'var(--shadow-panel), var(--shadow-inset-highlight)',
+          border: isMobile ? 'none' : '1px solid var(--border-faint)',
+          borderRadius: isMobile ? 0 : 'var(--radius-inset)',
+          boxShadow: isMobile ? 'none' : 'var(--shadow-panel), var(--shadow-inset-highlight)',
         }}
       >
         <ConnectionBanner />
@@ -170,6 +173,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         {children}
         {clockbarVisible && !isMobile && <Clockbar />}
       </div>
+      {isMobile && <MobileNavDrawer />}
       <CommandPalette />
       <DrawerRouter />
       <SubAgentOverlay />

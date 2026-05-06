@@ -30,6 +30,7 @@ import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   CHAT_ATTACHMENT_BUCKET,
   inferAttachmentLanguage,
@@ -378,6 +379,7 @@ type ModelKeyStatus = 'checking' | 'present' | 'missing' | 'unknown';
 export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const user = useAuthStore((s) => s.user);
   // Narrow selectors — the parent renders the *list shell* and the
   // streaming bubble. Individual messages are handled by <MessageItem>,
@@ -1530,17 +1532,17 @@ export default function ChatView() {
       >
         <div className="chat-empty-center flex-1 flex flex-col items-center justify-center">
           {/* Title + Echo particle field */}
-          <div style={{ textAlign: 'center', marginBottom: 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
+          <div className="chat-empty-hero" style={{ textAlign: 'center', marginBottom: isMobile ? 28 : 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
             <EchoField
-              size={280}
-              particleCount={18000}
+              size={isMobile ? 184 : 280}
+              particleCount={isMobile ? 7800 : 18000}
               state={isStreaming ? 'thinking' : 'idle'}
-              style={{ margin: '0 auto 32px' }}
+              style={{ margin: `0 auto ${isMobile ? 22 : 32}px` }}
             />
             <h1 style={{
-              fontSize: 38,
+              fontSize: isMobile ? 28 : 38,
               fontWeight: 280,
-              letterSpacing: '0.16em',
+              letterSpacing: isMobile ? '0.08em' : '0.16em',
               color: 'var(--text-tertiary)',
               fontFamily: 'var(--font-sans)',
               textTransform: 'lowercase',

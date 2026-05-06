@@ -1371,3 +1371,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Commit and push this mobile drawer/shell completion to `main`.
 2. Resume remaining Phase 4/5 launch gates.
+
+---
+
+## Phase 3/4 — Native Mobile UX Shell Redesign  [x] (2026-05-05)
+
+**Changed**
+- Replaced the mobile desktop-rail pattern with a mobile-native app shell: top app bar, left slide-out navigation drawer, route/thread identity, and contextual right-side activity/thread detail control.
+- Added the mobile drawer with search, new chat, activity, quick core surfaces, recent threads, full app navigation, account state, and sign-out.
+- Kept right/context drawer capability on mobile as a sheet for thread details, memory detail, and activity instead of hiding core context features.
+- Tuned mobile chat typography, message rhythm, empty-state scale, composer sizing, hit targets, safe-area padding, and reduced-motion drawer rules.
+- Added focused metadata tests for mobile route/thread header labeling.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/mobileShell.test.ts` passed.
+- Local Playwright verified `/chat`, an existing thread, left mobile menu open/close, thread navigation, chat thread detail, `/memory` plus memory detail, `/profile`, `/import`, `/settings/agents`, `/auth/login`, `/auth/signup`, and one desktop regression viewport.
+- Mobile viewport checks covered 390x844, 393x852, and 430x932 with the rail hidden, no visible horizontal overflow, and composer/header contained.
+- Drawer focus behavior was checked: initial focus lands in search, Escape closes the drawer, and focus returns to the menu button.
+- Console capture recorded 0 errors and 0 warnings in `output/playwright/mobile-ux-console-errors-final.log`.
+- Browser artifacts include `output/playwright/mobile-ux-chat-empty-390.png`, `output/playwright/mobile-ux-left-nav-final-390.png`, `output/playwright/mobile-ux-chat-thread-390.png`, `output/playwright/mobile-ux-thread-detail-390.png`, `output/playwright/mobile-ux-memory-detail-390.png`, `output/playwright/mobile-ux-profile-loaded-390.png`, and `output/playwright/mobile-ux-desktop-regression-chat.png`.
+
+**Remaining risks**
+- This pass intentionally focused on mobile structure, usability, typography, motion, safe areas, and route reachability. Riley's separate artistic visual-design pass can still refine the exact brand/aesthetic choices.
+- Real hosted staging should be visually re-smoked after Lovable pulls the pushed `main` commit.
+
+**Next**
+1. Let Lovable staging refresh from the pushed `main` commit, then do a quick hosted mobile visual smoke.
+2. Resume Phase 4/5 launch gates.
