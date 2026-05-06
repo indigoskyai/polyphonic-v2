@@ -14,6 +14,7 @@
 import { useMemo } from 'react';
 import PersonalitySignatureRadar from './PersonalitySignatureRadar';
 import MemoryPulseChart from '@/components/mind/MemoryPulseChart';
+import { profileText } from '@/lib/profileData';
 
 type Profile = {
   identity_narrative: string | null;
@@ -107,11 +108,13 @@ export default function PortraitMind({ profile, memoryStats, engramSummary }: Pr
   }, [bf]);
 
   const attachmentLabel: string | undefined =
-    profile.relational_dynamics?.attachment_style?.primary ??
-    profile.personality_dimensions?.attachment_style?.primary;
+    profileText(profile.relational_dynamics?.attachment_style?.primary)
+    || profileText(profile.personality_dimensions?.attachment_style?.primary)
+    || undefined;
   const cognitiveStyle: string | undefined =
-    profile.cognitive_tendencies?.thinking_style?.split(/[:.]/)[0]?.trim() ??
-    profile.cognitive_tendencies?.style;
+    profileText(profile.cognitive_tendencies?.thinking_style).split(/[:.]/)[0]?.trim()
+    || profileText(profile.cognitive_tendencies?.style)
+    || undefined;
 
   const dominantTrait = useMemo(() => {
     const entries = Object.entries(traits) as Array<[keyof typeof traits, number]>;

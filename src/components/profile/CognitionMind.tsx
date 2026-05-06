@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import ProfileMindShell from './ProfileMindShell';
 import { TraitBar, MagnitudeRow, TagCloud, QuoteCard, RadarMini, PanelHead, Empty, qualLabel } from './mindViz';
+import { asProfileRecord, profileNumberRecord, profileTagItems, profileText } from '@/lib/profileData';
 
 type Data = {
   thinking_style?: string;
@@ -24,7 +25,8 @@ interface Props {
 }
 
 export default function CognitionMind({ data, byType, engramTotal, updatedAt, version }: Props) {
-  const counts = byType ?? {};
+  const record = useMemo(() => asProfileRecord(data), [data]);
+  const counts = useMemo(() => profileNumberRecord(byType), [byType]);
   const get = (k: string) => counts[k] ?? 0;
   const max = Math.max(1, ...Object.values(counts));
   const norm = (raw: number) => Math.min(1, raw / max);
@@ -36,7 +38,7 @@ export default function CognitionMind({ data, byType, engramTotal, updatedAt, ve
     memory: norm(get('fact') + get('moment')),
     integration: norm((get('synthesis') + get('reflection')) * 0.7),
     abstract: norm(get('synthesis') + get('reflection') + get('principle') * 0.5),
-  }), [byType, engramTotal]);
+  }), [counts, engramTotal]);
 
   const axes = [
     { key: 'logic', label: 'Logic' },
@@ -52,11 +54,11 @@ export default function CognitionMind({ data, byType, engramTotal, updatedAt, ve
     return entries.sort((a, b) => b[1] - a[1])[0];
   }, [bandwidth]);
   const dominantLabel = axes.find(a => a.key === dominant?.[0])?.label ?? '—';
-  const styleSnippet = data?.thinking_style?.split(/[:.]/)[0]?.trim();
+  const styleSnippet = profileText(record.thinking_style).split(/[:.]/)[0]?.trim();
 
   const hasSignal = Object.values(counts).some(v => v > 0);
-  const biases = data?.biases ?? [];
-  const defenses = data?.defense_mechanisms ?? [];
+  const biases = profileTagItems(record.biases);
+  const defenses = profileTagItems(record.defense_mechanisms);
 
   return (
     <ProfileMindShell
@@ -99,13 +101,13 @@ export default function CognitionMind({ data, byType, engramTotal, updatedAt, ve
       {/* Tendencies — prose excerpts */}
       <div className="m-panel" style={{ gridColumn: 'span 7' }}>
         <PanelHead num="ii" label="Tendencies" aside={<>thinking · decisions · stress</>} />
-        {!data?.thinking_style && !data?.decision_patterns && !data?.stress_response ? (
+        {!profileText(record.thinking_style) && !profileText(record.decision_patterns) && !profileText(record.stress_response) ? (
           <Empty note="Cognitive tendencies forming." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {data?.thinking_style && <QuoteCard eyebrow="Thinking" body={data.thinking_style} />}
-            {data?.decision_patterns && <QuoteCard eyebrow="Decisions" body={data.decision_patterns} />}
-            {data?.stress_response && <QuoteCard eyebrow="Stress response" body={data.stress_response} />}
+            {profileText(record.thinking_style) && <QuoteCard eyebrow="Thinking" body={profileText(record.thinking_style)} />}
+            {profileText(record.decision_patterns) && <QuoteCard eyebrow="Decisions" body={profileText(record.decision_patterns)} />}
+            {profileText(record.stress_response) && <QuoteCard eyebrow="Stress response" body={profileText(record.stress_response)} />}
           </div>
         )}
       </div>
@@ -128,7 +130,7 @@ export default function CognitionMind({ data, byType, engramTotal, updatedAt, ve
       <div className="m-panel" style={{ gridColumn: 'span 6' }}>
         <PanelHead num="iv" label="Cognitive biases" aside={<><span className="v">{biases.length}</span> observed</>} />
         {biases.length ? (
-          <TagCloud items={biases.map(b => ({ label: b }))} />
+          <TagCloud items={biases} />
         ) : (
           <Empty note="Biases not yet identified." />
         )}
@@ -138,7 +140,7 @@ export default function CognitionMind({ data, byType, engramTotal, updatedAt, ve
       <div className="m-panel" style={{ gridColumn: 'span 6' }}>
         <PanelHead num="v" label="Defense mechanisms" aside={<><span className="v">{defenses.length}</span> patterns</>} />
         {defenses.length ? (
-          <TagCloud items={defenses.map(b => ({ label: b }))} />
+          <TagCloud items={defenses} />
         ) : (
           <Empty note="Defenses not yet surfaced." />
         )}

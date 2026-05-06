@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -35,6 +36,7 @@ const DEFAULTS: MemorySettings = {
  */
 export default function MemorySettingsPanel() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<MemorySettings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -132,9 +134,7 @@ export default function MemorySettingsPanel() {
           </div>
           <GhostButton
             label="Import conversations →"
-            onClick={() => {
-              window.location.href = '/import';
-            }}
+            onClick={() => navigate('/import')}
           />
         </div>
 

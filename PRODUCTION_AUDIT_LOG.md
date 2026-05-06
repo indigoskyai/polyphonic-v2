@@ -1278,3 +1278,32 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push this tracker update to `main`.
 2. Complete the human auth smoke list.
 3. Continue Phase 5 final release gates.
+
+---
+
+## Phase 3/4 — Profile Import Pipeline Repair  [x] (2026-05-05)
+
+**Changed**
+- Added shared profile-data normalization so fresh generated psychological-profile arrays/objects render as stable text, tags, ranked values, relationships, and numeric scores.
+- Hardened every psychological profile tab plus the import-complete summary against current structured profile output.
+- Added a profile tab boundary so one unexpected data shape cannot blank the whole profile surface, and the boundary resets when the user changes tabs.
+- Fixed the import profile-wait race by recording the profile `updated_at` baseline before dispatching deep analysis.
+- Surfaced synthesis failures, marked failed client-side imports in `chat_imports`, refreshed active import rows, showed failed imports in salient history, and changed memory-settings import navigation from full reload to in-app routing.
+- Added focused tests for the profile normalization layer and structured profile tab rendering.
+
+**Verified**
+- `npm run test -- src/test/profileData.test.ts src/test/profileMindComponents.test.tsx` passed: 5 tests.
+- `npm run verify` passed: typecheck, 230 unit tests, empty integration placeholder with `--passWithNoTests`, and production build.
+- Authenticated local Playwright `/profile` tab loop across Portrait, Personality, Communication, Emotions, Values, Relationships, Cognition, Growth, Shadow, and back to Portrait stayed on `/profile` with no blank state and no tab-boundary fallback.
+- Authenticated local Playwright `/import` showed import history while the upload state was visible.
+- Authenticated local Playwright `/memory` Settings -> Import preserved an in-page marker and landed on `/import`, confirming SPA navigation rather than a full document reload.
+- Browser artifacts: `output/playwright/profile-snapshot-current.md` and `output/playwright/profile-shadow-verification.png`.
+
+**Remaining risks**
+- A real fresh-account hosted import should be re-smoked after Lovable pulls this `main` commit because hosted import execution still depends on deployed edge functions and environment configuration.
+- This pass fixes the profile/import functional crash path; subjective profile visual redesign remains intentionally out of scope.
+
+**Next**
+1. Commit and push this profile/import repair to `main`.
+2. Re-test memory import on Lovable staging with the new account.
+3. Continue the remaining Phase 4/5 launch gates after the hosted smoke is green.

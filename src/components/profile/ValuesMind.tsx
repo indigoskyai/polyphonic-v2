@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import ProfileMindShell, { timeAgoShort } from './ProfileMindShell';
 import { QuoteCard, PanelHead, Empty, DivergenceRow } from './mindViz';
+import { asProfileRecord, profileRankedValues, profileText } from '@/lib/profileData';
 
 type RankedValue = { value: string; rank?: number; evidence?: string };
 
@@ -45,7 +46,8 @@ function tagMatchScore(valueName: string, byTagNorm: Record<string, number>): nu
 }
 
 export default function ValuesMind({ data, memoryStats, updatedAt, version }: Props) {
-  const ranked: RankedValue[] = data?.ranked_values ?? [];
+  const record = useMemo(() => asProfileRecord(data), [data]);
+  const ranked: RankedValue[] = useMemo(() => profileRankedValues(record.ranked_values), [record]);
   const top = ranked[0]?.value;
 
   const divergenceItems = useMemo(() => {
@@ -124,13 +126,13 @@ export default function ValuesMind({ data, memoryStats, updatedAt, version }: Pr
       </div>
 
       {/* iii — Decision architecture */}
-      {(data?.stated_vs_revealed || data?.decision_framework || data?.temporal_orientation) && (
+      {(profileText(record.stated_vs_revealed) || profileText(record.decision_framework) || profileText(record.temporal_orientation)) && (
         <div className="m-panel" style={{ gridColumn: 'span 12' }}>
           <PanelHead num="iii" label="Decision architecture" aside={<>updated · <span className="v">{timeAgoShort(updatedAt)}</span></>} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18, paddingTop: 4 }}>
-            {data?.stated_vs_revealed && <QuoteCard eyebrow="Stated vs revealed" body={data.stated_vs_revealed} />}
-            {data?.decision_framework && <QuoteCard eyebrow="Framework" body={data.decision_framework} />}
-            {data?.temporal_orientation && <QuoteCard eyebrow="Temporal orientation" body={data.temporal_orientation} />}
+            {profileText(record.stated_vs_revealed) && <QuoteCard eyebrow="Stated vs revealed" body={profileText(record.stated_vs_revealed)} />}
+            {profileText(record.decision_framework) && <QuoteCard eyebrow="Framework" body={profileText(record.decision_framework)} />}
+            {profileText(record.temporal_orientation) && <QuoteCard eyebrow="Temporal orientation" body={profileText(record.temporal_orientation)} />}
           </div>
         </div>
       )}

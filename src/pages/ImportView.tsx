@@ -4,6 +4,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
 import { supabase } from '@/integrations/supabase/client';
 import EchoField from '@/components/EchoField';
+import {
+  asProfileRecord,
+  isProfileRecord,
+  profileNumber,
+  profileRankedValues,
+  profileStringList,
+  profileText,
+} from '@/lib/profileData';
 
 type ImportRecord = {
   id: string;
@@ -58,22 +66,41 @@ export default function ImportView() {
 
   const [pastImports, setPastImports] = useState<ImportRecord[]>([]);
 
-  useEffect(() => {
+  const refreshImports = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { data } = await supabase
       .from('chat_imports')
       .select('id, status, source_platform, total_conversations, processed_conversations, memories_created, file_size_bytes, pipeline_stage, created_at, completed_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (data) setPastImports(data as ImportRecord[]);
-      });
-  }, [user, stage]); // re-fetch when stage changes (after an import completes)
+      .limit(20);
+    if (data) setPastImports(data as ImportRecord[]);
+  }, [user]);
 
   const isProcessing = ['extracting', 'synthesizing', 'profiling'].includes(stage);
   const showPreAnalysis = stage === 'idle' && filterStats !== null;
   const showUpload = stage === 'idle' && filterStats === null;
+  const hasActiveImport = pastImports.some((imp) => imp.status === 'processing');
+  const showImportHistory = pastImports.length > 0 && !showPreAnalysis;
+  const completedProfile = asProfileRecord(profileData);
+  const completedPersonality = asProfileRecord(completedProfile.personality_dimensions);
+  const completedBigFive = asProfileRecord(completedPersonality.big_five);
+  const completedValues = asProfileRecord(completedProfile.values_hierarchy);
+  const completedRankedValues = profileRankedValues(completedValues.ranked_values);
+  const completedShadow = asProfileRecord(completedProfile.shadow_patterns);
+  const completedBlindSpots = profileStringList(completedShadow.blind_spots);
+  const completedContradictions = profileStringList(completedShadow.contradictions);
+  const completedGrowth = profileStringList(asProfileRecord(completedProfile.growth_edges).active_growth);
+
+  useEffect(() => {
+    refreshImports();
+  }, [refreshImports, stage]);
+
+  useEffect(() => {
+    if (!user || (!isProcessing && !hasActiveImport)) return;
+    const interval = window.setInterval(refreshImports, 5000);
+    return () => window.clearInterval(interval);
+  }, [user, isProcessing, hasActiveImport, refreshImports]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
@@ -132,7 +159,7 @@ export default function ImportView() {
           )}
 
           {/* ── IMPORT HISTORY ── */}
-          {(showUpload || stage === 'complete') && pastImports.length > 0 && (
+          {showImportHistory && (
             <div style={{
               marginTop: stage === 'complete' ? 48 : 40,
               paddingTop: 32,
@@ -165,7 +192,7 @@ export default function ImportView() {
                     : null;
 
                   const isActive = imp.status === 'processing';
-                  const isError = imp.status === 'error';
+                  const isError = imp.status === 'error' || imp.status === 'failed';
                   const isCompleted = imp.status === 'completed';
 
                   let duration: string | null = null;
@@ -424,38 +451,43 @@ export default function ImportView() {
               </div>
 
               {/* Identity Portrait */}
-              {profileData?.identity_narrative && (
+              {profileText(completedProfile.identity_narrative) && (
                 <div style={{ marginBottom: 40, padding: '28px 24px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Portrait</div>
                   <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.8, fontWeight: 350, fontStyle: 'italic' }}>
-                    {profileData.identity_narrative}
+                    {profileText(completedProfile.identity_narrative)}
                   </p>
                 </div>
               )}
 
               {/* Big Five */}
-              {profileData?.personality_dimensions?.big_five && (
+              {Object.keys(completedBigFive).length > 0 && (
                 <div style={{ marginBottom: 32 }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Personality Dimensions</div>
                   <div className="flex flex-col gap-3">
-                    {Object.entries(profileData.personality_dimensions.big_five).map(([key, val]: [string, any]) => (
-                      <DimensionBar key={key} label={key} score={val.score} evidence={val.evidence} />
+                    {Object.entries(completedBigFive).map(([key, val]: [string, any]) => (
+                      <DimensionBar
+                        key={key}
+                        label={key}
+                        score={profileNumber(isProfileRecord(val) ? val.score : val, 50)}
+                        evidence={isProfileRecord(val) ? profileText(val.evidence) : undefined}
+                      />
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Communication */}
-              {profileData?.communication_patterns && (
-                <InsightSection title="Communication Style" data={profileData.communication_patterns} />
+              {Object.keys(asProfileRecord(completedProfile.communication_patterns)).length > 0 && (
+                <InsightSection title="Communication Style" data={asProfileRecord(completedProfile.communication_patterns)} />
               )}
 
               {/* Values */}
-              {profileData?.values_hierarchy?.ranked_values && (
+              {completedRankedValues.length > 0 && (
                 <div style={{ marginBottom: 32 }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Core Values</div>
                   <div className="flex flex-col gap-2">
-                    {profileData.values_hierarchy.ranked_values.slice(0, 8).map((v: any, i: number) => (
+                    {completedRankedValues.slice(0, 8).map((v, i: number) => (
                       <div key={i} className="flex items-start gap-3" style={{ padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                         <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', minWidth: 16 }}>{i + 1}</span>
                         <div>
@@ -469,21 +501,21 @@ export default function ImportView() {
               )}
 
               {/* Shadow Patterns */}
-              {profileData?.shadow_patterns && (
+              {(completedBlindSpots.length > 0 || completedContradictions.length > 0) && (
                 <div style={{ marginBottom: 32 }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Hidden Patterns</div>
-                  {profileData.shadow_patterns.blind_spots?.length > 0 && (
+                  {completedBlindSpots.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 450 }}>Blind Spots</div>
-                      {profileData.shadow_patterns.blind_spots.map((b: string, i: number) => (
+                      {completedBlindSpots.map((b: string, i: number) => (
                         <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>{b}</div>
                       ))}
                     </div>
                   )}
-                  {profileData.shadow_patterns.contradictions?.length > 0 && (
+                  {completedContradictions.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 450 }}>Contradictions</div>
-                      {profileData.shadow_patterns.contradictions.map((c: string, i: number) => (
+                      {completedContradictions.map((c: string, i: number) => (
                         <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>{c}</div>
                       ))}
                     </div>
@@ -492,10 +524,10 @@ export default function ImportView() {
               )}
 
               {/* Growth Edges */}
-              {profileData?.growth_edges?.active_growth?.length > 0 && (
+              {completedGrowth.length > 0 && (
                 <div style={{ marginBottom: 32 }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Growth Edges</div>
-                  {profileData.growth_edges.active_growth.map((g: string, i: number) => (
+                  {completedGrowth.map((g: string, i: number) => (
                     <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '6px 0' }}>→ {g}</div>
                   ))}
                 </div>
@@ -545,14 +577,15 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
 }
 
 function DimensionBar({ label, score, evidence }: { label: string; score: number; evidence?: string }) {
+  const safeScore = Math.max(0, Math.min(100, profileNumber(score, 50)));
   return (
     <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
       <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'capitalize', fontWeight: 450 }}>{label}</span>
-        <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>{score}/100</span>
+        <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)' }}>{safeScore}/100</span>
       </div>
       <div style={{ height: 3, background: 'var(--bg-surface)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: 'var(--text-ghost)', borderRadius: 2, transition: 'width 1s var(--ease-out)' }} />
+        <div style={{ width: `${safeScore}%`, height: '100%', background: 'var(--text-ghost)', borderRadius: 2, transition: 'width 1s var(--ease-out)' }} />
       </div>
       {evidence && <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 6, lineHeight: 1.4 }}>{evidence}</div>}
     </div>
@@ -560,7 +593,9 @@ function DimensionBar({ label, score, evidence }: { label: string; score: number
 }
 
 function InsightSection({ title, data }: { title: string; data: Record<string, any> }) {
-  const displayKeys = Object.entries(data).filter(([_, v]) => typeof v === 'string' && v.length > 0);
+  const displayKeys = Object.entries(data)
+    .map(([key, value]) => [key, profileText(value)] as const)
+    .filter(([, value]) => value.length > 0);
   if (displayKeys.length === 0) return null;
   return (
     <div style={{ marginBottom: 32 }}>
@@ -569,7 +604,7 @@ function InsightSection({ title, data }: { title: string; data: Record<string, a
         {displayKeys.map(([key, value]) => (
           <div key={key} style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'capitalize', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{String(value)}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{value}</div>
           </div>
         ))}
       </div>

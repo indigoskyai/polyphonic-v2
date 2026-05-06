@@ -9,6 +9,7 @@ import {
   TraitBar, TagCloud, QuoteCard, RadarMini,
   PanelHead, Empty, Sparkbar, qualLabel,
 } from './mindViz';
+import { asProfileRecord, profileTagItems, profileText } from '@/lib/profileData';
 
 type LandscapeData = {
   baseline_mood?: string;
@@ -63,12 +64,9 @@ function norm01(v: number | undefined | null): number {
   return 0.5;
 }
 
-function tagify(items: Array<string | { label: string; count?: number }> | undefined) {
-  if (!items?.length) return [];
-  return items.map(it => typeof it === 'string' ? { label: it } : { label: it.label, count: it.count });
-}
-
 export default function EmotionsMind({ data, emotionalSeries, memoryStats, updatedAt, version }: Props) {
+  const record = useMemo(() => asProfileRecord(data), [data]);
+
   const currentValues = useMemo(() => {
     if (!emotionalSeries?.current) return null;
     const out: Record<string, number> = {};
@@ -106,8 +104,8 @@ export default function EmotionsMind({ data, emotionalSeries, memoryStats, updat
     return { min, max, span, meanV };
   }, [trajectory]);
 
-  const triggers = tagify(data?.triggers);
-  const coping = tagify(data?.coping_mechanisms);
+  const triggers = profileTagItems(record.triggers);
+  const coping = profileTagItems(record.coping_mechanisms);
 
   return (
     <ProfileMindShell
@@ -196,12 +194,12 @@ export default function EmotionsMind({ data, emotionalSeries, memoryStats, updat
       {/* iv — Landscape prose */}
       <div className="m-panel" style={{ gridColumn: 'span 7' }}>
         <PanelHead num="iv" label="Landscape" aside={<>updated · <span className="v">{timeAgoShort(updatedAt)}</span></>} />
-        {data && (data.baseline_mood || data.emotional_range || data.regulation_style || data.granularity) ? (
+        {profileText(record.baseline_mood) || profileText(record.emotional_range) || profileText(record.regulation_style) || profileText(record.granularity) ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {data.baseline_mood && <QuoteCard eyebrow="Baseline mood" body={data.baseline_mood} />}
-            {data.emotional_range && <QuoteCard eyebrow="Range" body={data.emotional_range} />}
-            {data.regulation_style && <QuoteCard eyebrow="Regulation" body={data.regulation_style} />}
-            {data.granularity && <QuoteCard eyebrow="Granularity" body={data.granularity} />}
+            {profileText(record.baseline_mood) && <QuoteCard eyebrow="Baseline mood" body={profileText(record.baseline_mood)} />}
+            {profileText(record.emotional_range) && <QuoteCard eyebrow="Range" body={profileText(record.emotional_range)} />}
+            {profileText(record.regulation_style) && <QuoteCard eyebrow="Regulation" body={profileText(record.regulation_style)} />}
+            {profileText(record.granularity) && <QuoteCard eyebrow="Granularity" body={profileText(record.granularity)} />}
           </div>
         ) : (
           <Empty note="Landscape prose forming." />

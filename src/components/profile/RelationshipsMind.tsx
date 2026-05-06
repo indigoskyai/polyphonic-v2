@@ -4,6 +4,7 @@
  */
 import ProfileMindShell, { timeAgoShort } from './ProfileMindShell';
 import { QuoteCard, PanelHead, Empty } from './mindViz';
+import { asProfileRecord, profileRelationships, profileText } from '@/lib/profileData';
 
 type KeyRelationship = { role?: string; dynamic?: string };
 
@@ -26,8 +27,14 @@ const DIMS: Array<{ key: keyof Data; label: string }> = [
 ];
 
 export default function RelationshipsMind({ data, updatedAt, version }: Props) {
-  const rels: KeyRelationship[] = data?.key_relationships ?? [];
-  const dimsPresent = DIMS.filter(d => typeof data?.[d.key] === 'string' && data[d.key]);
+  const record = asProfileRecord(data);
+  const rels: KeyRelationship[] =
+    profileRelationships(record.key_relationships).length
+      ? profileRelationships(record.key_relationships)
+      : profileRelationships(record.named_people).length
+        ? profileRelationships(record.named_people)
+        : profileRelationships(record.relational_patterns);
+  const dimsPresent = DIMS.filter(d => Boolean(profileText(record[d.key])));
 
   return (
     <ProfileMindShell
@@ -71,7 +78,7 @@ export default function RelationshipsMind({ data, updatedAt, version }: Props) {
         {dimsPresent.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
             {dimsPresent.map(d => (
-              <QuoteCard key={String(d.key)} eyebrow={d.label} body={String(data![d.key])} />
+              <QuoteCard key={String(d.key)} eyebrow={d.label} body={profileText(record[d.key])} />
             ))}
           </div>
         ) : (
@@ -79,10 +86,10 @@ export default function RelationshipsMind({ data, updatedAt, version }: Props) {
         )}
       </div>
 
-      {data?.ai_relationship_style && (
+      {profileText(record.ai_relationship_style) && (
         <div className="m-panel" style={{ gridColumn: 'span 12' }}>
           <PanelHead num="iii" label="Relationship with AI" aside={<>updated · <span className="v">{timeAgoShort(updatedAt)}</span></>} />
-          <QuoteCard eyebrow="Stance" body={data.ai_relationship_style} />
+          <QuoteCard eyebrow="Stance" body={profileText(record.ai_relationship_style)} />
         </div>
       )}
     </ProfileMindShell>

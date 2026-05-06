@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import ProfileMindShell, { timeAgoShort } from './ProfileMindShell';
 import { TraitBar, TagCloud, QuoteCard, RadarMini, PanelHead, Empty, inferIntensity, qualLabel } from './mindViz';
+import { asProfileRecord, profileTagItems, profileText } from '@/lib/profileData';
 
 type Data = {
   vocabulary_richness?: string;
@@ -27,16 +28,19 @@ const AXES = [
 interface Props { data: Data | null | undefined; updatedAt?: string; version?: number; }
 
 export default function CommunicationMind({ data, updatedAt, version }: Props) {
+  const record = useMemo(() => asProfileRecord(data), [data]);
+  const signatures = useMemo(() => profileTagItems(record.unique_signatures), [record]);
+
   const inferred = useMemo(() => {
     const out: Record<string, number> = {};
     let any = false;
     for (const a of AXES) {
-      const v = inferIntensity(data?.[a.key]);
+      const v = inferIntensity(profileText(record[a.key]));
       out[a.key] = v ?? 0.5;
       if (v !== null) any = true;
     }
     return { values: out, any };
-  }, [data]);
+  }, [record]);
 
   const dominant = useMemo(() => {
     const sorted = Object.entries(inferred.values).sort((a, b) => b[1] - a[1]);
@@ -85,12 +89,12 @@ export default function CommunicationMind({ data, updatedAt, version }: Props) {
 
       {/* Patterns — prose readouts as TraitBars + extracts */}
       <div className="m-panel" style={{ gridColumn: 'span 7' }}>
-        <PanelHead num="ii" label="Patterns" aside={<><span className="v">{AXES.filter(a => data?.[a.key]).length}</span> dimensions</>} />
-        {!data || AXES.every(a => !data[a.key]) ? (
+        <PanelHead num="ii" label="Patterns" aside={<><span className="v">{AXES.filter(a => profileText(record[a.key])).length}</span> dimensions</>} />
+        {AXES.every(a => !profileText(record[a.key])) ? (
           <Empty note="Communication patterns forming." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {AXES.map(a => data?.[a.key] ? (
+            {AXES.map(a => profileText(record[a.key]) ? (
               <TraitBar key={a.key} label={a.label} value={inferred.values[a.key]} />
             ) : null)}
           </div>
@@ -99,22 +103,22 @@ export default function CommunicationMind({ data, updatedAt, version }: Props) {
 
       {/* Verbal signatures cloud */}
       <div className="m-panel" style={{ gridColumn: 'span 5' }}>
-        <PanelHead num="iii" label="Verbal signatures" aside={<><span className="v">{data?.unique_signatures?.length ?? 0}</span> phrases</>} />
-        {data?.unique_signatures?.length ? (
-          <TagCloud items={data.unique_signatures.map((s) => ({ label: s }))} />
+        <PanelHead num="iii" label="Verbal signatures" aside={<><span className="v">{signatures.length}</span> phrases</>} />
+        {signatures.length ? (
+          <TagCloud items={signatures} />
         ) : (
           <Empty note="Verbal tics not yet surfaced." />
         )}
       </div>
 
       {/* Sample voice — first prose dimension full-width */}
-      {data?.vocabulary_richness && (
+      {profileText(record.vocabulary_richness) && (
         <div className="m-panel" style={{ gridColumn: 'span 12' }}>
           <PanelHead num="iv" label="Voice excerpt" aside={<>vocabulary · <span className="v">{timeAgoShort(updatedAt)}</span></>} />
-          <QuoteCard eyebrow="Vocabulary" body={data.vocabulary_richness} />
-          {data.assertion_strength && (
+          <QuoteCard eyebrow="Vocabulary" body={profileText(record.vocabulary_richness)} />
+          {profileText(record.assertion_strength) && (
             <div style={{ marginTop: 14 }}>
-              <QuoteCard eyebrow="Assertion" body={data.assertion_strength} />
+              <QuoteCard eyebrow="Assertion" body={profileText(record.assertion_strength)} />
             </div>
           )}
         </div>

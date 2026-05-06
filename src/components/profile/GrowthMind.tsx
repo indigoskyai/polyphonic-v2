@@ -4,6 +4,7 @@
  */
 import ProfileMindShell, { timeAgoShort } from './ProfileMindShell';
 import { QuoteCard, PanelHead, Empty, MagnitudeRow } from './mindViz';
+import { asProfileRecord, profileStringList } from '@/lib/profileData';
 
 type Data = {
   active_growth?: string[];
@@ -35,11 +36,13 @@ function RankedColumn({ items }: { items: string[] }) {
 }
 
 export default function GrowthMind({ data, updatedAt, version }: Props) {
-  const active = data?.active_growth ?? [];
-  const emerging = data?.emerging_awareness ?? [];
-  const integration = data?.integration_opportunities ?? [];
-  const total = active.length + emerging.length + integration.length;
-  const max = Math.max(1, active.length, emerging.length, integration.length);
+  const record = asProfileRecord(data);
+  const active = profileStringList(record.active_growth);
+  const emerging = profileStringList(record.emerging_awareness);
+  const integration = profileStringList(record.integration_opportunities);
+  const horizons = profileStringList(record.horizons);
+  const total = active.length + emerging.length + integration.length + horizons.length;
+  const max = Math.max(1, active.length, emerging.length, integration.length, horizons.length);
 
   return (
     <ProfileMindShell
@@ -62,21 +65,26 @@ export default function GrowthMind({ data, updatedAt, version }: Props) {
             <MagnitudeRow label="Active" value={active.length} max={max} />
             <MagnitudeRow label="Emerging" value={emerging.length} max={max} />
             <MagnitudeRow label="Integration" value={integration.length} max={max} />
+            <MagnitudeRow label="Horizons" value={horizons.length} max={max} />
           </div>
         </div>
       )}
 
-      <div className="m-panel" style={{ gridColumn: 'span 4' }}>
+      <div className="m-panel" style={{ gridColumn: 'span 3' }}>
         <PanelHead num="ii" label="Active" aside={<><span className="v">{active.length}</span></>} />
         <RankedColumn items={active} />
       </div>
-      <div className="m-panel" style={{ gridColumn: 'span 4' }}>
+      <div className="m-panel" style={{ gridColumn: 'span 3' }}>
         <PanelHead num="iii" label="Emerging" aside={<><span className="v">{emerging.length}</span></>} />
         <RankedColumn items={emerging} />
       </div>
-      <div className="m-panel" style={{ gridColumn: 'span 4' }}>
+      <div className="m-panel" style={{ gridColumn: 'span 3' }}>
         <PanelHead num="iv" label="Integration" aside={<><span className="v">{integration.length}</span></>} />
         <RankedColumn items={integration} />
+      </div>
+      <div className="m-panel" style={{ gridColumn: 'span 3' }}>
+        <PanelHead num="v" label="Horizons" aside={<><span className="v">{horizons.length}</span></>} />
+        <RankedColumn items={horizons} />
       </div>
     </ProfileMindShell>
   );

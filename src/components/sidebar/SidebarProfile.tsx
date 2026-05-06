@@ -1,3 +1,4 @@
+import { startTransition } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useViewTabStore, ProfileTab } from '@/stores/viewTabStore';
 import SidebarHeader from './SidebarHeader';
@@ -38,7 +39,9 @@ export default function SidebarProfile() {
             active={path === '/profile' && profileTab === t}
             onClick={() => {
               setProfileTab(t);
-              if (path !== '/profile') navigate('/profile');
+              if (path !== '/profile') {
+                startTransition(() => navigate('/profile'));
+              }
             }}
           />
         ))}

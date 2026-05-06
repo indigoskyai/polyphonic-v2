@@ -46,7 +46,11 @@ function ImportRow({
   const created = imp.memories_created ?? 0;
   const total = imp.total_conversations ?? 0;
   const processed = imp.processed_conversations ?? 0;
-  const progress = total > 0 ? Math.min(1, processed / total) : (imp.status === 'completed' ? 1 : 0);
+  const isActive = imp.status === 'processing';
+  const isFailed = imp.status === 'error' || imp.status === 'failed';
+  const progress = total > 0
+    ? Math.min(1, processed / total)
+    : (imp.status === 'completed' ? 1 : 0);
 
   return (
     <div
@@ -68,9 +72,11 @@ function ImportRow({
         <span className="time">{timeAgo(imp.created_at)}</span>
       </div>
       <div className="s-row-content">
-        {imp.pipeline_stage && imp.status === 'processing'
+        {imp.pipeline_stage && isActive
           ? <>Stage <span style={{ color: 'var(--text-soft)' }}>{imp.pipeline_stage}</span> · {processed} / {total} conversations</>
-          : <>{processed} of {total} conversations processed · {created} memories created</>}
+          : isFailed
+            ? <>Import stopped at <span style={{ color: 'var(--text-soft)' }}>{imp.pipeline_stage || 'error'}</span> · {processed} / {total} conversations</>
+            : <>{processed} of {total} conversations processed · {created} memories created</>}
       </div>
       <div className="s-bars">
         <div className="s-bar">
@@ -113,11 +119,22 @@ export default function ImportsTab() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
-    if (data) setImports(data as ImportRecord[]);
+    if (data) {
+      const rows = data as ImportRecord[];
+      setImports(rows);
+      setSelectedImport((prev) => prev ? rows.find((imp) => imp.id === prev.id) ?? prev : prev);
+    }
     setLoading(false);
   }, [user]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const hasActiveImports = imports.some((imp) => imp.status === 'processing');
+  useEffect(() => {
+    if (!hasActiveImports) return;
+    const interval = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(interval);
+  }, [hasActiveImports, refresh]);
 
   const filtered = useMemo(() => {
     let list = imports;
@@ -125,7 +142,7 @@ export default function ImportsTab() {
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       list = list.filter((i) => new Date(i.created_at).getTime() >= cutoff);
     } else if (filter === 'salient') {
-      list = list.filter((i) => i.status === 'processing' || (i.conflicts_detected ?? 0) > 0);
+      list = list.filter((i) => i.status === 'processing' || i.status === 'failed' || i.status === 'error' || (i.conflicts_detected ?? 0) > 0);
     }
     if (query) {
       const q = query.toLowerCase();

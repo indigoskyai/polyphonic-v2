@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 import ProfileMindShell, { timeAgoShort } from './ProfileMindShell';
 import { QuoteCard, PanelHead, Empty, TagCloud, DivergenceRow } from './mindViz';
+import { asProfileRecord, profileStringList } from '@/lib/profileData';
 
 type Data = {
   contradictions?: string[];
@@ -44,11 +45,12 @@ function tagMatchScore(spot: string, byTagNorm: Record<string, number>): number 
 function shorten(s: string, n = 80) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 export default function ShadowMind({ data, memoryStats, updatedAt, version }: Props) {
-  const contradictions = data?.contradictions ?? [];
-  const blindSpots = data?.blind_spots ?? [];
-  const avoidance = data?.avoidance_patterns ?? [];
-  const compensatory = data?.compensatory_behaviors ?? [];
-  const questions = data?.unasked_questions ?? [];
+  const record = useMemo(() => asProfileRecord(data), [data]);
+  const contradictions = useMemo(() => profileStringList(record.contradictions), [record]);
+  const blindSpots = useMemo(() => profileStringList(record.blind_spots), [record]);
+  const avoidance = useMemo(() => profileStringList(record.avoidance_patterns), [record]);
+  const compensatory = useMemo(() => profileStringList(record.compensatory_behaviors), [record]);
+  const questions = useMemo(() => profileStringList(record.unasked_questions), [record]);
 
   const divergenceItems = useMemo(() => {
     if (!memoryStats || !blindSpots.length) return [];

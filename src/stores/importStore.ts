@@ -127,17 +127,24 @@ async function callWithRetry(url: string, options: RequestInit, retries = 3): Pr
   throw new Error('Exhausted retries');
 }
 
-async function waitForProfile(userId: string, timeoutMs = 10 * 60 * 1000, intervalMs = 8000) {
-  const startedAt = Date.now();
-  let baselineUpdatedAt: string | null = null;
-
-  const { data: baseline } = await supabase
+async function getProfileUpdatedAt(userId: string): Promise<string | null> {
+  const { data } = await supabase
     .from('psychological_profile')
     .select('updated_at')
     .eq('user_id', userId)
     .maybeSingle();
 
-  baselineUpdatedAt = baseline?.updated_at ?? null;
+  return data?.updated_at ?? null;
+}
+
+export async function waitForProfile(
+  userId: string,
+  options: { baselineUpdatedAt?: string | null; timeoutMs?: number; intervalMs?: number } = {},
+) {
+  const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
+  const intervalMs = options.intervalMs ?? 8000;
+  const startedAt = Date.now();
+  const baselineUpdatedAt = options.baselineUpdatedAt ?? null;
 
   while (Date.now() - startedAt < timeoutMs) {
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -341,7 +348,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
       // Stage 2: Synthesize — refresh token first
       token = await getToken();
       set({ stage: 'synthesizing', pipelineDetail: '' });
-      await callWithRetry(`${supabaseUrl}/functions/v1/memory-synthesize`, {
+      const synthesisResponse = await callWithRetry(`${supabaseUrl}/functions/v1/memory-synthesize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -350,9 +357,15 @@ export const useImportStore = create<ImportState>((set, get) => ({
         body: JSON.stringify({ import_id: importId }),
       });
 
+      if (!synthesisResponse.ok) {
+        const err = await synthesisResponse.json().catch(() => ({ error: `HTTP ${synthesisResponse.status}` }));
+        throw new Error(err.error || `Synthesis failed (${synthesisResponse.status})`);
+      }
+
       // Stage 3: Deep psychological analysis — refresh token first
       token = await getToken();
       set({ stage: 'profiling', pipelineDetail: '' });
+      const baselineUpdatedAt = await getProfileUpdatedAt(userId);
       const profileResponse = await callWithRetry(`${supabaseUrl}/functions/v1/profile-deep-analysis`, {
         method: 'POST',
         headers: {
@@ -369,7 +382,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
 
       set({ pipelineDetail: 'running in background' });
 
-      const profileData = await waitForProfile(userId);
+      const profileData = await waitForProfile(userId, { baselineUpdatedAt });
 
       // Update import record
       await supabase
@@ -380,7 +393,15 @@ export const useImportStore = create<ImportState>((set, get) => ({
       set({ stage: 'complete', pipelineDetail: '', profileData, preparedConversations: null });
     } catch (err: any) {
       console.error('Import error:', err);
-      set({ stage: 'error', error: err.message || 'An unexpected error occurred' });
+      const message = err.message || 'An unexpected error occurred';
+      const importId = get().importId;
+      if (importId) {
+        await supabase
+          .from('chat_imports')
+          .update({ status: 'failed', pipeline_stage: 'error', completed_at: new Date().toISOString() })
+          .eq('id', importId);
+      }
+      set({ stage: 'error', error: message });
     }
   },
 

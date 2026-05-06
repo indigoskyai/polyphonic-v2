@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,14 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { useViewTabStore } from '@/stores/viewTabStore';
+import {
+  asProfileRecord,
+  isProfileRecord,
+  profileNumber,
+  profileRankedValues,
+  profileStringList,
+  profileText,
+} from '@/lib/profileData';
 
 type Profile = {
   identity_narrative: string | null;
@@ -89,6 +97,75 @@ type EngramSummary = {
 const TABS = ['Portrait', 'Personality', 'Communication', 'Emotions', 'Values', 'Relationships', 'Cognition', 'Growth', 'Shadow'] as const;
 type Tab = typeof TABS[number];
 
+class ProfileTabBoundary extends Component<
+  { tab: Tab; onRetry: () => void; children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[profile-tab]', error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: { tab: Tab }) {
+    if (prevProps.tab !== this.props.tab && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div
+        style={{
+          margin: 24,
+          padding: 24,
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--bg-elevated)',
+          color: 'var(--text-secondary)',
+        }}
+      >
+        <div
+          style={{
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--text-ghost)',
+            marginBottom: 10,
+          }}
+        >
+          Profile tab unavailable
+        </div>
+        <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 16px' }}>
+          This tab hit an unexpected profile data shape. The rest of the profile is still available.
+        </p>
+        <button
+          type="button"
+          onClick={this.props.onRetry}
+          style={{
+            height: 34,
+            padding: '0 14px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          Refresh profile
+        </button>
+      </div>
+    );
+  }
+}
+
 export default function ProfileView() {
   const user = useAuthStore((s) => s.user);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -104,20 +181,25 @@ export default function ProfileView() {
 
   const starterPrompts = useMemo(() => {
     const prompts: string[] = [];
-    if (profile?.personality_dimensions?.big_five) {
-      const traits = Object.entries(profile.personality_dimensions.big_five) as [string, any][];
-      const top = traits.sort((a, b) => (b[1]?.score ?? 0) - (a[1]?.score ?? 0))[0];
+    const personality = asProfileRecord(profile?.personality_dimensions);
+    const bigFive = asProfileRecord(personality.big_five);
+    if (Object.keys(bigFive).length) {
+      const traits = Object.entries(bigFive) as [string, any][];
+      const top = traits.sort((a, b) => profileNumber(b[1]?.score ?? b[1], 0) - profileNumber(a[1]?.score ?? a[1], 0))[0];
       if (top) prompts.push(`Why did you score me high on ${top[0]}?`);
     }
-    if (profile?.shadow_patterns?.blind_spots?.length) {
+    const blindSpots = profileStringList(asProfileRecord(profile?.shadow_patterns).blind_spots);
+    if (blindSpots.length) {
       prompts.push('Which blind spot should I sit with first, and why?');
     }
-    if (profile?.values_hierarchy?.ranked_values?.length) {
-      const v = profile.values_hierarchy.ranked_values[0]?.value;
+    const rankedValues = profileRankedValues(asProfileRecord(profile?.values_hierarchy).ranked_values);
+    if (rankedValues.length) {
+      const v = rankedValues[0]?.value;
       if (v) prompts.push(`What evidence shows that "${v}" is one of my core values?`);
     }
-    if (profile?.personality_dimensions?.attachment_style?.primary) {
-      prompts.push(`What memories made you conclude my attachment style is ${profile.personality_dimensions.attachment_style.primary}?`);
+    const attachmentStyle = profileText(asProfileRecord(personality.attachment_style).primary);
+    if (attachmentStyle) {
+      prompts.push(`What memories made you conclude my attachment style is ${attachmentStyle}?`);
     }
     prompts.push('What is one thing about me you think I would be surprised to hear?');
     prompts.push('Based on my patterns, what should I focus on this month?');
@@ -498,65 +580,67 @@ export default function ProfileView() {
             scrollbarColor: 'var(--border) transparent',
           }}
         >
-          {activeTab === 'Portrait' && (
-            <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
-          )}
-          {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
-          {activeTab === 'Communication' && (
-            <CommunicationMind
-              data={profile.communication_patterns}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Emotions' && (
-            <EmotionsMind
-              data={profile.emotional_landscape}
-              emotionalSeries={emotionalSeries}
-              memoryStats={memoryStats}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Values' && (
-            <ValuesMind
-              data={profile.values_hierarchy}
-              memoryStats={memoryStats}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Relationships' && (
-            <RelationshipsMind
-              data={profile.relational_dynamics}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Cognition' && (
-            <CognitionMind
-              data={profile.cognitive_tendencies}
-              byType={memoryStats?.byType}
-              engramTotal={engramSummary?.total}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Growth' && (
-            <GrowthMind
-              data={profile.growth_edges}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
-          {activeTab === 'Shadow' && (
-            <ShadowMind
-              data={profile.shadow_patterns}
-              memoryStats={memoryStats}
-              updatedAt={profile.updated_at}
-              version={profile.version}
-            />
-          )}
+          <ProfileTabBoundary tab={activeTab} onRetry={loadData}>
+            {activeTab === 'Portrait' && (
+              <PortraitMind profile={profile as any} memoryStats={memoryStats} engramSummary={engramSummary} />
+            )}
+            {activeTab === 'Personality' && <PersonalityTab data={profile.personality_dimensions} />}
+            {activeTab === 'Communication' && (
+              <CommunicationMind
+                data={profile.communication_patterns}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Emotions' && (
+              <EmotionsMind
+                data={profile.emotional_landscape}
+                emotionalSeries={emotionalSeries}
+                memoryStats={memoryStats}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Values' && (
+              <ValuesMind
+                data={profile.values_hierarchy}
+                memoryStats={memoryStats}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Relationships' && (
+              <RelationshipsMind
+                data={profile.relational_dynamics}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Cognition' && (
+              <CognitionMind
+                data={profile.cognitive_tendencies}
+                byType={memoryStats?.byType}
+                engramTotal={engramSummary?.total}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Growth' && (
+              <GrowthMind
+                data={profile.growth_edges}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+            {activeTab === 'Shadow' && (
+              <ShadowMind
+                data={profile.shadow_patterns}
+                memoryStats={memoryStats}
+                updatedAt={profile.updated_at}
+                version={profile.version}
+              />
+            )}
+          </ProfileTabBoundary>
         </div>
       </div>
 
@@ -833,7 +917,12 @@ function PortraitTab({ profile, memoryStats }: { profile: Profile; memoryStats: 
 
 /* ─── Personality Tab ─── */
 function PersonalityTab({ data }: { data: any }) {
-  if (!data || Object.keys(data).length === 0) return <EmptySection label="personality dimensions" />;
+  const record = asProfileRecord(data);
+  if (!Object.keys(record).length) return <EmptySection label="personality dimensions" />;
+  const bigFive = asProfileRecord(record.big_five);
+  const attachmentStyle = asProfileRecord(record.attachment_style);
+  const cognitiveStyle = profileText(asProfileRecord(record.cognitive_style).prose) || profileText(record.cognitive_style);
+  const locusOfControl = profileText(record.locus_of_control);
 
   // Map attachment style label → phase diagram coords (anxiety × avoidance)
   const attachmentMap: Record<string, { x: number; y: number }> = {
@@ -847,12 +936,12 @@ function PersonalityTab({ data }: { data: any }) {
     'fearful-avoidant': { x: 80, y: 25 },
     'disorganized': { x: 80, y: 25 },
   };
-  const attachmentPrimary = (data.attachment_style?.primary ?? '').toLowerCase();
+  const attachmentPrimary = profileText(attachmentStyle.primary).toLowerCase();
   const attachmentCoords = Object.entries(attachmentMap).find(([k]) => attachmentPrimary.includes(k))?.[1] ?? null;
 
   return (
     <div>
-      {data.big_five && (
+      {Object.keys(bigFive).length > 0 && (
         <>
           <SectionEyebrow
             index="§ I"
@@ -860,14 +949,20 @@ function PersonalityTab({ data }: { data: any }) {
             lede="Big Five projected as oscilloscope traces. Each marker's deflection from the bell-curve mean is the deviation from population baseline."
           />
           <div style={{ paddingTop: 6 }}>
-            {Object.entries(data.big_five).map(([trait, info]: [string, any]) => (
-              <TraitTrace key={trait} label={trait} value={info?.score ?? 50} max={100} evidence={info?.evidence} />
+            {Object.entries(bigFive).map(([trait, info]: [string, any]) => (
+              <TraitTrace
+                key={trait}
+                label={trait}
+                value={profileNumber(isProfileRecord(info) ? info.score : info, 50)}
+                max={100}
+                evidence={isProfileRecord(info) ? profileText(info.evidence) : undefined}
+              />
             ))}
           </div>
         </>
       )}
 
-      {data.attachment_style && (
+      {Object.keys(attachmentStyle).length > 0 && (
         <>
           <SectionDivider />
           <SectionEyebrow
@@ -891,11 +986,11 @@ function PersonalityTab({ data }: { data: any }) {
             />
             <div>
               <div style={{ fontSize: 18, fontFamily: 'var(--font-sans)', fontStyle: 'italic', color: 'var(--text-primary)', marginBottom: 14, textTransform: 'capitalize', letterSpacing: '0.005em' }}>
-                {data.attachment_style.primary}
+                {profileText(attachmentStyle.primary) || 'Attachment pattern'}
               </div>
-              {data.attachment_style.evidence && (
+              {profileText(attachmentStyle.evidence) && (
                 <p style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.75, margin: 0 }}>
-                  {data.attachment_style.evidence}
+                  {profileText(attachmentStyle.evidence)}
                 </p>
               )}
             </div>
@@ -903,7 +998,7 @@ function PersonalityTab({ data }: { data: any }) {
         </>
       )}
 
-      {(data.cognitive_style || data.locus_of_control) && (
+      {(cognitiveStyle || locusOfControl) && (
         <>
           <SectionDivider />
           <SectionEyebrow
@@ -911,8 +1006,8 @@ function PersonalityTab({ data }: { data: any }) {
             label="Orientation"
             lede="Where your mind defaults: cognitive style and locus of control patterns observed across the corpus."
           />
-          {data.cognitive_style && <InsightPlate label="Cognitive style" text={data.cognitive_style} prominence="lead" />}
-          {data.locus_of_control && <InsightPlate label="Locus of control" text={data.locus_of_control} prominence="lead" />}
+          {cognitiveStyle && <InsightPlate label="Cognitive style" text={cognitiveStyle} prominence="lead" />}
+          {locusOfControl && <InsightPlate label="Locus of control" text={locusOfControl} prominence="lead" />}
         </>
       )}
 
