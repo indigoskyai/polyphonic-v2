@@ -1515,3 +1515,31 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push to `main`.
 2. Ask Lovable to redeploy `chat-multi` and frontend from latest main.
 3. Hosted smoke: normal chat should be fast; Agent-pill chat should show runtime/tool activity when it uses tools.
+
+---
+
+## Agent Runtime Trace Surface — Functionality Check  [x] (2026-05-06)
+
+**Changed**
+- Inspected the post-deploy agent runtime path after Riley's hosted smoke showed tools working but the reasoning/status surface absent in Agent mode.
+- Confirmed the SDK path already emitted runtime/tool SSE events, but the chat UI ignored `agent_runtime`, `tool_progress`, `tool_start`, and `tool_result`.
+- Replaced chunk-local SSE parsing in `ChatView` with buffered event-block parsing so split JSON frames are not silently lost.
+- Mapped agent runtime/tool events into concise user-facing trace lines under the existing thinking block.
+- Persisted the same agent trace into `thinking_content` for completed SDK messages, alongside any model reasoning tokens.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `deno check supabase/functions/_shared/agent-runtime/openrouter-agent.ts supabase/functions/chat-multi/index.ts` passed.
+- `npx vitest run src/test/openRouterAgentRuntime.test.ts --reporter=verbose` passed: 4 tests.
+- Local browser `/chat` load after the patch had 0 console errors/warnings except the React DevTools info line.
+- Screenshot artifact: `output/playwright/agent-runtime-chat-load-after-trace-patch.png`.
+- `npm run verify` passed: typecheck, 246 unit tests, empty integration placeholder, production build, and launch-payload gate at 299.6 KiB gzip.
+
+**Remaining risks**
+- This was a functionality repair, not the full final agent-mode visual design pass.
+- Hosted staging still needs the pushed commit redeployed before Riley can confirm live Agent-mode trace behavior.
+
+**Next**
+1. Commit and push to `main`.
+2. Let Lovable staging refresh, then smoke Agent-pill web search again and confirm the thinking surface shows the live activity trace.
+3. Continue with a dedicated reasoning/activity UI polish pass once the hosted trace path is confirmed.

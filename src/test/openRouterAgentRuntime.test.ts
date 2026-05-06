@@ -58,4 +58,21 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('>agent</button>');
     expect(source).toContain("Message Luca (agent)");
   });
+
+  it('surfaces agent runtime tool events and parses SSE blocks robustly', () => {
+    const chatView = readRepoFile('src/pages/ChatView.tsx');
+    const runtime = readRepoFile('supabase/functions/_shared/agent-runtime/openrouter-agent.ts');
+
+    expect(chatView).toContain("data.type === 'agent_runtime'");
+    expect(chatView).toContain("data.type === 'tool_progress'");
+    expect(chatView).toContain("data.type === 'tool_start'");
+    expect(chatView).toContain("data.type === 'tool_result'");
+    expect(chatView).toContain('agentTraceLine(data)');
+    expect(chatView).toContain('let sseBuffer');
+    expect(chatView).toContain('sseBuffer.split(/\\r?\\n\\r?\\n/)');
+
+    expect(runtime).toContain('const agentTrace: string[] = []');
+    expect(runtime).toContain('formatToolResultTrace');
+    expect(runtime).toContain('thinking_content: persistedThinking');
+  });
 });

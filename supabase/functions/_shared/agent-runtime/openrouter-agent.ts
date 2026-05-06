@@ -16,6 +16,7 @@ type ChatMessage = {
 };
 
 type SendEvent = (data: Record<string, unknown>) => void;
+type TraceRecorder = (line: string) => void;
 
 export interface OpenRouterAgentRuntimeOptions {
   messages: ChatMessage[];
@@ -134,8 +135,13 @@ async function runOpenRouterAgentSdkTurn(
   const toolCalls = new Map<string, RuntimeToolCall>();
   const toolResults = new Map<string, RuntimeToolResult>();
   const startedToolCalls = new Set<string>();
-  const runtimeTools = buildRuntimeTools(options, send);
+  const agentTrace: string[] = [];
+  const recordTrace: TraceRecorder = (line) => {
+    if (line) agentTrace.push(line);
+  };
+  const runtimeTools = buildRuntimeTools(options, send, recordTrace);
 
+  recordTrace("Preparing agent mode.");
   send({
     type: "agent_runtime",
     runtime: "openrouter_agent_sdk",
@@ -188,11 +194,13 @@ async function runOpenRouterAgentSdkTurn(
         toolCalls.set(call.id, call);
         if (!startedToolCalls.has(call.id) && isProbablyCompleteJson(call.arguments)) {
           startedToolCalls.add(call.id);
+          const input = safeParseJson(call.arguments);
+          recordTrace(formatToolStartTrace(call.name, input));
           send({
             type: "tool_start",
             runtime: "openrouter_agent_sdk",
             tool: call.name,
-            input: safeParseJson(call.arguments),
+            input,
           });
           await recordRuntimeActivity(options, {
             type: "agent_tool_call",
@@ -214,6 +222,7 @@ async function runOpenRouterAgentSdkTurn(
         const output = typeof item.output === "string" ? safeParseJson(item.output) : item.output;
         toolResults.set(item.callId, { callId: item.callId, output });
         const call = toolCalls.get(item.callId);
+        recordTrace(formatToolResultTrace(call?.name || "unknown_tool", output));
         send({
           type: "tool_result",
           runtime: "openrouter_agent_sdk",
@@ -251,6 +260,8 @@ async function runOpenRouterAgentSdkTurn(
   const tokensUsed = responseData.usage?.totalTokens ?? null;
   const usedModel = responseData.model || options.model;
   const toolMessages = buildToolMessages(toolCalls, toolResults);
+  const agentTraceBlock = agentTrace.length > 0 ? `— Agent activity —\n${agentTrace.join("\n")}` : "";
+  const persistedThinking = [agentTraceBlock, fullThinking].filter(Boolean).join("\n\n") || null;
 
   const { data: insertedMessage, error: insertError } = await options.supabase.from("messages").insert({
     thread_id: options.threadId,
@@ -259,7 +270,7 @@ async function runOpenRouterAgentSdkTurn(
     content: finalContent,
     model: usedModel,
     agent: options.agentId,
-    thinking_content: fullThinking || null,
+    thinking_content: persistedThinking,
     tokens_used: tokensUsed,
     metadata: {
       runtime: "openrouter_agent_sdk",
@@ -300,7 +311,7 @@ async function runOpenRouterAgentSdkTurn(
   });
 }
 
-function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEvent) {
+function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEvent, recordTrace: TraceRecorder) {
   const tools: any[] = [
     tool({
       name: "memory_read",
@@ -322,6 +333,7 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
         query: z.string().min(1).describe("The search query."),
       }),
       execute: async ({ query }) => {
+        recordTrace(`Searching the web for "${query}".`);
         send({ type: "tool_progress", tool: "web_search", text: `Searching: ${query}` });
         return await invokeEdgeJson(options, "anima-web-search", { user_id: options.userId, query });
       },
@@ -334,6 +346,7 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
         focus: z.string().optional().describe("Optional focus for the read."),
       }),
       execute: async ({ url, focus }) => {
+        recordTrace(`Reading ${url}.`);
         send({ type: "tool_progress", tool: "read_url", text: `Reading: ${url}` });
         return await invokeEdgeJson(options, "anima-web-read", { user_id: options.userId, url, focus });
       },
@@ -567,6 +580,21 @@ function isProbablyCompleteJson(value: string): boolean {
 
 function summarizeArgs(value: string): string {
   return truncate(value.replace(/\s+/g, " "), 220);
+}
+
+function humanToolName(name: string): string {
+  return name.replace(/_/g, " ");
+}
+
+function formatToolStartTrace(name: string, input: unknown): string {
+  if (name === "memory_read") return "Checking Luca continuity and memory context.";
+  if (name === "web_search" || name === "read_url") return "";
+  return `Using ${humanToolName(name)}.`;
+}
+
+function formatToolResultTrace(name: string, output: unknown): string {
+  const summary = summarizeOutput(output);
+  return summary ? `${humanToolName(name)} finished: ${summary}` : `${humanToolName(name)} finished.`;
 }
 
 function summarizeOutput(output: unknown): string {

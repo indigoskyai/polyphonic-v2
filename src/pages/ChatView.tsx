@@ -233,6 +233,38 @@ function thinkingLabel(state: ThinkingState): string {
   }
 }
 
+function compactTraceValue(value: unknown, max = 180): string {
+  if (value == null) return '';
+  const raw = typeof value === 'string' ? value : JSON.stringify(value);
+  const compact = raw.replace(/\s+/g, ' ').trim();
+  return compact.length > max ? `${compact.slice(0, max)}...` : compact;
+}
+
+function humanToolName(tool: unknown): string {
+  return String(tool || 'tool').replace(/_/g, ' ');
+}
+
+function agentTraceLine(data: any): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const tool = humanToolName(data.tool);
+  if (data.type === 'agent_runtime') {
+    return data.status === 'starting' ? 'Preparing agent mode.' : `Agent mode ${data.status || 'updated'}.`;
+  }
+  if (data.type === 'tool_progress') {
+    return typeof data.text === 'string' ? data.text : `${tool} is running.`;
+  }
+  if (data.type === 'tool_start') {
+    if (data.tool === 'memory_read') return 'Checking Luca continuity and memory context.';
+    if (data.tool === 'web_search' || data.tool === 'read_url') return null;
+    return `Using ${tool}.`;
+  }
+  if (data.type === 'tool_result') {
+    const output = compactTraceValue(data.output);
+    return output ? `${tool} finished: ${output}` : `${tool} finished.`;
+  }
+  return null;
+}
+
 function ThinkingBlock({
   content,
   state,
@@ -1220,17 +1252,34 @@ export default function ChatView() {
       let collectedVerdict: 'synthesize' | 'diverge' | null = null;
       let collectedCritique: CouncilV2Critique | null = null;
       let collectedRevised: string | null = null;
+      let agentTraceStarted = false;
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          for (const line of chunk.split('\n')) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === 'variant') {
+      const appendAgentTrace = (line: string | null) => {
+        if (!line) return;
+        const prefix = agentTraceStarted ? '' : '— Agent activity —\n';
+        agentTraceStarted = true;
+        fullThinking += `${fullThinking ? '\n' : ''}${prefix}${line}`;
+        setStreamingThinking(fullThinking);
+      };
+
+      const handleSseBlock = (block: string) => {
+        const payload = block
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n');
+        if (!payload || payload === '[DONE]') return;
+        try {
+          const data = JSON.parse(payload);
+          if (
+            data.type === 'agent_runtime' ||
+            data.type === 'tool_progress' ||
+            data.type === 'tool_start' ||
+            data.type === 'tool_result'
+          ) {
+            appendAgentTrace(agentTraceLine(data));
+          }
+          if (data.type === 'variant') {
                 // Council v2 keys variants by character; legacy by model.
                 if (data.character) {
                   collectedProposers.push({
@@ -1334,6 +1383,9 @@ export default function ChatView() {
                 if (needsChairmanHeader) {
                   fullThinking += (fullThinking ? '\n\n' : '') + '— Chairman —\n' + data.text;
                 } else {
+                  if (fullThinking && !fullThinking.endsWith('\n') && !String(data.text || '').startsWith('\n')) {
+                    fullThinking += '\n\n';
+                  }
                   fullThinking += data.text;
                 }
                 setStreamingThinking(fullThinking);
@@ -1380,9 +1432,21 @@ export default function ChatView() {
                   metadata: { agent: activeAgentId, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
                 } as any);
               }
-            } catch {}
-          }
+        } catch {}
+      };
+
+      if (reader) {
+        let sseBuffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          const blocks = sseBuffer.split(/\r?\n\r?\n/);
+          sseBuffer = blocks.pop() ?? '';
+          blocks.forEach(handleSseBlock);
         }
+        const tail = `${sseBuffer}${decoder.decode()}`;
+        if (tail.trim()) handleSseBlock(tail);
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
