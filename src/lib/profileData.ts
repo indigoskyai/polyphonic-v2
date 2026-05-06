@@ -114,7 +114,7 @@ export function profileTagItems(value: unknown): Array<{ label: string; count?: 
         || profileNumber(record.frequency, NaN);
       return Number.isFinite(count) ? { label, count } : { label };
     })
-    .filter((item): item is { label: string; count?: number } => item !== null);
+    .filter((item): item is { label: string; count: number } | { label: string; count?: undefined } => item !== null);
 }
 
 export type NormalizedRankedValue = {
@@ -148,7 +148,7 @@ export function profileRankedValues(value: unknown): NormalizedRankedValue[] {
         divergence_narrative: isProfileRecord(item) ? profileText(item.divergence_narrative) || undefined : undefined,
       };
     })
-    .filter((item): item is NormalizedRankedValue => item !== null);
+    .filter((item: NormalizedRankedValue | null): item is NormalizedRankedValue => item !== null);
 }
 
 export type NormalizedRelationship = {
