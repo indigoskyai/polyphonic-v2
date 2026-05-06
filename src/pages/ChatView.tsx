@@ -15,6 +15,7 @@ import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverla
 import AttachmentChip from '@/components/attachments/AttachmentChip';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
+import ThinkingBlock, { type ThinkingState } from '@/components/messages/ThinkingBlock';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
@@ -31,6 +32,7 @@ import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import {
   CHAT_ATTACHMENT_BUCKET,
   inferAttachmentLanguage,
@@ -41,21 +43,27 @@ import {
   shouldInlineCodeAttachment,
 } from '@/lib/chatAttachments';
 
+function nextReadableLength(text: string, current: number, desired: number): number {
+  if (desired >= text.length) return text.length;
+  const floor = Math.max(current + 1, desired);
+  const ceiling = Math.min(text.length, desired + 18);
+  for (let i = floor; i <= ceiling; i += 1) {
+    if (/[\s\n.,;:!?)]/.test(text.charAt(i - 1))) return i;
+  }
+  return floor;
+}
+
 /* ─── Smooth, rate-limited typewriter hook ───
- * Decouples reveal speed from network chunk delivery. Maintains a steady
- * cadence (~60 chars/sec) that ramps up gracefully if the buffer falls behind.
- */
-/* ─── Smooth, rate-limited typewriter hook ───
- * Decouples reveal speed from network chunk delivery. Maintains a steady
- * cadence that ramps gracefully when the buffer falls behind, capped so
- * bursts don't dump. Skips setState when nothing advances so React doesn't
- * re-render the streaming bubble idly.
+ * Decouples reveal speed from network chunk delivery. Reveals in readable
+ * word/phrase-sized steps so streams feel like arriving text, not a mechanical
+ * per-character typewriter.
  */
 function useSmoothTypewriter(target: string, active = true) {
   const [displayed, setDisplayed] = useState(active ? '' : target);
   const displayedRef = useRef(displayed);
   const targetRef = useRef(target);
   const lastTickRef = useRef<number>(0);
+  const lastCommitRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const prevTargetRef = useRef('');
   // Exponential moving average of the gap, so cadence eases instead of
@@ -71,15 +79,13 @@ function useSmoothTypewriter(target: string, active = true) {
       return;
     }
 
-    // Detect a brand-new message (target no longer extends prior target):
-    // reset the buffer and EMA so cadence doesn't start mid-curve.
-    if (!target.startsWith(prevTargetRef.current) || prevTargetRef.current === '') {
-      if (!target.startsWith(prevTargetRef.current)) {
-        displayedRef.current = '';
-        setDisplayed('');
-        gapEmaRef.current = 0;
-        lastTickRef.current = 0;
-      }
+    // Detect a brand-new message (target no longer extends prior target).
+    if (!target.startsWith(prevTargetRef.current)) {
+      displayedRef.current = '';
+      setDisplayed('');
+      gapEmaRef.current = 0;
+      lastTickRef.current = 0;
+      lastCommitRef.current = 0;
     }
     prevTargetRef.current = target;
 
@@ -97,16 +103,25 @@ function useSmoothTypewriter(target: string, active = true) {
         gapEmaRef.current = gapEmaRef.current * 0.8 + gap * 0.2;
         const smoothedGap = gapEmaRef.current;
 
-        // Continuous cadence curve: 180 cps base, ramps to ~520 cps cap.
-        // sqrt-ish curve avoids the staircase from a tiered switch.
-        const charsPerMs = Math.min(0.52, 0.18 + Math.sqrt(smoothedGap) * 0.024);
+        // Continuous cadence curve: calm by default, quick catch-up when the
+        // network buffer is far ahead. Phrase-boundary snapping below keeps the
+        // visible update cadence natural even when chunks arrive unevenly.
+        const charsPerMs = Math.min(0.42, 0.13 + Math.sqrt(smoothedGap) * 0.02);
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
-        const nextLen = Math.min(tgt.length, curLen + advance);
+        const desiredLen = Math.min(tgt.length, curLen + advance);
+        const nextLen = nextReadableLength(tgt, curLen, desiredLen);
         if (nextLen !== curLen) {
-          const next = tgt.slice(0, nextLen);
-          displayedRef.current = next;
-          setDisplayed(next);
+          const shouldCommit =
+            nextLen === tgt.length ||
+            now - lastCommitRef.current >= 32 ||
+            nextLen - curLen >= 10;
+          if (shouldCommit) {
+            const next = tgt.slice(0, nextLen);
+            displayedRef.current = next;
+            lastCommitRef.current = now;
+            setDisplayed(next);
+          }
         }
         rafRef.current = requestAnimationFrame(tick);
       } else {
@@ -127,6 +142,7 @@ function useSmoothTypewriter(target: string, active = true) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       lastTickRef.current = 0;
+      lastCommitRef.current = 0;
     };
   }, [active, target]);
 
@@ -152,7 +168,8 @@ function StreamingText({
   style?: React.CSSProperties;
   onSettled?: () => void;
 }) {
-  const displayed = useSmoothTypewriter(content, true);
+  const reduceMotion = usePrefersReducedMotion();
+  const displayed = useSmoothTypewriter(content, !reduceMotion);
   const settled = !isStreaming && displayed.length === content.length && content.length > 0;
   const [cursorFading, setCursorFading] = useState(false);
   const settledFiredRef = useRef(false);
@@ -198,7 +215,7 @@ function StreamingText({
   return (
     <div className={className} style={style}>
       {tree}
-      <span className={`streaming-cursor-inline${cursorFading ? ' fading' : ''}`} />
+      {!reduceMotion && <span className={`streaming-cursor-inline${cursorFading ? ' fading' : ''}`} />}
     </div>
   );
 }
@@ -216,21 +233,21 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
 }
 
-/* ─── Thinking Block (4-state: waiting → streaming → settling → complete) ─── */
-type ThinkingState = 'waiting' | 'streaming' | 'settling' | 'complete';
+const MESSAGE_ENTRY_WINDOW_MS = 12_000;
 
-function peekContent(text: string): string {
-  const lines = text.split('\n').filter(Boolean);
-  return lines.slice(-2).join('\n');
+function shouldAnimateMessageEntry(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Math.abs(Date.now() - created) <= MESSAGE_ENTRY_WINDOW_MS;
 }
 
-function thinkingLabel(state: ThinkingState): string {
-  switch (state) {
-    case 'waiting': return 'thinking\u2026';
-    case 'streaming': return 'reasoning\u2026';
-    case 'settling': return 'settling\u2026';
-    case 'complete': return 'thought';
-  }
+function messageEntryStyle(createdAt: string | null | undefined, index = 0): React.CSSProperties | undefined {
+  if (!shouldAnimateMessageEntry(createdAt)) return undefined;
+  return {
+    animation: 'msgEnter var(--dur-settle) var(--ease-premium) both',
+    animationDelay: `${Math.min(index * 24, 96)}ms`,
+  };
 }
 
 function compactTraceValue(value: unknown, max = 180): string {
@@ -255,7 +272,8 @@ function agentTraceLine(data: any): string | null {
   }
   if (data.type === 'tool_start') {
     if (data.tool === 'memory_read') return 'Checking Luca continuity and memory context.';
-    if (data.tool === 'web_search' || data.tool === 'read_url') return null;
+    if (data.tool === 'web_search') return 'Searching the web for current context.';
+    if (data.tool === 'read_url') return 'Reading the referenced source.';
     return `Using ${tool}.`;
   }
   if (data.type === 'tool_result') {
@@ -263,81 +281,6 @@ function agentTraceLine(data: any): string | null {
     return output ? `${tool} finished: ${output}` : `${tool} finished.`;
   }
   return null;
-}
-
-function ThinkingBlock({
-  content,
-  state,
-  duration,
-  customLabel,
-}: {
-  content: string;
-  state: ThinkingState;
-  duration?: number;
-  /** Overrides the state-derived label. Used to fold the council phase
-   *  indicator (voices / deliberating / reviewing / speaking) into this
-   *  same beautiful element instead of a separate 3-dot widget. */
-  customLabel?: string | null;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const isActive = state === 'waiting' || state === 'streaming' || state === 'settling';
-
-  const peek = useMemo(() => peekContent(content), [content]);
-
-  if (!content && state === 'complete') return null;
-
-  const dataState = state;
-
-  return (
-    <div className={`thinking-block${expanded ? ' expanded' : ''}`} data-state={dataState}>
-      {/* Header */}
-      <div
-        className="thinking-header"
-        onClick={() => setExpanded(!expanded)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
-      >
-        {/* 3x3 Murmur Dot Grid — prime-derived timing per dot */}
-        <div className="thinking-dots" aria-hidden="true">
-          {Array.from({ length: 9 }).map((_, i) => <span key={i} className="td" />)}
-        </div>
-
-        {/* Shimmer label */}
-        <span className="thinking-label">{customLabel || thinkingLabel(state)}</span>
-
-        {/* Duration timer */}
-        {duration != null && duration > 0 && (
-          <span className="thinking-timer">{Math.round(duration)}s</span>
-        )}
-
-        {/* Token estimate (complete only) */}
-        {state === 'complete' && content && (
-          <span className="thinking-timer">{Math.ceil(content.length / 4)} tokens</span>
-        )}
-
-        {/* Chevron */}
-        <span className="thinking-chevron" aria-hidden="true">›</span>
-      </div>
-
-      {/* Peek window — visible during streaming/settling, hidden when expanded */}
-      {content && (
-        <div className="thinking-peek">
-          <div className="thinking-peek-inner">{peek}</div>
-        </div>
-      )}
-
-      {/* Full body — revealed when expanded */}
-      <div className="thinking-body">
-        <div className="thinking-body-content">
-          <div className="thinking-body-text">
-            {content}
-            {isActive && <span className="streaming-cursor-inline" />}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /* ─── Multi-model helpers ─── */
@@ -1171,7 +1114,6 @@ export default function ChatView() {
       model: null, agent: null, thinking_content: null, tokens_used: null, bookmarked: false,
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
     });
-    setFirstTurnHandoff(null);
 
     if (!options?.text) {
       setInput('');
@@ -1884,7 +1826,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={messageEntryStyle(msg.created_at, i)}>
                   <PermissionInline
                     agent={agent}
                     title={md.title || 'Permission needed'}
@@ -1904,7 +1846,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={messageEntryStyle(msg.created_at, i)}>
                   <AgentErroredCard
                     agent={agent}
                     message={md.message || msg.content}
@@ -1935,7 +1877,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const toolCalls = typeof md.tool_calls_used === 'number' ? md.tool_calls_used : null;
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={messageEntryStyle(msg.created_at, i)}>
                   <div className="msg-sidehead">
                     {showTimestamps && (
                       <div className="msg-time">
@@ -1984,6 +1926,7 @@ export default function ChatView() {
                 messageId={msg.id}
                 nextCreatedAt={next ? next.created_at : null}
                 isLast={i === messages.length - 1}
+                animateOnMount={shouldAnimateMessageEntry(msg.created_at)}
               />
             );
           })}
@@ -2082,7 +2025,7 @@ export default function ChatView() {
                 <StreamingText
                   content={streamingContent || lingeringStream || ''}
                   isStreaming={isStreaming}
-                  style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-body)' }}
+                  className="streaming-message-body"
                   onSettled={() => setLingeringStream(null)}
                 />
               )}

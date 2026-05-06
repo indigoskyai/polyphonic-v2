@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 
 interface DrawerProps {
   open: boolean;
@@ -14,8 +15,6 @@ interface DrawerProps {
   ariaLabel?: string;
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export function Drawer({
   open,
   onClose,
@@ -26,72 +25,41 @@ export function Drawer({
   children,
   ariaLabel,
 }: DrawerProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const handleEscape = useCallback(() => {
+    if (closeOnEsc) onClose();
+  }, [closeOnEsc, onClose]);
+
+  useDialogFocus({
+    active: open,
+    containerRef,
+    onEscape: closeOnEsc ? handleEscape : undefined,
+  });
 
   useEffect(() => {
-    if (!open) return;
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const t = requestAnimationFrame(() => {
-      const first = containerRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-      (first ?? containerRef.current)?.focus();
-    });
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && closeOnEsc) {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab' && containerRef.current) {
-        const nodes = containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
-        if (nodes.length === 0) {
-          e.preventDefault();
-          return;
-        }
-        const first = nodes[0];
-        const last = nodes[nodes.length - 1];
-        const active = document.activeElement as HTMLElement | null;
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
+    const node = containerRef.current;
+    if (!node) return;
+    if (open) node.removeAttribute('inert');
+    else node.setAttribute('inert', '');
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || showBackdrop || !closeOnBackdropClick) return;
+    const onDocPointer = (e: MouseEvent) => {
+      const node = containerRef.current;
+      if (!node) return;
+      if (node.contains(e.target as Node)) return;
+      onClose();
     };
-    document.addEventListener('keydown', onKey);
-
-    // When there's no backdrop, close on outside click (mousedown anywhere
-    // outside the drawer container). With a backdrop, the backdrop already
-    // handles this.
-    let onDocPointer: ((e: MouseEvent) => void) | null = null;
-    if (!showBackdrop && closeOnBackdropClick) {
-      onDocPointer = (e: MouseEvent) => {
-        const node = containerRef.current;
-        if (!node) return;
-        if (node.contains(e.target as Node)) return;
-        onClose();
-      };
-      // Defer to avoid catching the click that opened the drawer
-      const id = window.setTimeout(() => {
-        document.addEventListener('mousedown', onDocPointer!);
-      }, 0);
-      return () => {
-        cancelAnimationFrame(t);
-        window.clearTimeout(id);
-        document.removeEventListener('keydown', onKey);
-        if (onDocPointer) document.removeEventListener('mousedown', onDocPointer);
-        previouslyFocused.current?.focus?.();
-      };
-    }
-
+    // Defer to avoid catching the click that opened the drawer.
+    const id = window.setTimeout(() => {
+      document.addEventListener('mousedown', onDocPointer);
+    }, 0);
     return () => {
-      cancelAnimationFrame(t);
-      document.removeEventListener('keydown', onKey);
-      previouslyFocused.current?.focus?.();
+      window.clearTimeout(id);
+      document.removeEventListener('mousedown', onDocPointer);
     };
-  }, [open, closeOnEsc, closeOnBackdropClick, showBackdrop, onClose]);
+  }, [open, closeOnBackdropClick, showBackdrop, onClose]);
 
   return createPortal(
     <>
@@ -108,7 +76,8 @@ export function Drawer({
         className="drawer"
         data-open={open ? 'true' : undefined}
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
+        aria-hidden={open ? undefined : 'true'}
         aria-label={ariaLabel}
         tabIndex={-1}
         style={width ? { width: `min(${width}px, calc(100vw - (var(--inset-gap) * 2)))` } : undefined}

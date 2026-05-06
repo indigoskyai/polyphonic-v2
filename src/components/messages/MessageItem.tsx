@@ -10,6 +10,7 @@ import ImagePreview from '@/components/attachments/ImagePreview';
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useFirstMount } from '@/lib/useFirstMount';
+import ThinkingBlock from '@/components/messages/ThinkingBlock';
 
 /* ─── Multi-model thinking helpers (kept here so MessageItem stays self-contained) ─── */
 function isMultiModelThinking(thinkingContent: string): boolean {
@@ -34,30 +35,6 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
 }
 
-interface ThinkingBlockProps { content: string; state: 'complete' }
-// Local minimal ThinkingBlock for "complete" state only — the live streaming
-// variant lives in ChatView and is only used inside the streaming bubble.
-function ThinkingBlockComplete({ content }: { content: string }) {
-  if (!content) return null;
-  return (
-    <div className="thinking-block" data-state="complete">
-      <div className="thinking-header">
-        <div className="thinking-dots" aria-hidden="true">
-          {Array.from({ length: 9 }).map((_, i) => <span key={i} className="td" />)}
-        </div>
-        <span className="thinking-label">thought</span>
-        <span className="thinking-timer">{Math.ceil(content.length / 4)} tokens</span>
-        <span className="thinking-chevron" aria-hidden="true">›</span>
-      </div>
-      <div className="thinking-body">
-        <div className="thinking-body-content">
-          <div className="thinking-body-text">{content}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Stable empty array reference so the artifact selector returns the same
 // value across renders when there are no artifacts for this thread —
 // keeps React.memo on MessageItem effective.
@@ -72,6 +49,8 @@ interface Props {
   /** Whether this is the last message in the thread (for orphan-artifact
    *  attachment fallback). */
   isLast: boolean;
+  /** Only messages appended in the current session should animate on mount. */
+  animateOnMount?: boolean;
 }
 
 /**
@@ -85,7 +64,7 @@ interface Props {
  * Special branches (permission_request, agent_error, subagent_report) stay
  * in the parent — they're rare and don't need memoization.
  */
-function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
+function MessageItemImpl({ messageId, nextCreatedAt, isLast, animateOnMount = false }: Props) {
   const msg = useThreadStore((s) => s.messages.find((m) => m.id === messageId));
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
@@ -117,7 +96,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
   return (
     <div
       className="msg-row"
-      data-fresh={isFirstMount ? 'true' : undefined}
+      data-fresh={animateOnMount && isFirstMount ? 'true' : undefined}
     >
       <div className="msg-sidehead">
         {showTimestamps && (
@@ -136,7 +115,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
 
       <div className="msg-body">
         {msg.thinking_content && showThinking && !isMultiModelThinking(msg.thinking_content) && (
-          <ThinkingBlockComplete content={msg.thinking_content} />
+          <ThinkingBlock content={msg.thinking_content} state="complete" />
         )}
 
         <RichBody source={msg.content} />

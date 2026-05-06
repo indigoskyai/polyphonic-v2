@@ -1543,3 +1543,53 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push to `main`.
 2. Let Lovable staging refresh, then smoke Agent-pill web search again and confirm the thinking surface shows the live activity trace.
 3. Continue with a dedicated reasoning/activity UI polish pass once the hosted trace path is confirmed.
+
+---
+
+## Chat UX Polish Pass  [x] (2026-05-06)
+
+**Changed**
+- Added a shared `ThinkingBlock` renderer for live and persisted reasoning content, with display-only parsing for `Agent activity` trace sections and normal reasoning sections.
+- Rendered Agent runtime/tool activity as integrated trace rows inside the thinking surface instead of plain text dumps, while preserving existing persisted `thinking_content` storage and backend payload shape.
+- Raised Observer alcove prose to the same readable body scale as normal chat messages and moved Observer drawer prose/history/notes onto shared drawer typography classes.
+- Normalized right-drawer typography across thread detail, Observer, activity/timeline, and agent-dialogue surfaces: calm titles, compact metadata, readable prose, consistent timeline rows, stable actions.
+- Reworked streaming text reveal to advance at phrase/word-feeling boundaries, throttle commits, and skip animation entirely under `prefers-reduced-motion`.
+- Gated message entrance animation so historical thread loads do not replay fresh-message motion; newly appended and active stream rows can still enter quietly.
+- Stabilized the first-message handoff so the staged first user row is not cleared immediately during thread creation and route navigation.
+- Tightened composer control microstates and drawer open/close/focus behavior, including shared drawer focus handling and inert closed drawer content.
+
+**Finding map**
+- `CP-CHAT-001`: Observer typography - verified.
+- `CP-CHAT-002`: Right drawer hierarchy - verified.
+- `CP-CHAT-003`: Agent activity traces - verified.
+- `CP-CHAT-004`: Streaming text motion - verified.
+- `CP-CHAT-005`: Historical message entrance gating - verified.
+- `CP-CHAT-006`: First-message handoff continuity - verified.
+- `CP-CHAT-007`: Composer controls and microstates - verified.
+- `CP-CHAT-008`: Drawer/sheet focus and motion safety - verified.
+- `CP-CHAT-009`: Reduced-motion behavior - verified.
+- `CP-CHAT-010`: Mobile containment at 390x844 and 430x932 - verified.
+
+**Verified**
+- `npx tsc --noEmit` passed.
+- `npx vitest run src/test/thinkingBlock.test.ts src/test/dialogFocus.test.tsx src/test/reducedMotion.test.tsx --reporter=verbose` passed: 3 files, 4 tests.
+- Deterministic local Playwright smoke against `http://127.0.0.1:5174` passed: 2 tests covering desktop existing thread, expanded Agent trace, Observer alcove typography comparison, right drawer open/close, mobile 390x844, mobile 430x932, reduced motion, and horizontal overflow assertions.
+- `npm run verify` passed: typecheck, 41 unit-test files, 248 tests, empty integration placeholder, production build, and launch-payload gate at 300.1 KiB gzip.
+- Browser artifacts:
+  - `output/playwright/chat-polish-20260506/baseline-desktop-chat.png`
+  - `output/playwright/chat-polish-20260506/baseline-mobile-390-chat.png`
+  - `output/playwright/chat-polish-20260506/desktop-existing-thread.png`
+  - `output/playwright/chat-polish-20260506/desktop-agent-trace-expanded.png`
+  - `output/playwright/chat-polish-20260506/desktop-observer-alcove.png`
+  - `output/playwright/chat-polish-20260506/desktop-thread-drawer.png`
+  - `output/playwright/chat-polish-20260506/mobile-390-existing-thread.png`
+  - `output/playwright/chat-polish-20260506/mobile-430-existing-thread-reduced-motion.png`
+
+**Remaining risks**
+- Local browser verification used deterministic mocked Supabase and edge responses because the command-line browser was unauthenticated. The UI contracts were verified locally; hosted staging should still get a quick real Agent-pill/Observer smoke after Lovable pulls the commit.
+- No backend schema, edge function, OpenRouter Agent SDK payload, or Lovable function change is expected for this pass.
+
+**Next**
+1. Commit and push this UI-only polish milestone to `main`.
+2. Let Lovable staging refresh from GitHub.
+3. No Lovable prompt is needed unless staging fails to emit Agent SDK runtime activity payloads after the frontend deploy.
