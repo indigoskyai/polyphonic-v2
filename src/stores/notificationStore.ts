@@ -24,6 +24,11 @@ export interface ActivityEntry {
 
 export type NotificationFilter = 'all' | 'unread' | 'agents' | 'permissions' | 'memory';
 
+const activeNotificationSubscriptions = new Map<
+  string,
+  { refs: number; channel: ReturnType<typeof supabase.channel> }
+>();
+
 interface NotificationState {
   initiations: ThoughtInitiation[];
   activity: ActivityEntry[];
@@ -80,8 +85,22 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   subscribe: (userId: string) => {
+    const existing = activeNotificationSubscriptions.get(userId);
+    if (existing) {
+      existing.refs += 1;
+      return () => {
+        const current = activeNotificationSubscriptions.get(userId);
+        if (!current) return;
+        current.refs -= 1;
+        if (current.refs <= 0) {
+          supabase.removeChannel(current.channel);
+          activeNotificationSubscriptions.delete(userId);
+        }
+      };
+    }
+
     const channel = supabase
-      .channel(`notifications:${userId}`)
+      .channel(`notifications:${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'thought_initiations', filter: `user_id=eq.${userId}` },
@@ -108,8 +127,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         },
       )
       .subscribe();
+    activeNotificationSubscriptions.set(userId, { refs: 1, channel });
+
     return () => {
-      supabase.removeChannel(channel);
+      const current = activeNotificationSubscriptions.get(userId);
+      if (!current) return;
+      current.refs -= 1;
+      if (current.refs <= 0) {
+        supabase.removeChannel(current.channel);
+        activeNotificationSubscriptions.delete(userId);
+      }
     };
   },
 

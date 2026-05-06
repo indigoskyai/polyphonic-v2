@@ -111,7 +111,7 @@ export function Drawer({
         aria-modal="true"
         aria-label={ariaLabel}
         tabIndex={-1}
-        style={width ? { width } : undefined}
+        style={width ? { width: `min(${width}px, calc(100vw - (var(--inset-gap) * 2)))` } : undefined}
       >
         {children}
       </div>

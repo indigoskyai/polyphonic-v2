@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { EmptyState } from '@/components/ui/luca';
+import { collectActivityThreadRefs } from '@/lib/threadActivity';
 
 export type TimelineRowType = 'default' | 'checkpoint' | 'handoff' | 'tool' | 'file' | 'error';
 
@@ -145,7 +146,8 @@ function extractTarget(r: ActivityLogShape): string | undefined {
   if (typeof c.file === 'string') return c.file;
   if (typeof c.target === 'string') return c.target;
   if (typeof c.ref === 'string') return c.ref;
-  if (typeof c.thread_id === 'string') return `thread:${c.thread_id.slice(0, 8)}`;
+  const threadRef = collectActivityThreadRefs(c)[0];
+  if (threadRef) return `thread:${threadRef.slice(0, 8)}`;
   return undefined;
 }
 

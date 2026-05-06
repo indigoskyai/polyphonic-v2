@@ -1816,7 +1816,7 @@ html {
   top: calc(var(--devbar-height, 0px) + var(--inset-gap));
   right: var(--inset-gap);
   bottom: 0;
-  width: var(--drawer-width);
+  width: min(var(--drawer-width), calc(100vw - (var(--inset-gap) * 2)));
   z-index: 100;
   background: var(--canvas);
   border-top-left-radius: var(--radius-inset);
@@ -1863,10 +1863,17 @@ html {
 
 .drawer-title {
   font-size: 24px;
+  line-height: 1.18;
   font-weight: 450;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .drawer-esc-chip {
@@ -1949,6 +1956,7 @@ html {
 .drawer-header-col {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 4px;
   min-width: 0;
 }

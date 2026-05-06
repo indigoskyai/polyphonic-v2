@@ -163,8 +163,10 @@ function ConsultationItem({ consult }: { consult: AgentConsultation }) {
 
 export default function AgentDialogueDrawer() {
   const close = useDrawerStore((s) => s.close);
+  const payload = useDrawerStore((s) => s.payload) as { threadId?: string } | null;
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
-  const consultations = useAgentConsultStore(selectByThread(currentThreadId));
+  const threadId = payload?.threadId || currentThreadId;
+  const consultations = useAgentConsultStore(selectByThread(threadId));
 
   const counts = useMemo(() => {
     const total = consultations.length;

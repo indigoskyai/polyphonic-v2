@@ -1307,3 +1307,33 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 1. Commit and push this profile/import repair to `main`.
 2. Re-test memory import on Lovable staging with the new account.
 3. Continue the remaining Phase 4/5 launch gates after the hosted smoke is green.
+
+---
+
+## Phase 3/4 — Right Drawer Context Repair  [x] (2026-05-05)
+
+**Changed**
+- Mapped the right drawer surfaces: thread detail, notifications, full activity timeline, memory detail, observer, agent dialogue, and current placeholders.
+- Scoped thread-detail activity to rows with an explicit thread/conversation reference, so global autonomous activity no longer appears inside arbitrary chat thread details.
+- Added shared thread-reference extraction for snake_case and camelCase activity payloads, and reused it for timeline target labels.
+- Reworked thread-detail metadata to derive turns, tokens, participants, and model from live message rows instead of fixed Luca-only assumptions.
+- Made notification realtime subscriptions ref-counted so opening the full activity timeline from the notifications drawer does not crash when another surface is already subscribed.
+- Passed the active thread into the agent-dialogue drawer opener, tightened drawer responsive width, clamped long drawer titles, and replaced the misleading Archive footer action with Close.
+
+**Verified**
+- `npm run test -- src/test/threadActivity.test.ts` passed.
+- `npx tsc --noEmit` passed.
+- `npm run verify` passed: typecheck, 233 unit tests, empty integration placeholder, and production build.
+- Local Playwright `/chat/431a0f51-9f7c-4fdf-b5de-92faae43942c` thread detail showed `ACTIVITY · 0 events` and no leaked global autonomous rows.
+- Local Playwright Activity -> Full timeline opened successfully with 0 console errors/warnings.
+- Local Playwright 390x844 thread drawer fit inside the viewport with contained title/footer.
+- Local Playwright `/memory` opened a memory-detail drawer with 0 console errors.
+- Browser artifacts include `output/playwright/drawer-thread-detail-title-clamp.png`, `output/playwright/drawer-thread-mobile-after-open.png`, `output/playwright/drawer-activity-timeline-after-refcount.md`, and `output/playwright/drawer-memory-detail-after-open.md`.
+
+**Remaining risks**
+- The underlying mobile chat layout can still expose off-viewport desktop content behind the modal drawer on this route; the drawer itself is now correctly constrained. Track the broader mobile chat shell separately if it reappears outside drawer context.
+- The `agent-inspector` drawer route is still a placeholder with no active opener found during this pass.
+
+**Next**
+1. Commit and push this right-drawer milestone to `main`.
+2. Continue remaining Phase 4/5 launch gates unless Riley wants a dedicated mobile chat shell follow-up first.

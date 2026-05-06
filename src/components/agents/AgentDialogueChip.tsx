@@ -27,7 +27,7 @@ export default function AgentDialogueChip() {
   return (
     <button
       type="button"
-      onClick={() => open('agent-dialogue')}
+      onClick={() => open('agent-dialogue', currentThreadId ? { threadId: currentThreadId } : undefined)}
       title="Open agent dialogue"
       style={{
         display: 'inline-flex',
