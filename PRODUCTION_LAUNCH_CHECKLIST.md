@@ -6,8 +6,8 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] Security scan: zero unaccepted findings (`security--run_security_scan`)
 - [x] Supabase linter: zero unaccepted warnings (`supabase--linter`; residual infos/warnings accepted in P4-016)
 - [ ] RLS verified on every public-schema table; all owner-scoped
-- [ ] No `SERVICE_ROLE` references in client `src/`
-- [ ] CORS allowlist contains production domain only (no wildcard)
+- [x] No `SERVICE_ROLE` references in client runtime `src/` code
+- [x] CORS allowlist restricted to production/staging/Lovable preview patterns; no wildcard; localhost only outside production
 - [ ] All `verify_jwt = false` functions documented as either in-code-validating or intentionally public
 - [x] Storage buckets owner-scoped or explicitly published-reference scoped
 - [x] Auth: HIBP password check ON, email confirmation configured, `/reset-password` page live
@@ -20,7 +20,8 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 
 ## Auth
 - [ ] Email signup → confirmation → login round-trip green on staging
-- [ ] Google OAuth signup → login round-trip green on staging (hosted provider configured; human round trip pending)
+- [x] Google OAuth login/sign-in green on staging
+- [ ] Google OAuth new-account/signup flow green on staging after signup surfaces are designed
 - [ ] Apple OAuth signup → login round-trip green on staging (repo UI/helper wired; human round trip pending)
 - [ ] Forgot-password → email → `/reset-password` → new password → login green
 - [ ] Logout fully clears client state (repo-side reset verified locally; staging smoke pending)
@@ -47,5 +48,5 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 ## Legal / content
 - [x] Privacy policy page exists and is linked from auth pages
 - [x] Terms of service page exists and is linked from auth pages
-- [ ] Favicon + social-share meta + robots.txt present
+- [x] Favicon + social-share meta + robots.txt + web manifest present
 - [ ] Footer attributions / OSS notices (if any) present

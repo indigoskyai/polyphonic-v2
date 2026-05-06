@@ -1,0 +1,18 @@
+{
+  "name": "Polyphonic",
+  "short_name": "Polyphonic",
+  "description": "A private AI workspace for continuous conversation, memory, and agent collaboration.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

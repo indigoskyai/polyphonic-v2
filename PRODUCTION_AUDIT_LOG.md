@@ -1427,3 +1427,29 @@ Set `REPLICA IDENTITY FULL` on all 7 published tables that lacked it (`messages`
 **Next**
 1. Let Lovable staging refresh from the pushed `main` commit and do a quick hosted chat send visual smoke.
 2. Continue the remaining Phase 4/5 launch gates.
+
+---
+
+## Phase 4/5 — Static Launch Gates And Metadata  [x] (2026-05-06)
+
+**Changed**
+- Recorded Riley's hosted Google OAuth sign-in smoke as green, while keeping Google new-account/signup pending until signup surfaces are designed.
+- Added root document launch metadata: canonical URL, theme/app metadata, Open Graph tags, Twitter tags, and app icon links.
+- Added `public/site.webmanifest` and `public/sitemap.xml`; linked the sitemap from `robots.txt`.
+- Added `launchReadiness.test.ts` to guard client service-role absence, CORS no-wildcard posture, social metadata, robots, sitemap, and web manifest.
+- Updated the launch checklist for the static gates now covered by tests.
+
+**Verified**
+- `npx vitest run src/test/launchReadiness.test.ts src/test/corsAllowlist.test.ts` passed: 6 tests.
+- Static service-role scan covers runtime `src` files and excludes tests.
+- Static CORS guard confirms production/staging/Lovable preview origins, non-production localhost gating, and no wildcard `Access-Control-Allow-Origin`.
+- Release metadata guard confirms `index.html`, `robots.txt`, `site.webmanifest`, and `sitemap.xml` are present and linked.
+
+**Remaining risks**
+- Google new-account/signup remains pending until Riley designs the signup surfaces.
+- Email signup confirmation, Apple OAuth, forgot-password email, logout hosted smoke, RLS policy review, edge-function auth documentation, and performance/accessibility launch gates remain open.
+
+**Next**
+1. Run full `npm run verify`.
+2. Commit and push the static launch gate milestone to `main`.
+3. Continue with RLS/edge-function inventory or hosted auth smoke, whichever is unblocked first.
