@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 
 import EchoField from '@/components/EchoField';
+import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import AttachmentChip from '@/components/attachments/AttachmentChip';
@@ -954,9 +955,44 @@ export default function ChatView() {
   const renderModelKeyNotice = () => {
     if (!modelKeyMissing) return null;
     return (
-      <div className="composer-key-warning" role="status">
-        <span>No model key connected.</span>
-        <button type="button" onClick={() => navigate('/settings/models')}>Open Models</button>
+      <div
+        className="composer-key-warning"
+        role="status"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ flex: '1 1 auto', minWidth: 180 }}>
+          Connect OpenRouter to start chatting — sign in or create an
+          account in a popup, no key copy/paste required.
+        </span>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+          <ConnectOpenRouter
+            variant="ghost"
+            label="Connect OpenRouter"
+            onConnected={() => setModelKeyStatus('present')}
+          />
+          <button
+            type="button"
+            onClick={() => navigate('/settings/models')}
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              background: 'transparent',
+              border: 'none',
+              padding: '4px 0',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              letterSpacing: 'var(--track-body)',
+            }}
+          >
+            Use a key I already have
+          </button>
+        </div>
       </div>
     );
   };

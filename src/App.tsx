@@ -38,6 +38,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const OpenRouterCallback = lazy(() => import("./pages/OpenRouterCallback"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
@@ -293,6 +294,7 @@ const App = () => (
                 <Route path="/auth/legacy-login" element={<LoginPage />} />
                 <Route path="/auth/legacy-signup" element={<SignupPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/auth/openrouter/callback" element={<OpenRouterCallback />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 {/* Public profile (no app shell, no auth required) */}

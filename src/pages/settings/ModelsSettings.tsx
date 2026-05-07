@@ -13,6 +13,7 @@ import {
   AgentDot,
 } from '@/components/settings/SettingsPage';
 import { useClock } from '@/components/settings/useClock';
+import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 
 interface ModelDef {
   id: string;
@@ -161,23 +162,65 @@ export default function ModelsSettings() {
               removing={removing}
             />
           ) : (
-            <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
-              <div style={{ flex: 1 }}>
-                <MaskedInput
-                  value={apiKey}
-                  onChange={setApiKey}
-                  placeholder="sk-or-v1-…"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <ConnectOpenRouter
+                variant="primary"
+                label="Connect with OpenRouter"
+                onConnected={(preview) => {
+                  if (preview) {
+                    setKeyPreview(preview);
+                    setKeyInfo('Connected to OpenRouter.');
+                  }
+                }}
+              />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  fontSize: 10,
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: 'var(--track-meta)',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-whisper)',
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background:
+                      'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 100%)',
+                  }}
+                />
+                <span>or paste a key</span>
+                <span
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background:
+                      'linear-gradient(90deg, rgba(255,255,255,0.07) 0%, transparent 100%)',
+                  }}
                 />
               </div>
-              <button
-                type="button"
-                className="set-btn primary"
-                onClick={saveKey}
-                disabled={!apiKey || saving}
-                style={{ height: 40 }}
-              >
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+                <div style={{ flex: 1 }}>
+                  <MaskedInput
+                    value={apiKey}
+                    onChange={setApiKey}
+                    placeholder="sk-or-v1-…"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="set-btn primary"
+                  onClick={saveKey}
+                  disabled={!apiKey || saving}
+                  style={{ height: 40 }}
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
             </div>
           )}
           {keyError && (
