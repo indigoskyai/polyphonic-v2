@@ -259,4 +259,30 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       threads: s.threads.map((t) => (t.id === threadId ? { ...t, project_id: projectId } : t)),
     }));
   },
+
+  updateThreadStarred: async (threadId, starred) => {
+    await supabase.from('threads').update({ starred }).eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (t.id === threadId ? { ...t, starred } : t)),
+    }));
+  },
+
+  updateThreadArchived: async (threadId, archived) => {
+    await supabase.from('threads').update({ archived }).eq('id', threadId);
+    set((s) => ({
+      threads: archived
+        ? s.threads.filter((t) => t.id !== threadId)
+        : s.threads.map((t) => (t.id === threadId ? { ...t, archived } : t)),
+      currentThreadId: archived && s.currentThreadId === threadId ? null : s.currentThreadId,
+    }));
+  },
+
+  deleteThread: async (threadId) => {
+    await supabase.from('threads').delete().eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.filter((t) => t.id !== threadId),
+      currentThreadId: s.currentThreadId === threadId ? null : s.currentThreadId,
+      messages: s.currentThreadId === threadId ? [] : s.messages,
+    }));
+  },
 }));
