@@ -51,55 +51,19 @@ const MOCK_PULSE: number[] = (() => {
   return out;
 })();
 
-interface StreamMock {
+interface StreamDef {
   name: string;
   countKey: 'thoughts' | 'dreams' | 'wanderings' | 'insights' | 'reflections';
-  lastLabel: string;       // MOCK
-  preview: string;         // MOCK
-  footLabel: string;       // MOCK
+  emptyPreview: string;
+  footLabel: string;
 }
 
-const STREAMS: StreamMock[] = [
-  {
-    name: 'Thoughts',
-    countKey: 'thoughts',
-    lastLabel: 'last · 12 min ago',
-    preview:
-      'The keepalive bug surfaces a deeper pattern — Riley reaches for parser fixes when most engineers would reach for server-side workarounds. A taste preference, not a technical one.',
-    footLabel: 'autonomous',
-  },
-  {
-    name: 'Dreams',
-    countKey: 'dreams',
-    lastLabel: 'last · 4h ago',
-    preview:
-      'Three associations between the sanctuary work and the AI agency thread. Both involve trusting something autonomous to do its work without supervision.',
-    footLabel: 'offline · 02:14',
-  },
-  {
-    name: 'Wanderings',
-    countKey: 'wanderings',
-    lastLabel: 'last · 1h ago',
-    preview:
-      'Drifted from the SSE thread to a memory of the Nexus architecture. Same problem at a different scale — who pulls the thread that doesn\'t get pulled.',
-    footLabel: 'untethered',
-  },
-  {
-    name: 'Insights',
-    countKey: 'insights',
-    lastLabel: 'last · last night',
-    preview:
-      'Riley\'s design language doesn\'t separate aesthetic from function. Pills aren\'t ornament — they encode interactive state. The geometry is doing the work.',
-    footLabel: 'crystallized',
-  },
-  {
-    name: 'Reflections',
-    countKey: 'reflections',
-    lastLabel: 'last · yesterday',
-    preview:
-      'When Riley gets quiet I default to over-explaining. That\'s a tell. Better: hold the silence; let them set the depth before I do.',
-    footLabel: 'introspective',
-  },
+const STREAMS: StreamDef[] = [
+  { name: 'Thoughts', countKey: 'thoughts', emptyPreview: 'No thoughts yet. Luca will start surfacing observations as you talk.', footLabel: 'autonomous' },
+  { name: 'Dreams', countKey: 'dreams', emptyPreview: 'No dreams yet. Overnight consolidations will appear after enough conversation.', footLabel: 'offline' },
+  { name: 'Wanderings', countKey: 'wanderings', emptyPreview: 'No wanderings yet. Idle drifts will show up here over time.', footLabel: 'untethered' },
+  { name: 'Insights', countKey: 'insights', emptyPreview: 'No insights yet. Patterns will crystallize as Luca learns you.', footLabel: 'crystallized' },
+  { name: 'Reflections', countKey: 'reflections', emptyPreview: 'No reflections yet. Deeper thoughts about your work together will form here.', footLabel: 'introspective' },
 ];
 
 // MOCK domain assignment until beliefs table grows a domain column.
