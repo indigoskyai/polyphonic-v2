@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/integrations/supabase/client';
 import {
   DangerButton,
   GhostButton,
@@ -18,9 +20,12 @@ import { useClock } from '@/components/settings/useClock';
 
 export default function AccountSettings() {
   const { user, signOut } = useAuthStore();
+  const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const time = useClock();
 
@@ -36,6 +41,45 @@ export default function AccountSettings() {
           : 'Could not sign out. Please try again.',
       );
       setSigningOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      // Edge function does the work: verifies our JWT, then calls
+      // supabase.auth.admin.deleteUser() with the service role key.
+      // FK CASCADE on auth.users handles all the user-owned rows.
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        method: 'POST',
+      });
+
+      if (error) {
+        throw new Error(
+          error.message || 'Could not delete your account.',
+        );
+      }
+      if (data && typeof data === 'object' && 'error' in data && data.error) {
+        throw new Error(String(data.error));
+      }
+
+      // Clean up the local session and bounce to the landing.
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Even if local signOut fails, the server-side user is gone
+        // and the JWT will be rejected on the next request — proceed.
+      }
+      navigate('/', { replace: true });
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : 'Could not delete your account. Please try again.',
+      );
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -129,9 +173,23 @@ export default function AccountSettings() {
         >
           <div style={{ marginTop: 4 }}>
             <DangerButton
-              label="Delete account"
+              label={deleting ? 'Deleting…' : 'Delete account'}
               onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleting}
             />
+            {deleteError && (
+              <p
+                style={{
+                  marginTop: 12,
+                  fontSize: 12,
+                  color: 'var(--rose-accent, #c97c8a)',
+                  fontFamily: 'var(--font-sans)',
+                  letterSpacing: 'var(--track-body-tight)',
+                }}
+              >
+                {deleteError}
+              </p>
+            )}
           </div>
         </Section>
 
@@ -139,9 +197,11 @@ export default function AccountSettings() {
           <ConfirmDialog
             title="Delete account"
             message="This will permanently delete your account and all associated data. This cannot be undone."
-            confirmLabel="Delete account"
-            onConfirm={() => setShowDeleteConfirm(false)}
-            onCancel={() => setShowDeleteConfirm(false)}
+            confirmLabel={deleting ? 'Deleting…' : 'Delete account'}
+            onConfirm={handleDeleteAccount}
+            onCancel={() => {
+              if (!deleting) setShowDeleteConfirm(false);
+            }}
           />
         )}
       </div>
