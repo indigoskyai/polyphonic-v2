@@ -21,9 +21,9 @@ export async function authenticateUser(req: Request): Promise<{ userId: string }
   if (!authHeader?.startsWith("Bearer ")) return null;
   const userClient = getUserClient(authHeader);
   const token = authHeader.replace("Bearer ", "");
-  const { data: claims, error } = await userClient.auth.getClaims(token);
-  if (error || !claims?.claims?.sub) return null;
-  return { userId: claims.claims.sub as string };
+  const { data, error } = await userClient.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return { userId: data.user.id };
 }
 
 /**
