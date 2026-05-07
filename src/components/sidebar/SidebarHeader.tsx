@@ -18,7 +18,7 @@ export default function SidebarHeader({ folio, title }: Props) {
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 500,
             letterSpacing: 'var(--track-folio)',
             color: 'var(--text-soft)',
@@ -32,7 +32,7 @@ export default function SidebarHeader({ folio, title }: Props) {
         <div
           style={{
             fontFamily: 'var(--font-grotesque)',
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: 500,
             color: 'var(--ink)',
             letterSpacing: 'var(--track-tight)',
