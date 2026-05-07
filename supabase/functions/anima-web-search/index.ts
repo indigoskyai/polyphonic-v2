@@ -78,9 +78,9 @@ async function resolveUserId(
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: `Bearer ${token}` } } },
   );
-  const { data, error } = await supabaseAuth.auth.getClaims(token);
-  if (error || !data?.claims) return null;
-  return (data.claims.sub as string) || null;
+  const { data, error } = await supabaseAuth.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
 }
 
 function jsonResp(body: unknown, status: number, req: Request): Response {
