@@ -1,87 +1,94 @@
-## Problem
+# Threads sidebar: row actions + date grouping
 
-Two regressions surfaced after the M0–M7 memory-augmentation wave:
+Add a 3-dot context menu to every thread row in the left panel and reorganize the list into industry-standard date-grouped sections. Everything wired to real data — no mock states.
 
-1. **Duplicated Luca message.** Database confirms only ONE assistant row exists for the latest turn (id `16aca0aa…`). So the duplicate in the screenshot is purely a render bug: the persisted DB message and the lingering streaming bubble are both visible at the same time. The two visible bodies even differ slightly ("graduation" vs "graduation mechanism", "with rather than fetched" vs "opened with rather than fetched") — that text drift is the smoking gun.
-2. **Streaming animations lost their polish.** The typewriter cadence, fade-in, settle, and cursor-fade transitions feel choppier than after the previous round of polish.
+## What the user gets
 
-## Root cause — the duplicate
+**Per-thread 3-dot menu (appears on hover, also via keyboard):**
+- Rename (inline edit in row)
+- Pin / Unpin (sticks thread to top)
+- Star / Unstar (favorites group above date sections)
+- Add to / Move to project... (submenu listing projects + "Remove from project" + "New project...")
+- Archive (hides from main list, accessible via Archived view)
+- Delete (confirm dialog, cascades to messages)
 
-In `ChatView.tsx`:
+**Date-grouped thread list:**
+- Pinned (existing, unchanged)
+- Starred (new, only if any)
+- Today
+- Yesterday
+- Previous 7 Days
+- Previous 30 Days
+- Older — grouped by month ("November 2025", "October 2025", ...) up to current year, then by year for older
 
-- The chairman streams `content` chunks → `streamingContent` → `lingeringStream` mirror.
-- Council v2 then runs the **voice-fidelity critique** which can emit a `revised_content` event. That replaces `fullContent` with the revised text and pushes it into `setStreamingContent` (line 967-973).
-- On `done`, `addMessage({ content: fullContent, … })` records the local stub.
-- Realtime delivers the canonical DB row (which the edge function persisted with `synthesizedContent` = the revised text).
-- `messages.map` hides the duplicate via strict equality: `msg.content === lingeringStream` (line 1389).
+Bucketing uses `updated_at`. Pinned/starred threads are excluded from date buckets so they don't double-list.
 
-The strict content equality is fragile:
-- Streaming buffer may carry trailing whitespace or a partial last token that the DB row doesn't.
-- If `revised_content` arrives after `addMessage` was queued or while React batches, the `lingeringStream` snapshot can be the **pre-revision** text while the persisted row holds the **revised** text. They're now permanently mismatched → both render.
-- This is exactly what the screenshot shows: two slightly-different bodies of the same reply.
+## Backend changes (one migration)
 
-## Plan
+Add two columns to `public.threads`:
+- `starred BOOLEAN NOT NULL DEFAULT false`
+- `archived BOOLEAN NOT NULL DEFAULT false`
 
-### 1. Fix the duplicate render (correctness)
+Add indexes:
+- `idx_threads_user_starred (user_id, starred) WHERE starred`
+- `idx_threads_user_archived (user_id, archived)`
 
-Replace the brittle string-equality dedupe in `ChatView.tsx` with an identity- and recency-based one:
+Existing RLS already covers these (policies are row-level on user_id). Existing delete policy handles Delete. Cascade on `messages.thread_id` already set — delete just works.
 
-- When the streaming bubble is mounted (`isStreaming || lingeringStream`), hide the **last assistant message** in the list if its `created_at` is within ~5s of "now" AND its `agent` matches `activeAgentId`. No content comparison.
-- On `StreamingText.onSettled`, clear `lingeringStream` AND set a one-frame `justSettled` flag so the swap from streaming bubble → persisted message is atomic (no in-between frame where neither or both render).
-- Once `lingeringStream` is null and `justSettled` flips off (next frame), the persisted message becomes visible with its own `msgEnter` animation suppressed (it's the same content the user was just reading — no re-animate).
+No edge function changes needed. No new tables.
 
-Also tighten `threadStore.addMessage` dedupe so it accepts a small content delta (normalize trailing whitespace) when matching against a realtime row in the 30s window. This makes the stub→canonical replacement reliable when `revised_content` and `done` race.
+## Frontend changes
 
-Edge-function side: in `chat-multi`, ensure `revised_content` is always emitted **before** `done` (verify order; today it is, but assert it explicitly with a single `await` boundary so the SSE writes can't reorder under back-pressure).
+### New components
+- `src/components/sidebar/ThreadRow.tsx` — replaces inline `ThreadItem` in `SidebarChat.tsx`. Renders title, hover-revealed 3-dot trigger, inline rename input mode, project assignment dot.
+- `src/components/sidebar/ThreadRowMenu.tsx` — Radix DropdownMenu with all actions; nested submenu for project assignment.
+- `src/components/sidebar/ThreadDeleteDialog.tsx` — AlertDialog confirm.
 
-### 2. Audit and restore the streaming animation polish
+### Updated
+- `src/components/sidebar/SidebarChat.tsx` — replace flat list with grouped sections (Pinned, Starred, Today, Yesterday, Previous 7 Days, Previous 30 Days, month/year buckets). Filter out archived. Search still works across all groups.
+- `src/stores/threadStore.ts` — add:
+  - `updateThreadStarred(threadId, starred)`
+  - `updateThreadArchived(threadId, archived)`
+  - `deleteThread(threadId)` (calls supabase delete, removes from local state, navigates away if current)
+  - Extend `Thread` interface with `starred`, `archived`
+  - `loadThreads` already filterable; add `.eq('archived', false)` for default load
+- `src/lib/threadGrouping.ts` (new) — pure helpers: `groupThreadsByDate(threads)` returning ordered sections.
+- `src/integrations/supabase/types.ts` — add `starred`/`archived` to threads row type (manually until regen).
 
-Cover every surface that contributes to the perceived "smoothness" of a Luca reply landing.
+### Touch points already in place
+- `useThreadStore.updateThreadPinned` ✓
+- `useThreadStore.updateThreadTitle` ✓
+- `useThreadStore.updateThreadProject` ✓
+- `useProjectStore.projects` ✓ (used to populate "Move to project" submenu)
 
-**a. Typewriter cadence (`useSmoothTypewriter`)**
-- Re-tune the EMA + tier curve so it ramps from ~180 cps → ~520 cps proportional to buffer gap, with a soft ceiling. Today's 220/360/600 step function feels staircase-y on long bursts.
-- Skip the rAF tick entirely when the buffer is empty AND not active, instead of running an idle loop.
-- Reset `gapEmaRef` on a new message instead of carrying over from the prior reply.
+## UX details
 
-**b. Streaming bubble lifecycle (`StreamingText`)**
-- Drive cursor opacity with a CSS transition (240ms ease-out) instead of a class-toggle that fights React's render cycle.
-- On `onSettled`, animate the bubble height to its persisted equivalent (no shift).
-- Memoize the `RichBody` tree with a chunk size threshold (e.g. only re-parse when displayed grew by ≥8 chars or contains a fence delimiter) — today it reparses every char, which becomes expensive on long markdown replies and drops the framerate well below 60fps.
+- 3-dot button: 16px, opacity 0 by default, opacity 1 on row hover or when menu open. Always visible on touch (hover capability check).
+- Rename: clicking Rename swaps title to an `<input>` with auto-focus + select all. Enter/blur saves, Escape cancels. Uses `updateThreadTitle`.
+- Project submenu lists projects sorted by `updated_at`, shows checkmark next to current project, "Remove from project" if assigned, divider, "New project..." which navigates to `/projects` (project creation modal flow already exists there).
+- Delete dialog: "Delete \"{title}\"? This permanently removes the conversation and all its messages." with Cancel / Delete buttons.
+- Archived threads: out of scope for a dedicated view in this pass — archive just hides them. Add a small "Show archived" toggle at the bottom of the list as escape hatch (loads archived=true and renders them in a collapsed section). Unarchive available from the same 3-dot menu.
 
-**c. Message enter animation**
-- The `msgEnter` keyframe is fine, but the per-message `animationDelay: i * 30ms` (capped 150ms) re-runs on every list change. Gate it so only **newly added** messages animate, not the entire list when one row is appended. Track previously-rendered IDs in a ref.
+## Accessibility
 
-**d. ThinkingBlock state machine**
-- The 4-state transition (waiting → streaming → settling → complete) currently has hard-cuts on label changes. Cross-fade the label text with a 180ms opacity dip.
-- Keep the dots animation running through the entire isActive window with a single keyframe, not restarted per state change.
+- 3-dot trigger: `aria-label="Thread actions"`, focusable, opens menu on Enter/Space.
+- Menu items keyboard-navigable (Radix handles this).
+- Delete dialog has focus trap (Radix AlertDialog).
+- Rename input has `aria-label="Rename thread"`.
 
-**e. Auto-scroll**
-- Throttle to rAF (currently throttled, but verify the throttle unsubscribes when streaming ends).
-- Use `scrollTo({ behavior: 'auto' })` during active streaming, switch to `'smooth'` only at settle. Smooth-during-streaming compounds with the reveal cadence and feels laggy.
+## Verification
 
-**f. Reduced motion**
-- Verify `@media (prefers-reduced-motion: reduce)` collapses the typewriter to instant reveal and skips the cursor fade.
-
-**g. Performance verification**
-- Open the affected thread, send a long reply, profile with browser perf tools. Confirm: no layout thrash during streaming, JS task durations < 16ms during reveal, stable 60fps.
-
-### 3. Verification
-
-- Reproduce the duplicate by running a council reply that triggers a critique revision; confirm only one body renders.
-- Send a 1500-char reply, screenshot before/after to confirm the typewriter ramp feels even.
-- Console clean.
-- Reduced-motion check.
-
-## Files touched
-
-- `src/pages/ChatView.tsx` — dedupe rewrite, typewriter retune, StreamingText polish, msgEnter gating, scroll behavior.
-- `src/stores/threadStore.ts` — normalize content comparison in `addMessage` + `subscribeMessages`.
-- `src/components/messages/MessageItem.tsx` — accept a `suppressEnter` prop for the just-settled persisted row.
-- `supabase/functions/chat-multi/index.ts` — assert SSE event order around `revised_content` → `done`.
-- `src/index.css` — cursor fade transition, label crossfade keyframe, reduced-motion overrides.
+1. Migration applies cleanly; `starred`/`archived` defaults populate existing rows to false.
+2. Existing threads still appear, now bucketed by `updated_at`.
+3. Each menu action persists (refresh confirms): rename, pin, star, archive, delete, assign project.
+4. Deleting current thread navigates to `/chat`.
+5. No console errors.
+6. Search filters across all visible groups.
+7. Pinned > Starred > date buckets ordering preserved after each mutation.
 
 ## Out of scope
 
-- Council v2 behavior changes (only animation/timing).
-- Hypomnema / memory pipeline (already shipped and dormant by design).
-- Mobile composer animations (separate phase).
+- Dedicated `/archived` page (toggle covers it for now).
+- Bulk select / multi-thread actions.
+- Drag-to-reorder.
+- Folder/tag system beyond projects.
