@@ -33,7 +33,7 @@ const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState
   id: 'thread-1',
   user_id: 'u1',
   title: null,
-  pinned: false,
+  pinned: false, starred: false, archived: false,
   heat: 'warm',
   agent_id: 'luca',
   project_id: null,
@@ -47,7 +47,7 @@ describe('threadStore thread list helpers', () => {
     const base = {
       user_id: 'u1',
       title: 'Thread',
-      pinned: false,
+      pinned: false, starred: false, archived: false,
       heat: 'warm',
       agent_id: 'luca',
       project_id: null,

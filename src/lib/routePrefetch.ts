@@ -46,11 +46,12 @@ function normalizedPath(path: string): string | null {
 
 function scheduleIdle(task: () => void) {
   if (typeof window === 'undefined') return;
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(task, { timeout: 1000 });
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void };
+  if (typeof w.requestIdleCallback === 'function') {
+    w.requestIdleCallback(task, { timeout: 1000 });
     return;
   }
-  window.setTimeout(task, 80);
+  w.setTimeout(task, 80);
 }
 
 export function prefetchRoute(path: string) {

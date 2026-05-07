@@ -40,7 +40,7 @@ describe('resetClientSessionStores', () => {
 
   it('clears account-scoped client state after logout', () => {
     useThreadStore.setState({
-      threads: [{ id: 'thread-1', user_id: 'user-1', title: 'private', pinned: false, heat: 'cold', agent_id: 'luca', project_id: 'project-1', created_at: '', updated_at: '' }],
+      threads: [{ id: 'thread-1', user_id: 'user-1', title: 'private', pinned: false, starred: false, archived: false, heat: 'cold', agent_id: 'luca', project_id: 'project-1', created_at: '', updated_at: '' }],
       currentThreadId: 'thread-1',
       messages: [{
         id: 'message-1',

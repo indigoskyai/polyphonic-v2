@@ -6,6 +6,8 @@ export interface Thread {
   user_id: string;
   title: string | null;
   pinned: boolean;
+  starred: boolean;
+  archived: boolean;
   heat: string;
   agent_id: string;
   project_id: string | null;
@@ -55,8 +57,11 @@ interface ThreadState {
   setStreamingThinking: (t: string) => void;
   updateThreadTitle: (threadId: string, title: string) => Promise<void>;
   updateThreadPinned: (threadId: string, pinned: boolean) => Promise<void>;
+  updateThreadStarred: (threadId: string, starred: boolean) => Promise<void>;
+  updateThreadArchived: (threadId: string, archived: boolean) => Promise<void>;
   updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
   updateThreadProject: (threadId: string, projectId: string | null) => Promise<void>;
+  deleteThread: (threadId: string) => Promise<void>;
 }
 
 const normContent = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
@@ -87,6 +92,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { data } = await supabase
       .from('threads')
       .select('*')
+      .eq('archived', false)
       .order('updated_at', { ascending: false });
     if (data) set({ threads: dedupeThreadsById(data as Thread[]) });
   },
@@ -251,6 +257,32 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await supabase.from('threads').update({ project_id: projectId }).eq('id', threadId);
     set((s) => ({
       threads: s.threads.map((t) => (t.id === threadId ? { ...t, project_id: projectId } : t)),
+    }));
+  },
+
+  updateThreadStarred: async (threadId, starred) => {
+    await supabase.from('threads').update({ starred }).eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (t.id === threadId ? { ...t, starred } : t)),
+    }));
+  },
+
+  updateThreadArchived: async (threadId, archived) => {
+    await supabase.from('threads').update({ archived }).eq('id', threadId);
+    set((s) => ({
+      threads: archived
+        ? s.threads.filter((t) => t.id !== threadId)
+        : s.threads.map((t) => (t.id === threadId ? { ...t, archived } : t)),
+      currentThreadId: archived && s.currentThreadId === threadId ? null : s.currentThreadId,
+    }));
+  },
+
+  deleteThread: async (threadId) => {
+    await supabase.from('threads').delete().eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.filter((t) => t.id !== threadId),
+      currentThreadId: s.currentThreadId === threadId ? null : s.currentThreadId,
+      messages: s.currentThreadId === threadId ? [] : s.messages,
     }));
   },
 }));

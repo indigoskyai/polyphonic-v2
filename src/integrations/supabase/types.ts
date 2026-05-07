@@ -2729,6 +2729,7 @@ export type Database = {
       threads: {
         Row: {
           agent_id: string
+          archived: boolean
           created_at: string
           heat: string
           id: string
@@ -2736,12 +2737,14 @@ export type Database = {
           pinned: boolean
           primary_agent_id: string
           project_id: string | null
+          starred: boolean
           title: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           agent_id?: string
+          archived?: boolean
           created_at?: string
           heat?: string
           id?: string
@@ -2749,12 +2752,14 @@ export type Database = {
           pinned?: boolean
           primary_agent_id?: string
           project_id?: string | null
+          starred?: boolean
           title?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           agent_id?: string
+          archived?: boolean
           created_at?: string
           heat?: string
           id?: string
@@ -2762,6 +2767,7 @@ export type Database = {
           pinned?: boolean
           primary_agent_id?: string
           project_id?: string | null
+          starred?: boolean
           title?: string | null
           updated_at?: string
           user_id?: string
