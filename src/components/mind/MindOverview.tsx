@@ -81,6 +81,14 @@ export default function MindOverview() {
     reflections: reflections.length,
   };
 
+  const latest = {
+    thoughts: thoughts[0],
+    dreams: dreams[0],
+    wanderings: wanderings[0],
+    insights: insights[0],
+    reflections: reflections[0],
+  };
+
   const radarVals = {
     openness: modulators.openness ?? 0.5,
     arousal: modulators.arousal ?? 0.5,
