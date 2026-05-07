@@ -34,12 +34,12 @@ export default function SidebarProjects() {
           onClick={() => navigate('/projects')}
           style={{
             minHeight: 30,
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: 8,
             border: '1px solid var(--border-faint)',
             color: 'var(--text-secondary)',
             fontSize: 12,
             textAlign: 'left',
-            padding: '0 10px',
+            padding: '0 12px',
           }}
         >
           New project or manage threads

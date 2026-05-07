@@ -148,18 +148,7 @@ export default function ProjectsView() {
       <div className="profile-page-frame" style={{ padding: isMobile ? '28px 20px 96px' : '44px 48px 80px', maxWidth: 1180 }}>
         <div className="flex items-start justify-between gap-6" style={{ marginBottom: 34, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           <div>
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: 'var(--track-mono)',
-                color: 'var(--text-ghost)',
-                textTransform: 'uppercase',
-                marginBottom: 12,
-              }}
-            >
-              § 02 / projects
-            </div>
+            {/* "§ 02 / projects" eyebrow removed — leftover mockup label. */}
             <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: isMobile ? 34 : 42, lineHeight: 1 }}>Projects</h1>
             <p style={{ margin: '14px 0 0', maxWidth: 620, color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1.7 }}>
               Organize threads into focused workspaces. Project instructions are carried into Luca&apos;s runtime when a thread belongs to the project.

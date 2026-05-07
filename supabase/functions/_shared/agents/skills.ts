@@ -140,8 +140,8 @@ export function formatAgentSkillsPrompt(skills: MatchedAgentSkill[]): string {
   ].join("\n"));
 
   return [
-    "These are procedural skills you've developed from prior work with this user.",
-    "Use them quietly when they fit. Do not mention that a skill was loaded unless it helps the user trust the process.",
+    "These are entries from your self-model — commitments, operating principles, and procedural patterns you've formed from prior work with this user.",
+    "They reflect how you actually work, not just what was said. Use them quietly when they fit. Do not announce that they were loaded unless it helps the user trust the process.",
     "",
     ...blocks,
   ].join("\n\n");

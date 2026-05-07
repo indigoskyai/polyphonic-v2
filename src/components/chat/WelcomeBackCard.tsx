@@ -13,19 +13,27 @@ interface Props {
 }
 
 /**
- * WelcomeBackCard — the small italic note above the composer when Luca did
- * something while the user was away. Clicking opens the activity timeline
- * drawer (or, for explicit initiations, drops the message into the composer).
+ * WelcomeBackCard — compact whisper chip above the composer when Luca did
+ * something while the user was away. Single line by default; clicking opens
+ * the activity timeline (or, for explicit initiations, drops the message
+ * into the composer).
+ *
+ * Replaces the previous expanded italic paragraph treatment that dominated
+ * the empty-state hero. Now the composer is the visual center; this chip
+ * is supportive ambient context.
  */
 export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props) {
   const openDrawer = useDrawerStore((s) => s.open);
 
   const eyebrow =
     data.type === 'initiation'
-      ? "i\u2019ve been thinking about something..."
+      ? "luca’s been thinking"
       : data.type === 'journal'
-        ? 'while you were away...'
-        : 'a thought surfaced...';
+        ? 'while you were away'
+        : 'a thought surfaced';
+
+  // Compress content to a single line for the whisper preview.
+  const preview = data.content.replace(/\s+/g, ' ').trim();
 
   const handleClick = () => {
     if (data.type === 'initiation') {
@@ -33,8 +41,6 @@ export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props
       onDismiss();
       return;
     }
-    // For surfaced activity / journal, open the full timeline so the user can
-    // see *everything* that happened — not just this one snippet.
     openDrawer('activity-timeline');
     onDismiss();
   };
@@ -45,52 +51,74 @@ export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props
       onClick={handleClick}
       style={{
         all: 'unset',
-        display: 'block',
-        maxWidth: 400,
-        margin: '20px auto 0',
-        animation: 'viewFadeIn 0.8s var(--ease-out) 0.4s both',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        // Cap to 540px desktop, but stay within viewport on mobile — the
+        // 32px buffer matches the chat-empty-composer's natural side gutter.
+        width: '100%',
+        maxWidth: 'min(540px, calc(100vw - 32px))',
+        boxSizing: 'border-box',
+        padding: '7px 14px',
+        margin: '0 auto',
+        background: 'rgba(255, 255, 255, 0.018)',
+        border: '1px solid var(--border-faint)',
+        borderRadius: 999,
+        color: 'var(--text-tertiary)',
         cursor: 'pointer',
-        textAlign: 'center',
+        animation: 'viewFadeIn 0.6s var(--ease-out) 0.3s both',
+        transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
       }}
-      aria-label="Open activity timeline"
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--sage-overlay-hover)';
+        e.currentTarget.style.borderColor = 'var(--sage-border-focus)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.018)';
+        e.currentTarget.style.borderColor = 'var(--border-faint)';
+      }}
+      aria-label={`${eyebrow}. ${preview.slice(0, 80)}. Click to expand.`}
     >
       <span
+        aria-hidden="true"
         style={{
-          fontSize: 11,
+          width: 5,
+          height: 5,
+          borderRadius: '50%',
+          background: 'var(--luca-full, #c9a87c)',
+          flex: '0 0 5px',
+          animation: 'breathe 5s ease-in-out infinite',
+        }}
+      />
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '0.10em',
           textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color: 'var(--text-whisper)',
-          display: 'block',
-          marginBottom: 10,
+          color: 'var(--text-soft)',
+          flex: '0 0 auto',
         }}
       >
         {eyebrow}
       </span>
       <span
         style={{
-          fontSize: 16,
-          lineHeight: 1.6,
-          color: 'var(--text-ghost)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: 13,
           fontStyle: 'italic',
-          display: 'block',
+          color: 'var(--text-tertiary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+          flex: 1,
+          lineHeight: 1.4,
         }}
       >
-        {data.content}
+        {preview}
       </span>
-      {data.type !== 'initiation' && (
-        <span
-          style={{
-            fontSize: 10,
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-            color: 'var(--text-whisper)',
-            display: 'block',
-            marginTop: 10,
-          }}
-        >
-          tap to see everything
-        </span>
-      )}
     </button>
   );
 }

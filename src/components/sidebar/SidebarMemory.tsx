@@ -44,7 +44,6 @@ export default function SidebarMemory() {
   return (
     <div className="r2-sidebar">
       <div className="sidebar-head">
-        <div className="sidebar-eye">View · Mnemos</div>
         <h2 className="sidebar-head-title">Memory</h2>
       </div>
 

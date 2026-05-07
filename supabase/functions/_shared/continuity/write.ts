@@ -143,10 +143,13 @@ export function queueContinuityTurnWrites(
     }, opts.authHeader || "", deps),
   );
 
+  // Self-model distillation runs for ALL agents now (was Luca-only). Each
+  // agent builds its own self-model from conversations with the user. The
+  // distiller's system prompt is tuned per-agent inside the function.
   queue(
     "skills_distill",
-    hasTurn && agentId === "luca" && Boolean(opts.authHeader),
-    agentId !== "luca" ? "non-luca agent" : opts.authHeader ? "empty turn" : "no auth header",
+    hasTurn && Boolean(agentId) && Boolean(opts.authHeader),
+    !agentId ? "no agent id" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("skills-distill", {
       thread_id: opts.threadId,
       agent_id: agentId,

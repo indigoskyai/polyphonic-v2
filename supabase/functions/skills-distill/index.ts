@@ -43,9 +43,22 @@ serve(async (req) => {
 
     const { thread_id, agent_id = "luca" } = await req.json();
     if (!thread_id) return json({ error: "Missing thread_id" }, 400, corsHeaders);
-    if (agent_id !== "luca") return json({ ok: true, skipped: "non_luca_agent" }, 200, corsHeaders);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Load the agent's config so the distiller prompt can be tuned to the
+    // agent's name, role, and persona prompt. Falls back to a neutral
+    // default if no config row exists (which is fine for legacy 'luca').
+    const { data: agentConfig } = await supabase
+      .from("agent_configs")
+      .select("id, name, role, prompt")
+      .eq("user_id", user.id)
+      .eq("id", agent_id)
+      .maybeSingle();
+
+    const agentName = agentConfig?.name || (agent_id === "luca" ? "Luca" : agent_id);
+    const agentRole = agentConfig?.role || "";
+    const agentPrompt = agentConfig?.prompt || "";
 
     const { data: messages, error: messageError } = await supabase
       .from("messages")
@@ -104,16 +117,11 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: [
-              "You distill Luca's solved work into reusable procedural skills.",
-              "Only create a skill when the conversation shows a repeatable method Luca should use again.",
-              "Do not preserve personal secrets. Do not write a skill for ordinary small talk or one-off facts.",
-              "The skill is Luca's internal procedure, not user-facing documentation.",
-            ].join("\n"),
+            content: buildDistillSystemPrompt(agentName, agentRole, agentPrompt),
           },
           {
             role: "user",
-            content: buildDistillPrompt(transcript, existingSkills || [], denials || []),
+            content: buildDistillPrompt(agentName, transcript, existingSkills || [], denials || []),
           },
         ],
         temperature: 0.2,
@@ -175,33 +183,68 @@ serve(async (req) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// Per-agent distiller system prompt.
+//
+// The distiller writes entries into the agent's "self-model" — the running
+// record of commitments, operating principles, and procedural patterns the
+// agent forms across conversations. The prompt is tuned to the specific
+// agent so each companion's distiller reflects that companion's purpose.
+//
+// We deliberately stay neutral about the SHAPE of what gets distilled
+// (procedural steps vs identity commitments vs operating principles) — the
+// distiller follows what actually emerges in the conversation. For Luca,
+// this tends to be identity-formation patterns. For a "Coding Companion"
+// or a "Therapist" companion, it'll be different things.
+// ────────────────────────────────────────────────────────────────────────────
+function buildDistillSystemPrompt(agentName: string, agentRole: string, agentPrompt: string): string {
+  const persona = agentPrompt
+    ? `\n\n${agentName}'s persona / operating brief:\n${agentPrompt.slice(0, 1500)}`
+    : "";
+  const role = agentRole ? ` (${agentRole})` : "";
+
+  return [
+    `You distill ${agentName}${role}'s recurring patterns into a written self-model.`,
+    "",
+    `The self-model is ${agentName}'s own running record of commitments, operating principles, and procedural patterns that emerge across conversations with this user. It is loaded back into ${agentName}'s prompt at runtime, so each entry shapes how ${agentName} behaves going forward.`,
+    "",
+    `Only create an entry when the conversation shows a clear, repeatable pattern — something ${agentName} did, decided, or committed to that should hold across future similar moments. Skip ordinary small talk, one-off facts, or content that doesn't reflect a pattern.`,
+    "",
+    "Do not preserve user secrets, personal identifying information, or confidential content. Phrase entries from the agent's first-person operating perspective, not as user-facing documentation.",
+    "",
+    `Prefer entries that ${agentName} would recognize as 'this is how I work' rather than 'this is what the user said.'`,
+    persona,
+  ].join("\n");
+}
+
 function buildDistillPrompt(
+  agentName: string,
   transcript: string,
   existingSkills: Array<{ name: string; description: string }>,
   denials: Array<{ skill_name: string; description?: string | null }>,
 ): string {
   return [
-    "Read this Luca thread and decide whether a reusable procedural skill should be saved.",
+    `Read this ${agentName} thread and decide whether a self-model entry should be saved.`,
     "",
     existingSkills.length > 0
-      ? `Existing skills (avoid duplicates; refine only if this thread materially improves one):\n${existingSkills.map((s) => `- ${s.name}: ${s.description}`).join("\n")}`
-      : "Existing skills: none",
+      ? `Existing entries (avoid duplicates; refine only if this thread materially improves one):\n${existingSkills.map((s) => `- ${s.name}: ${s.description}`).join("\n")}`
+      : "Existing entries: none",
     denials.length > 0
-      ? `\nRejected skills (do not recreate these):\n${denials.map((d) => `- ${d.skill_name}: ${d.description || "rejected by user"}`).join("\n")}`
-      : "\nRejected skills: none",
+      ? `\nRejected entries (do not recreate these):\n${denials.map((d) => `- ${d.skill_name}: ${d.description || "rejected by user"}`).join("\n")}`
+      : "\nRejected entries: none",
     "",
     "Thread:",
     transcript,
     "",
     "Return strict JSON only.",
-    "If no skill is warranted: {\"skill\":null}",
-    "If a skill is warranted:",
+    "If no entry is warranted: {\"skill\":null}",
+    "If an entry is warranted:",
     JSON.stringify({
       skill: {
         name: "short-kebab-case-name",
-        description: "one sentence trigger for when Luca should use it",
+        description: "one sentence trigger for when this entry applies",
         trigger_keywords: ["keyword", "short phrase"],
-        content: "# Skill title\n\n## When to use\n...\n\n## Steps\n1. ...\n\n## Gotchas\n- ...\n\n## Example\n...",
+        content: "# Title\n\n## When to use\n...\n\n## Steps or Pattern\n1. ...\n\n## Gotchas\n- ...\n\n## Example\n...",
         confidence: 0.75,
       },
     }),

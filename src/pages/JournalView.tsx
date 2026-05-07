@@ -67,53 +67,141 @@ export default function JournalView() {
           {filtered.length === 0 ? (
             <div className="s-empty">No journal entries yet.</div>
           ) : (
-            <div>
+            // Centered reading column — max 760px keeps line length comfortable
+            // (60–75 chars). Each day group is a chapter; each entry is a page.
+            <div style={{ maxWidth: 760, margin: '0 auto', padding: '8px 24px 80px' }}>
               {Array.from(grouped.entries()).map(([date, entries]) => (
-                <div key={date} style={{ marginBottom: 32 }}>
-                  <div style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 500,
-                    textTransform: 'uppercase', letterSpacing: 'var(--track-folio)',
-                    color: 'var(--text-whisper)', marginBottom: 14, paddingBottom: 8,
-                    borderBottom: '1px solid var(--hairline)',
-                  }}>
-                    {date}
+                <section key={date} style={{ marginBottom: 56 }}>
+                  {/* Chapter mark — date left, hairline middle, count right */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 14,
+                      marginBottom: 22,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10.5,
+                        fontWeight: 500,
+                        letterSpacing: 'var(--track-folio)',
+                        color: 'var(--text-soft)',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {date}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-faint)', opacity: 0.7 }} />
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        fontWeight: 500,
+                        letterSpacing: 'var(--track-folio)',
+                        color: 'var(--text-whisper)',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+                    </span>
                   </div>
-                  {entries.map((entry) => (
-                    <div key={entry.id} style={{ marginBottom: 24 }}>
-                      <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
-                        <span style={{ fontSize: 10, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)' }}>
-                          {new Date(entry.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                        </span>
-                        {entry.mood && (
-                          <span style={{
-                            fontSize: 9, padding: '1px 8px', borderRadius: 999,
-                            background: moodColor(entry.mood) + '15',
-                            color: moodColor(entry.mood),
-                            border: `1px solid ${moodColor(entry.mood)}30`,
-                            fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-folio)',
-                            textTransform: 'uppercase',
-                          }}>
-                            {entry.mood}
+
+                  {/* Pages */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {entries.map((entry) => (
+                      <article
+                        key={entry.id}
+                        style={{
+                          background: 'var(--canvas)',
+                          border: '1px solid var(--border-faint)',
+                          borderRadius: 14,
+                          padding: '22px 26px 24px',
+                          boxShadow: 'var(--shadow-inset-highlight)',
+                        }}
+                      >
+                        {/* Meta strip */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            paddingBottom: 14,
+                            marginBottom: 16,
+                            borderBottom: '1px solid var(--border-faint)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10.5,
+                              fontWeight: 500,
+                              letterSpacing: 'var(--track-folio)',
+                              color: 'var(--text-tertiary)',
+                              textTransform: 'uppercase',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {new Date(entry.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                           </span>
-                        )}
-                        {entry.trigger_type && (
-                          <span style={{ fontSize: 9, color: 'var(--text-whisper)', fontFamily: 'var(--font-mono)', letterSpacing: 'var(--track-folio)', textTransform: 'uppercase' }}>
-                            {entry.trigger_type === 'periodic' ? 'scheduled' : 'post-conversation'}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{
-                        fontFamily: 'var(--font-sans)', fontSize: 14.5, lineHeight: 1.7,
-                        color: 'var(--text-primary)', letterSpacing: 'var(--track-body)',
-                        paddingLeft: 14, borderLeft: '2px solid var(--hairline)',
-                      }}>
-                        {entry.content.split('\n').map((line, i) => (
-                          <p key={i} style={{ marginBottom: line.trim() ? 10 : 4 }}>{line}</p>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                          {entry.mood && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                padding: '2px 9px',
+                                borderRadius: 999,
+                                background: moodColor(entry.mood) + '15',
+                                color: moodColor(entry.mood),
+                                border: `1px solid ${moodColor(entry.mood)}30`,
+                                fontFamily: 'var(--font-mono)',
+                                letterSpacing: 'var(--track-folio)',
+                                textTransform: 'uppercase',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {entry.mood}
+                            </span>
+                          )}
+                          {entry.trigger_type && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                color: 'var(--text-whisper)',
+                                fontFamily: 'var(--font-mono)',
+                                letterSpacing: 'var(--track-folio)',
+                                textTransform: 'uppercase',
+                                marginLeft: 'auto',
+                              }}
+                            >
+                              {entry.trigger_type === 'periodic' ? 'scheduled' : 'post-conversation'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Body — generous reading typography */}
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-sans)',
+                            fontSize: 15.5,
+                            lineHeight: 1.78,
+                            color: 'var(--text-primary)',
+                            letterSpacing: 'var(--track-body)',
+                          }}
+                        >
+                          {entry.content.split('\n').map((line, i) => (
+                            <p key={i} style={{ margin: 0, marginBottom: line.trim() ? 14 : 6 }}>
+                              {line}
+                            </p>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           )}

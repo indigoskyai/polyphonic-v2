@@ -47,9 +47,9 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
       <div
         className="thread-row group flex items-center gap-2.5 cursor-pointer"
         style={{
-          padding: '7px 10px',
-          borderRadius: 'var(--radius-sm)',
-          background: active ? 'var(--overlay-active)' : undefined,
+          padding: '7px 12px',
+          borderRadius: 8,
+          background: active ? 'var(--sage-overlay-active)' : undefined,
           opacity: active ? 1 : opacityMap[heat] || 0.82,
           transition: 'background var(--dur-fast) var(--ease-out), opacity var(--dur-normal) var(--ease-out)',
           position: 'relative',
@@ -58,17 +58,13 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
           if (!renaming) onClick();
         }}
         onMouseEnter={(e) => {
-          if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)';
+          if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--sage-overlay-hover)';
         }}
         onMouseLeave={(e) => {
           if (!active) (e.currentTarget as HTMLDivElement).style.background = '';
         }}
       >
-        <div
-          className="w-1 h-1 rounded-full shrink-0"
-          style={{ background: active ? 'var(--luca-full)' : 'var(--text-tertiary)' }}
-        />
-
+        {/* Leading dot removed — text-only thread rows like ChatGPT/Claude. */}
         {renaming ? (
           <input
             ref={inputRef}
@@ -89,7 +85,7 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
             className="flex-1 outline-none"
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 14,
+              fontSize: 15,
               color: 'var(--text-primary)',
               background: 'var(--surface-input, transparent)',
               border: '1px solid var(--border-faint)',
@@ -103,9 +99,9 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
             className="flex-1 truncate"
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 14,
-              fontWeight: 400,
-              letterSpacing: 'var(--track-body)',
+              fontSize: 15,
+              fontWeight: active ? 600 : 500,
+              letterSpacing: '-0.012em',
               color: active ? 'var(--text-primary)' : 'var(--text-body)',
             }}
           >

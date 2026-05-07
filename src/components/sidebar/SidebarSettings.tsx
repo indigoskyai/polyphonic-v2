@@ -18,7 +18,7 @@ const SYSTEM_GROUP: Entry[] = [
   { key: 'general', label: 'General', path: '/settings/general' },
   { key: 'models', label: 'Models', path: '/settings/models' },
   { key: 'appearance', label: 'Appearance', path: '/settings/appearance' },
-  { key: 'skills', label: 'Skills', path: '/settings/skills' },
+  { key: 'skills', label: 'Self-model', path: '/settings/skills' },
   { key: 'routines', label: 'Routines', path: '/settings/routines' },
   { key: 'voice', label: 'Voice & security', path: '/settings/voice' },
   { key: 'local-runtime', label: 'Local runtime', path: '/settings/local-runtime' },

@@ -43,27 +43,12 @@ export default function MnemosStreamShell({
 
   return (
     <div className="s-stream">
-      {/* Folio strip — mirrors MindStreamShell */}
-      <div className="r2-folio">
-        <div className="r2-folio-left">
-          <span><span className="agent-dot" /> mnemos</span>
-          <span>session 001{/* MOCK */}</span>
-        </div>
-        <div className="r2-folio-right">
-          <span>claude-sonnet-4.5</span>
-          <span>{fmtClock()}</span>
-        </div>
-      </div>
-
+      {/* Folio strip + hero-eye preamble removed at Riley's request — they were
+          leftover from early mockups and redundant with the nav. Title + sub
+          alone carry the page now. The `num` and `streamLabel` props are kept
+          for callsite compatibility but no longer rendered. */}
       <div className="s-stream-inner">
         <div className="s-hero">
-          <div className="s-hero-eye">
-            <span className="num"># {num}</span>
-            <span>·</span>
-            <span className="v">Mnemos</span>
-            <span>·</span>
-            <span className="stream">{streamLabel}</span>
-          </div>
           <h1 className="s-hero-title">{title}</h1>
           <p className="s-hero-sub">{subtitle}</p>
         </div>

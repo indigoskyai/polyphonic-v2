@@ -10,6 +10,7 @@ import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
 import Rail from "./components/Rail";
 import Sidebar from "./components/Sidebar";
+import NavColumn from "./components/NavColumn";
 import Clockbar from "./components/Clockbar";
 import MobileAppBar from "./components/mobile/MobileAppBar";
 import MobileNavDrawer from "./components/mobile/MobileNavDrawer";
@@ -57,6 +58,7 @@ const CheckpointsView = lazy(() => import("./pages/CheckpointsView"));
 const WorkspaceView = lazy(() => import("./pages/WorkspaceView"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const MobilePreview = lazy(() => import("./pages/MobilePreview"));
+const StyleGallery = lazy(() => import("./pages/StyleGallery"));
 const PublicProfileView = lazy(() => import("./pages/PublicProfileView"));
 const AgentsList = lazy(() => import("./pages/settings/AgentsList"));
 const AgentDetail = lazy(() => import("./pages/settings/AgentDetail"));
@@ -91,7 +93,8 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
       || location.pathname === '/privacy'
       || location.pathname === '/terms'
       || location.pathname.startsWith('/u/')
-      || location.pathname.startsWith('/@');
+      || location.pathname.startsWith('/@')
+      || location.pathname.startsWith('/_mockups');
 
     if (isPublicRoute) { setChecked(true); return; }
     if (!user) { setChecked(true); return; }
@@ -181,8 +184,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       data-mobile={isMobile ? 'true' : undefined}
       style={{ background: 'var(--floor)' }}
     >
-      {isMobile ? <MobileAppBar /> : <Rail />}
-      {!isMobile && <Sidebar />}
+      {isMobile ? <MobileAppBar /> : <NavColumn />}
       <div
         className="app-main flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
         style={{
@@ -335,6 +337,7 @@ const App = () => (
                 <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
+                <Route path="/_mockups/styles" element={<StyleGallery />} />
                 <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

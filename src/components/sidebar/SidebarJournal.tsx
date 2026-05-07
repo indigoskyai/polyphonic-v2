@@ -6,7 +6,6 @@ export default function SidebarJournal() {
   return (
     <div className="r2-sidebar">
       <div className="sidebar-head">
-        <div className="sidebar-eye">View · Journal</div>
         <h2 className="sidebar-head-title">Journal</h2>
       </div>
 

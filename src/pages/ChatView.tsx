@@ -41,6 +41,7 @@ import {
   safeAttachmentFileName,
   shouldInlineCodeAttachment,
 } from '@/lib/chatAttachments';
+import { Boxes, Paperclip, PocketKnife } from 'lucide-react';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -95,12 +96,16 @@ function useSmoothTypewriter(target: string, active = true) {
 
       if (gap > 0) {
         // Smoothed gap with EMA so cadence rises and falls gracefully.
-        gapEmaRef.current = gapEmaRef.current * 0.8 + gap * 0.2;
+        // Tighter factor (0.92/0.08) absorbs token bursts over ~12 frames
+        // instead of ~5, eliminating the visible accel/decel that made the
+        // reveal feel token-by-token.
+        gapEmaRef.current = gapEmaRef.current * 0.92 + gap * 0.08;
         const smoothedGap = gapEmaRef.current;
 
-        // Continuous cadence curve: 180 cps base, ramps to ~520 cps cap.
-        // sqrt-ish curve avoids the staircase from a tiered switch.
-        const charsPerMs = Math.min(0.52, 0.18 + Math.sqrt(smoothedGap) * 0.024);
+        // Continuous cadence curve: 160 cps base, ramps to ~300 cps cap.
+        // Lower cap than before (was 520) — at 300 the typewriter caps at
+        // ~60 wpm, fast comfortable reading speed. Steadier rhythm.
+        const charsPerMs = Math.min(0.30, 0.16 + Math.sqrt(smoothedGap) * 0.018);
 
         const advance = Math.max(1, Math.round(elapsed * charsPerMs));
         const nextLen = Math.min(tgt.length, curLen + advance);
@@ -185,7 +190,9 @@ function StreamingText({
     const cur = displayed.length;
     if (cur === 0) { lastTreeLenRef.current = 0; return 0; }
     if (settled || !isStreaming) { lastTreeLenRef.current = cur; return cur; }
-    if (cur - prev >= 8) { lastTreeLenRef.current = cur; return cur; }
+    // 4-char threshold (was 8) keeps the markdown tree fresher during
+    // quiet stretches between bursts — feels more continuous.
+    if (cur - prev >= 4) { lastTreeLenRef.current = cur; return cur; }
     const tail = displayed.slice(prev);
     if (/[\n`*_>#-]/.test(tail)) { lastTreeLenRef.current = cur; return cur; }
     return prev;
@@ -557,9 +564,28 @@ export default function ChatView() {
     return () => { canceled = true; };
   }, [user?.id]);
 
+  // Skip the route-mount viewFadeIn animation when this mount is the result
+  // of a fresh-thread send (sessionStorage flag set by sendMessage just before
+  // navigate). Prevents the layered fade-out/fade-in jumpiness when the user
+  // sends the very first message in a brand-new thread.
+  const [skipMountFade] = useState(() => {
+    try {
+      const flag = sessionStorage.getItem('luca:freshSendNav');
+      if (flag) {
+        sessionStorage.removeItem('luca:freshSendNav');
+        return true;
+      }
+    } catch { /* */ }
+    return false;
+  });
+
   // Lingering streaming snapshot — keeps the streaming bubble mounted
-  // after isStreaming flips to false, until the typewriter has caught up.
+  // after isStreaming flips to false, until BOTH (a) the typewriter has
+  // caught up AND (b) the canonical assistant message has landed in
+  // messages[]. This closes the timing gap that produced the settle flicker
+  // (where the bubble unmounted before the canonical row was visible).
   const [lingeringStream, setLingeringStream] = useState<string | null>(null);
+  const typewriterSettledRef = useRef(false);
   const agentNameById = useMemo(
     () => new Map(agents.map((agent) => [agent.id, agent.name])),
     [agents]
@@ -572,13 +598,34 @@ export default function ChatView() {
   }, [firstTurnHandoff, messages.length]);
 
   useEffect(() => {
-    if (isStreaming && streamingContent) {
+    if (streamingContent) {
       setLingeringStream(streamingContent);
-    } else if (!isStreaming && streamingContent) {
-      // capture final content the moment stream ends
-      setLingeringStream(streamingContent);
+      typewriterSettledRef.current = false;
     }
   }, [isStreaming, streamingContent]);
+
+  // Clear lingeringStream only when (a) typewriter has settled AND (b) a
+  // recent canonical assistant message exists in messages[]. The canonical
+  // message is what the dedupe filter currently hides; once we clear
+  // lingeringStream, the dedupe condition flips false and the canonical
+  // row pops in seamlessly.
+  useEffect(() => {
+    if (!lingeringStream || typewriterSettledRef.current === false) return;
+    const recentAssistant = [...messages].reverse().find((m) =>
+      m.role === 'assistant' &&
+      (m.agent ?? null) === (activeAgentId ?? null) &&
+      Date.now() - new Date(m.created_at).getTime() < 60_000
+    );
+    if (recentAssistant) {
+      setLingeringStream(null);
+    }
+    // Safety net: even if a canonical never arrives, force-clear after 4s so
+    // the bubble doesn't stick around indefinitely.
+    const timeout = setTimeout(() => {
+      if (typewriterSettledRef.current) setLingeringStream(null);
+    }, 4000);
+    return () => clearTimeout(timeout);
+  }, [lingeringStream, messages, activeAgentId]);
 
   // User-scroll-aware auto-scroll. We follow the bottom of the stream as
   // long as the user is "pinned" there; the moment they scroll up, we stop
@@ -1230,6 +1277,10 @@ export default function ChatView() {
     }
 
     if (createdThread) {
+      // Signal to the next mount that this is a continuation of an in-flight
+      // send, not a fresh navigation — skip the route-level viewFadeIn so the
+      // first message animates seamlessly with the rest of the message list.
+      try { sessionStorage.setItem('luca:freshSendNav', '1'); } catch { /* */ }
       navigate(`/chat/${tid}`, { replace: true });
     }
 
@@ -1591,24 +1642,10 @@ export default function ChatView() {
 
   const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
   const agentModePillClass = `ensemble-pill agent-mode-pill${agentModeActive ? ' armed' : ''}`;
-  const EnsembleIcon = () => (
-    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2}>
-      <circle cx={3} cy={3.5} r={1.3} fill="currentColor" />
-      <circle cx={11} cy={4} r={1.3} fill="currentColor" />
-      <circle cx={7} cy={10.5} r={1.3} fill="currentColor" />
-      <path d="M3 3.5 L11 4 L7 10.5 Z" opacity={0.45} />
-    </svg>
-  );
-  const AgentModeIcon = () => (
-    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 1.6v2.1" />
-      <path d="M7 10.3v2.1" />
-      <path d="M1.6 7h2.1" />
-      <path d="M10.3 7h2.1" />
-      <circle cx={7} cy={7} r={2.7} />
-      <path d="M5.7 7.1l.8.8 1.9-2" opacity={0.8} />
-    </svg>
-  );
+  // Composer pill glyphs — lucide icons matching Riley's curated set.
+  // Boxes (3 stacked cubes) for ensemble; PocketKnife (swiss-army) for agent.
+  const EnsembleIcon = () => <Boxes size={14} strokeWidth={1.4} />;
+  const AgentModeIcon = () => <PocketKnife size={14} strokeWidth={1.4} />;
 
   const stopStreaming = useCallback(async () => {
     if (guardianStreaming) {
@@ -1705,20 +1742,31 @@ export default function ChatView() {
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
       <div
         className="chat-view chat-view--empty flex flex-col flex-1 min-h-0 overflow-hidden"
-        style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+        style={{ animation: skipMountFade ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="chat-empty-center flex-1 flex flex-col items-center justify-center">
-          {/* Title + Echo particle field */}
-          <div className="chat-empty-hero" style={{ textAlign: 'center', marginBottom: isMobile ? 28 : 48, animation: 'viewFadeIn 0.8s var(--ease-out) both' }}>
+        <div
+          className="chat-empty-center flex-1 flex flex-col items-center"
+          style={{
+            // Layout strategy: simulator is the centerpiece. The visualization
+            // gets the upper canvas at full size; composer anchors at the
+            // bottom as a quiet way to interact. The composer is OFF the
+            // visual center so the simulator can breathe.
+            paddingTop: isMobile ? '6vh' : '8vh',
+            paddingBottom: isMobile ? '4vh' : '6vh',
+            justifyContent: 'space-between',
+          }}
+        >
+          {/* Hero — simulator + wordmark, dominant scale */}
+          <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <EchoField
-              size={isMobile ? 184 : 280}
-              particleCount={isMobile ? 7800 : 18000}
+              size={isMobile ? 240 : 360}
+              particleCount={isMobile ? 9000 : 22000}
               state={isStreaming ? 'thinking' : 'idle'}
-              style={{ margin: `0 auto ${isMobile ? 22 : 32}px` }}
+              style={{ margin: `0 auto ${isMobile ? 26 : 36}px` }}
             />
             <h1 style={{
               fontSize: isMobile ? 28 : 38,
@@ -1731,17 +1779,11 @@ export default function ChatView() {
             }}>
               polyphonic
             </h1>
-            {welcomeBack && (
-              <WelcomeBackCard
-                data={welcomeBack}
-                onUseAsInput={(t) => setInput(t)}
-                onDismiss={() => setWelcomeBack(null)}
-              />
-            )}
           </div>
 
-          {/* Centered input */}
-          <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both' }}>
+          {/* Composer — anchored to the bottom of the empty state, off the
+              visual center, supporting the simulator above. */}
+          <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className={`input-shell${focused ? ' focused' : ''}`}>
               <input
                 ref={fileInputRef}
@@ -1780,9 +1822,7 @@ export default function ChatView() {
                     aria-label="Attach files"
                     title="Attach files"
                   >
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M6.5 8.5l3.6-3.6a2.2 2.2 0 113.1 3.1l-5.4 5.4a3.4 3.4 0 01-4.8-4.8l5.2-5.2" />
-                    </svg>
+                    <Paperclip size={15} strokeWidth={1.5} aria-hidden="true" />
                   </button>
                   <AgentPicker
                     activeAgentId={activeAgentId}
@@ -1826,7 +1866,7 @@ export default function ChatView() {
                 <button
                   type="button"
                   aria-label="Send message"
-                  className={`send-btn${ensembleActive ? ' ensemble-armed' : ''}`}
+                  className={`send-btn${(input.trim() || pendingAttachments.length > 0) && !modelKeyMissing ? ' armed' : ''}${ensembleActive ? ' ensemble-armed' : ''}`}
                   onClick={() => sendMessage()}
                   disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
                 >
@@ -1840,6 +1880,20 @@ export default function ChatView() {
               </div>
             </div>
           </div>
+
+          {/* WelcomeBack whisper chip — tiny ambient context above (visually
+              below) the composer, only when Luca did something while the
+              user was away. Click expands to the activity timeline, or
+              drops the message into the composer for explicit initiations. */}
+          {welcomeBack && (
+            <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
+              <WelcomeBackCard
+                data={welcomeBack}
+                onUseAsInput={(t) => setInput(t)}
+                onDismiss={() => setWelcomeBack(null)}
+              />
+            </div>
+          )}
         </div>
         <AttachmentDropOverlay visible={isDragging} />
       </div>
@@ -1847,7 +1901,7 @@ export default function ChatView() {
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div
       className={`chat-view flex flex-col flex-1 min-h-0 overflow-hidden${isFirstTurnHandoff ? ' chat-view--handoff' : ''}`}
-      style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+      style={{ animation: skipMountFade ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1887,7 +1941,7 @@ export default function ChatView() {
           {firstTurnHandoff && messages.length === 0 && (
             <FreshMsgRow
               className="msg-row first-turn-handoff-row"
-              style={{ animation: 'firstTurnMessageIn 360ms var(--ease-premium) both' }}
+              style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}
             >
               <div className="msg-sidehead">
                 {showTimestamps && (
@@ -1933,7 +1987,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
                   <PermissionInline
                     agent={agent}
                     title={md.title || 'Permission needed'}
@@ -1953,7 +2007,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
                   <AgentErroredCard
                     agent={agent}
                     message={md.message || msg.content}
@@ -1984,7 +2038,7 @@ export default function ChatView() {
               const md = (msg.metadata as any) || {};
               const toolCalls = typeof md.tool_calls_used === 'number' ? md.tool_calls_used : null;
               return (
-                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(i * 30, 150)}ms` }}>
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
                   <div className="msg-sidehead">
                     {showTimestamps && (
                       <div className="msg-time">
@@ -2132,7 +2186,14 @@ export default function ChatView() {
                   content={streamingContent || lingeringStream || ''}
                   isStreaming={isStreaming}
                   style={{ fontSize: '14.5px', lineHeight: 1.65, color: 'var(--text-body)' }}
-                  onSettled={() => setLingeringStream(null)}
+                  onSettled={() => {
+                    // Mark typewriter settled — the lingering effect above
+                    // clears lingeringStream once a canonical assistant
+                    // message also exists. Don't clear here directly to
+                    // avoid the flicker race.
+                    typewriterSettledRef.current = true;
+                    setLingeringStream((v) => v); // trigger effect re-run
+                  }}
                 />
               )}
               {/* Live artifacts extracted from in-progress stream */}
@@ -2309,7 +2370,7 @@ export default function ChatView() {
             <button
               type="button"
               aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
-              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
+              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
               onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
               disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
             >

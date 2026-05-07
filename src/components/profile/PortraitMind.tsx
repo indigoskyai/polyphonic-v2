@@ -146,30 +146,12 @@ export default function PortraitMind({ profile, memoryStats, engramSummary }: Pr
 
   return (
     <main className="m-main">
-      {/* Folio */}
-      <div className="r2-folio">
-        <div className="r2-folio-left">
-          <span><span className="agent-dot" /> luca</span>
-          <span>view · <span className="v">profile</span></span>
-          <span>portrait · v{profile.version ?? 1}</span>
-        </div>
-        <div className="r2-folio-right">
-          <span>synced · <span className="v">{timeAgoShort(profile.updated_at)}</span></span>
-          <span>{fmtClock()}</span>
-        </div>
-      </div>
+      {/* Folio strip + hero-eye preamble removed at Riley's request — they
+          were leftover from early mockups and redundant with the page header
+          and the nav. The H1 and the lede paragraph carry the page now. */}
 
       {/* Hero */}
       <div className="m-hero">
-        <div className="m-hero-eye">
-          <span className="num"># 05</span>
-          <span>·</span>
-          <span className="v">Psychological portrait</span>
-          <span>·</span>
-          <span>v{profile.version ?? 1}</span>
-          <span>·</span>
-          <span className="live">profile current</span>
-        </div>
         <h1 className="m-hero-title">Your portrait</h1>
         <p className="m-hero-sub">
           <span className="accent">

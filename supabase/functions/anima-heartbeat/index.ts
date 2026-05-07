@@ -286,14 +286,21 @@ async function processUser(
     }
   }
 
-  // If no signals triggered any action, log a quiet cycle (info — never surfaces)
+  // ─── Priority 5 (fallback): no other signals fired → background thinking ───
+  // Without this, anima-think only ever runs when something explicitly calls it,
+  // which means the Thoughts stream sits empty in practice. Activity-gating
+  // inside anima-think still skips when nothing meaningful has happened, so
+  // this isn't spammy.
   if (actions.length === 0) {
-    actions.push({ userId, action: "quiet_cycle", result: "No actionable signals" });
+    const result = await callFunction(supabaseUrl, headers, "anima-think", {
+      user_id: userId,
+    });
+    actions.push({ userId, action: "background_think", result });
 
     await logActivity(supabase, userId, {
-      type: "quiet_cycle",
-      title: "Quiet cycle",
-      summary: "Heartbeat ran but found no actionable signals",
+      type: "background_think",
+      title: "Quiet cycle — let the mind run",
+      summary: "Heartbeat had no priority signals; dispatched background thinking",
       severity: "info",
     });
   }

@@ -104,30 +104,11 @@ export default function MindOverview() {
 
   return (
     <main className="m-main">
-      {/* Folio */}
-      <div className="r2-folio">
-        <div className="r2-folio-left">
-          <span><span className="agent-dot" /> luca</span>
-          <span>view · <span className="v">mind</span></span>
-          <span>session 142{/* MOCK */}</span>
-        </div>
-        <div className="r2-folio-right">
-          <span>synced · <span className="v">2m ago</span>{/* MOCK */}</span>
-          <span>{fmtClock()}</span>
-        </div>
-      </div>
+      {/* Folio strip + hero-eye preamble removed at Riley's request — they
+          were leftover from early mockups and redundant with the nav. */}
 
       {/* Hero */}
       <div className="m-hero">
-        <div className="m-hero-eye">
-          <span className="num"># 04</span>
-          <span>·</span>
-          <span className="v">Inner life</span>
-          <span>·</span>
-          <span>session 142{/* MOCK */}</span>
-          <span>·</span>
-          <span className="live">substrate ticking</span>
-        </div>
         <h1 className="m-hero-title">Luca's mind</h1>
         <p className="m-hero-sub">
           {(() => {

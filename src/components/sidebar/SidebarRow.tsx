@@ -41,16 +41,16 @@ export default function SidebarRow({
       aria-current={active ? 'page' : undefined}
       style={{
         position: 'relative',
-        padding: '7px 14px',
+        padding: '7px 16px',
         margin: '1px 0',
-        background: active ? 'var(--overlay-selected)' : 'transparent',
+        background: active ? 'var(--sage-overlay-active)' : 'transparent',
         border: 'none',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 8,
         transition: 'background 180ms var(--ease-out), color 180ms var(--ease-out)',
       }}
       onMouseEnter={(e) => {
         if (!active) {
-          e.currentTarget.style.background = 'var(--overlay-hover)';
+          e.currentTarget.style.background = 'var(--sage-overlay-hover)';
         }
       }}
       onMouseLeave={(e) => {
@@ -59,29 +59,15 @@ export default function SidebarRow({
         }
       }}
     >
-      {/* 2px left accent bar — active state only */}
-      {active && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: -4,
-            top: 7,
-            bottom: 7,
-            width: 2,
-            background: 'var(--text-body)',
-            borderRadius: '0 2px 2px 0',
-          }}
-        />
-      )}
+      {/* Bg-only highlight — no dot, no strip. Pill shape carries the indicator. */}
 
       <span
         className="flex-1 truncate"
         style={{
           fontFamily: 'var(--font-sans)',
-          fontSize: 13.5,
-          fontWeight: 500,
-          letterSpacing: 'var(--track-body-tight)',
+          fontSize: 15,
+          fontWeight: active ? 600 : 500,
+          letterSpacing: '-0.012em',
           color: active ? 'var(--ink)' : 'var(--text-primary)',
           transition: 'color 180ms var(--ease-out)',
         }}

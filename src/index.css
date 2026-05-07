@@ -13,8 +13,8 @@
 
 :root {
   /* Surfaces v4 — temperature-locked, B = R × 1.20 ratio */
-  --floor:     #0a0a0c;   /* outer chrome, rail, scene nav */
-  --canvas:    #0e0e11;   /* main background, inset panels */
+  --floor:     #08080a;   /* outer chrome, rail, scene nav — slightly cooler+darker so card shadow reads */
+  --canvas:    #0f0e11;   /* main background, inset panels — micro-warm vs floor for perceptual depth */
   --surface-1: #121216;   /* cards, inputs, data rows */
   --surface-2: #16161a;   /* hover state on cards */
   --surface-3: #1a1a1f;   /* modals, popovers, segment selected */
@@ -84,6 +84,15 @@
   --overlay-hover:    rgba(255, 255, 255, 0.030);
   --overlay-active:   rgba(255, 255, 255, 0.055);
   --overlay-selected: rgba(255, 255, 255, 0.080);
+
+  /* Sage overlays — Polyphonic's brand color (--luca-full = #c9a87c) tinted
+     onto interactive surfaces. "Full embrace" alpha range, used wherever the
+     interface communicates "this is alive / active / focused / armed." Adds
+     warmth without competing with the monochrome body palette. */
+  --sage-overlay-hover:   rgba(201, 168, 124, 0.06);
+  --sage-overlay-active:  rgba(201, 168, 124, 0.12);
+  --sage-overlay-glow:    rgba(201, 168, 124, 0.14);
+  --sage-border-focus:    rgba(201, 168, 124, 0.32);
 
   /* Legacy card surfaces */
   --card:           rgba(220, 219, 216, 0.03);
@@ -330,7 +339,7 @@ html {
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
 }
 
-::selection { background: rgba(220, 219, 216, 0.14); color: var(--ink); }
+::selection { background: rgba(201, 168, 124, 0.18); color: var(--ink); }
 ::placeholder { color: rgba(132, 130, 126, 0.38); font-weight: 400; }
 
 /* Tabular numerals on all mono contexts */
@@ -1302,6 +1311,9 @@ html {
   border: 1px solid var(--border-faint);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  /* Top-edge inset highlight — suggests light from above, makes the composer
+     read as a real surface rather than a CSS rectangle. */
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
   /* No shadow at rest — pool blends softly into canvas. Shadow appears on :focus-within. */
   transition: border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out);
 }
@@ -1471,7 +1483,7 @@ html {
   outline: none;
   color: var(--text-body);
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 400;
   letter-spacing: var(--track-body);
   line-height: 1.55;
@@ -1590,6 +1602,42 @@ html {
   cursor: default;
   background: transparent;
   color: var(--text-ghost);
+}
+
+/* ARMED state — composer has text. Send button glows soft sage and pulses,
+   signaling "ready to send." Disarms the moment the message goes. */
+.send-btn.armed {
+  background: linear-gradient(180deg,
+    rgba(201, 168, 124, 0.18) 0%,
+    rgba(201, 168, 124, 0.10) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 1px rgba(201, 168, 124, 0.30),
+    0 0 12px rgba(201, 168, 124, 0.18);
+  animation: send-armed-pulse 4s ease-in-out infinite;
+}
+.send-btn.armed:hover {
+  background: linear-gradient(180deg,
+    rgba(201, 168, 124, 0.24) 0%,
+    rgba(201, 168, 124, 0.14) 100%);
+}
+.send-btn.armed:disabled {
+  animation: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+@keyframes send-armed-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(201, 168, 124, 0.30),
+      0 0 12px rgba(201, 168, 124, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(201, 168, 124, 0.45),
+      0 0 18px rgba(201, 168, 124, 0.28);
+  }
 }
 .send-btn svg { width: 13px; height: 13px; }
 .send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
@@ -2582,16 +2630,22 @@ html {
   background: var(--canvas);
   border-top-left-radius: var(--radius-inset);
   border-top-right-radius: var(--radius-inset);
-  box-shadow: var(--shadow-inset-highlight), var(--shadow-drawer-near), var(--shadow-drawer-far);
+  /* Shadow gated to open state — when closed, the negative-x drawer shadows
+     would otherwise bleed back into the visible viewport even though the
+     drawer itself is translated off-screen. The blur radius (64px) is wider
+     than the 26px translation buffer, so a gradient was visible at the right
+     edge in production. Only render the shadow when actually open. */
+  box-shadow: var(--shadow-inset-highlight);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transform: translateX(calc(100% + 26px));
-  transition: transform var(--dur-drawer) var(--ease-premium);
+  transition: transform var(--dur-drawer) var(--ease-premium), box-shadow var(--dur-drawer) var(--ease-premium);
   outline: none;
 }
 .drawer[data-open="true"] {
   transform: translateX(0);
+  box-shadow: var(--shadow-inset-highlight), var(--shadow-drawer-near), var(--shadow-drawer-far);
 }
 
 .drawer-header {
@@ -8078,9 +8132,14 @@ html {
   padding: 8px 12px;
   background: var(--surface-1);
   border: 1px solid var(--border-faint);
-  border-radius: var(--radius-pill);
+  border-radius: 8px;
   font-family: var(--font-sans); font-size: 12px;
   color: var(--text-tertiary); letter-spacing: var(--track-body);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.r2-sidebar .sidebar-search:focus-within {
+  border-color: var(--sage-border-focus);
+  box-shadow: 0 0 0 3px var(--sage-overlay-hover);
 }
 .r2-sidebar .sidebar-search-glyph {
   font-family: var(--font-mono); font-size: 11px; color: var(--text-whisper);
@@ -8102,18 +8161,16 @@ html {
 .r2-sidebar .sidebar-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
 .r2-sidebar .sidebar-item {
   display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; padding: 8px 14px; border-radius: 6px;
+  gap: 12px; padding: 8px 14px; border-radius: 8px;
   cursor: pointer; position: relative; isolation: isolate;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   width: 100%; text-align: left; appearance: none; border: none;
   background: transparent;
 }
-.r2-sidebar .sidebar-item:hover { background: rgba(255, 255, 255, 0.012); }
+.r2-sidebar .sidebar-item:hover { background: var(--sage-overlay-hover); }
 .r2-sidebar .sidebar-item.active {
-  background: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.025) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.085),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.060);
+  /* Sage bg-only highlight — no inset hairline, no marker. */
+  background: var(--sage-overlay-active);
 }
 .r2-sidebar .sidebar-item-name {
   font-family: var(--font-sans); font-size: 13px;

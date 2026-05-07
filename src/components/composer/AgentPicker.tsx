@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Ghost } from 'lucide-react';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { resolveAgentColor } from '@/lib/agentColors';
 import { useAuthStore } from '@/stores/authStore';
@@ -85,15 +86,24 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
         }}
         title="Switch agent"
       >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: activeColor,
-            display: 'inline-block',
-          }}
-        />
+        {activeAgentId === 'luca' ? (
+          // Luca's identity glyph — small ghost in the brand sage tone.
+          <Ghost
+            size={14}
+            strokeWidth={1.5}
+            style={{ color: activeColor, flexShrink: 0 }}
+          />
+        ) : (
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: activeColor,
+              display: 'inline-block',
+            }}
+          />
+        )}
         {activeName}
       </button>
 
