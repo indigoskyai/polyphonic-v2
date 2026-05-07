@@ -9209,3 +9209,10 @@ html {
   color: var(--text-soft); letter-spacing: 0.14em;
   text-transform: uppercase; margin-right: auto;
 }
+
+/* Sidebar thread row — reveal action button on hover/focus/menu-open */
+.thread-row .thread-row__actions { opacity: 0; transition: opacity 140ms var(--ease-out); }
+.thread-row:hover .thread-row__actions,
+.thread-row:focus-within .thread-row__actions,
+.thread-row .thread-row__actions:has([data-state="open"]) { opacity: 1; }
+@media (hover: none) { .thread-row .thread-row__actions { opacity: 1; } }
