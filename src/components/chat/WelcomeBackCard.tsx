@@ -56,19 +56,19 @@ export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props
     >
       <span
         style={{
-          fontSize: 10,
+          fontSize: 11,
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
           color: 'var(--text-whisper)',
           display: 'block',
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         {eyebrow}
       </span>
       <span
         style={{
-          fontSize: 13,
+          fontSize: 16,
           lineHeight: 1.6,
           color: 'var(--text-ghost)',
           fontStyle: 'italic',
@@ -80,7 +80,7 @@ export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props
       {data.type !== 'initiation' && (
         <span
           style={{
-            fontSize: 9,
+            fontSize: 10,
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
             color: 'var(--text-whisper)',

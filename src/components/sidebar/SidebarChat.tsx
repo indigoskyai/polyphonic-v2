@@ -60,9 +60,9 @@ export default function SidebarChat() {
           placeholder="Search threads..."
           className="w-full outline-none"
           style={{
-            height: 30,
+            height: 34,
             fontFamily: 'var(--font-sans)',
-            fontSize: 12,
+            fontSize: 14,
             color: 'var(--text-secondary)',
             background: 'transparent',
             border: '1px solid var(--border-faint)',
@@ -96,7 +96,7 @@ export default function SidebarChat() {
           <div
             style={{
               padding: '14px 10px',
-              fontSize: 11.5,
+              fontSize: 13,
               color: 'var(--text-ghost)',
               fontFamily: 'var(--font-sans)',
             }}
@@ -116,14 +116,14 @@ export default function SidebarChat() {
               border: 'none',
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
-              fontSize: 9,
+              fontSize: 10.5,
               fontWeight: 500,
               letterSpacing: 'var(--track-meta)',
               color: 'var(--text-ghost)',
               textTransform: 'uppercase',
             }}
           >
-            {showArchived ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            {showArchived ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             Archived
             {showArchived && archived.length > 0 && (
               <span style={{ marginLeft: 4, color: 'var(--text-tertiary)' }}>{archived.length}</span>
@@ -132,7 +132,7 @@ export default function SidebarChat() {
           {showArchived && (
             <div>
               {archived.length === 0 && (
-                <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-ghost)' }}>
+                <div style={{ padding: '6px 10px', fontSize: 13, color: 'var(--text-ghost)' }}>
                   Nothing archived.
                 </div>
               )}
@@ -151,7 +151,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       className="uppercase"
       style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 9,
+        fontSize: 10.5,
         fontWeight: 500,
         letterSpacing: 'var(--track-meta)',
         color: 'var(--text-ghost)',

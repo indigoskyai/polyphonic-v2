@@ -89,7 +89,7 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
             className="flex-1 outline-none"
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 12.5,
+              fontSize: 14,
               color: 'var(--text-primary)',
               background: 'var(--surface-input, transparent)',
               border: '1px solid var(--border-faint)',
@@ -103,7 +103,7 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
             className="flex-1 truncate"
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 12.5,
+              fontSize: 14,
               fontWeight: 400,
               letterSpacing: 'var(--track-body)',
               color: active ? 'var(--text-primary)' : 'var(--text-body)',
