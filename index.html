@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#08080a" />
+    <meta name="theme-color" content="#0a0a0c" />
     <meta name="color-scheme" content="dark light" />
     <meta name="application-name" content="Polyphonic" />
     <meta name="apple-mobile-web-app-title" content="Polyphonic" />
@@ -32,10 +32,79 @@
     <meta name="twitter:title" content="Polyphonic" />
     <meta name="twitter:description" content="A private AI workspace for continuous conversation, memory, and agent collaboration." />
     <meta name="twitter:image" content="https://polyphonic.chat/favicon.png" />
+
+    <!--
+      Pre-React loading state. The HTML below paints the moment the
+      response arrives — long before main.tsx parses, before the React
+      bundle hydrates, before any route component mounts. Without this
+      the user sees a flash of pure black between any cross-origin
+      handoff and the first React render (most painful on the OAuth
+      round-trip back from Lovable / Google / OpenRouter).
+
+      The shell mirrors the landing page's POLYPHONIC banner exactly,
+      so when React mounts and the real banner appears, they overlap
+      and the visual feels seamless instead of like a swap. Pure CSS;
+      no JS, no FOUC, fonts fall back to the system stack while the
+      web font loads.
+    -->
+    <style>
+      html, body { margin: 0; padding: 0; background: #0a0a0c; }
+      body {
+        color: rgba(244, 243, 240, 0.93);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      #root { min-height: 100vh; }
+
+      .boot-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0c;
+        z-index: 9999;
+        animation: bootFadeIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        pointer-events: none;
+      }
+      .boot-mark {
+        font-size: 44px;
+        font-weight: 100;
+        letter-spacing: 0.2em;
+        text-indent: 0.2em;
+        line-height: 1;
+        margin: 0 0 16px 0;
+        opacity: 0.9;
+      }
+      .boot-tagline {
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(178, 176, 172, 0.5);
+      }
+      @keyframes bootFadeIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      /* Smaller wordmark on narrow viewports (popup-sized windows). */
+      @media (max-width: 540px) {
+        .boot-mark { font-size: 30px; }
+        .boot-tagline { font-size: 10px; }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-shell" aria-hidden="true">
+        <h1 class="boot-mark">POLYPHONIC</h1>
+        <p class="boot-tagline">where many minds meet</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

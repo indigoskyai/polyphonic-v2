@@ -6,109 +6,157 @@ import { handleOpenRouterCallbackInPopup } from "@/lib/openrouterAuth";
  * redirects back to after the user finishes their PKCE flow there.
  *
  * Posts the `code` back to its opener (the Polyphonic app) and closes
- * itself. The user only sees this page for a fraction of a second
- * unless something went wrong — in which case we surface a clear
- * message and a link back into the app.
+ * itself. The user sees this page for ~80–120ms in the success path;
+ * if something went wrong (no opener, expired code, popup deep-linked
+ * directly), we surface a clear status with a return link instead.
  */
 export default function OpenRouterCallback() {
   const [status, setStatus] = useState<{ ok: boolean; message: string }>(() =>
     handleOpenRouterCallbackInPopup(),
   );
 
-  // If the popup somehow doesn't auto-close (e.g. navigated to manually
-  // outside a popup context), nudge the user back home after a beat.
+  // Soft return when the page is loaded outside a popup context.
   useEffect(() => {
     if (!window.opener) {
       const t = window.setTimeout(() => {
-        // Best-effort soft return.
         if (window.location.pathname.endsWith("/auth/openrouter/callback")) {
           window.location.replace("/");
         }
-      }, 2200);
+      }, 2400);
       return () => window.clearTimeout(t);
     }
   }, []);
 
+  const accent = status.ok
+    ? { dot: "var(--luca-full, #c9a87c)", ring: "rgba(201, 168, 124, 0.32)", glow: "rgba(201, 168, 124, 0.55)" }
+    : { dot: "#c97c7c", ring: "rgba(201, 124, 124, 0.32)", glow: "rgba(201, 124, 124, 0.55)" };
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "var(--floor, #0a0a0c)",
-        color: "var(--text-body, rgba(210,208,204,0.72))",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 360,
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 18,
-        }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: status.ok ? "var(--luca-full, #c9a87c)" : "#c97c7c",
-            boxShadow: status.ok
-              ? "0 0 0 1px rgba(201,168,124,0.20), 0 0 12px rgba(201,168,124,0.45)"
-              : "0 0 0 1px rgba(201,124,124,0.20), 0 0 12px rgba(201,124,124,0.45)",
-            animation: "breathe-dot 2.6s ease-in-out infinite",
-          }}
-        />
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 200,
-            letterSpacing: "0.22em",
-            textTransform: "uppercase",
-            color: "var(--text-tertiary)",
-          }}
-        >
-          POLYPHONIC · OPENROUTER
+    <div className="orcb-shell">
+      <style>{`
+        .orcb-shell {
+          position: fixed;
+          inset: 0;
+          background: var(--floor, #0a0a0c);
+          color: var(--text-body, rgba(210, 208, 204, 0.72));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+          overflow: hidden;
+          animation: orcbFade 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .orcb-shell::before {
+          content: '';
+          position: absolute;
+          inset: -10%;
+          background:
+            radial-gradient(circle at 50% 35%, ${accent.glow.replace("0.55", "0.10")} 0%, transparent 55%),
+            radial-gradient(circle at 30% 80%, rgba(255,255,255,0.018) 0%, transparent 60%);
+          pointer-events: none;
+        }
+        .orcb-content {
+          position: relative;
+          max-width: 380px;
+          width: 100%;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+        }
+        .orcb-mark {
+          position: relative;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .orcb-mark::before,
+        .orcb-mark::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          border: 1px solid ${accent.ring};
+        }
+        .orcb-mark::before {
+          animation: orcbHalo 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+        }
+        .orcb-mark::after {
+          animation: orcbHalo 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite 1.3s;
+        }
+        .orcb-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: ${accent.dot};
+          box-shadow: 0 0 0 1px ${accent.ring}, 0 0 14px ${accent.glow};
+          animation: orcbBreathe 2.6s ease-in-out infinite;
+        }
+        .orcb-eyebrow {
+          font-size: 11px;
+          font-weight: 200;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: var(--text-tertiary, rgba(178, 176, 172, 0.56));
+          margin: 0;
+        }
+        .orcb-title {
+          font-size: 24px;
+          font-weight: 450;
+          letter-spacing: -0.018em;
+          line-height: 1.25;
+          color: var(--ink, rgba(244, 243, 240, 0.93));
+          margin: 0;
+        }
+        .orcb-subtitle {
+          font-size: 13.5px;
+          font-weight: 400;
+          line-height: 1.55;
+          color: var(--text-body, rgba(210, 208, 204, 0.72));
+          margin: 0;
+          max-width: 320px;
+        }
+        .orcb-link {
+          font-size: 12.5px;
+          color: var(--text-primary, rgba(244, 243, 240, 0.9));
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          margin-top: 6px;
+        }
+        @keyframes orcbFade {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes orcbBreathe {
+          0%, 100% { opacity: 0.55; transform: scale(0.95); }
+          50%      { opacity: 1;    transform: scale(1.05); }
+        }
+        @keyframes orcbHalo {
+          0%   { opacity: 0.55; transform: scale(0.7); }
+          70%  { opacity: 0;    transform: scale(2.4); }
+          100% { opacity: 0;    transform: scale(2.4); }
+        }
+      `}</style>
+
+      <div className="orcb-content">
+        <div className="orcb-mark" aria-hidden="true">
+          <span className="orcb-dot" />
         </div>
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 450,
-            letterSpacing: "-0.018em",
-            lineHeight: 1.25,
-            color: "var(--ink, rgba(244,243,240,0.93))",
-            margin: 0,
-          }}
-        >
+        <p className="orcb-eyebrow">Polyphonic · OpenRouter</p>
+        <h1 className="orcb-title">
           {status.ok ? "Connected." : "Couldn't connect."}
         </h1>
-        <p
-          style={{
-            fontSize: 13.5,
-            lineHeight: 1.55,
-            color: "var(--text-body)",
-            margin: 0,
-          }}
-        >
-          {status.message}
+        <p className="orcb-subtitle">
+          {status.ok
+            ? "Returning to Polyphonic. You can close this window if it doesn't close itself."
+            : status.message}
         </p>
         {!window.opener && (
-          <a
-            href="/"
-            style={{
-              fontSize: 12.5,
-              color: "var(--text-primary)",
-              textDecoration: "underline",
-              marginTop: 4,
-            }}
-          >
+          <a className="orcb-link" href="/">
             Return to Polyphonic
           </a>
         )}
