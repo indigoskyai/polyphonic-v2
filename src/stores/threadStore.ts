@@ -6,6 +6,8 @@ export interface Thread {
   user_id: string;
   title: string | null;
   pinned: boolean;
+  starred: boolean;
+  archived: boolean;
   heat: string;
   agent_id: string;
   project_id: string | null;
