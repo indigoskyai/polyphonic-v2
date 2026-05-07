@@ -218,14 +218,17 @@ export default function MindOverview() {
           <div className="m-streams-grid">
             {STREAMS.map((s) => {
               const mindTabName = s.name as 'Thoughts' | 'Dreams' | 'Wanderings' | 'Insights' | 'Reflections';
+              const item = latest[s.countKey];
+              const lastLabel = item ? `last · ${timeAgo(item.created_at)}` : 'no activity yet';
+              const preview = item?.content || s.emptyPreview;
               return (
                 <button key={s.name} type="button" className="m-stream" onClick={() => setMindTab(mindTabName)}>
                   <div className="m-stream-head">
                     <span className="m-stream-name">{s.name}</span>
                     <span className="m-stream-count">{counts[s.countKey]}<span className="total">today</span></span>
                   </div>
-                  <div className="m-stream-time">{s.lastLabel}</div>
-                  <p className="m-stream-preview">{s.preview}</p>
+                  <div className="m-stream-time">{lastLabel}</div>
+                  <p className="m-stream-preview">{preview}</p>
                   <div className="m-stream-foot">
                     <span>{s.footLabel}</span>
                     <span>→</span>
