@@ -92,6 +92,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { data } = await supabase
       .from('threads')
       .select('*')
+      .eq('archived', false)
       .order('updated_at', { ascending: false });
     if (data) set({ threads: dedupeThreadsById(data as Thread[]) });
   },
