@@ -57,8 +57,11 @@ interface ThreadState {
   setStreamingThinking: (t: string) => void;
   updateThreadTitle: (threadId: string, title: string) => Promise<void>;
   updateThreadPinned: (threadId: string, pinned: boolean) => Promise<void>;
+  updateThreadStarred: (threadId: string, starred: boolean) => Promise<void>;
+  updateThreadArchived: (threadId: string, archived: boolean) => Promise<void>;
   updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
   updateThreadProject: (threadId: string, projectId: string | null) => Promise<void>;
+  deleteThread: (threadId: string) => Promise<void>;
 }
 
 const normContent = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
