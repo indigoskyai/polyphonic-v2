@@ -1,26 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useThreadStore, Thread } from '@/stores/threadStore';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useThreadStore, type Thread } from '@/stores/threadStore';
 import SidebarHeader from './SidebarHeader';
+import ThreadRow from './ThreadRow';
+import { groupThreadsByDate } from '@/lib/threadGrouping';
 
 export default function SidebarChat() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [archived, setArchived] = useState<Thread[]>([]);
   const { threads, currentThreadId, loadThreads } = useThreadStore();
 
-  useEffect(() => { loadThreads(); }, []);
+  useEffect(() => { loadThreads(); }, [loadThreads]);
 
-  const filteredThreads = search
-    ? threads.filter((t) => t.title?.toLowerCase().includes(search.toLowerCase()))
-    : threads;
-  const pinnedThreads = filteredThreads.filter((t) => t.pinned);
-  const recentThreads = filteredThreads.filter((t) => !t.pinned);
+  useEffect(() => {
+    if (!showArchived) { setArchived([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('threads')
+        .select('*')
+        .eq('archived', true)
+        .order('updated_at', { ascending: false });
+      if (!cancelled && data) setArchived(data as Thread[]);
+    })();
+    return () => { cancelled = true; };
+  }, [showArchived, threads]);
+
+  const q = search.trim().toLowerCase();
+  const matches = (t: Thread) => !q || (t.title?.toLowerCase().includes(q) ?? false);
+
+  const visible = threads.filter(matches);
+  const pinned = visible.filter((t) => t.pinned);
+  const starred = visible.filter((t) => !t.pinned && t.starred);
+  const rest = visible.filter((t) => !t.pinned && !t.starred);
+  const dateGroups = useMemo(() => groupThreadsByDate(rest), [rest]);
+
+  const renderThread = (t: Thread) => (
+    <ThreadRow
+      key={t.id}
+      thread={t}
+      active={t.id === currentThreadId}
+      onClick={() => navigate(`/chat/${t.id}`)}
+    />
+  );
 
   return (
     <>
       <SidebarHeader folio="§ 01" title="Threads" />
 
-      {/* Search */}
       <div style={{ padding: '0 8px 8px' }}>
         <input
           aria-label="Search threads"
@@ -41,30 +72,74 @@ export default function SidebarChat() {
         />
       </div>
 
-      {/* Thread list */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px', scrollbarWidth: 'none' }}>
-        {pinnedThreads.length > 0 && (
+        {pinned.length > 0 && (
           <>
             <SectionLabel>Pinned</SectionLabel>
-            {pinnedThreads.map((t) => (
-              <ThreadItem
-                key={t.id}
-                thread={t}
-                active={t.id === currentThreadId}
-                onClick={() => navigate(`/chat/${t.id}`)}
-              />
-            ))}
+            {pinned.map(renderThread)}
           </>
         )}
-        <SectionLabel>Recent</SectionLabel>
-        {recentThreads.map((t) => (
-          <ThreadItem
-            key={t.id}
-            thread={t}
-            active={t.id === currentThreadId}
-            onClick={() => navigate(`/chat/${t.id}`)}
-          />
+        {starred.length > 0 && (
+          <>
+            <SectionLabel>Starred</SectionLabel>
+            {starred.map(renderThread)}
+          </>
+        )}
+        {dateGroups.map((group) => (
+          <div key={group.key}>
+            <SectionLabel>{group.label}</SectionLabel>
+            {group.threads.map(renderThread)}
+          </div>
         ))}
+
+        {visible.length === 0 && (
+          <div
+            style={{
+              padding: '14px 10px',
+              fontSize: 11.5,
+              color: 'var(--text-ghost)',
+              fontFamily: 'var(--font-sans)',
+            }}
+          >
+            {q ? 'No threads match your search.' : 'No conversations yet.'}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="flex items-center gap-1.5 w-full"
+            style={{
+              padding: '6px 10px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: 'var(--track-meta)',
+              color: 'var(--text-ghost)',
+              textTransform: 'uppercase',
+            }}
+          >
+            {showArchived ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            Archived
+            {showArchived && archived.length > 0 && (
+              <span style={{ marginLeft: 4, color: 'var(--text-tertiary)' }}>{archived.length}</span>
+            )}
+          </button>
+          {showArchived && (
+            <div>
+              {archived.length === 0 && (
+                <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-ghost)' }}>
+                  Nothing archived.
+                </div>
+              )}
+              {archived.filter(matches).map(renderThread)}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -84,40 +159,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-    </div>
-  );
-}
-
-function ThreadItem({ thread, active, onClick }: { thread: Thread; active: boolean; onClick: () => void }) {
-  const heat = thread.heat || 'warm';
-  const opacityMap: Record<string, number> = { hot: 1, warm: 0.82, cool: 0.54, ghost: 0.32 };
-  return (
-    <div
-      className="flex items-center gap-2.5 cursor-pointer"
-      style={{
-        padding: '7px 10px',
-        borderRadius: 'var(--radius-sm)',
-        background: active ? 'var(--overlay-active)' : undefined,
-        opacity: active ? 1 : opacityMap[heat] || 0.82,
-        transition: 'background var(--dur-fast) var(--ease-out), opacity var(--dur-normal) var(--ease-out)',
-      }}
-      onClick={onClick}
-      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)'; }}
-      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = ''; }}
-    >
-      <div className="w-1 h-1 rounded-full shrink-0" style={{ background: active ? 'var(--luca-full)' : 'var(--text-tertiary)' }} />
-      <span
-        className="flex-1 truncate"
-        style={{
-          fontFamily: 'var(--font-sans)',
-          fontSize: 12.5,
-          fontWeight: 400,
-          letterSpacing: 'var(--track-body)',
-          color: active ? 'var(--text-primary)' : 'var(--text-body)',
-        }}
-      >
-        {thread.title || 'New conversation'}
-      </span>
     </div>
   );
 }
