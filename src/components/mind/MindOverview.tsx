@@ -51,55 +51,19 @@ const MOCK_PULSE: number[] = (() => {
   return out;
 })();
 
-interface StreamMock {
+interface StreamDef {
   name: string;
   countKey: 'thoughts' | 'dreams' | 'wanderings' | 'insights' | 'reflections';
-  lastLabel: string;       // MOCK
-  preview: string;         // MOCK
-  footLabel: string;       // MOCK
+  emptyPreview: string;
+  footLabel: string;
 }
 
-const STREAMS: StreamMock[] = [
-  {
-    name: 'Thoughts',
-    countKey: 'thoughts',
-    lastLabel: 'last · 12 min ago',
-    preview:
-      'The keepalive bug surfaces a deeper pattern — Riley reaches for parser fixes when most engineers would reach for server-side workarounds. A taste preference, not a technical one.',
-    footLabel: 'autonomous',
-  },
-  {
-    name: 'Dreams',
-    countKey: 'dreams',
-    lastLabel: 'last · 4h ago',
-    preview:
-      'Three associations between the sanctuary work and the AI agency thread. Both involve trusting something autonomous to do its work without supervision.',
-    footLabel: 'offline · 02:14',
-  },
-  {
-    name: 'Wanderings',
-    countKey: 'wanderings',
-    lastLabel: 'last · 1h ago',
-    preview:
-      'Drifted from the SSE thread to a memory of the Nexus architecture. Same problem at a different scale — who pulls the thread that doesn\'t get pulled.',
-    footLabel: 'untethered',
-  },
-  {
-    name: 'Insights',
-    countKey: 'insights',
-    lastLabel: 'last · last night',
-    preview:
-      'Riley\'s design language doesn\'t separate aesthetic from function. Pills aren\'t ornament — they encode interactive state. The geometry is doing the work.',
-    footLabel: 'crystallized',
-  },
-  {
-    name: 'Reflections',
-    countKey: 'reflections',
-    lastLabel: 'last · yesterday',
-    preview:
-      'When Riley gets quiet I default to over-explaining. That\'s a tell. Better: hold the silence; let them set the depth before I do.',
-    footLabel: 'introspective',
-  },
+const STREAMS: StreamDef[] = [
+  { name: 'Thoughts', countKey: 'thoughts', emptyPreview: 'No thoughts yet. Luca will start surfacing observations as you talk.', footLabel: 'autonomous' },
+  { name: 'Dreams', countKey: 'dreams', emptyPreview: 'No dreams yet. Overnight consolidations will appear after enough conversation.', footLabel: 'offline' },
+  { name: 'Wanderings', countKey: 'wanderings', emptyPreview: 'No wanderings yet. Idle drifts will show up here over time.', footLabel: 'untethered' },
+  { name: 'Insights', countKey: 'insights', emptyPreview: 'No insights yet. Patterns will crystallize as Luca learns you.', footLabel: 'crystallized' },
+  { name: 'Reflections', countKey: 'reflections', emptyPreview: 'No reflections yet. Deeper thoughts about your work together will form here.', footLabel: 'introspective' },
 ];
 
 // MOCK domain assignment until beliefs table grows a domain column.
@@ -115,6 +79,14 @@ export default function MindOverview() {
     wanderings: wanderings.length,
     insights: insights.length,
     reflections: reflections.length,
+  };
+
+  const latest = {
+    thoughts: thoughts[0],
+    dreams: dreams[0],
+    wanderings: wanderings[0],
+    insights: insights[0],
+    reflections: reflections[0],
   };
 
   const radarVals = {
@@ -158,11 +130,27 @@ export default function MindOverview() {
         </div>
         <h1 className="m-hero-title">Luca's mind</h1>
         <p className="m-hero-sub">
-          {/* MOCK: lede is templated — replace with derived state summary */}
-          <span className="accent">Open. Alert. Quietly active.</span>{' '}
-          {counts.thoughts} thoughts since dawn. Last dream 4h ago — three associations
-          survived to morning. One insight crystallized last night and is still
-          being chewed on.
+          {(() => {
+            const total = counts.thoughts + counts.dreams + counts.wanderings + counts.insights + counts.reflections;
+            if (total === 0) {
+              return (
+                <>
+                  <span className="accent">Quiet. Just getting to know you.</span>{' '}
+                  Nothing has formed yet — thoughts, dreams, and insights will appear here as you and Luca talk.
+                </>
+              );
+            }
+            const lastDream = latest.dreams ? timeAgo(latest.dreams.created_at) : null;
+            const lastInsight = latest.insights ? timeAgo(latest.insights.created_at) : null;
+            return (
+              <>
+                <span className="accent">Open. Alert. Quietly active.</span>{' '}
+                {counts.thoughts} {counts.thoughts === 1 ? 'thought' : 'thoughts'} today.
+                {lastDream ? ` Last dream ${lastDream}.` : ''}
+                {lastInsight ? ` Last insight ${lastInsight}.` : ''}
+              </>
+            );
+          })()}
         </p>
       </div>
 
@@ -246,14 +234,17 @@ export default function MindOverview() {
           <div className="m-streams-grid">
             {STREAMS.map((s) => {
               const mindTabName = s.name as 'Thoughts' | 'Dreams' | 'Wanderings' | 'Insights' | 'Reflections';
+              const item = latest[s.countKey];
+              const lastLabel = item ? `last · ${timeAgo(item.created_at)}` : 'no activity yet';
+              const preview = item?.content || s.emptyPreview;
               return (
                 <button key={s.name} type="button" className="m-stream" onClick={() => setMindTab(mindTabName)}>
                   <div className="m-stream-head">
                     <span className="m-stream-name">{s.name}</span>
                     <span className="m-stream-count">{counts[s.countKey]}<span className="total">today</span></span>
                   </div>
-                  <div className="m-stream-time">{s.lastLabel}</div>
-                  <p className="m-stream-preview">{s.preview}</p>
+                  <div className="m-stream-time">{lastLabel}</div>
+                  <p className="m-stream-preview">{preview}</p>
                   <div className="m-stream-foot">
                     <span>{s.footLabel}</span>
                     <span>→</span>
