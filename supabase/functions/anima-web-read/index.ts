@@ -105,9 +105,9 @@ async function resolveUserId(
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: `Bearer ${token}` } } },
   );
-  const { data, error } = await supabaseAuth.auth.getClaims(token);
-  if (error || !data?.claims) return null;
-  return (data.claims.sub as string) || null;
+  const { data, error } = await supabaseAuth.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
 }
 
 interface RawFetchSuccess {
@@ -121,10 +121,43 @@ interface RawFetchFailure {
   error: string;
 }
 
+function isSafePublicUrl(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  if (!host) return false;
+  // Block loopback / link-local / unspecified by name
+  if (host === "localhost" || host.endsWith(".localhost") || host === "0.0.0.0") return false;
+  // Block IPv6 loopback / link-local / unique-local / unspecified
+  if (host.includes(":")) {
+    const h = host.replace(/^\[|\]$/g, "");
+    if (h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return false;
+  }
+  // Block IPv4 RFC1918, loopback, link-local, CGNAT
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [parseInt(m[1], 10), parseInt(m[2], 10)];
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 0) return false;
+    if (a === 169 && b === 254) return false; // link-local incl. AWS IMDS
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false; // CGNAT
+    if (a >= 224) return false; // multicast / reserved
+  }
+  return true;
+}
+
 async function rawFetchAndExtract(url: string): Promise<RawFetchSuccess | RawFetchFailure> {
+  if (!isSafePublicUrl(url)) {
+    return { ok: false, status: 400, error: "URL must be a public http(s) address" };
+  }
   let html: string;
   try {
     const response = await fetch(url, {
+      redirect: "manual",
       headers: {
         "User-Agent": "Polyphonic/1.0",
         "Accept": "text/html,application/xhtml+xml",
