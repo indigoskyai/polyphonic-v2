@@ -34,6 +34,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 
 const queryClient = new QueryClient();
 
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
@@ -270,7 +271,10 @@ function DrawerRouter() {
 function RootRedirect() {
   const { user, loading } = useAuthStore();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
-  return <Navigate to={user ? "/chat" : "/auth/login"} replace />;
+  // Authenticated users go straight to chat. Unauthenticated visitors land
+  // on the public landing surface (composer + auth states), not the bare
+  // login form.
+  return user ? <Navigate to="/chat" replace /> : <LandingPage initialMode="idle" />;
 }
 
 const App = () => (
@@ -284,8 +288,10 @@ const App = () => (
             <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/" element={<RootRedirect />} />
-                <Route path="/auth/login" element={<LoginPage />} />
-                <Route path="/auth/signup" element={<SignupPage />} />
+                <Route path="/auth/login" element={<LandingPage initialMode="signin" />} />
+                <Route path="/auth/signup" element={<LandingPage initialMode="signup" />} />
+                <Route path="/auth/legacy-login" element={<LoginPage />} />
+                <Route path="/auth/legacy-signup" element={<SignupPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />

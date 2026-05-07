@@ -458,7 +458,20 @@ export default function ChatView() {
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
   const defaultEnsembleOn = useSettingsStore((s) => s.multi_model_enabled);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => {
+    // Pick up any prompt the user typed on the public landing before
+    // they signed in. The Landing stashes it under this key; we
+    // consume it once and clear it so reloading /chat doesn't
+    // re-prefill the composer.
+    try {
+      const stashed = sessionStorage.getItem('polyphonic_landing_prompt');
+      if (stashed) {
+        sessionStorage.removeItem('polyphonic_landing_prompt');
+        return stashed;
+      }
+    } catch { /* ignore */ }
+    return '';
+  });
   const [focused, setFocused] = useState(false);
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
