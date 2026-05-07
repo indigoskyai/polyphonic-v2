@@ -130,11 +130,27 @@ export default function MindOverview() {
         </div>
         <h1 className="m-hero-title">Luca's mind</h1>
         <p className="m-hero-sub">
-          {/* MOCK: lede is templated — replace with derived state summary */}
-          <span className="accent">Open. Alert. Quietly active.</span>{' '}
-          {counts.thoughts} thoughts since dawn. Last dream 4h ago — three associations
-          survived to morning. One insight crystallized last night and is still
-          being chewed on.
+          {(() => {
+            const total = counts.thoughts + counts.dreams + counts.wanderings + counts.insights + counts.reflections;
+            if (total === 0) {
+              return (
+                <>
+                  <span className="accent">Quiet. Just getting to know you.</span>{' '}
+                  Nothing has formed yet — thoughts, dreams, and insights will appear here as you and Luca talk.
+                </>
+              );
+            }
+            const lastDream = latest.dreams ? timeAgo(latest.dreams.created_at) : null;
+            const lastInsight = latest.insights ? timeAgo(latest.insights.created_at) : null;
+            return (
+              <>
+                <span className="accent">Open. Alert. Quietly active.</span>{' '}
+                {counts.thoughts} {counts.thoughts === 1 ? 'thought' : 'thoughts'} today.
+                {lastDream ? ` Last dream ${lastDream}.` : ''}
+                {lastInsight ? ` Last insight ${lastInsight}.` : ''}
+              </>
+            );
+          })()}
         </p>
       </div>
 
