@@ -59,6 +59,7 @@ const WorkspaceView = lazy(() => import("./pages/WorkspaceView"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const MobilePreview = lazy(() => import("./pages/MobilePreview"));
 const StyleGallery = lazy(() => import("./pages/StyleGallery"));
+const ComposerGallery = lazy(() => import("./pages/ComposerGallery"));
 const PublicProfileView = lazy(() => import("./pages/PublicProfileView"));
 const AgentsList = lazy(() => import("./pages/settings/AgentsList"));
 const AgentDetail = lazy(() => import("./pages/settings/AgentDetail"));
@@ -338,6 +339,7 @@ const App = () => (
                 <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
                 <Route path="/_mockups/styles" element={<StyleGallery />} />
+                <Route path="/_mockups/composer" element={<ComposerGallery />} />
                 <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

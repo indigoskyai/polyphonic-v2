@@ -49,7 +49,7 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
         style={{
           padding: '7px 12px',
           borderRadius: 8,
-          background: active ? 'var(--sage-overlay-active)' : undefined,
+          background: active ? 'var(--overlay-active)' : undefined,
           opacity: active ? 1 : opacityMap[heat] || 0.82,
           transition: 'background var(--dur-fast) var(--ease-out), opacity var(--dur-normal) var(--ease-out)',
           position: 'relative',
@@ -58,7 +58,7 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
           if (!renaming) onClick();
         }}
         onMouseEnter={(e) => {
-          if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--sage-overlay-hover)';
+          if (!active) (e.currentTarget as HTMLDivElement).style.background = 'var(--overlay-hover)';
         }}
         onMouseLeave={(e) => {
           if (!active) (e.currentTarget as HTMLDivElement).style.background = '';

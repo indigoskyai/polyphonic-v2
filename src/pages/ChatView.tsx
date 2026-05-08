@@ -4,12 +4,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
 import { ObserverEyeChip } from '@/components/composer/ObserverEyeChip';
+import ModesDropdown from '@/components/composer/ModesDropdown';
+import DictationButton from '@/components/composer/DictationButton';
+import { useDictation } from '@/hooks/useDictation';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 
 import EchoField from '@/components/EchoField';
+import ExpressiveField from '@/components/ExpressiveField';
 import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
@@ -41,7 +45,7 @@ import {
   safeAttachmentFileName,
   shouldInlineCodeAttachment,
 } from '@/lib/chatAttachments';
-import { Boxes, Paperclip, PocketKnife } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -491,6 +495,28 @@ export default function ChatView() {
   const [agentModeArmed, setAgentModeArmed] = useState(false);
   const agentModeActive = agentModeArmed && activeAgentId === 'luca';
   const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
+
+  // Dictation — Web Speech API → composer textarea. Final segments append
+  // to `input` with a separating space. ExpressiveField listens for
+  // `dictationListening` to flip into 'listening' state. The mic button
+  // toggles via toggleDictation below.
+  const {
+    isListening: dictationListening,
+    supported: dictationSupported,
+    start: startDictation,
+    stop: stopDictation,
+  } = useDictation({
+    onResult: (text, isFinal) => {
+      if (!isFinal) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setInput((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${trimmed}` : trimmed));
+    },
+  });
+  const toggleDictation = useCallback(() => {
+    if (dictationListening) stopDictation();
+    else startDictation();
+  }, [dictationListening, startDictation, stopDictation]);
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
@@ -1640,13 +1666,6 @@ export default function ChatView() {
     }
   };
 
-  const ensemblePillClass = `ensemble-pill${ensembleLocked ? ' locked' : ensembleArmed ? ' armed' : ''}`;
-  const agentModePillClass = `ensemble-pill agent-mode-pill${agentModeActive ? ' armed' : ''}`;
-  // Composer pill glyphs — lucide icons matching Riley's curated set.
-  // Boxes (3 stacked cubes) for ensemble; PocketKnife (swiss-army) for agent.
-  const EnsembleIcon = () => <Boxes size={14} strokeWidth={1.4} />;
-  const AgentModeIcon = () => <PocketKnife size={14} strokeWidth={1.4} />;
-
   const stopStreaming = useCallback(async () => {
     if (guardianStreaming) {
       guardianAbortRef.current?.abort();
@@ -1685,10 +1704,14 @@ export default function ChatView() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Stop dictation cleanly when the message goes out so the next
+      // recognition session starts fresh.
+      if (dictationListening) stopDictation();
       if (alcoveOpen) sendGuardianMessage();
       else sendMessage();
     }
     if (e.key === 'Escape' && alcoveOpen) setAlcoveOpen(false);
+    if (e.key === 'Escape' && dictationListening) stopDictation();
   };
 
   const threadTitle = useMemo(() => {
@@ -1749,24 +1772,30 @@ export default function ChatView() {
         onDrop={handleDrop}
       >
         <div
-          className="chat-empty-center flex-1 flex flex-col items-center"
+          className="chat-empty-center flex-1 flex flex-col items-center justify-center"
           style={{
-            // Layout strategy: simulator is the centerpiece. The visualization
-            // gets the upper canvas at full size; composer anchors at the
-            // bottom as a quiet way to interact. The composer is OFF the
-            // visual center so the simulator can breathe.
-            paddingTop: isMobile ? '6vh' : '8vh',
-            paddingBottom: isMobile ? '4vh' : '6vh',
-            justifyContent: 'space-between',
+            // Tightened layout: simulator + wordmark + composer sit as one
+            // visual group, vertically centered. No huge stretch gaps —
+            // they belong together as the welcome moment, not three
+            // separated zones.
+            paddingTop: isMobile ? '4vh' : '5vh',
+            paddingBottom: isMobile ? '4vh' : '5vh',
+            gap: isMobile ? 16 : 22,
           }}
         >
-          {/* Hero — simulator + wordmark, dominant scale */}
-          <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <EchoField
-              size={isMobile ? 240 : 360}
-              particleCount={isMobile ? 9000 : 22000}
-              state={isStreaming ? 'thinking' : 'idle'}
-              style={{ margin: `0 auto ${isMobile ? 26 : 36}px` }}
+          {/* Hero — Expressive Field (Sovereign Mind engine, 12 shapes auto-
+              cycling) + wordmark, dominant scale. */}
+          <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 14 : 18 }}>
+            <ExpressiveField
+              size={isMobile ? 280 : 440}
+              state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
+              /* Shape responds to active modes — the simulator becomes a
+                 visual confirmation of the configuration:
+                 0=Sphere (default Luca), 10=Echo (ensemble, nested spheres),
+                 4=Torus (agent runtime, single-loop topology).
+                 The engine morphs particles smoothly between shapes via
+                 home-target easing — graceful transform on every toggle. */
+              shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
             />
             <h1 style={{
               fontSize: isMobile ? 28 : 38,
@@ -1781,9 +1810,11 @@ export default function ChatView() {
             </h1>
           </div>
 
-          {/* Composer — anchored to the bottom of the empty state, off the
-              visual center, supporting the simulator above. */}
-          <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {/* Composer — sits with the hero as one welcome group.
+              maxWidth + alignItems:stretch so the input-shell fills the
+              wrapper instead of shrinking to its (now smaller) footer
+              content after the modes consolidation. */}
+          <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
             <div className={`input-shell${focused ? ' focused' : ''}`}>
               <input
                 ref={fileInputRef}
@@ -1839,17 +1870,13 @@ export default function ChatView() {
                   {activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
-                      <button
-                        type="button"
-                        className={agentModePillClass}
-                        onClick={() => setAgentModeArmed((v) => !v)}
-                        title="Use Luca's web-safe agent runtime for this message. Best for research, tool use, multi-step planning, and context checks."
-                      ><AgentModeIcon />agent</button>
-                      <button
-                        className={ensemblePillClass}
-                        onClick={toggleEnsemble}
-                        title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
-                      ><EnsembleIcon />ensemble</button>
+                      <ModesDropdown
+                        agentModeArmed={agentModeArmed}
+                        ensembleArmed={ensembleArmed}
+                        ensembleLocked={ensembleLocked}
+                        onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
+                        onToggleEnsemble={toggleEnsemble}
+                      />
                     </>
                   )}
                 </div>
@@ -1863,11 +1890,17 @@ export default function ChatView() {
                   <option value="medium">Medium</option>
                   <option value="high">Deep</option>
                 </select>
+                <DictationButton
+                  isListening={dictationListening}
+                  supported={dictationSupported}
+                  disabled={modelKeyMissing}
+                  onClick={toggleDictation}
+                />
                 <button
                   type="button"
                   aria-label="Send message"
                   className={`send-btn${(input.trim() || pendingAttachments.length > 0) && !modelKeyMissing ? ' armed' : ''}${ensembleActive ? ' ensemble-armed' : ''}`}
-                  onClick={() => sendMessage()}
+                  onClick={() => { if (dictationListening) stopDictation(); sendMessage(); }}
                   disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
                 >
                   <span className="send-icon">
@@ -2340,17 +2373,13 @@ export default function ChatView() {
               {!alcoveOpen && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
-                  <button
-                    type="button"
-                    className={agentModePillClass}
-                    onClick={() => setAgentModeArmed((v) => !v)}
-                    title="Use Luca's web-safe agent runtime for this message. Best for research, tool use, multi-step planning, and context checks."
-                  ><AgentModeIcon />agent</button>
-                  <button
-                    className={ensemblePillClass}
-                    onClick={toggleEnsemble}
-                    title="Consult multiple models for this message. Shift-click (or ⇧⌘E) to lock on. ⌘E toggles."
-                  ><EnsembleIcon />ensemble</button>
+                  <ModesDropdown
+                    agentModeArmed={agentModeArmed}
+                    ensembleArmed={ensembleArmed}
+                    ensembleLocked={ensembleLocked}
+                    onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
+                    onToggleEnsemble={toggleEnsemble}
+                  />
                 </>
               )}
             </div>
@@ -2367,11 +2396,29 @@ export default function ChatView() {
               <option value="high">Deep</option>
             </select>
 
+            <DictationButton
+              isListening={dictationListening}
+              supported={dictationSupported}
+              disabled={modelKeyMissing || isStreaming || guardianStreaming}
+              onClick={toggleDictation}
+            />
+
             <button
               type="button"
               aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
               className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
-              onClick={isStreaming || guardianStreaming ? stopStreaming : (alcoveOpen ? sendGuardianMessage : () => sendMessage())}
+              onClick={() => {
+                if (isStreaming || guardianStreaming) {
+                  void stopStreaming();
+                  return;
+                }
+                if (dictationListening) stopDictation();
+                if (alcoveOpen) {
+                  void sendGuardianMessage();
+                } else {
+                  void sendMessage();
+                }
+              }}
               disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
             >
               <span className="send-icon">

@@ -148,7 +148,7 @@ export default function SidebarChat() {
                       color: 'var(--text-secondary)',
                       transition: 'background var(--dur-fast) var(--ease-out)',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--sage-overlay-hover)'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--overlay-hover)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     aria-expanded={!isCollapsed}
                     aria-label={`${project.name} (${projectThreads.length} ${projectThreads.length === 1 ? 'thread' : 'threads'})`}

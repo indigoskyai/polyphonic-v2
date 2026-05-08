@@ -53,11 +53,16 @@ describe('OpenRouter Agent SDK runtime gate', () => {
 
   it('keeps agent runtime opt-in from the composer so normal chat stays fast', () => {
     const source = readRepoFile('src/pages/ChatView.tsx');
+    const modesDropdown = readRepoFile('src/components/composer/ModesDropdown.tsx');
 
     expect(source).toContain('const [agentModeArmed, setAgentModeArmed] = useState(false)');
     expect(source).toContain("agent_mode: agentModeActive ? 'agent' : 'chat'");
-    expect(source).toContain('agentModePillClass');
-    expect(source).toContain('>agent</button>');
+    // Agent runtime is opt-in via the consolidated ModesDropdown — verify
+    // it's wired with the right state + handler so users can toggle it.
+    expect(source).toContain('<ModesDropdown');
+    expect(source).toContain('agentModeArmed={agentModeArmed}');
+    expect(source).toContain('onToggleAgentMode={() => setAgentModeArmed');
+    expect(modesDropdown).toContain('Agent runtime');
     expect(source).toContain("Message Luca (agent)");
   });
 

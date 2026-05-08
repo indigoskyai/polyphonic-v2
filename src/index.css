@@ -94,6 +94,11 @@
   --sage-overlay-glow:    rgba(201, 168, 124, 0.14);
   --sage-border-focus:    rgba(201, 168, 124, 0.32);
 
+  /* --accent-soft is the sage color used for ARMED state text/icons (agent
+     mode, ensemble, modes trigger). Same hue as --luca-full but referenced
+     under a semantic name so call sites read as "armed" rather than "luca". */
+  --accent-soft: #c9a87c;
+
   /* Legacy card surfaces */
   --card:           rgba(220, 219, 216, 0.03);
   --card-hover:     rgba(220, 219, 216, 0.045);
@@ -1328,23 +1333,23 @@ html {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  opacity: 0.52;
+  opacity: 0.85;
   transition: opacity 0.8s var(--ease-out);
   pointer-events: none;
   z-index: 3;
-  /* Gradient vertical extent kept tight (60%) so top-row and bottom-row
-     pools fade well before the vertical center — guarantees no horizontal
-     seam is ever visible inside the input shell, even at full focus
-     opacity. */
+  /* Pool vertical extent (180%) — pools span well past the center so the
+     8 glow points overlap into a continuous luminous strip wrapping the
+     whole frame. The 8 prime-interval rhythms (3/5/7/11/13/17/19/23s)
+     never sync, so any seam is in motion and never visibly resolves. */
   background:
-    radial-gradient(ellipse 45% 60% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 70%),
-    radial-gradient(ellipse 45% 60% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 70%),
-    radial-gradient(ellipse 45% 60% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 70%),
-    radial-gradient(ellipse 45% 60% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 70%);
+    radial-gradient(ellipse 45% 180% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -1358,9 +1363,9 @@ html {
     shimmer-c7 19s ease-in-out infinite,
     shimmer-c8 23s ease-in-out infinite;
 }
-.input-shell:hover::before { opacity: 0.7; }
+.input-shell:hover::before { opacity: 0.95; }
 .input-shell.focused::before,
-.input-shell:focus-within::before { opacity: 0.95; }
+.input-shell:focus-within::before { opacity: 1; }
 
 /* Focus-within intensification — hairline only, no bloom shadow.
    The shimmer escalation IS the focus light. */
@@ -1581,6 +1586,204 @@ html {
 }
 .ensemble-pill svg { width: 11px; height: 11px; opacity: 0.75; }
 .ensemble-pill.armed svg, .ensemble-pill.locked svg { opacity: 1; }
+
+/* ── Modes Dropdown (consolidated agent + ensemble selector) ──────────────
+   One trigger pill in the toolbar, opens a popover with two toggle rows.
+   The trigger label updates to show active modes ("Agent · Ensemble", etc.)
+   so configuration is always visible at a glance without opening the menu. */
+.modes-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.modes-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px 3px 9px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 420;
+  letter-spacing: 0.02em;
+  color: var(--text-ghost);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+  margin-left: 2px;
+}
+.modes-trigger:hover {
+  color: var(--text-tertiary);
+  background: var(--overlay-hover);
+}
+.modes-trigger.armed {
+  color: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 11%, transparent);
+}
+.modes-trigger.armed:hover {
+  background: color-mix(in srgb, var(--accent-soft) 16%, transparent);
+}
+.modes-trigger.open {
+  color: var(--text-tertiary);
+  background: var(--overlay-active);
+}
+.modes-trigger.armed.open {
+  color: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 16%, transparent);
+}
+.modes-chev {
+  opacity: 0.6;
+  transition: transform 220ms var(--ease-premium);
+}
+.modes-trigger.open .modes-chev { transform: rotate(180deg); }
+
+/* Popover — portaled to <body> so it escapes the composer's overflow:hidden
+   clipping context. Position is calculated in JS from the trigger rect.
+   Visual treatment is industry-minimal: tight padding, soft shadow, no
+   ornamentation. The menu should disappear into the toolbar at rest and
+   read as "just another control surface" when open. */
+.modes-pop {
+  position: fixed;
+  min-width: 224px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  z-index: 1000;
+  animation: modes-pop-in 160ms var(--ease-premium) both;
+}
+@keyframes modes-pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.modes-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  color: var(--text-tertiary);
+}
+.modes-item + .modes-item { margin-top: 1px; }
+.modes-item:hover { background: var(--overlay-hover); }
+.modes-item.armed { color: var(--text-body); }
+
+.modes-item-icon {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.modes-item.armed .modes-item-icon { color: var(--accent-soft); }
+
+.modes-item-name {
+  flex: 1 1 auto;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 440;
+  letter-spacing: var(--track-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+}
+.modes-item-lock {
+  color: var(--accent-soft);
+  opacity: 0.85;
+}
+
+/* Switch — small, subtle. Knob slides; track tints sage when on. */
+.modes-switch {
+  position: relative;
+  width: 22px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(220, 219, 216, 0.10);
+  border: 1px solid rgba(220, 219, 216, 0.10);
+  flex-shrink: 0;
+  transition: background var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out);
+}
+.modes-switch.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.modes-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(244, 243, 240, 0.65);
+  transition: transform var(--dur-normal) var(--ease-premium), background var(--dur-normal) var(--ease-out);
+}
+.modes-switch.on .modes-knob {
+  transform: translateX(10px);
+  background: rgba(28, 24, 20, 0.92);
+}
+
+/* ── Dictation button (Web Speech API mic) ────────────────────────────────
+   Sits right before the send button. Idle state matches send-btn's quiet
+   icon-button vocabulary. Listening state borrows the sage armed treatment
+   (gradient + glow + slow pulse) used by send-armed, so "this surface is
+   live" reads as one coherent visual language across the composer. */
+.mic-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--dur-fast) var(--ease-out);
+  position: relative;
+  margin-right: 2px;
+}
+.mic-btn:hover {
+  background: var(--overlay-hover);
+  color: var(--text-body);
+}
+.mic-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+  background: transparent;
+  color: var(--text-ghost);
+}
+.mic-btn svg { width: 13px; height: 13px; }
+
+/* LISTENING — no color shift, no surrounding glow. The mic icon glows
+   in place via two coprime breathing rhythms: opacity pulses softly
+   (0.72 → 1 → 0.72) at 3.4s, and a tiny white drop-shadow halo breathes
+   in and out at 5.1s. Because the two periods never sync, the visible
+   "murmur" never repeats and there's no hard cycle boundary the eye can
+   latch onto. Same spirit as the SF Mono shimmer — continuous brightness
+   variation — but expressed as in-place breathing rather than a directional
+   sweep, so the icon never disappears or shows a hard edge. */
+.mic-btn.listening svg {
+  animation:
+    mic-murmur-opacity 3.4s ease-in-out infinite,
+    mic-murmur-glow 5.1s ease-in-out infinite;
+}
+@keyframes mic-murmur-opacity {
+  0%, 100% { opacity: 0.72; }
+  50%      { opacity: 1; }
+}
+@keyframes mic-murmur-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(244, 243, 240, 0)); }
+  50%      { filter: drop-shadow(0 0 2.5px rgba(244, 243, 240, 0.45)); }
+}
 
 .send-btn {
   width: 30px;
@@ -8167,10 +8370,12 @@ html {
   width: 100%; text-align: left; appearance: none; border: none;
   background: transparent;
 }
-.r2-sidebar .sidebar-item:hover { background: var(--sage-overlay-hover); }
+.r2-sidebar .sidebar-item:hover { background: var(--overlay-hover); }
 .r2-sidebar .sidebar-item.active {
-  /* Sage bg-only highlight — no inset hairline, no marker. */
-  background: var(--sage-overlay-active);
+  /* Neutral bg-only highlight — sage was reverted here; sage stays for the
+     composer's armed states + send glow + selection where it earns its
+     warmth. Persistent rail/sidebar surfaces stay monochrome. */
+  background: var(--overlay-active);
 }
 .r2-sidebar .sidebar-item-name {
   font-family: var(--font-sans); font-size: 13px;

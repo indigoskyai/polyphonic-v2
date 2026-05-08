@@ -87,11 +87,14 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
         title="Switch agent"
       >
         {activeAgentId === 'luca' ? (
-          // Luca's identity glyph — small ghost in the brand sage tone.
+          // Luca's composer identity glyph — rich electric blue (Vercel-spec
+          // #0070F3). Distinct from the sage agent-color tokens used in
+          // identity dots elsewhere; this icon is the always-on "you're
+          // talking to your agent" mark in the composer surface.
           <Ghost
             size={14}
             strokeWidth={1.5}
-            style={{ color: activeColor, flexShrink: 0 }}
+            style={{ color: '#0070F3', flexShrink: 0 }}
           />
         ) : (
           <span

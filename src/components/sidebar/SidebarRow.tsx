@@ -43,14 +43,14 @@ export default function SidebarRow({
         position: 'relative',
         padding: '7px 16px',
         margin: '1px 0',
-        background: active ? 'var(--sage-overlay-active)' : 'transparent',
+        background: active ? 'var(--overlay-active)' : 'transparent',
         border: 'none',
         borderRadius: 8,
         transition: 'background 180ms var(--ease-out), color 180ms var(--ease-out)',
       }}
       onMouseEnter={(e) => {
         if (!active) {
-          e.currentTarget.style.background = 'var(--sage-overlay-hover)';
+          e.currentTarget.style.background = 'var(--overlay-hover)';
         }
       }}
       onMouseLeave={(e) => {

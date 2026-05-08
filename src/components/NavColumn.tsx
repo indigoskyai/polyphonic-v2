@@ -360,7 +360,7 @@ function NavRow({ expanded, icon, label, path, active, onClick, badge }: NavRowP
         height: 32,
         padding: '0 12px',
         borderRadius: 8,
-        background: active ? 'var(--sage-overlay-active)' : 'transparent',
+        background: active ? 'var(--overlay-active)' : 'transparent',
         color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
         cursor: 'pointer',
         position: 'relative',
