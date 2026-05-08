@@ -3,7 +3,7 @@
 Hard gates. None of these may be `[ ]` at launch. Detail and per-item verification lives in [`PRODUCTION_AUDIT.md`](./PRODUCTION_AUDIT.md).
 
 ## Security
-- [ ] Security scan: zero unaccepted findings (`security--run_security_scan`)
+- [x] Security scan: zero unaccepted findings (`security--run_security_scan`) — 0 ERROR, 14 WARN, all 14 on the accepted list (1× `extension_in_public`, 3× `anon_security_definer_function_executable`, 10× `authenticated_security_definer_function_executable`); see PRODUCTION_AUDIT.md §14 Accepted-risk register
 - [x] Supabase linter: zero unaccepted warnings (`supabase--linter`; residual infos/warnings accepted in P4-016)
 - [ ] RLS verified on every public-schema table; all owner-scoped
 - [x] No `SERVICE_ROLE` references in client runtime `src/` code
@@ -42,7 +42,7 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [ ] Lovable Cloud PITR confirmed ON; restore rehearsed once
 - [ ] Custom domain configured (if applicable) + SSL valid
 - [ ] Email domain configured (if transactional emails used)
-- [ ] Error reporting wired and receiving events from staging
+- [x] Error reporting wired and receiving events from staging — Lovable verified live `client_error_log` row id `249772cd-befa-4cfa-bfc6-8471b08cd1b4` from a synthetic `throw new Error('staging error log smoke')` injection on 2026-05-08 23:44:09Z; see PRODUCTION_AUDIT.md P4-023
 - [ ] Cron health surface live and showing recent green ticks
 
 ## Legal / content
