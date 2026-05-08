@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Archive, FolderKanban, MessageCircle, Plus, Save, X } from 'lucide-react';
+import { Archive, MessageCircle, Plus, Save, X } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useProjectStore, threadsForProject, type Project } from '@/stores/projectStore';
 import { useThreadStore, type Thread } from '@/stores/threadStore';
@@ -145,16 +145,24 @@ export default function ProjectsView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div className="profile-page-frame" style={{ padding: isMobile ? '28px 20px 96px' : '44px 48px 80px', maxWidth: 1180 }}>
-        <div className="flex items-start justify-between gap-6" style={{ marginBottom: 34, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+      {/* Centered reading column — same editorial philosophy as Journal,
+          Mind streams, and Settings. The project switcher already lives in
+          the rail's SidebarProjects, so this view focuses purely on editing
+          the selected project. */}
+      <div style={{
+        maxWidth: 720,
+        margin: '0 auto',
+        padding: isMobile ? '28px 20px 96px' : '44px 32px 80px',
+        width: '100%',
+      }}>
+        <div className="flex items-start justify-between gap-6" style={{ marginBottom: 32, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           <div>
-            {/* "§ 02 / projects" eyebrow removed — leftover mockup label. */}
-            <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: isMobile ? 34 : 42, lineHeight: 1 }}>Projects</h1>
-            <p style={{ margin: '14px 0 0', maxWidth: 620, color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1.7 }}>
+            <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: isMobile ? 32 : 36, lineHeight: 1, letterSpacing: 'var(--track-tight)' }}>Projects</h1>
+            <p style={{ margin: '12px 0 0', color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1.6 }}>
               Organize threads into focused workspaces. Project instructions are carried into Luca&apos;s runtime when a thread belongs to the project.
             </p>
           </div>
-          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)} style={{ flexShrink: 0 }}>
             <Plus size={15} />
             <span>New project</span>
           </button>
@@ -182,49 +190,25 @@ export default function ProjectsView() {
           </section>
         )}
 
-        <div className="grid gap-8" style={{ gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(250px, 320px) minmax(0, 1fr)' }}>
-          <aside style={{ minWidth: 0 }}>
-            <div style={panelStyle}>
-              <div style={sectionLabelStyle}>Active projects</div>
-              {projectsLoading ? (
-                <p style={emptyStyle}>Loading projects...</p>
-              ) : projectsError ? (
-                <p style={errorStyle}>{projectsError}</p>
-              ) : projects.length === 0 ? (
-                <p style={emptyStyle}>No projects yet. Create one to start grouping threads.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {projects.map((project) => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                      style={{
-                        ...projectRowStyle,
-                        borderColor: selected?.id === project.id ? 'var(--border-focus)' : 'var(--border-faint)',
-                        background: selected?.id === project.id ? 'var(--surface-raised)' : 'transparent',
-                      }}
-                    >
-                      <FolderKanban size={15} strokeWidth={1.7} />
-                      <span className="min-w-0">
-                        <span style={{ display: 'block', color: 'var(--text-primary)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {project.name}
-                        </span>
-                        <span style={{ display: 'block', color: 'var(--text-ghost)', fontSize: 10, fontFamily: 'var(--font-mono)', marginTop: 4 }}>
-                          {formatProjectDate(project.updated_at)}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </aside>
-
+        {/* Active project switcher lives in the rail-sidebar (SidebarProjects);
+            this main view focuses on editing the selected project. */}
+        {projectsLoading ? (
+          <section style={panelStyle}>
+            <p style={emptyStyle}>Loading projects...</p>
+          </section>
+        ) : projectsError ? (
+          <section style={panelStyle}>
+            <p style={errorStyle}>{projectsError}</p>
+          </section>
+        ) : projects.length === 0 ? (
+          <section style={panelStyle}>
+            <p style={emptyStyle}>No projects yet. Create one to start grouping threads.</p>
+          </section>
+        ) : (
           <main style={{ minWidth: 0 }}>
             {!selected ? (
               <section style={panelStyle}>
-                <p style={emptyStyle}>Create a project to add instructions and organize threads.</p>
+                <p style={emptyStyle}>Select a project from the sidebar to edit, or create a new one.</p>
               </section>
             ) : (
               <div className="flex flex-col gap-6">
@@ -332,7 +316,7 @@ export default function ProjectsView() {
               </div>
             )}
           </main>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -361,9 +345,11 @@ function ThreadProjectRow({
 }
 
 const panelStyle: CSSProperties = {
-  borderTop: '1px solid var(--border-faint)',
-  paddingTop: 18,
-  marginBottom: 22,
+  background: 'var(--surface-1)',
+  border: '1px solid var(--border-faint)',
+  borderRadius: 12,
+  padding: 22,
+  boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.025)',
 };
 
 const sectionLabelStyle: CSSProperties = {

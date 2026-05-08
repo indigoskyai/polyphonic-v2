@@ -124,7 +124,7 @@ function BeliefsTab() {
       {filtered.length === 0 ? (
         <div className="s-empty">No beliefs formed yet.</div>
       ) : (
-        <div>
+        <div className="s-belief-list">
           {filtered.map((b, i) => (
             <div key={i} className="s-belief">
               <div className="s-belief-head">

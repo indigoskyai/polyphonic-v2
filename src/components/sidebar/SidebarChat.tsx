@@ -91,7 +91,7 @@ export default function SidebarChat() {
 
   return (
     <>
-      <SidebarHeader folio="§ 01" title="Threads" />
+      <SidebarHeader folio="§ 01" title="Threads" eyebrow="LIVE" />
 
       <div style={{ padding: '0 8px 8px' }}>
         <input
@@ -112,8 +112,8 @@ export default function SidebarChat() {
             transition: 'border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)',
           }}
           onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--sage-border-focus)';
-            e.currentTarget.style.boxShadow = '0 0 0 3px var(--sage-overlay-hover)';
+            e.currentTarget.style.borderColor = 'var(--border-subtle)';
+            e.currentTarget.style.boxShadow = 'none';
           }}
           onBlur={(e) => {
             e.currentTarget.style.borderColor = 'var(--border-faint)';

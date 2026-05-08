@@ -1,87 +1,86 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Archive, FolderKanban } from 'lucide-react';
-import { useThreadStore } from '@/stores/threadStore';
+import {
+  MessageSquare,
+  Brain,
+  Bot,
+  NotebookPen,
+  Layers,
+  User,
+  Activity,
+  Cog,
+  PanelLeft,
+} from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { prefetchRoute } from '@/lib/routePrefetch';
 
-import { supabase } from '@/integrations/supabase/client';
-
-interface EmotionalIndicator {
-  breatheSpeed: number;
-  tint: string;
-  label: string;
-}
-
-function computeEmotionalIndicator(state: Record<string, number> | null): EmotionalIndicator {
-  if (!state) return { breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' };
-
-  const { curiosity = 0.5, warmth = 0.5, restlessness = 0.5, clarity = 0.5, creative_flow = 0.5, isolation = 0.5 } = state;
-
-  const activation = (curiosity + restlessness + creative_flow) / 3;
-  const breatheSpeed = 6 - activation * 4;
-
-  const dims = [
-    { name: 'curious', value: curiosity, tint: '#c9a87c' },
-    { name: 'warm', value: warmth, tint: '#c9a87c' },
-    { name: 'restless', value: restlessness, tint: '#a88cc9' },
-    { name: 'clear', value: clarity, tint: '#5b8aad' },
-    { name: 'creative', value: creative_flow, tint: '#8ca89c' },
-    { name: 'withdrawn', value: isolation, tint: '#7a6f6f' },
-  ].sort((a, b) => b.value - a.value);
-
-  return {
-    breatheSpeed: Math.max(1.5, breatheSpeed),
-    tint: dims[0].value > 0.5 ? dims[0].tint : 'var(--text-secondary)',
-    label: dims[0].value > 0.5 ? dims[0].name : 'present',
-  };
-}
-
+/**
+ * Rail — always-visible thin column on the floor.
+ *
+ * Holds the brand mark, panel toggle, primary nav icons, and bottom
+ * utilities (Activity bell + Settings). Sits at --rail-width and uses
+ * the floor color directly (no card surface) so it reads as a deliberate
+ * piece of the depth, framing the elevated sidebar card to its right.
+ *
+ * Each icon shows a hover label (tooltip) via the [data-label] CSS hook
+ * defined in index.css — solid background, 350ms hover delay so labels
+ * don't pop while you're scrubbing through the rail. The wrapper carries
+ * an explicit z-index so labels clear the sidebar reliably.
+ *
+ * Toggle behavior: clicking the brand mark or the panel-toggle button
+ * (or pressing ⌘\) toggles the sidebar via sidebarStore. The sidebar
+ * handles its own slide animation; the rail never moves.
+ */
 export default function Rail() {
-  const [emotionalIndicator, setEmotionalIndicator] = useState<EmotionalIndicator>({ breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' });
-  const user = useAuthStore((s) => s.user);
+  const _user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
-  const { createThread } = useThreadStore();
-  const settingsOpen = location.pathname.startsWith('/settings')
-    || location.pathname.startsWith('/profile/skills')
-    || location.pathname.startsWith('/profile/schedule');
+  const sidebarVisible = useSidebarStore((s) => s.visible);
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
 
+  // Navigate to a section AND ensure the sidebar is open. Clicking a rail
+  // icon when the sidebar is collapsed should both jump to that section and
+  // reveal its content — never leave the user in a state where they tapped
+  // the icon but nothing visible changed beyond the active highlight.
+  const goTo = (path: string) => {
+    setSidebarVisible(true);
+    navigate(path);
+  };
+
+  // Toggle sidebar via ⌘\ (or Ctrl+\)
   useEffect(() => {
-    if (!user) return;
-    supabase.from('emotional_state').select('curiosity, restlessness, warmth, clarity, creative_flow, isolation')
-      .eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data) setEmotionalIndicator(computeEmotionalIndicator(data as Record<string, number>));
-      });
-  }, [user]);
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [toggleSidebar]);
+
+  const settingsActive =
+    location.pathname.startsWith('/settings') ||
+    location.pathname.startsWith('/profile/skills') ||
+    location.pathname.startsWith('/profile/schedule');
 
   const activeView = location.pathname.startsWith('/chat') ? 'chat'
     : location.pathname.startsWith('/memory') ? 'memory'
     : location.pathname.startsWith('/mind') ? 'mind'
     : location.pathname.startsWith('/journal') ? 'journal'
-    : location.pathname.startsWith('/import') ? 'import'
     : location.pathname.startsWith('/projects') ? 'projects'
     : location.pathname.startsWith('/profile/identity') ? 'mind'
     : location.pathname.startsWith('/profile/revisions') ? 'mind'
-    : location.pathname.startsWith('/profile/skills') ? 'settings'
-    : location.pathname.startsWith('/profile/schedule') ? 'settings'
     : location.pathname.startsWith('/profile') ? 'profile'
     : location.pathname.startsWith('/dashboard') ? 'mind'
     : 'chat';
-
-  const handleNewThread = async () => {
-    if (!user) return;
-    const id = await createThread(user.id);
-    navigate(`/chat/${id}`);
-  };
 
   return (
     <div
@@ -89,111 +88,170 @@ export default function Rail() {
       style={{
         width: 'var(--rail-width)',
         minWidth: 'var(--rail-width)',
-        padding: '12px 0 12px',
-        gap: 4,
+        padding: '12px 0',
+        gap: 2,
         background: 'transparent',
+        position: 'relative',
+        // z-index above the sidebar so hover labels never get clipped.
+        zIndex: 10,
       }}
     >
-      {/* Identity — click to toggle sidebar */}
-      <div
-        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer relative"
+      {/* Brand mark — clickable to toggle sidebar (matches the original
+          Rail's identity-as-toggle pattern). */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        title="Polyphonic"
+        aria-label="Toggle sidebar"
         style={{
-          background: 'var(--overlay-hover)',
-          border: `1px solid ${emotionalIndicator.tint}30`,
-          color: emotionalIndicator.tint,
+          appearance: 'none',
+          width: 26,
+          height: 26,
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 6,
+          background: 'rgba(255, 255, 255, 0.018)',
+          color: 'var(--text-tertiary)',
           fontFamily: 'var(--font-sans)',
-          fontStyle: 'italic',
-          fontSize: 15,
-          lineHeight: 1,
-          paddingTop: 1,
-          transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out)',
-          animation: `breathe ${emotionalIndicator.breatheSpeed}s ease-in-out infinite`,
+          fontSize: 11,
+          fontWeight: 300,
+          cursor: 'pointer',
+          flexShrink: 0,
+          marginBottom: 6,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition:
+            'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
         }}
-        onClick={toggleSidebar}
-        title={emotionalIndicator.label}
       >
-        L
-      </div>
+        P
+      </button>
 
-      {/* Spacer — click to toggle sidebar */}
-      <div
-        className="flex-1 w-full cursor-pointer"
+      {/* Toggle button — explicit panel-collapse affordance with rotating
+          chevron. No hover tooltip (Riley's call: the icon is its own
+          affordance and the keyboard shortcut is documented elsewhere). */}
+      <button
+        type="button"
+        className="rail-nav-icon w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
         onClick={toggleSidebar}
-        title="Toggle sidebar"
+        aria-label={sidebarVisible ? 'Collapse panel' : 'Expand panel'}
+        style={{ color: 'var(--text-soft)' }}
+      >
+        <PanelLeft
+          size={14}
+          strokeWidth={1.6}
+          style={{
+            transform: sidebarVisible ? 'none' : 'rotate(180deg)',
+            transition: 'transform var(--dur-normal) var(--ease-premium)',
+          }}
+        />
+      </button>
+
+      {/* Primary nav — every click auto-opens the sidebar via goTo() */}
+      <NavIcon
+        icon={<MessageSquare size={15} strokeWidth={1.55} />}
+        label="Chat"
+        path="/chat"
+        active={activeView === 'chat'}
+        onClick={() => goTo('/chat')}
+      />
+      <NavIcon
+        icon={<Brain size={15} strokeWidth={1.55} />}
+        label="Memory"
+        path="/memory"
+        active={activeView === 'memory'}
+        onClick={() => goTo('/memory')}
+      />
+      <NavIcon
+        icon={<Bot size={15} strokeWidth={1.55} />}
+        label="Mind"
+        path="/mind"
+        active={activeView === 'mind'}
+        onClick={() => goTo('/mind')}
+      />
+      <NavIcon
+        icon={<NotebookPen size={15} strokeWidth={1.55} />}
+        label="Journal"
+        path="/journal"
+        active={activeView === 'journal'}
+        onClick={() => goTo('/journal')}
+      />
+      <NavIcon
+        icon={<Layers size={15} strokeWidth={1.55} />}
+        label="Projects"
+        path="/projects"
+        active={activeView === 'projects'}
+        onClick={() => goTo('/projects')}
+      />
+      <NavIcon
+        icon={<User size={15} strokeWidth={1.55} />}
+        label="Profile"
+        path="/profile"
+        active={activeView === 'profile'}
+        onClick={() => goTo('/profile')}
       />
 
-      {/* Nav icons */}
-      <NavIcon icon="chat" label="Open Chat" path="/chat" active={activeView === 'chat'} onClick={() => navigate('/chat')} />
-      <NavIcon icon="memory" label="Open Memory" path="/memory" active={activeView === 'memory'} onClick={() => navigate('/memory')} />
-      <NavIcon icon="mind" label="Open Mind" path="/mind" active={activeView === 'mind'} onClick={() => navigate('/mind')} />
-      <NavIcon icon="journal" label="Open Journal" path="/journal" active={activeView === 'journal'} onClick={() => navigate('/journal')} />
-      <NavIcon icon="import" label="Open Import" path="/import" active={activeView === 'import'} onClick={() => navigate('/import')} />
-      <NavIcon icon="projects" label="Open Projects" path="/projects" active={activeView === 'projects'} onClick={() => navigate('/projects')} />
-      <NavIcon icon="profile" label="Open Profile" path="/profile" active={activeView === 'profile'} onClick={() => navigate('/profile')} />
+      {/* Spacer — clicking the empty area between nav and utilities toggles
+          the sidebar, so the user can collapse/expand by clicking anywhere
+          in the rail's open space (not just on the toggle button). */}
+      <button
+        type="button"
+        className="flex-1 w-full"
+        onClick={toggleSidebar}
+        aria-label="Toggle panel"
+        style={{
+          appearance: 'none',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          margin: 0,
+        }}
+      />
 
-      {/* Notifications bell */}
+      {/* Activity bell — opens notifications drawer. The pendingCount dot
+          breathes the same sage rhythm as the brand identity. */}
       <button
         type="button"
         className="rail-bell shrink-0"
         data-active={activeDrawer === 'notifications' ? 'true' : undefined}
+        data-label="Activity"
         onClick={() => openDrawer('notifications')}
-        title="Activity"
         aria-label={`Activity${pendingCount > 0 ? ` — ${pendingCount} pending` : ''}`}
       >
-        <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6a4 4 0 1 1 8 0v2.2l1 1.6H2l1-1.6z" />
-          <path d="M5.7 11.4a1.5 1.5 0 0 0 2.6 0" />
-        </svg>
+        <Activity size={14} strokeWidth={1.55} />
         {pendingCount > 0 && <span className="rail-bell__dot" aria-hidden="true" />}
       </button>
 
-      {/* Divider */}
-      <div className="shrink-0" style={{ width: 20, height: 1, background: 'var(--border-faint)', margin: '4px 0' }} />
-
-      {/* New thread */}
-      <button
-        type="button"
-        className="rail-nav-icon w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
-        style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 300 }}
-        onClick={handleNewThread}
-        title="New thread"
-        aria-label="New thread"
-        onPointerEnter={() => prefetchRoute('/chat')}
-        onFocus={() => prefetchRoute('/chat')}
-        onPointerDown={() => prefetchRoute('/chat')}
-      >
-        +
-      </button>
-
-      {/* Settings */}
-      <NavIcon icon="settings" label="Open Settings" path="/settings/agents" active={settingsOpen} onClick={() => navigate('/settings/agents')} />
-
-
-
+      {/* Settings — auto-opens the sidebar like the other nav icons */}
+      <NavIcon
+        icon={<Cog size={15} strokeWidth={1.55} />}
+        label="Settings"
+        path="/settings/agents"
+        active={settingsActive}
+        onClick={() => goTo('/settings/agents')}
+      />
     </div>
   );
 }
 
-function NavIcon({
-  icon,
-  label,
-  path,
-  active,
-  onClick,
-}: {
-  icon: string;
+interface NavIconProps {
+  icon: React.ReactNode;
   label: string;
   path: string;
   active: boolean;
   onClick: () => void;
-}) {
+}
+
+function NavIcon({ icon, label, path, active, onClick }: NavIconProps) {
   const prime = () => prefetchRoute(path);
 
   return (
     <button
       type="button"
-      className="rail-nav-icon w-6 h-6 rounded flex items-center justify-center cursor-pointer shrink-0"
+      className="rail-nav-icon w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
       data-active={active ? 'true' : undefined}
+      data-label={label}
       style={{
         color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
         background: active ? 'var(--overlay-active)' : undefined,
@@ -202,18 +260,10 @@ function NavIcon({
       onPointerEnter={prime}
       onFocus={prime}
       onPointerDown={prime}
-      title={label.replace(/^Open /, '')}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
     >
-      {icon === 'chat' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M2 3h10v7H5L2 12V3z"/></svg>}
-      {icon === 'memory' && <Archive size={14} strokeWidth={1.6} />}
-      {icon === 'mind' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M5 2.5c-1.7 0-3 1.3-3 3 0 .9.4 1.7 1 2.3-.6.5-1 1.3-1 2.2 0 .8.7 1.5 1.5 1.5h7c.8 0 1.5-.7 1.5-1.5 0-.9-.4-1.7-1-2.2.6-.6 1-1.4 1-2.3 0-1.7-1.3-3-3-3-.7 0-1.4.2-2 .7-.6-.5-1.3-.7-2-.7z"/><path d="M7 3.2v8.3"/></svg>}
-      {icon === 'journal' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 1.5h6.5L11.5 3.5V12a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 .5-.5z"/><path d="M5 5h4M5 7.5h4M5 10h2.5"/></svg>}
-      {icon === 'import' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M7 1v8M4 6l3 3 3-3"/><path d="M2 10v2h10v-2"/></svg>}
-      {icon === 'projects' && <FolderKanban size={14} strokeWidth={1.6} />}
-      {icon === 'profile' && <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx={7} cy={4} r={2.5}/><path d="M2.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/></svg>}
-      {icon === 'settings' && <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>}
+      {icon}
     </button>
   );
 }

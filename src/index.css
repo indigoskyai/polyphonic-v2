@@ -57,8 +57,12 @@
   --genome-hairline:  rgba(108, 104, 98,  0.18);
 
   /* Genome accent colors */
-  --rose:       #c97c8a;
-  --rose-faint: rgba(201, 124, 138, 0.10);
+  --rose:        #c97c8a;
+  --rose-faint:  rgba(201, 124, 138, 0.10);
+  /* --rose-accent is the destructive-action color used on .set-btn.danger
+     and similar surfaces. Saturated noticeably more than --rose so the
+     "this is destructive" signal reads clearly without being aggressive. */
+  --rose-accent: #e15873;
   --sage:       #8aa888;
   --sage-faint: rgba(138, 168, 136, 0.10);
   --surface-shadow: #0c0b0e;
@@ -171,7 +175,10 @@
   --radius-inset: 16px;
 
   --rail-width:        36px;
-  --sidebar-width:     280px;
+  /* --sidebar-width is now controlled at runtime by sidebarStore (user-
+     resizable, persisted to localStorage). The CSS variable is kept as
+     a default fallback for any consumer that still reads it. */
+  --sidebar-width:     240px;
   --drawer-width:      420px;
   --message-max-width: 720px;
   --inset-gap:         6px;
@@ -832,6 +839,100 @@ html {
 .rail-nav-icon[data-active="true"] {
   background: var(--overlay-active);
   color: var(--text-primary);
+}
+
+/* SidebarHeader live-dot breathing keyframe — gently pulses the sage
+   dot next to "LIVE" eyebrow on sections that are actively listening. */
+@keyframes livedot-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+
+/* ── Sidebar resize handle ─────────────────────────────────────────
+   Invisible at rest. Faint pill on hover. Brighter when actively
+   dragging. Cursor: col-resize so the affordance is discoverable.
+   Sits at the very right edge of the sidebar, 6px wide for an easy
+   grab target without visual noise. */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+  transition: background 200ms var(--ease-out);
+}
+.sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 28px;
+  background: var(--text-whisper);
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out), height 200ms var(--ease-out);
+}
+.sidebar-resize-handle:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.sidebar-resize-handle:hover::before {
+  opacity: 0.7;
+  height: 36px;
+}
+.sidebar-resize-handle.dragging,
+.sidebar-resize-handle.dragging:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.sidebar-resize-handle.dragging::before {
+  opacity: 1;
+  height: 44px;
+  background: var(--text-soft);
+}
+
+/* ── Rail hover labels ───────────────────────────────────────────
+   Solid tooltip floating right of the icon, fades in 350ms after hover.
+   z-index 100 + rail's own stacking context (z-index 10) keeps it above
+   the sidebar card. */
+.rail-nav-icon[data-label],
+.rail-bell[data-label] {
+  position: relative;
+}
+.rail-nav-icon[data-label]::after,
+.rail-bell[data-label]::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 5px 10px;
+  background: #1a181d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 460;
+  letter-spacing: var(--track-ui);
+  color: var(--text-body);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 180ms var(--ease-out) 350ms,
+    transform 220ms var(--ease-premium) 350ms;
+  z-index: 100;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.rail-nav-icon:hover[data-label]::after,
+.rail-bell:hover[data-label]::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 
 .mobile-app-bar {
@@ -6347,7 +6448,10 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 14px 32px 0;
+  /* Increased top padding from 14px to 22px so the folio gets breathing
+     room from the canvas's rounded corner edge — was reading as
+     "cut off at the top." */
+  padding: 22px 32px 0;
   font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 500;
@@ -6593,14 +6697,15 @@ html {
 }
 
 .set-btn.danger {
-  color: var(--rose-accent, #c97c8a);
-  border-color: rgba(201, 124, 138, 0.20);
+  color: var(--rose-accent);
+  border-color: rgba(225, 88, 115, 0.32);
+  background: rgba(225, 88, 115, 0.04);
 }
 
 .set-btn.danger:hover {
-  background: rgba(201, 124, 138, 0.06);
-  border-color: rgba(201, 124, 138, 0.30);
-  color: var(--rose-accent, #c97c8a);
+  background: rgba(225, 88, 115, 0.10);
+  border-color: rgba(225, 88, 115, 0.48);
+  color: var(--rose-accent);
 }
 
 .set-btn.compact {
@@ -8752,7 +8857,10 @@ html {
   background: var(--canvas);
 }
 .s-stream-inner {
-  max-width: 1280px; margin: 0 auto; width: 100%;
+  /* Tightened from 1280 to 880 so hero + toolbar live in the same
+     editorial column the body content centers within. Matches the
+     settings page width and the overall reading-column philosophy. */
+  max-width: 880px; margin: 0 auto; width: 100%;
   padding: 0 36px 28px;
   display: flex; flex-direction: column; flex: 1; min-height: 0;
 }
@@ -8830,6 +8938,19 @@ html {
 }
 
 /* List rows (cards) */
+/* Reading column — match the Journal layout philosophy. Body content
+   (lists, beliefs, activity) centers at 760px so line lengths stay
+   comfortable (~60-75 chars) and the page reads as a deliberate column
+   on the canvas instead of edge-to-edge text. The hero + toolbar stay
+   at the wider .s-stream-inner width since they're chrome, not content. */
+.s-list,
+.s-activity-list,
+.s-belief-list {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 0 80px;
+  width: 100%;
+}
 .s-list { display: flex; flex-direction: column; }
 .s-row {
   padding: 18px 0;
