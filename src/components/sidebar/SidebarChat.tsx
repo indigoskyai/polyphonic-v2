@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuthStore } from '@/stores/authStore';
 import { useThreadStore, type Thread } from '@/stores/threadStore';
 import { useProjectStore, threadsForProject, sortProjects } from '@/stores/projectStore';
 import SidebarHeader from './SidebarHeader';
@@ -22,10 +23,17 @@ function saveCollapseState(state: Record<string, boolean>) {
 
 export default function SidebarChat() {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [archived, setArchived] = useState<Thread[]>([]);
-  const { threads, currentThreadId, loadThreads } = useThreadStore();
+  const { threads, currentThreadId, loadThreads, createThread } = useThreadStore();
+
+  const handleNewThread = async () => {
+    if (!user) return;
+    const id = await createThread(user.id);
+    navigate(`/chat/${id}`);
+  };
   const projects = useProjectStore((s) => s.projects);
   const loadProjects = useProjectStore((s) => s.loadProjects);
 
@@ -92,6 +100,46 @@ export default function SidebarChat() {
   return (
     <>
       <SidebarHeader folio="§ 01" title="Threads" eyebrow="LIVE" />
+
+      {/* New thread CTA — bordered pill that opens a fresh conversation.
+          Sits prominently above search so it's always one click away. */}
+      <div style={{ padding: '4px 8px 8px' }}>
+        <button
+          type="button"
+          onClick={handleNewThread}
+          className="w-full"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 11px',
+            background: 'transparent',
+            border: '1px solid var(--border-faint)',
+            borderRadius: 8,
+            color: 'var(--text-secondary)',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 13,
+            fontWeight: 460,
+            letterSpacing: 'var(--track-ui)',
+            textAlign: 'left',
+            cursor: 'pointer',
+            transition: 'all var(--dur-fast) var(--ease-out)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--text-body)';
+            e.currentTarget.style.background = 'var(--overlay-hover)';
+            e.currentTarget.style.borderColor = 'var(--border-subtle)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--text-secondary)';
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = 'var(--border-faint)';
+          }}
+        >
+          <Plus size={14} strokeWidth={1.7} style={{ flexShrink: 0 }} />
+          <span>New thread</span>
+        </button>
+      </div>
 
       <div style={{ padding: '0 8px 8px' }}>
         <input
