@@ -4,9 +4,57 @@ This is the live, self-tracking master checklist for the production-readiness au
 
 ---
 
+## Minimal launch path
+
+The full audit is ~90% complete. **88 ledger findings, all Verified or Deferred.** What remains are the open gates in `PRODUCTION_LAUNCH_CHECKLIST.md`, grouped here into 4 passes. Run A + B in parallel; C and D follow once A is locked.
+
+### Pass A — Security & DB hardening *(Claude · automated)*
+1. Lovable security scan: triage + accept/fix every WARN
+2. RLS per-table sweep across all 55 public tables (owner-scope policy verified on each)
+3. `decrypt_user_api_key` scoping fix (§A.6 Top-5 risk: hardcode `auth.uid()`, reject arbitrary `p_user_id`)
+4. Cascade-on-user-delete test in a scratch account → zero orphan rows
+5. Cron pattern consolidation: 11 inline `net.http_post` → `invoke_edge_function` (§3.53)
+6. Wire error reporting (Sentry/PostHog) to staging events
+
+**Gate:** Security + Reliability + Operations#error-reporting all `[x]` in `PRODUCTION_LAUNCH_CHECKLIST.md`.
+
+### Pass B — Auth & Operations smoke *(Riley · staging clicks)*
+1. Email signup → confirmation → login
+2. Google new-account signup (login already `[x]`)
+3. Apple signup → login
+4. Forgot-password full loop
+5. Logout fully clears state on staging
+6. Lovable Cloud panel: PITR ON + restore rehearsed
+7. Email domain configured (transactional)
+8. Cron health surface live + green ticks
+9. Custom domain + SSL *(skip if Lovable subdomain)*
+
+**Gate:** Auth + Operations sections all `[x]`.
+
+### Pass C — Functional E2E *(Claude · Playwright)*
+1. Fresh account: seed empty, walk every route, 0 console errors
+2. Heavy account: seed 5k engrams, walk every route, 0 console errors
+3. Chat: send / stream / stop / regenerate / retry / missing-key UX
+4. Mnemos full loop: encode → retrieve → decay → consolidate → dialectic
+
+**Gate:** Functional section all `[x]`.
+
+### Pass D — Performance, A11y, launch metadata *(Claude · Lighthouse + small edits)*
+1. Lighthouse ≥80 perf on `/chat` and `/mind`
+2. Lighthouse ≥90 a11y on `/chat` and `/mind`
+3. Graph 60fps at 1000 nodes; CPU sleeps when idle
+4. SEO basics — title <60ch, meta desc <160ch, single H1, canonical (§12.7)
+5. Footer OSS attributions (if any)
+
+**Gate:** Performance + Legal sections all `[x]`.
+
+**Out of scope here:** the `DESIGN_AUDIT.md` sweep (~17 pages still owed reading-column treatment). Polish, not launch gate — ship first.
+
+---
+
 ## Current operating board
 
-Updated: 2026-05-06
+Updated: 2026-05-08
 
 ### Now
 - `[x]` **Phase 0 — Current stabilization snapshot**: baseline fixes documented and verified.
@@ -19,6 +67,11 @@ Updated: 2026-05-06
 2. **Phase 5 — Performance, accessibility, and release gates**: finish route timing/Lighthouse, final launch checklist, and accepted-risk signoff.
 
 ### Done this session
+- Pass A kickoff: minimal launch path written into the audit (4 passes, scoped to remaining checklist gates).
+- Pass A cron consolidation: 7 inline `net.http_post` autonomous-loop jobs (`luca-think`, `luca-observe`, `luca-emotional-drift`, `luca-question`, `luca-initiate`, `luca-connect`, `luca-dream`) refactored to use the shared `invoke_edge_function('anima-dispatch', payload)` helper. Migration `20260508120000_cron_consolidate_anima_dispatch.sql` is idempotent (guarded unschedule).
+- Pass A audit scripts: read-only inspection SQL added under `supabase/audits/` for RLS coverage (`rls-coverage.sql`), owner-scope policy review (`policy-owner-scope.sql`), and user-FK cascade-on-delete (`user-cascade.sql`), plus a README. Riley/Lovable runs them on staging to close launch checklist Security #3 and Reliability #4.
+- Pass A error reporting: tiny Supabase-native logger wired — migration `20260508120100_client_error_log.sql` creates the `client_error_log` table (insert-any, select-service-role); `src/lib/observability.ts` provides `reportError` + `installGlobalErrorHandlers`; `src/components/ErrorBoundary.tsx` wraps the React tree in `main.tsx`. No new third-party APM dependency. Closes the wireup half of Operations#error-reporting; "receiving events from staging" verification is pending Riley's hosted apply.
+- Pass A confirmation: `decrypt_user_api_key` is already hardened in migration `20260507071530` — explicit role check rejects arbitrary `p_user_id` from authenticated callers (only self or service-role can decrypt). Marked Verified in the ledger.
 - Chat de-duplication and realtime reconciliation tightened so canonical assistant messages replace local stream stubs without suppressing legitimate nearby replies.
 - Hypomnema identity read path corrected from `soul_md` to the live `soul` document type.
 - Stale sub-agent strip filtered to the current thread.
@@ -222,6 +275,10 @@ Ledger rules:
 | P4-017 | P2 | Verified | Hosted Google OAuth login | Google OAuth provider wiring was reported green, but a human staging login smoke still needed confirmation. | Existing users should be able to sign into staging with Google OAuth without auth-loop or redirect failure. | Recorded Riley's hosted Google sign-in smoke as verified and split the launch checklist so new-account/signup remains pending separately until signup surfaces are designed. | Riley human staging smoke 2026-05-06: Google sign-in/auth worked. No credentials or private account details recorded. | Pending |
 | P4-018 | P2 | Verified | Static client security / CORS guardrails | Launch checklist still needed repo-side proof that client runtime code does not reference service-role keys and CORS is not wildcarded. | Client runtime code should not contain service-role key references; browser CORS should be restricted to production/staging/Lovable preview patterns with localhost only outside production. | Added `launchReadiness.test.ts` to scan runtime `src` code excluding tests and assert the shared CORS helper includes production/staging origins, Lovable preview handling, non-prod localhost gating, and no wildcard `Access-Control-Allow-Origin`. | `npx vitest run src/test/launchReadiness.test.ts src/test/corsAllowlist.test.ts`; `npm run verify`. | Pending |
 | P4-019 | P2 | Verified | Edge function CORS/auth wrappers | The launch checklist still treated CORS preflight, CORS-on-error, try/catch wrappers, and `verify_jwt=false` posture as open across edge functions. | Every edge function should have preflight handling, response CORS, catch coverage, and any configured `verify_jwt=false` function should show a source auth marker or explicit source-level auth posture. | Extended `launchReadiness.test.ts` to enumerate all `supabase/functions/*/index.ts` files and assert the wrapper/auth markers across all 70 edge-function directories. | `npx vitest run src/test/launchReadiness.test.ts src/test/corsAllowlist.test.ts`; `npm run verify`. | Pending |
+| P4-020 | P2 | Verified | `decrypt_user_api_key` scoping (§A.6 #1) | Original baseline finding: function was `SECURITY DEFINER` callable by `authenticated`; concern was that an authenticated caller could pass an arbitrary `p_user_id` and decrypt another user's key. | The function should reject any non-service-role caller whose `auth.uid()` does not match the requested `p_user_id`. | Verified in migration `20260507071530_ce861ba7-...sql` lines 102–117: function reads `request.jwt.claim.role`, falls back to `request.jwt.claims->>'role'`, and raises `'Not authorized to decrypt this key'` whenever the role is not `service_role` AND `auth.uid()` differs from `p_user_id`. Service-role retains full access for edge functions. | Source inspection of `supabase/migrations/20260507071530_ce861ba7-37d8-42c3-ba05-39e98e51befc.sql`; earlier hardening migrations `20260218092147` (revoke from anon) and `20260502215917` (initial self-decrypt enforcement) are the lineage. | Pending |
+| P4-021 | P2 | Verified | Cron pattern consolidation (§3.53) | Seven autonomous-loop cron jobs (`luca-think`, `luca-observe`, `luca-emotional-drift`, `luca-question`, `luca-initiate`, `luca-connect`, `luca-dream`) used inline `net.http_post()` with embedded `service_role_key` references; the rest of the cron jobs already used the shared `invoke_edge_function` helper. | All cron jobs should flow through `invoke_edge_function(function_name, payload)` so service-role handling is centralized and rotation is tractable. | Added migration `20260508120000_cron_consolidate_anima_dispatch.sql` that idempotently unschedules each inline job (guarded by `cron.job` existence check) and reschedules through `invoke_edge_function('anima-dispatch', '{"function":"anima-XXX"}'::jsonb)`. Cadences preserved exactly. | Source inspection of `supabase/migrations/20260508120000_cron_consolidate_anima_dispatch.sql`; verification on staging post-deploy: `SELECT jobname, command FROM cron.job WHERE jobname IN ('luca-think','luca-observe','luca-emotional-drift','luca-question','luca-initiate','luca-connect','luca-dream')` should show every command starting with `SELECT invoke_edge_function('anima-dispatch'`. | Pending |
+| P4-022 | P2 | Verified | RLS / cascade audit tooling (Security #3, Reliability #4) | Launch checklist Security #3 ("RLS verified on every public-schema table; all owner-scoped") and Reliability #4 ("Cascade-on-user-delete tested in a scratch account; zero orphan rows") had no repo-side inspection tooling — they required manual case-by-case review. | Repo should ship read-only audit scripts that turn each gate into a single SQL run with explicit pass criteria. | Added `supabase/audits/rls-coverage.sql` (lists tables missing RLS or policies + summary), `supabase/audits/policy-owner-scope.sql` (surfaces policies that may not reference `auth.uid()` for case-by-case review), and `supabase/audits/user-cascade.sql` (lists FKs into `auth.users` whose `ON DELETE` action is not `CASCADE`). README documents pass criteria and how to run via psql or the Supabase SQL editor. | Source inspection; live run is pending Riley/Lovable execution against staging. | Pending |
+| P4-023 | P1 | Verified | Client error reporting wireup (Operations#error-reporting wireup half) | Launch checklist Operations#error-reporting required "error reporting wired and receiving events from staging" — neither half was in place, and no APM (Sentry/PostHog) was wired. | App should capture uncaught render errors, `window.onerror`, and `unhandledrejection` and persist them somewhere queryable, without taking on a new third-party dependency for the launch gate. | Added migration `20260508120100_client_error_log.sql` (table with insert-any RLS + select-service-role-only RLS + dedupe unique index on `request_id`); `src/lib/observability.ts` exposes `reportError` and `installGlobalErrorHandlers`; `src/components/ErrorBoundary.tsx` wraps the React tree in `src/main.tsx`. Fire-and-forget posts; never throws; truncates to 1KB / 8KB. | `npx tsc --noEmit` passed after wireup. Live "receiving events from staging" half remains pending Lovable apply + a synthetic uncaught error on staging that lands a row in `client_error_log`. | Pending |
 | P5-001 | P2 | Verified | Bundle/load release gate | The app shell eagerly imported every page and Shiki-powered code highlighting, making initial load heavier than needed and leaving build chunk warnings. | First-load JS should be split by route and stable vendor groups; code rendering should stay smooth without loading a language engine for ordinary chat. | Converted route pages/canvas/settings surfaces to `React.lazy`, added a route Suspense fallback, split React/Supabase/UI/icons/markdown/charts vendor chunks, moved code blocks and attachment previews to the lightweight token highlighter, removed Shiki/react-syntax-highlighter packages, and kept Mermaid as a deliberate lazy artifact-renderer chunk under a 600 kB budget. | `npx tsc --noEmit`; `npx vitest run src/test/CouncilPanelV2.test.tsx src/test/chatAttachments.test.ts`; `npm run build` with no large-chunk warning; local Playwright `/auth/login` + protected `/chat` redirect smoke passed with 0 browser errors. | Pending |
 | P5-002 | P3 | Verified | React Router future-warning console noise | React Router v7 future warnings were known residual noise in tests/browser smokes. | Console checks should surface real app issues, not predictable framework-upgrade warnings. | Opted into the v7 transition and splat-route behavior flags in `BrowserRouter` and the CouncilPanel `MemoryRouter` test wrapper. | `npx tsc --noEmit`; `npx vitest run src/test/CouncilPanelV2.test.tsx`; local Playwright `/auth/login` smoke captured `messages: []` for console errors/warnings. | Pending |
 | P5-003 | P2 | Verified | Keyboard focus / custom overlays | Several custom surfaces used `role="dialog"` but did not share reliable focus placement, Tab containment, Escape handling, or opener-focus restoration. | Modal-like surfaces should keep keyboard users oriented and should not leak focus into the page behind the overlay. | Added `useDialogFocus` and wired it into command palette, code fullscreen, sub-agent overlay, Hypomnema forget confirmation, and mobile drawer; mobile drawer now exposes `aria-modal` only while open and hides from assistive tech while closed. | `npx tsc --noEmit`; `npx vitest run src/test/dialogFocus.test.tsx src/test/CouncilPanelV2.test.tsx`; local Playwright `/_mobile` smoke confirmed focus lands on first thread, `Shift+Tab` wraps to last thread, `Tab` wraps to first thread, `Escape` closes, focus returns to "Open menu", and `messages: []`. | Pending |

@@ -33,7 +33,10 @@ describe('agent skill helpers', () => {
       },
     ]);
 
-    expect(prompt).toContain("procedural skills you've developed");
+    // Skills were reframed as the agent's self-model (see
+    // supabase/functions/_shared/agents/skills.ts:143). Assertion follows
+    // current wording.
+    expect(prompt).toContain("procedural patterns you've formed");
     expect(prompt).toContain('### cold-outreach-drafting');
     expect(prompt).toContain('When to use: Draft and refine concise cold outreach emails.');
   });
