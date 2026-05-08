@@ -732,6 +732,42 @@ export type Database = {
         }
         Relationships: []
       }
+      client_error_log: {
+        Row: {
+          context: Json
+          created_at: string
+          id: string
+          level: string
+          message: string
+          request_id: string | null
+          source: string
+          stack: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+          request_id?: string | null
+          source: string
+          stack?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+          request_id?: string | null
+          source?: string
+          stack?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       cognitive_state: {
         Row: {
           beliefs: Json
