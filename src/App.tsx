@@ -72,6 +72,7 @@ const AppearanceSettings = lazy(() => import("./pages/settings/AppearanceSetting
 const AccountSettings = lazy(() => import("./pages/settings/AccountSettings"));
 const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSettings"));
 const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
+const CronHealthSettings = lazy(() => import("./pages/settings/CronHealthSettings"));
 const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
 
 function AuthInit({ children }: { children: React.ReactNode }) {
@@ -338,6 +339,7 @@ const App = () => (
                 <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/cron-health" element={<ProtectedRoute><AppShell><CronHealthSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
                 <Route path="/_mockups/styles" element={<StyleGallery />} />

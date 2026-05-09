@@ -26,6 +26,10 @@ const SYSTEM_GROUP: Entry[] = [
   { key: 'account', label: 'Account & preferences', path: '/settings/account' },
 ];
 
+const OPERATIONS_GROUP: Entry[] = [
+  { key: 'cron-health', label: 'Cron health', path: '/settings/cron-health' },
+];
+
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -78,6 +82,19 @@ export default function SidebarSettings() {
 
         <GroupLabel>System</GroupLabel>
         {SYSTEM_GROUP.map((e) => (
+          <SidebarRow
+            key={e.key}
+            label={e.label}
+            active={isActive(e.path)}
+            onClick={() => navigate(e.path)}
+            onFocus={prime(e.path)}
+            onPointerDown={prime(e.path)}
+            onPointerEnter={prime(e.path)}
+          />
+        ))}
+
+        <GroupLabel>Operations</GroupLabel>
+        {OPERATIONS_GROUP.map((e) => (
           <SidebarRow
             key={e.key}
             label={e.label}
