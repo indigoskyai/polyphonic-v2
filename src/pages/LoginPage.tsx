@@ -224,6 +224,8 @@ export default function LoginPage() {
           <Link to="/privacy" className="underline" style={{ color: 'var(--text-ghost)' }}>Privacy</Link>
           <span aria-hidden="true" className="mx-2">/</span>
           <Link to="/terms" className="underline" style={{ color: 'var(--text-ghost)' }}>Terms</Link>
+          <span aria-hidden="true" className="mx-2">/</span>
+          <Link to="/credits" className="underline" style={{ color: 'var(--text-ghost)' }}>Credits</Link>
         </p>
       </div>
     </div>

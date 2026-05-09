@@ -49,4 +49,4 @@ Hard gates. None of these may be `[ ]` at launch. Detail and per-item verificati
 - [x] Privacy policy page exists and is linked from auth pages
 - [x] Terms of service page exists and is linked from auth pages
 - [x] Favicon + social-share meta + robots.txt + web manifest present
-- [ ] Footer attributions / OSS notices (if any) present
+- [x] Footer attributions / OSS notices (if any) present — `/credits` route added with grouped OSS list (framework, UI primitives, backend, viz, typography). Linked from Login, Signup, Privacy, Terms footers as `Privacy / Terms / Credits`. Page uses the same chrome as Privacy/Terms; `useDocumentTitle('Credits')` wired. See PRODUCTION_AUDIT.md P4-027.
