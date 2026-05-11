@@ -1948,7 +1948,7 @@ export default function ChatView() {
               below) the composer, only when Luca did something while the
               user was away. Click expands to the activity timeline, or
               drops the message into the composer for explicit initiations. */}
-          {welcomeBack && (
+          {welcomeBack && !isMobile && (
             <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
               <WelcomeBackCard
                 data={welcomeBack}
