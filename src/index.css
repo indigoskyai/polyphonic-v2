@@ -971,6 +971,10 @@ html {
 }
 
 @media (max-width: 767px) {
+  html, body {
+    background: var(--canvas);
+  }
+
   .app-shell {
     width: 100dvw;
     max-width: 100dvw;
@@ -1945,8 +1949,9 @@ html {
 
 @media (max-width: 767px) {
   .input-zone {
-    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
     max-width: none;
+    background: var(--canvas);
   }
 
   .input-zone::before {
@@ -1955,8 +1960,15 @@ html {
   }
 
   .input-shell {
-    border-radius: 28px;
+    border-radius: 24px;
     background: color-mix(in srgb, var(--surface-1) 88%, var(--surface-2) 12%);
+  }
+
+  /* Prevent iOS auto-zoom when focusing the composer (requires ≥16px) */
+  .input-shell .input-textarea,
+  .input-shell input[type="text"],
+  .input-shell textarea {
+    font-size: 16px;
   }
 
   .input-textarea {
