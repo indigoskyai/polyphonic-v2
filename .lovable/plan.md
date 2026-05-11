@@ -1,94 +1,81 @@
-# Threads sidebar: row actions + date grouping
+## What's wrong (image 1)
 
-Add a 3-dot context menu to every thread row in the left panel and reorganize the list into industry-standard date-grouped sections. Everything wired to real data — no mock states.
+Three different darks are stacked on top of each other on iOS Safari:
 
-## What the user gets
+```
+┌──────────────────────────┐  Safari status bar — #08080a (theme-color, --floor)
+├──────────────────────────┤  ← visible seam
+│   Polyphonic / LUCA…     │  mobile app bar — color-mix(canvas, +6% black) ≈ #0e0d0f, plus 1px border
+├──────────────────────────┤  ← visible seam
+│                          │
+│        (sphere)          │  app canvas — #0f0e11 (--canvas)
+│       polyphonic         │
+│                          │
+├──────────────────────────┤
+│   composer pill          │
+├──────────────────────────┤
+│ safe-area inset          │  body fallback — #08080a (--floor) again
+├──────────────────────────┤  ← visible seam
+│   Safari URL bar         │  Safari chrome — #08080a (theme-color)
+└──────────────────────────┘
+```
 
-**Per-thread 3-dot menu (appears on hover, also via keyboard):**
-- Rename (inline edit in row)
-- Pin / Unpin (sticks thread to top)
-- Star / Unstar (favorites group above date sections)
-- Add to / Move to project... (submenu listing projects + "Remove from project" + "New project...")
-- Archive (hides from main list, accessible via Archived view)
-- Delete (confirm dialog, cascades to messages)
+ChatGPT (image 2) collapses all of this into one color. We do the same.
 
-**Date-grouped thread list:**
-- Pinned (existing, unchanged)
-- Starred (new, only if any)
-- Today
-- Yesterday
-- Previous 7 Days
-- Previous 30 Days
-- Older — grouped by month ("November 2025", "October 2025", ...) up to current year, then by year for older
+## Fix
 
-Bucketing uses `updated_at`. Pinned/starred threads are excluded from date buckets so they don't double-list.
+### 1. One color for the whole vertical stack on mobile
 
-## Backend changes (one migration)
+- Pick `--canvas` (#0f0e11) as the single mobile surface color (it's the larger area; matching app to chrome rather than chrome to app).
+- `index.html` `<meta name="theme-color">` → `#0f0e11` (also update boot-shell `background` and `html, body` background in the inline `<style>`, plus `.boot-shell` background).
+- Add a `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0e11">` for completeness.
 
-Add two columns to `public.threads`:
-- `starred BOOLEAN NOT NULL DEFAULT false`
-- `archived BOOLEAN NOT NULL DEFAULT false`
+### 2. Flatten the mobile app bar
 
-Add indexes:
-- `idx_threads_user_starred (user_id, starred) WHERE starred`
-- `idx_threads_user_archived (user_id, archived)`
+In `src/index.css` `.mobile-app-bar`:
+- `background: var(--canvas)` (drop the color-mix darkening).
+- Remove `border-bottom` (replace with nothing — let it bleed into the canvas; the title typography is enough separation).
+- Keep the safe-area top padding as-is.
 
-Existing RLS already covers these (policies are row-level on user_id). Existing delete policy handles Delete. Cascade on `messages.thread_id` already set — delete just works.
+### 3. Flatten the composer footer band
 
-No edge function changes needed. No new tables.
+- Ensure the composer outer wrapper on mobile uses `background: var(--canvas)` (or transparent over a canvas body) so the safe-area-inset-bottom region matches everything else.
+- Audit the mobile composer wrap classes (`.chat-empty-composer`, `.m-composer-wrap` and any `padding-bottom: env(safe-area-inset-bottom)` rule near the composer) and confirm none paint a darker band.
 
-## Frontend changes
+### 4. Body / root fallback
 
-### New components
-- `src/components/sidebar/ThreadRow.tsx` — replaces inline `ThreadItem` in `SidebarChat.tsx`. Renders title, hover-revealed 3-dot trigger, inline rename input mode, project assignment dot.
-- `src/components/sidebar/ThreadRowMenu.tsx` — Radix DropdownMenu with all actions; nested submenu for project assignment.
-- `src/components/sidebar/ThreadDeleteDialog.tsx` — AlertDialog confirm.
+- `index.html` inline style: `html, body { background: #0f0e11 }` (was `#08080a`).
+- Confirm no `body { background: var(--floor) }` rule overrides on mobile in `index.css`.
 
-### Updated
-- `src/components/sidebar/SidebarChat.tsx` — replace flat list with grouped sections (Pinned, Starred, Today, Yesterday, Previous 7 Days, Previous 30 Days, month/year buckets). Filter out archived. Search still works across all groups.
-- `src/stores/threadStore.ts` — add:
-  - `updateThreadStarred(threadId, starred)`
-  - `updateThreadArchived(threadId, archived)`
-  - `deleteThread(threadId)` (calls supabase delete, removes from local state, navigates away if current)
-  - Extend `Thread` interface with `starred`, `archived`
-  - `loadThreads` already filterable; add `.eq('archived', false)` for default load
-- `src/lib/threadGrouping.ts` (new) — pure helpers: `groupThreadsByDate(threads)` returning ordered sections.
-- `src/integrations/supabase/types.ts` — add `starred`/`archived` to threads row type (manually until regen).
+### 5. Mobile typography & proportion polish (industry standards)
 
-### Touch points already in place
-- `useThreadStore.updateThreadPinned` ✓
-- `useThreadStore.updateThreadTitle` ✓
-- `useThreadStore.updateThreadProject` ✓
-- `useProjectStore.projects` ✓ (used to populate "Move to project" submenu)
+- **App bar title** (`.mobile-bar-title-main`): 17px → keep; tighten letter-spacing to `-0.01em` for SF-Pro-like optical balance.
+- **App bar subtitle** (`.mobile-bar-title-sub`): 9px mono caps → 10px, opacity slightly lifted (`--text-soft` instead of `--text-ghost`) so "LUCA · OPUS 4.7" doesn't look ghosted.
+- **Bar height**: 56px → 52px content area (Apple HIG nav-bar standard) plus safe-area inset; removes top-heavy feel.
+- **"polyphonic" wordmark** on mobile: currently sized for the desktop hero — reduce to ~26px and tighten letter-spacing to match Apple/OpenAI minimalism. Also reduce its opacity slightly so the sphere stays the hero.
+- **Sphere size on mobile**: confirm it scales to ~min(62vw, 280px) so it sits visually centered with breathing room above the wordmark.
+- **Composer input font-size**: enforce `16px` minimum on the mobile input (prevents iOS auto-zoom on focus — production-grade requirement).
+- **Composer pill**: increase border-radius slightly (24px → matches iOS messaging affordance), keep border at 1px `var(--border-subtle)`.
+- **Vertical rhythm** in the empty hero: sphere center at ~42% of available height, wordmark at ~76%, composer flush to bottom — the "balanced distribution" you described, but tuned to Apple's optical-center conventions (true center reads as low because of the composer weight).
 
-## UX details
+### 6. Status-bar text color
 
-- 3-dot button: 16px, opacity 0 by default, opacity 1 on row hover or when menu open. Always visible on touch (hover capability check).
-- Rename: clicking Rename swaps title to an `<input>` with auto-focus + select all. Enter/blur saves, Escape cancels. Uses `updateThreadTitle`.
-- Project submenu lists projects sorted by `updated_at`, shows checkmark next to current project, "Remove from project" if assigned, divider, "New project..." which navigates to `/projects` (project creation modal flow already exists there).
-- Delete dialog: "Delete \"{title}\"? This permanently removes the conversation and all its messages." with Cancel / Delete buttons.
-- Archived threads: out of scope for a dedicated view in this pass — archive just hides them. Add a small "Show archived" toggle at the bottom of the list as escape hatch (loads archived=true and renders them in a collapsed section). Unarchive available from the same 3-dot menu.
+- `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` so when added to home screen the status bar text stays light over the unified dark.
 
-## Accessibility
+## Files touched (all frontend, no backend)
 
-- 3-dot trigger: `aria-label="Thread actions"`, focusable, opens menu on Enter/Space.
-- Menu items keyboard-navigable (Radix handles this).
-- Delete dialog has focus trap (Radix AlertDialog).
-- Rename input has `aria-label="Rename thread"`.
+- `index.html` — theme-color, status-bar-style, inline boot-shell background.
+- `src/index.css` — `.mobile-app-bar` (background, remove border, height), `.mobile-bar-title-main/-sub` (size, color, tracking), composer mobile padding, ensure body bg matches.
+- `src/pages/ChatView.tsx` — mobile branch of the empty hero: sphere size token, wordmark size, vertical positioning percentages, composer input font-size guard.
 
 ## Verification
 
-1. Migration applies cleanly; `starred`/`archived` defaults populate existing rows to false.
-2. Existing threads still appear, now bucketed by `updated_at`.
-3. Each menu action persists (refresh confirms): rename, pin, star, archive, delete, assign project.
-4. Deleting current thread navigates to `/chat`.
-5. No console errors.
-6. Search filters across all visible groups.
-7. Pinned > Starred > date buckets ordering preserved after each mutation.
+1. Reload on iPhone Safari → screenshot top + bottom: status bar, app bar, canvas, composer, safe-area, URL bar all read as one continuous `#0f0e11`.
+2. No visible seam lines between Safari chrome and app surface.
+3. Tap composer → no iOS auto-zoom (16px input enforced).
+4. Sphere + wordmark + composer feel optically balanced at 390×844 and 430×932 (iPhone 16 Pro Max).
+5. Existing desktop layout untouched.
 
 ## Out of scope
 
-- Dedicated `/archived` page (toggle covers it for now).
-- Bulk select / multi-thread actions.
-- Drag-to-reorder.
-- Folder/tag system beyond projects.
+No backend, no edge functions, no schema changes. Pure frontend cohesion + typography pass.

@@ -1793,24 +1793,25 @@ export default function ChatView() {
                 animation: 'viewFadeIn 0.8s var(--ease-out) both',
               }}
             >
-              {/* Sphere centered in the full open area */}
-              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+              {/* Sphere optically centered in the upper open area */}
+              <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)' }}>
                 <ExpressiveField
-                  size={240}
+                  size={Math.min(260, Math.round(window.innerWidth * 0.62))}
                   state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
                   shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
                 />
               </div>
-              {/* Wordmark centered between sphere-bottom (50%+radius) and composer top (100%) */}
+              {/* Wordmark optically balanced between sphere and composer */}
               <h1 style={{
                 position: 'absolute',
                 left: '50%',
-                top: '81%',
+                top: '82%',
                 transform: 'translate(-50%, -50%)',
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: 280,
-                letterSpacing: '0.08em',
+                letterSpacing: '0.06em',
                 color: 'var(--text-tertiary)',
+                opacity: 0.78,
                 fontFamily: 'var(--font-sans)',
                 textTransform: 'lowercase',
                 margin: 0,
