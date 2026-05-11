@@ -432,26 +432,20 @@ export default function ChatView() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  // iOS Safari keyboard tracking — write the keyboard height into a CSS
-  // var so the fixed-position composer can ride above the keyboard
-  // without the page scrolling. Only active on mobile.
+  // iOS Safari keyboard handling: with `interactive-widget=resizes-content`
+  // in the viewport meta + `100dvh` on the shell, the layout reflows
+  // automatically when the keyboard opens. We just nudge the scroller
+  // back to the bottom on resize so the latest message stays visible.
   React.useEffect(() => {
     if (!isMobile) return;
     const vv = window.visualViewport;
     if (!vv) return;
-    const root = document.documentElement;
-    const update = () => {
-      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty('--kb-offset', `${offset}px`);
+    const onResize = () => {
+      const scroller = document.querySelector('.chat-scroll-area') as HTMLElement | null;
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
     };
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-      root.style.removeProperty('--kb-offset');
-    };
+    vv.addEventListener('resize', onResize);
+    return () => { vv.removeEventListener('resize', onResize); };
   }, [isMobile]);
 
   const user = useAuthStore((s) => s.user);
