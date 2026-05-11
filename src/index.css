@@ -977,8 +977,8 @@ html {
 }
 
 @media (max-width: 767px) {
-  html, body {
-    background: var(--canvas);
+  html, body, #root {
+    background: var(--floor);
   }
 
   .app-shell {
@@ -992,7 +992,7 @@ html {
     flex-direction: column;
     padding: 0;
     gap: 0;
-    background: var(--canvas) !important;
+    background: var(--floor) !important;
   }
 
   .app-main {
@@ -1001,12 +1001,14 @@ html {
     min-width: 0;
     max-width: 100dvw;
     min-height: 0;
+    background: var(--floor);
   }
 
   .chat-view {
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    background: var(--floor);
   }
 }
 
