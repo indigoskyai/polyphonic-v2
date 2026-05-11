@@ -367,12 +367,18 @@ html {
 
 @layer base {
   * { @apply border-border; }
+  html {
+    background-color: var(--floor);
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    background-color: var(--floor);
+    overscroll-behavior-y: none;
   }
 }
 
@@ -965,14 +971,14 @@ html {
   right: 0;
   top: -32px;
   height: 32px;
-  background: linear-gradient(to top, var(--canvas), transparent);
+  background: linear-gradient(to top, var(--floor), transparent);
   pointer-events: none;
   z-index: -1;
 }
 
 @media (max-width: 767px) {
-  html, body {
-    background: var(--canvas);
+  html, body, #root {
+    background: var(--floor);
   }
 
   .app-shell {
@@ -986,7 +992,7 @@ html {
     flex-direction: column;
     padding: 0;
     gap: 0;
-    background: var(--canvas) !important;
+    background: var(--floor) !important;
   }
 
   .app-main {
@@ -995,12 +1001,14 @@ html {
     min-width: 0;
     max-width: 100dvw;
     min-height: 0;
+    background: var(--floor);
   }
 
   .chat-view {
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    background: var(--floor);
   }
 }
 
@@ -1011,7 +1019,7 @@ html {
   display: none;
   align-items: center;
   gap: 10px;
-  background: var(--canvas);
+  background: var(--floor);
   border-bottom: none;
   position: relative;
   z-index: 45;
@@ -1948,10 +1956,30 @@ html {
 }
 
 @media (max-width: 767px) {
+  /* Pin composer to the bottom of the visual viewport so iOS Safari can't
+     scroll the page upward when the keyboard opens. --kb-offset is set
+     from JS via window.visualViewport (see ChatView). */
+  .input-zone,
+  .chat-empty-composer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    transform: translateY(calc(-1 * var(--kb-offset, 0px)));
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
   .input-zone {
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
     max-width: none;
-    background: var(--canvas);
+    background: var(--floor);
+  }
+
+  .chat-empty-composer {
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--floor);
   }
 
   .input-zone::before {
@@ -2342,7 +2370,8 @@ html {
 
 @media (max-width: 767px) {
   .chat-scroll-area {
-    padding: 22px 0 10px;
+    padding: 22px 0 calc(120px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(140px + env(safe-area-inset-bottom));
   }
 
   .chat-header {
@@ -2364,7 +2393,8 @@ html {
   }
 
   .chat-empty-center {
-    padding: 0 16px calc(14px + env(safe-area-inset-bottom));
+    /* Reserve space at the bottom for the now-fixed composer */
+    padding: 0 16px calc(140px + env(safe-area-inset-bottom));
     justify-content: flex-end;
   }
 

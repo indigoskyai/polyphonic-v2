@@ -431,6 +431,29 @@ export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  // iOS Safari keyboard tracking — write the keyboard height into a CSS
+  // var so the fixed-position composer can ride above the keyboard
+  // without the page scrolling. Only active on mobile.
+  React.useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--kb-offset', `${offset}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      root.style.removeProperty('--kb-offset');
+    };
+  }, [isMobile]);
+
   const user = useAuthStore((s) => s.user);
   // Narrow selectors — the parent renders the *list shell* and the
   // streaming bubble. Individual messages are handled by <MessageItem>,
