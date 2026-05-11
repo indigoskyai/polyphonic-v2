@@ -1002,13 +1002,13 @@ html {
 
 .mobile-app-bar {
   flex: 0 0 auto;
-  min-height: calc(56px + env(safe-area-inset-top));
-  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  min-height: calc(52px + env(safe-area-inset-top));
+  padding: calc(6px + env(safe-area-inset-top)) 10px 6px;
   display: none;
   align-items: center;
   gap: 10px;
-  background: color-mix(in srgb, var(--canvas) 94%, black 6%);
-  border-bottom: 1px solid var(--border-faint);
+  background: var(--canvas);
+  border-bottom: none;
   position: relative;
   z-index: 45;
 }
@@ -1069,7 +1069,7 @@ html {
   font-size: 17px;
   line-height: 1.18;
   font-weight: 560;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 .mobile-bar-title-sub {
@@ -1078,11 +1078,12 @@ html {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.2;
   letter-spacing: var(--track-mono);
   text-transform: uppercase;
-  color: var(--text-ghost);
+  color: var(--text-soft);
+  opacity: 0.72;
 }
 
 .mobile-nav-backdrop {
