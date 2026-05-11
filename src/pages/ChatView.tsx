@@ -1772,43 +1772,73 @@ export default function ChatView() {
         onDrop={handleDrop}
       >
         <div
-          className="chat-empty-center flex-1 flex flex-col items-center justify-center"
+          className="chat-empty-center flex-1 flex flex-col items-center"
           style={{
-            // Tightened layout: simulator + wordmark + composer sit as one
-            // visual group, vertically centered. No huge stretch gaps —
-            // they belong together as the welcome moment, not three
-            // separated zones.
-            paddingTop: isMobile ? '4vh' : '5vh',
-            paddingBottom: isMobile ? '4vh' : '5vh',
-            gap: isMobile ? 16 : 22,
+            // Mobile: sphere centered in the full open area, wordmark
+            // centered in the lower half (between sphere center and
+            // composer top). Desktop: keep tightened group layout.
+            justifyContent: isMobile ? 'flex-end' : 'center',
+            paddingTop: isMobile ? 0 : '5vh',
+            paddingBottom: isMobile ? '2vh' : '5vh',
+            gap: isMobile ? 0 : 22,
           }}
         >
-          {/* Hero — Expressive Field (Sovereign Mind engine, 12 shapes auto-
-              cycling) + wordmark, dominant scale. */}
-          <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 14 : 18 }}>
-            <ExpressiveField
-              size={isMobile ? 280 : 440}
-              state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
-              /* Shape responds to active modes — the simulator becomes a
-                 visual confirmation of the configuration:
-                 0=Sphere (default Luca), 10=Echo (ensemble, nested spheres),
-                 4=Torus (agent runtime, single-loop topology).
-                 The engine morphs particles smoothly between shapes via
-                 home-target easing — graceful transform on every toggle. */
-              shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
-            />
-            <h1 style={{
-              fontSize: isMobile ? 28 : 38,
-              fontWeight: 280,
-              letterSpacing: isMobile ? '0.08em' : '0.16em',
-              color: 'var(--text-tertiary)',
-              fontFamily: 'var(--font-sans)',
-              textTransform: 'lowercase',
-              margin: 0,
-            }}>
-              polyphonic
-            </h1>
-          </div>
+          {isMobile ? (
+            <div
+              className="chat-empty-hero"
+              style={{
+                position: 'relative',
+                flex: 1,
+                width: '100%',
+                animation: 'viewFadeIn 0.8s var(--ease-out) both',
+              }}
+            >
+              {/* Sphere centered in the full open area */}
+              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                <ExpressiveField
+                  size={240}
+                  state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
+                  shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
+                />
+              </div>
+              {/* Wordmark centered between sphere-bottom (50%+radius) and composer top (100%) */}
+              <h1 style={{
+                position: 'absolute',
+                left: '50%',
+                top: '81%',
+                transform: 'translate(-50%, -50%)',
+                fontSize: 28,
+                fontWeight: 280,
+                letterSpacing: '0.08em',
+                color: 'var(--text-tertiary)',
+                fontFamily: 'var(--font-sans)',
+                textTransform: 'lowercase',
+                margin: 0,
+                whiteSpace: 'nowrap',
+              }}>
+                polyphonic
+              </h1>
+            </div>
+          ) : (
+            <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <ExpressiveField
+                size={440}
+                state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
+                shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
+              />
+              <h1 style={{
+                fontSize: 38,
+                fontWeight: 280,
+                letterSpacing: '0.16em',
+                color: 'var(--text-tertiary)',
+                fontFamily: 'var(--font-sans)',
+                textTransform: 'lowercase',
+                margin: 0,
+              }}>
+                polyphonic
+              </h1>
+            </div>
+          )}
 
           {/* Composer — sits with the hero as one welcome group.
               maxWidth + alignItems:stretch so the input-shell fills the
