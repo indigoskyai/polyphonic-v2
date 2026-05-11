@@ -1,81 +1,67 @@
-## What's wrong (image 1)
+# Mobile Safari polish — seamless surface + stable composer
 
-Three different darks are stacked on top of each other on iOS Safari:
+Two distinct iOS Safari issues, one root cause each.
 
-```
-┌──────────────────────────┐  Safari status bar — #08080a (theme-color, --floor)
-├──────────────────────────┤  ← visible seam
-│   Polyphonic / LUCA…     │  mobile app bar — color-mix(canvas, +6% black) ≈ #0e0d0f, plus 1px border
-├──────────────────────────┤  ← visible seam
-│                          │
-│        (sphere)          │  app canvas — #0f0e11 (--canvas)
-│       polyphonic         │
-│                          │
-├──────────────────────────┤
-│   composer pill          │
-├──────────────────────────┤
-│ safe-area inset          │  body fallback — #08080a (--floor) again
-├──────────────────────────┤  ← visible seam
-│   Safari URL bar         │  Safari chrome — #08080a (theme-color)
-└──────────────────────────┘
-```
+## Issue 1 — Top/bottom bars don't match the page
 
-ChatGPT (image 2) collapses all of this into one color. We do the same.
+On iOS Safari, the strip behind the status bar (clock/battery) and the strip behind the home-indicator / URL bar are NOT part of our React tree. Safari paints them itself, sampling color from two places:
 
-## Fix
+1. `<meta name="theme-color">` (used for the URL bar tint)
+2. The `<html>` element's background color (used for the safe-area extension when content scrolls under it with `viewport-fit=cover`)
 
-### 1. One color for the whole vertical stack on mobile
+Right now our tokens mismatch:
 
-- Pick `--canvas` (#0f0e11) as the single mobile surface color (it's the larger area; matching app to chrome rather than chrome to app).
-- `index.html` `<meta name="theme-color">` → `#0f0e11` (also update boot-shell `background` and `html, body` background in the inline `<style>`, plus `.boot-shell` background).
-- Add a `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0e11">` for completeness.
+- `--canvas` = `#0f0e11` → used by `theme-color`, `html`/`body`, and the mobile app-shell
+- `--floor`  = `#08080a` → used by `LandingPage` background and most full-screen page surfaces
 
-### 2. Flatten the mobile app bar
+So Safari paints the chrome strips in `#0f0e11` while the actual page paints in `#08080a`. Two slightly different blacks → the seam Riley sees in IMG_3100/IMG_3101.
 
-In `src/index.css` `.mobile-app-bar`:
-- `background: var(--canvas)` (drop the color-mix darkening).
-- Remove `border-bottom` (replace with nothing — let it bleed into the canvas; the title typography is enough separation).
-- Keep the safe-area top padding as-is.
+**Fix:** pick one black for the entire mobile surface and force everything that touches an edge to it. Choosing `--floor` (#08080a) because it's what LandingPage + most chrome already use.
 
-### 3. Flatten the composer footer band
+Changes:
+- `index.html` — `<meta name="theme-color">` from `#0f0e11` → `#08080a` (both the plain and `prefers-color-scheme: dark` variants). Also update the inline boot-shell `background` to match.
+- `src/index.css` — at the mobile breakpoint (`@media (max-width: 767px)`), force `html`, `body`, `#root`, and `.app-shell[data-mobile="true"]` to `background: #08080a` (i.e. `var(--floor)`). Add `background-color: var(--floor)` to `html` globally as a safe baseline so Safari's safe-area fill never differs.
+- Audit the three surfaces visible on mobile (`LandingPage`, `ChatView` landing state, `ChatView` conversation state) — anything using `var(--canvas)` as a full-bleed background on mobile gets switched to `var(--floor)`. The mobile app-bar (`.mobile-app-bar`) also moves from `--canvas` → `--floor`.
+- Add `overscroll-behavior-y: none` on `html, body` so the iOS rubber-band reveal at the top/bottom doesn't expose a different color underneath.
 
-- Ensure the composer outer wrapper on mobile uses `background: var(--canvas)` (or transparent over a canvas body) so the safe-area-inset-bottom region matches everything else.
-- Audit the mobile composer wrap classes (`.chat-empty-composer`, `.m-composer-wrap` and any `padding-bottom: env(safe-area-inset-bottom)` rule near the composer) and confirm none paint a darker band.
+## Issue 2 — Composer flies to the top of the screen on tap
 
-### 4. Body / root fallback
+Default iOS Safari behavior when an `<input>` is focused:
+1. Keyboard slides up
+2. The visual viewport shrinks
+3. Safari auto-scrolls the page so the focused input is visible — but because our composer was already pinned to the bottom of a `100vh` flex column, "visible" gets interpreted as "pull the whole page upward," which is what we see in IMG_3100.
 
-- `index.html` inline style: `html, body { background: #0f0e11 }` (was `#08080a`).
-- Confirm no `body { background: var(--floor) }` rule overrides on mobile in `index.css`.
+The fix is to take the composer off the document flow on mobile and anchor it to the **visual viewport** so it rides exactly on top of the keyboard without the page scrolling.
 
-### 5. Mobile typography & proportion polish (industry standards)
+Changes in `src/components/mobile/MobileComposer.tsx` + `.m-composer-wrap` CSS:
 
-- **App bar title** (`.mobile-bar-title-main`): 17px → keep; tighten letter-spacing to `-0.01em` for SF-Pro-like optical balance.
-- **App bar subtitle** (`.mobile-bar-title-sub`): 9px mono caps → 10px, opacity slightly lifted (`--text-soft` instead of `--text-ghost`) so "LUCA · OPUS 4.7" doesn't look ghosted.
-- **Bar height**: 56px → 52px content area (Apple HIG nav-bar standard) plus safe-area inset; removes top-heavy feel.
-- **"polyphonic" wordmark** on mobile: currently sized for the desktop hero — reduce to ~26px and tighten letter-spacing to match Apple/OpenAI minimalism. Also reduce its opacity slightly so the sphere stays the hero.
-- **Sphere size on mobile**: confirm it scales to ~min(62vw, 280px) so it sits visually centered with breathing room above the wordmark.
-- **Composer input font-size**: enforce `16px` minimum on the mobile input (prevents iOS auto-zoom on focus — production-grade requirement).
-- **Composer pill**: increase border-radius slightly (24px → matches iOS messaging affordance), keep border at 1px `var(--border-subtle)`.
-- **Vertical rhythm** in the empty hero: sphere center at ~42% of available height, wordmark at ~76%, composer flush to bottom — the "balanced distribution" you described, but tuned to Apple's optical-center conventions (true center reads as low because of the composer weight).
+- Make `.m-composer-wrap` `position: fixed; left: 0; right: 0; bottom: 0;` with `padding-bottom: max(env(safe-area-inset-bottom), 12px)` so it sits flush above the home indicator when no keyboard.
+- Add a small JS hook (inside `MobileComposer`) that subscribes to `window.visualViewport`'s `resize` and `scroll` events and writes the current keyboard offset to a CSS custom property on the wrapper:
+  ```
+  const vv = window.visualViewport;
+  const offset = window.innerHeight - (vv.height + vv.offsetTop);
+  el.style.setProperty('--kb-offset', `${Math.max(0, offset)}px`);
+  ```
+  Then `.m-composer-wrap` uses `transform: translateY(calc(var(--kb-offset, 0px) * -1))` to ride above the keyboard.
+- Use `100dvh` (already in place in some spots, audit and replace any remaining `100vh` in mobile chat view) so the page itself doesn't resize when the keyboard opens.
+- Add `scroll-padding-bottom` on the messages scroller equal to composer height + keyboard height so the last message stays visible while typing.
+- Reserve space at the bottom of the messages scroller equal to composer height so content is never hidden behind the fixed composer.
 
-### 6. Status-bar text color
-
-- `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` so when added to home screen the status bar text stays light over the unified dark.
-
-## Files touched (all frontend, no backend)
-
-- `index.html` — theme-color, status-bar-style, inline boot-shell background.
-- `src/index.css` — `.mobile-app-bar` (background, remove border, height), `.mobile-bar-title-main/-sub` (size, color, tracking), composer mobile padding, ensure body bg matches.
-- `src/pages/ChatView.tsx` — mobile branch of the empty hero: sphere size token, wordmark size, vertical positioning percentages, composer input font-size guard.
+This combination is the standard iOS PWA pattern (used by ChatGPT, Claude, Linear's mobile web): page never scrolls on focus, composer stays glued to the keyboard.
 
 ## Verification
 
-1. Reload on iPhone Safari → screenshot top + bottom: status bar, app bar, canvas, composer, safe-area, URL bar all read as one continuous `#0f0e11`.
-2. No visible seam lines between Safari chrome and app surface.
-3. Tap composer → no iOS auto-zoom (16px input enforced).
-4. Sphere + wordmark + composer feel optically balanced at 390×844 and 430×932 (iPhone 16 Pro Max).
-5. Existing desktop layout untouched.
+Cannot test the iOS chrome directly in the sandbox (Riley's point — those areas only exist on the device). Verification plan:
 
-## Out of scope
+1. Sandbox preview at 390×844: confirm the composer is now `position: fixed`, sits at the bottom, no layout shift on focus, no element above the messages list jumps.
+2. Computed-style check: `getComputedStyle(document.documentElement).backgroundColor` returns `rgb(8, 8, 10)` on mobile.
+3. Riley reloads `polyphonic.chat` on iPhone after publish: status bar strip and home-indicator strip should be visually indistinguishable from the page; tapping the composer should not move the composer or scroll the page.
 
-No backend, no edge functions, no schema changes. Pure frontend cohesion + typography pass.
+## Files touched
+
+- `index.html` (theme-color + boot-shell bg)
+- `src/index.css` (html bg baseline, mobile overrides, `.m-composer-wrap` fixed positioning + safe-area, `.mobile-app-bar` color)
+- `src/components/mobile/MobileComposer.tsx` (visualViewport hook for `--kb-offset`)
+- `src/pages/ChatView.tsx` + `src/pages/LandingPage.tsx` (only mobile-conditional bg fixes — switch `--canvas` → `--floor` on full-bleed wrappers)
+
+No backend changes. No data model changes. Pure presentation.
