@@ -367,12 +367,18 @@ html {
 
 @layer base {
   * { @apply border-border; }
+  html {
+    background-color: var(--floor);
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    background-color: var(--floor);
+    overscroll-behavior-y: none;
   }
 }
 
