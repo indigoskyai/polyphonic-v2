@@ -1019,7 +1019,7 @@ html {
   display: none;
   align-items: center;
   gap: 10px;
-  background: var(--canvas);
+  background: var(--floor);
   border-bottom: none;
   position: relative;
   z-index: 45;
