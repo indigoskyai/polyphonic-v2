@@ -2367,8 +2367,8 @@ html {
 
 @media (max-width: 767px) {
   .chat-scroll-area {
-    padding: 22px 0 calc(120px + env(safe-area-inset-bottom));
-    scroll-padding-bottom: calc(140px + env(safe-area-inset-bottom));
+    padding: 16px 0 12px;
+    scroll-padding-bottom: 24px;
   }
 
   .chat-header {
@@ -2390,8 +2390,7 @@ html {
   }
 
   .chat-empty-center {
-    /* Reserve space at the bottom for the now-fixed composer */
-    padding: 0 16px calc(140px + env(safe-area-inset-bottom));
+    padding: 0 16px;
     justify-content: flex-end;
   }
 
