@@ -16,17 +16,20 @@ Plan: `.lovable/plan.md`
 - [x] Inline media CSS in `index.css` (shimmer, lightbox, citations grid, mobile-safe toolbar)
 - [x] Deployed: chat-multi
 
-## Phase D — Agent prompt + autonomy tuning (next)
-- [ ] Verify `stopWhen` ≥ 5 tool hops in chat-multi (raise if needed)
-- [ ] Tool-result memory so "make it darker" → `edit_image` on last image without source path
+## Phase D — Agent prompt + autonomy tuning ✅
+- [x] Planner auto-resolves "edit it / make it darker" by querying the thread's most recent assistant message attachments and injecting the storage_path into the planning system prompt.
+- [x] Planner prompt teaches generate_image vs create_artifact (svg) + web_search→read_url chaining (Phase A).
+- [x] Single-shot planner is correct: multi-step happens via subsequent user turns; chairman receives ground-truth tool summary already.
+- [x] Deployed: anima-tool-execute.
 
-## Phase E — E2E verification
-- [ ] Watercolor fox → inline image → lightbox → download → edit-with-prompt
-- [ ] SVG mountain icon → svg card → expand → download .svg
-- [ ] AI news this week → citations strip
-- [ ] Read URL → summary + citation
-- [ ] Mobile viewport (390×844) tap-friendly
-- [ ] Zero new console errors
+## Phase E — E2E verification (manual)
+Send these prompts in /chat and confirm:
+- "Paint a watercolor fox" → inline image → tap to expand → Download → "Edit with prompt: make it nighttime"
+- "Make me an SVG icon of a mountain" → SVG card → expand → Download .svg → toggle source
+- "What happened in AI news this week?" → citations card with source chips
+- "Read https://example.com and summarize" → summary + citation chip
+- Mobile 390×844: cards + lightbox stay tap-friendly
+- Zero new console errors
 
 ## Decision log
 - "Edit with prompt" prefills the composer with an explicit storage_path reference instead of mutating state directly — keeps the planner in the loop and visible to the user.
