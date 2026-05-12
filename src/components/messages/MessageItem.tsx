@@ -7,6 +7,8 @@ import RichBody from '@/components/rich/RichBody';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
 import ImagePreview from '@/components/attachments/ImagePreview';
+import ImageCard from '@/components/messages/ImageCard';
+import SearchCitationsCard, { type Citation } from '@/components/messages/SearchCitationsCard';
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useFirstMount } from '@/lib/useFirstMount';
