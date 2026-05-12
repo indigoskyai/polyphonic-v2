@@ -1329,6 +1329,8 @@ async function saveAssistantMessage(
     };
   }
 
+  const attachments = buildAttachmentsFromToolMessages(toolMessages);
+
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
     thread_id: threadId,
     user_id: userId,
@@ -1338,6 +1340,7 @@ async function saveAssistantMessage(
     agent: agentId,
     thinking_content: thinkingContent || null,
     tokens_used: null,
+    ...(attachments.length > 0 ? { attachments } : {}),
     ...(metadata ? { metadata } : {}),
   }).select("id").single();
 
