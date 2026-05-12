@@ -1014,8 +1014,8 @@ html {
 
 .mobile-app-bar {
   flex: 0 0 auto;
-  min-height: calc(56px + max(env(safe-area-inset-top), 12px));
-  padding: calc(max(env(safe-area-inset-top), 12px) + 10px) 10px 8px;
+  min-height: calc(64px + max(env(safe-area-inset-top), 12px));
+  padding: calc(max(env(safe-area-inset-top), 12px) + 14px) 10px 8px;
   display: none;
   align-items: center;
   gap: 10px;
