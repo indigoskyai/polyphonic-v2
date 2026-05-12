@@ -234,7 +234,10 @@ serve(async (req) => {
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       useAgentRuntime === true;
-    const shouldRunLegacyToolPlanner =
+    // Tool planner is enabled when explicitly requested OR when this is the
+    // system Luca (so image gen / web search / artifacts work out of the box
+    // without the user toggling agent mode).
+    const explicitAgentRuntime =
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       agentRuntime === "legacy_tool_planner" ||
