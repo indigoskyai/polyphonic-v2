@@ -433,6 +433,12 @@ serve(async (req) => {
               starting_url: args.starting_url,
               max_steps: args.max_steps,
             };
+          } else if (fnName === "generate_image") {
+            edgeFn = "anima-image-create";
+            body = { prompt: args.prompt, aspect_ratio: args.aspect_ratio, transparent: args.transparent };
+          } else if (fnName === "edit_image") {
+            edgeFn = "anima-image-edit";
+            body = { source_path: args.source_path, source_bucket: args.source_bucket, prompt: args.prompt };
           } else if (fnName === "workspace_file") {
             edgeFn = "anima-workspace-file";
             body = {
