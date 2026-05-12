@@ -234,7 +234,10 @@ serve(async (req) => {
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       useAgentRuntime === true;
-    const shouldRunLegacyToolPlanner =
+    // Tool planner is enabled when explicitly requested OR when this is the
+    // system Luca (so image gen / web search / artifacts work out of the box
+    // without the user toggling agent mode).
+    const explicitAgentRuntime =
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       agentRuntime === "legacy_tool_planner" ||
@@ -273,6 +276,8 @@ serve(async (req) => {
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
+    const shouldRunLegacyToolPlanner = explicitAgentRuntime || agentIsSystemLuca;
+
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
@@ -348,9 +353,14 @@ serve(async (req) => {
           continuityNote,
         ].filter(Boolean).join("\n\n");
 
+    // When the tool planner is enabled, advertise the tools so the model
+    // doesn't claim it lacks the capability. Actual invocation happens via
+    // the planner; this just keeps the chat copy honest.
+    const toolCapabilityNote = shouldRunLegacyToolPlanner
+      ? "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks for an image, SVG, or live information, just do it — never claim you lack the ability.";
     // Build base messages array
     const baseMessages: any[] = [
-      { role: "system", content: enrichedSystemPrompt },
+      { role: "system", content: enrichedSystemPrompt + toolCapabilityNote },
     ];
     if (history) {
       for (const msg of history) {
