@@ -1000,6 +1000,47 @@ async function runToolPlanner(threadId: string, authHeader: string, messages: an
   }
 }
 
+/**
+ * Inspect tool_messages from the planner and extract any rendered media
+ * (generated/edited images) as attachments to persist on the assistant message.
+ * The attachments array drives inline rendering in MessageItem.
+ */
+function buildAttachmentsFromToolMessages(toolMessages: any[]): Array<{ type: string; url: string; meta?: any }> {
+  const out: Array<{ type: string; url: string; meta?: any }> = [];
+  if (!Array.isArray(toolMessages)) return out;
+
+  // toolMessages alternates: [assistant w/ tool_calls, tool, tool, ...]
+  // We need to know which tool produced each tool result, by tool_call_id.
+  const toolCallById = new Map<string, string>(); // tool_call_id -> name
+  for (const m of toolMessages) {
+    if (m?.role === "assistant" && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc?.id && tc?.function?.name) toolCallById.set(tc.id, tc.function.name);
+      }
+    }
+  }
+  for (const m of toolMessages) {
+    if (m?.role !== "tool" || !m.tool_call_id) continue;
+    const name = toolCallById.get(m.tool_call_id);
+    if (name !== "generate_image" && name !== "edit_image") continue;
+    let parsed: any;
+    try { parsed = typeof m.content === "string" ? JSON.parse(m.content) : m.content; } catch { continue; }
+    const url = parsed?.image_url;
+    if (typeof url !== "string" || url.length === 0) continue;
+    out.push({
+      type: "image",
+      url,
+      meta: {
+        kind: name,
+        storage_path: parsed?.storage_path,
+        revised_prompt: parsed?.revised_prompt,
+        source_path: parsed?.source_path,
+      },
+    });
+  }
+  return out;
+}
+
 
 /** Call a single model non-streaming, returning content and thinking. */
 async function callModelNonStreaming(
