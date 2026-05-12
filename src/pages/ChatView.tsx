@@ -564,6 +564,7 @@ export default function ChatView() {
   // Allow inline UI (e.g. ImageCard "Edit with prompt") to prefill the
   // composer and optionally auto-send. Listens for window event dispatched
   // from MediaLightbox/ImageCard.
+  const sendMessageRef = useRef<((opts?: { text?: string }) => void) | null>(null);
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
@@ -571,7 +572,6 @@ export default function ChatView() {
       if (!text) return;
       setInput(text);
       if (detail.autoSend) {
-        // Defer so setInput commits before send reads it.
         setTimeout(() => { void sendMessageRef.current?.({ text }); }, 30);
       }
     };
