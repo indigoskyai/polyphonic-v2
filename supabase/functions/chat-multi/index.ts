@@ -882,6 +882,7 @@ serve(async (req) => {
             variants, synthesisThinking || null, agentId,
             { rankings, aggregate, label_to_model: labelToModel },
             councilV2Trace,
+            toolMessages,
           );
           // Update thread timestamp
           await supabase
