@@ -273,7 +273,12 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const { messages, custom_instructions, thread_id, source_message_id } = await req.json();
+    const { messages, custom_instructions, thread_id, source_message_id, user_id: bodyUserId } = await req.json();
+    // When invoked with the service role (internal call from chat-multi), the
+    // caller MUST pass user_id in the body so we can resolve their API key.
+    if (!userId && typeof bodyUserId === "string" && bodyUserId.length > 0) {
+      userId = bodyUserId;
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
