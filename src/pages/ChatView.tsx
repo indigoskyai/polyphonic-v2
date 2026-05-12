@@ -448,6 +448,32 @@ export default function ChatView() {
     return () => { vv.removeEventListener('resize', onResize); };
   }, [isMobile]);
 
+  // Reactive viewport-aware sphere size for mobile. Scales with both width
+  // and height so the field always has a comfortable margin and never
+  // collides with the app bar / wordmark / composer.
+  const [mobileFieldSize, setMobileFieldSize] = React.useState(() => {
+    if (typeof window === 'undefined') return 320;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return Math.max(220, Math.min(460, Math.min(w * 0.88, h * 0.48)));
+  });
+  React.useEffect(() => {
+    if (!isMobile) return;
+    const recompute = () => {
+      const vv = window.visualViewport;
+      const w = vv?.width ?? window.innerWidth;
+      const h = vv?.height ?? window.innerHeight;
+      setMobileFieldSize(Math.round(Math.max(220, Math.min(460, Math.min(w * 0.88, h * 0.48)))));
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    window.visualViewport?.addEventListener('resize', recompute);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      window.visualViewport?.removeEventListener('resize', recompute);
+    };
+  }, [isMobile]);
+
   const user = useAuthStore((s) => s.user);
   // Narrow selectors — the parent renders the *list shell* and the
   // streaming bubble. Individual messages are handled by <MessageItem>,
