@@ -993,7 +993,7 @@ function collectObservers(opts: {
 async function runToolPlanner(threadId: string, userId: string, messages: any[]): Promise<any[]> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    const timeout = setTimeout(() => controller.abort(), 130_000);
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/anima-tool-execute`, {
       method: "POST",
