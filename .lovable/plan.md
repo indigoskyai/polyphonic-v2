@@ -1,67 +1,54 @@
-# Mobile Safari polish — seamless surface + stable composer
+# Plan: Larger, viewport-aware particle field on mobile
 
-Two distinct iOS Safari issues, one root cause each.
+## Problem
 
-## Issue 1 — Top/bottom bars don't match the page
+In `src/pages/ChatView.tsx` (line 1816), the mobile `ExpressiveField` is sized as:
 
-On iOS Safari, the strip behind the status bar (clock/battery) and the strip behind the home-indicator / URL bar are NOT part of our React tree. Safari paints them itself, sampling color from two places:
+```ts
+size={Math.min(260, Math.round(window.innerWidth * 0.62))}
+```
 
-1. `<meta name="theme-color">` (used for the URL bar tint)
-2. The `<html>` element's background color (used for the safe-area extension when content scrolls under it with `viewport-fit=cover`)
+On a 390px-wide iPhone this caps at ~241px. The user wants it close to 2× that, matching the circle they drew (~340–360px on a 390px viewport, leaving a small breathing margin on each side). The size should also adapt live to any phone width/height, not be a fixed constant.
 
-Right now our tokens mismatch:
+## Approach
 
-- `--canvas` = `#0f0e11` → used by `theme-color`, `html`/`body`, and the mobile app-shell
-- `--floor`  = `#08080a` → used by `LandingPage` background and most full-screen page surfaces
+Replace the one-shot `window.innerWidth` calculation with a small reactive hook that recomputes on viewport changes and respects both width and height so the sphere never collides with the app bar or composer.
 
-So Safari paints the chrome strips in `#0f0e11` while the actual page paints in `#08080a`. Two slightly different blacks → the seam Riley sees in IMG_3100/IMG_3101.
+### 1. Compute size from both dimensions
 
-**Fix:** pick one black for the entire mobile surface and force everything that touches an edge to it. Choosing `--floor` (#08080a) because it's what LandingPage + most chrome already use.
+Formula:
 
-Changes:
-- `index.html` — `<meta name="theme-color">` from `#0f0e11` → `#08080a` (both the plain and `prefers-color-scheme: dark` variants). Also update the inline boot-shell `background` to match.
-- `src/index.css` — at the mobile breakpoint (`@media (max-width: 767px)`), force `html`, `body`, `#root`, and `.app-shell[data-mobile="true"]` to `background: #08080a` (i.e. `var(--floor)`). Add `background-color: var(--floor)` to `html` globally as a safe baseline so Safari's safe-area fill never differs.
-- Audit the three surfaces visible on mobile (`LandingPage`, `ChatView` landing state, `ChatView` conversation state) — anything using `var(--canvas)` as a full-bleed background on mobile gets switched to `var(--floor)`. The mobile app-bar (`.mobile-app-bar`) also moves from `--canvas` → `--floor`.
-- Add `overscroll-behavior-y: none` on `html, body` so the iOS rubber-band reveal at the top/bottom doesn't expose a different color underneath.
+```
+size = clamp( min(viewportW * 0.88, viewportH * 0.48), 220, 460 )
+```
 
-## Issue 2 — Composer flies to the top of the screen on tap
+- `0.88 * width` → leaves ~6% margin on each side (matches the user's drawn circle)
+- `0.48 * height` → guarantees room for top app bar + wordmark + composer on short phones (e.g. iPhone SE)
+- Floor 220px so it never collapses on tiny screens; ceiling 460px so on large foldables it doesn't overshoot the desktop size
 
-Default iOS Safari behavior when an `<input>` is focused:
-1. Keyboard slides up
-2. The visual viewport shrinks
-3. Safari auto-scrolls the page so the focused input is visible — but because our composer was already pinned to the bottom of a `100vh` flex column, "visible" gets interpreted as "pull the whole page upward," which is what we see in IMG_3100.
+On a 390×844 iPhone 14 Pro this yields **343px** (~2× the current 241px), matching the screenshot reference.
 
-The fix is to take the composer off the document flow on mobile and anchor it to the **visual viewport** so it rides exactly on top of the keyboard without the page scrolling.
+### 2. Make it reactive
 
-Changes in `src/components/mobile/MobileComposer.tsx` + `.m-composer-wrap` CSS:
+Add a tiny inline hook (or `useEffect` + `useState`) at the top of `ChatView` that:
 
-- Make `.m-composer-wrap` `position: fixed; left: 0; right: 0; bottom: 0;` with `padding-bottom: max(env(safe-area-inset-bottom), 12px)` so it sits flush above the home indicator when no keyboard.
-- Add a small JS hook (inside `MobileComposer`) that subscribes to `window.visualViewport`'s `resize` and `scroll` events and writes the current keyboard offset to a CSS custom property on the wrapper:
-  ```
-  const vv = window.visualViewport;
-  const offset = window.innerHeight - (vv.height + vv.offsetTop);
-  el.style.setProperty('--kb-offset', `${Math.max(0, offset)}px`);
-  ```
-  Then `.m-composer-wrap` uses `transform: translateY(calc(var(--kb-offset, 0px) * -1))` to ride above the keyboard.
-- Use `100dvh` (already in place in some spots, audit and replace any remaining `100vh` in mobile chat view) so the page itself doesn't resize when the keyboard opens.
-- Add `scroll-padding-bottom` on the messages scroller equal to composer height + keyboard height so the last message stays visible while typing.
-- Reserve space at the bottom of the messages scroller equal to composer height so content is never hidden behind the fixed composer.
+- Initializes from `window.innerWidth/innerHeight`
+- Subscribes to `window.resize` and `window.visualViewport` `resize` events
+- Returns the computed size
 
-This combination is the standard iOS PWA pattern (used by ChatGPT, Claude, Linear's mobile web): page never scrolls on focus, composer stays glued to the keyboard.
+Used only in the mobile branch; desktop branch keeps `size={440}`.
+
+### 3. Reposition the wordmark
+
+Currently the sphere is positioned at `top: 46%` and the wordmark at `top: 82%`. With a sphere ~100px taller, the wordmark may collide. Adjust the sphere `top` to `~42%` and wordmark `top` to `~86%` (or compute wordmark offset from sphere size). Verify visually at 390×844 and 375×667 (iPhone SE) viewports.
+
+## Files to change
+
+- `src/pages/ChatView.tsx` — add reactive size hook; swap the mobile `size` prop; nudge wordmark/sphere vertical positions if needed.
+
+No CSS, no engine, no other files affected. Particle count is left at the engine default (the engine already DPI-scales the canvas, so doubling the CSS size doesn't change particle count — the field just renders larger and feels denser, which is what the screenshot shows).
 
 ## Verification
 
-Cannot test the iOS chrome directly in the sandbox (Riley's point — those areas only exist on the device). Verification plan:
-
-1. Sandbox preview at 390×844: confirm the composer is now `position: fixed`, sits at the bottom, no layout shift on focus, no element above the messages list jumps.
-2. Computed-style check: `getComputedStyle(document.documentElement).backgroundColor` returns `rgb(8, 8, 10)` on mobile.
-3. Riley reloads `polyphonic.chat` on iPhone after publish: status bar strip and home-indicator strip should be visually indistinguishable from the page; tapping the composer should not move the composer or scroll the page.
-
-## Files touched
-
-- `index.html` (theme-color + boot-shell bg)
-- `src/index.css` (html bg baseline, mobile overrides, `.m-composer-wrap` fixed positioning + safe-area, `.mobile-app-bar` color)
-- `src/components/mobile/MobileComposer.tsx` (visualViewport hook for `--kb-offset`)
-- `src/pages/ChatView.tsx` + `src/pages/LandingPage.tsx` (only mobile-conditional bg fixes — switch `--canvas` → `--floor` on full-bleed wrappers)
-
-No backend changes. No data model changes. Pure presentation.
+- Resize preview to 390×844, 375×667, 414×896, and 360×800 — sphere should always have a visible margin on both sides and never touch the app bar or composer.
+- Rotate / open keyboard (visualViewport shrink) — sphere should shrink accordingly, not overflow.

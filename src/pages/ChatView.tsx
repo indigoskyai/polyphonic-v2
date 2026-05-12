@@ -448,6 +448,32 @@ export default function ChatView() {
     return () => { vv.removeEventListener('resize', onResize); };
   }, [isMobile]);
 
+  // Reactive viewport-aware sphere size for mobile. Scales with both width
+  // and height so the field always has a comfortable margin and never
+  // collides with the app bar / wordmark / composer.
+  const [mobileFieldSize, setMobileFieldSize] = React.useState(() => {
+    if (typeof window === 'undefined') return 320;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return Math.max(220, Math.min(460, Math.min(w * 0.88, h * 0.48)));
+  });
+  React.useEffect(() => {
+    if (!isMobile) return;
+    const recompute = () => {
+      const vv = window.visualViewport;
+      const w = vv?.width ?? window.innerWidth;
+      const h = vv?.height ?? window.innerHeight;
+      setMobileFieldSize(Math.round(Math.max(220, Math.min(460, Math.min(w * 0.88, h * 0.48)))));
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    window.visualViewport?.addEventListener('resize', recompute);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      window.visualViewport?.removeEventListener('resize', recompute);
+    };
+  }, [isMobile]);
+
   const user = useAuthStore((s) => s.user);
   // Narrow selectors — the parent renders the *list shell* and the
   // streaming bubble. Individual messages are handled by <MessageItem>,
@@ -1811,9 +1837,9 @@ export default function ChatView() {
               }}
             >
               {/* Sphere optically centered in the upper open area */}
-              <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+              <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%, -50%)' }}>
                 <ExpressiveField
-                  size={Math.min(260, Math.round(window.innerWidth * 0.62))}
+                  size={mobileFieldSize}
                   state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
                   shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
                 />
