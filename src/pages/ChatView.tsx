@@ -1663,6 +1663,8 @@ export default function ChatView() {
       loadThreads();
     }
   }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
+  // Keep the prefill listener pointed at the latest sendMessage closure.
+  useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
