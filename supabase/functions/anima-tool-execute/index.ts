@@ -448,8 +448,8 @@ serve(async (req) => {
         }
 
         const controller = new AbortController();
-        // Image gen can take 30-50s; give all tools 60s headroom.
-        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image") ? 60_000 : 20_000;
+        // Image gen on gpt-image-2 high quality can take 60-100s.
+        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image") ? 110_000 : 20_000;
         const timeout = setTimeout(() => controller.abort(), toolTimeoutMs);
 
         try {
