@@ -166,12 +166,35 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
           <div className="msg-attachments" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {msg.attachments.map((att, idx) => {
               const meta = (att.meta || {}) as any;
-              if (att.type === 'image') return <ImagePreview key={idx} src={att.url} alt={meta.alt} agent={meta.agent} />;
+              if (att.type === 'image') {
+                if (meta.kind === 'generate_image' || meta.kind === 'edit_image') {
+                  return (
+                    <ImageCard
+                      key={idx}
+                      src={att.url}
+                      alt={meta.revised_prompt || meta.alt}
+                      agent={meta.agent}
+                      storagePath={meta.storage_path}
+                      revisedPrompt={meta.revised_prompt}
+                    />
+                  );
+                }
+                return <ImagePreview key={idx} src={att.url} alt={meta.alt} agent={meta.agent} />;
+              }
               if (att.type === 'code') return <CodePreviewCard key={idx} code={meta.code || ''} lang={meta.lang} label={meta.label} />;
               return <MessageAttachment key={idx} name={meta.name || 'file'} size={meta.size} mime={meta.mime} url={att.url} />;
             })}
           </div>
         )}
+
+        {(() => {
+          const md = (msg as any).metadata;
+          const cites: Citation[] | undefined = md?.citations;
+          if (Array.isArray(cites) && cites.length > 0) {
+            return <SearchCitationsCard citations={cites} query={md?.search_query} />;
+          }
+          return null;
+        })()}
 
         {attachedArtifacts.map((artifact) => (
           <ArtifactCard key={artifact.id} artifact={artifact} />
