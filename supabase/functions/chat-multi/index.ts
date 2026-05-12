@@ -1379,6 +1379,11 @@ async function saveAssistantMessage(
   }
 
   const attachments = buildAttachmentsFromToolMessages(toolMessages);
+  const { citations, query: searchQuery } = buildCitationsFromToolMessages(toolMessages);
+  if (citations.length > 0) {
+    const base = (metadata && typeof metadata === "object") ? metadata : {};
+    metadata = { ...base, citations, ...(searchQuery ? { search_query: searchQuery } : {}) };
+  }
 
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
     thread_id: threadId,
