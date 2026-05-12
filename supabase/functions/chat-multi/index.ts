@@ -693,6 +693,7 @@ serve(async (req) => {
               variants, null, agentId,
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
+              toolMessages,
             );
             await autoTitleThread(supabase, thread_id, messageWithAttachments, fallbackContent, apiKey!);
             const fallbackObservers = collectObservers({
@@ -881,6 +882,7 @@ serve(async (req) => {
             variants, synthesisThinking || null, agentId,
             { rankings, aggregate, label_to_model: labelToModel },
             councilV2Trace,
+            toolMessages,
           );
           // Update thread timestamp
           await supabase
@@ -998,6 +1000,47 @@ async function runToolPlanner(threadId: string, authHeader: string, messages: an
     console.warn("tool planner skipped:", e);
     return [];
   }
+}
+
+/**
+ * Inspect tool_messages from the planner and extract any rendered media
+ * (generated/edited images) as attachments to persist on the assistant message.
+ * The attachments array drives inline rendering in MessageItem.
+ */
+function buildAttachmentsFromToolMessages(toolMessages: any[]): Array<{ type: string; url: string; meta?: any }> {
+  const out: Array<{ type: string; url: string; meta?: any }> = [];
+  if (!Array.isArray(toolMessages)) return out;
+
+  // toolMessages alternates: [assistant w/ tool_calls, tool, tool, ...]
+  // We need to know which tool produced each tool result, by tool_call_id.
+  const toolCallById = new Map<string, string>(); // tool_call_id -> name
+  for (const m of toolMessages) {
+    if (m?.role === "assistant" && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc?.id && tc?.function?.name) toolCallById.set(tc.id, tc.function.name);
+      }
+    }
+  }
+  for (const m of toolMessages) {
+    if (m?.role !== "tool" || !m.tool_call_id) continue;
+    const name = toolCallById.get(m.tool_call_id);
+    if (name !== "generate_image" && name !== "edit_image") continue;
+    let parsed: any;
+    try { parsed = typeof m.content === "string" ? JSON.parse(m.content) : m.content; } catch { continue; }
+    const url = parsed?.image_url;
+    if (typeof url !== "string" || url.length === 0) continue;
+    out.push({
+      type: "image",
+      url,
+      meta: {
+        kind: name,
+        storage_path: parsed?.storage_path,
+        revised_prompt: parsed?.revised_prompt,
+        source_path: parsed?.source_path,
+      },
+    });
+  }
+  return out;
 }
 
 
@@ -1259,6 +1302,7 @@ async function saveAssistantMessage(
     critique: unknown | null;
     revised_content: string | null;
   } | null = null,
+  toolMessages: any[] = [],
 ) : Promise<string | null> {
   // Build metadata payload — when council v2 trace is provided, prefer that
   // shape (kind='council_v2'). Falls back to legacy council shape for any
@@ -1287,6 +1331,8 @@ async function saveAssistantMessage(
     };
   }
 
+  const attachments = buildAttachmentsFromToolMessages(toolMessages);
+
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
     thread_id: threadId,
     user_id: userId,
@@ -1296,6 +1342,7 @@ async function saveAssistantMessage(
     agent: agentId,
     thinking_content: thinkingContent || null,
     tokens_used: null,
+    ...(attachments.length > 0 ? { attachments } : {}),
     ...(metadata ? { metadata } : {}),
   }).select("id").single();
 
@@ -1419,10 +1466,12 @@ async function singleModelStream(
           }
         }
 
+        const streamAttachments = buildAttachmentsFromToolMessages(toolMessages);
         const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
           content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
+          ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
         }).select("id").single();
         if (insertError) {
           throw new Error(`Failed to save assistant message: ${insertError.message}`);

@@ -1,33 +1,13 @@
-// anima-image-create
-// Direct OpenAI gpt-image-2 (with gpt-image-1 fallback). Generates a high-quality
-// image, uploads it to the `generated-images` bucket, and returns a signed URL.
+// anima-image-edit
+// Edit an existing image (from the generated-images or chat-attachments bucket)
+// using OpenAI's gpt-image-2 image edits endpoint.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 
-type Size = "1024x1024" | "1536x1024" | "1024x1536" | "auto";
-
-function pickSize(aspect?: string): Size {
-  switch ((aspect || "").toLowerCase()) {
-    case "wide":
-    case "landscape":
-    case "16:9":
-    case "3:2":
-      return "1536x1024";
-    case "tall":
-    case "portrait":
-    case "9:16":
-    case "2:3":
-      return "1024x1536";
-    case "square":
-    case "1:1":
-      return "1024x1024";
-    default:
-      return "auto";
-  }
-}
+const ALLOWED_BUCKETS = ["generated-images", "chat-attachments"];
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -59,26 +39,26 @@ serve(async (req) => {
     }
 
     const body = await req.json();
+    const sourcePath: string = (body?.source_path ?? "").toString();
+    const sourceBucket: string = (body?.source_bucket ?? "generated-images").toString();
     const prompt: string = (body?.prompt ?? "").toString();
-    const aspect: string | undefined = body?.aspect_ratio;
-    const transparent: boolean = body?.transparent === true;
 
-    if (!prompt || prompt.trim().length === 0) {
+    if (!prompt.trim()) {
       return new Response(JSON.stringify({ error: "Prompt is required" }), { status: 400, headers: jsonHeaders });
+    }
+    if (!sourcePath || !ALLOWED_BUCKETS.includes(sourceBucket)) {
+      return new Response(JSON.stringify({ error: "Invalid source image" }), { status: 400, headers: jsonHeaders });
     }
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiKey) {
-      return new Response(JSON.stringify({ error: "Image generation not configured (OPENAI_API_KEY missing)" }), {
-        status: 500,
-        headers: jsonHeaders,
-      });
+      return new Response(JSON.stringify({ error: "Image editing not configured" }), { status: 500, headers: jsonHeaders });
     }
 
     if (userId !== "system") {
       try {
         await checkAndIncrement(userId, "image-generation");
-      } catch (e) {
+      } catch {
         return new Response(JSON.stringify({ error: "Daily image generation limit reached" }), {
           status: 429,
           headers: jsonHeaders,
@@ -88,45 +68,58 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const requestBody: Record<string, unknown> = {
-      model: "gpt-image-2",
-      prompt: prompt.trim(),
-      n: 1,
-      size: pickSize(aspect),
-      quality: "high",
-      output_format: "png",
-    };
-    if (transparent) requestBody.background = "transparent";
+    // Download the source image from storage
+    const { data: blob, error: dlErr } = await supabase.storage.from(sourceBucket).download(sourcePath);
+    if (dlErr || !blob) {
+      console.error("Source download failed:", dlErr);
+      return new Response(JSON.stringify({ error: "Source image not found" }), { status: 404, headers: jsonHeaders });
+    }
 
-    let response = await fetch("https://api.openai.com/v1/images/generations", {
+    const sourceBytes = new Uint8Array(await blob.arrayBuffer());
+
+    // Build multipart form
+    const form = new FormData();
+    form.append("model", "gpt-image-2");
+    form.append("prompt", prompt.trim());
+    form.append("n", "1");
+    form.append("size", "auto");
+    form.append("quality", "high");
+    form.append(
+      "image",
+      new Blob([sourceBytes], { type: blob.type || "image/png" }),
+      "source.png",
+    );
+
+    let response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+      headers: { Authorization: `Bearer ${openaiKey}` },
+      body: form,
     });
 
-    // Fallback to gpt-image-1 if gpt-image-2 isn't available on this account yet
     if (response.status === 400 || response.status === 404) {
       const errText = await response.clone().text();
       if (/model/i.test(errText)) {
-        console.warn("gpt-image-2 unavailable, falling back to gpt-image-1");
-        requestBody.model = "gpt-image-1";
-        response = await fetch("https://api.openai.com/v1/images/generations", {
+        console.warn("gpt-image-2 unavailable for edits, falling back to gpt-image-1");
+        const form2 = new FormData();
+        form2.append("model", "gpt-image-1");
+        form2.append("prompt", prompt.trim());
+        form2.append("n", "1");
+        form2.append("size", "auto");
+        form2.append("quality", "high");
+        form2.append("image", new Blob([sourceBytes], { type: blob.type || "image/png" }), "source.png");
+        response = await fetch("https://api.openai.com/v1/images/edits", {
           method: "POST",
-          headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: form2,
         });
       }
     }
 
     if (!response.ok) {
       const text = await response.text();
-      console.error("OpenAI image generation failed:", response.status, text);
-      const status = response.status === 429 ? 429 : response.status === 402 ? 402 : 500;
-      return new Response(JSON.stringify({ error: "Image generation failed", detail: text.slice(0, 300) }), {
-        status,
+      console.error("OpenAI image edit failed:", response.status, text);
+      return new Response(JSON.stringify({ error: "Image edit failed", detail: text.slice(0, 300) }), {
+        status: response.status === 429 ? 429 : 500,
         headers: jsonHeaders,
       });
     }
@@ -134,40 +127,30 @@ serve(async (req) => {
     const data = await response.json();
     const item = data?.data?.[0];
     const b64 = item?.b64_json as string | undefined;
-    const revisedPrompt = (item?.revised_prompt as string | undefined) || prompt.trim();
     if (!b64) {
       return new Response(JSON.stringify({ error: "No image returned" }), { status: 422, headers: jsonHeaders });
     }
 
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const fileName = `${userId}/${crypto.randomUUID()}.png`;
-
     const { error: uploadError } = await supabase.storage
       .from("generated-images")
       .upload(fileName, bytes, { contentType: "image/png", upsert: false });
     if (uploadError) {
-      console.error("Storage upload error:", uploadError);
-      return new Response(JSON.stringify({ error: "Failed to save generated image" }), {
-        status: 500,
-        headers: jsonHeaders,
-      });
+      return new Response(JSON.stringify({ error: "Failed to save edited image" }), { status: 500, headers: jsonHeaders });
     }
 
     const { data: signed, error: signedErr } = await supabase.storage
       .from("generated-images")
-      .createSignedUrl(fileName, 60 * 60 * 24 * 7); // 7 days
+      .createSignedUrl(fileName, 60 * 60 * 24 * 7);
     if (signedErr || !signed?.signedUrl) {
-      console.error("Signed URL error:", signedErr);
-      return new Response(JSON.stringify({ error: "Failed to generate image URL" }), {
-        status: 500,
-        headers: jsonHeaders,
-      });
+      return new Response(JSON.stringify({ error: "Failed to generate image URL" }), { status: 500, headers: jsonHeaders });
     }
 
     if (userId !== "system") {
       await logActivity(supabase, userId, {
         type: "image",
-        title: `Generated: ${prompt.slice(0, 60)}`,
+        title: `Edited: ${prompt.slice(0, 60)}`,
       });
     }
 
@@ -175,13 +158,13 @@ serve(async (req) => {
       JSON.stringify({
         image_url: signed.signedUrl,
         storage_path: fileName,
-        revised_prompt: revisedPrompt,
-        model: requestBody.model,
+        source_path: sourcePath,
+        source_bucket: sourceBucket,
       }),
       { status: 200, headers: jsonHeaders },
     );
   } catch (e) {
-    console.error("anima-image-create error:", e);
+    console.error("anima-image-edit error:", e);
     return new Response(JSON.stringify({ error: "An unexpected error occurred." }), {
       status: 500,
       headers: getCorsHeaders(req) as any,
