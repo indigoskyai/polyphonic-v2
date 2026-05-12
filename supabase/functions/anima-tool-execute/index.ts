@@ -448,7 +448,9 @@ serve(async (req) => {
         }
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12_000);
+        // Image gen can take 30-50s; give all tools 60s headroom.
+        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image") ? 60_000 : 20_000;
+        const timeout = setTimeout(() => controller.abort(), toolTimeoutMs);
 
         try {
           let edgeFn: string;
