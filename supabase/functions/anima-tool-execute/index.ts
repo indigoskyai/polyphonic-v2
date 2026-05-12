@@ -106,8 +106,46 @@ const TOOL_SCHEMAS = [
   {
     type: "function",
     function: {
+      name: "generate_image",
+      description:
+        "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using OpenAI gpt-image-2. Use for anything that should look like a real image. For diagrams, icons, or anything line-based, prefer create_artifact with kind=svg instead.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Detailed visual description of the image to generate." },
+          aspect_ratio: {
+            type: "string",
+            enum: ["square", "landscape", "portrait", "auto"],
+            description: "Optional aspect ratio. Defaults to auto.",
+          },
+          transparent: { type: "boolean", description: "Set true for a transparent background (icons, stickers)." },
+        },
+        required: ["prompt"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_image",
+      description:
+        "Edit a previously generated image by describing the change. Use when the user says things like 'make it darker', 'change the background', or otherwise wants to iterate on the most recent image. The source_path is the storage_path returned by generate_image.",
+      parameters: {
+        type: "object",
+        properties: {
+          source_path: { type: "string", description: "storage_path of the source image (from a prior generate_image / edit_image result)." },
+          source_bucket: { type: "string", enum: ["generated-images", "chat-attachments"], description: "Bucket of the source image. Defaults to generated-images." },
+          prompt: { type: "string", description: "What to change about the image." },
+        },
+        required: ["source_path", "prompt"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_artifact",
-      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants something visible or iteratable.",
+      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants something visible or iteratable. For SVGs of icons/diagrams/charts, this is preferred over generate_image.",
       parameters: {
         type: "object",
         properties: {
