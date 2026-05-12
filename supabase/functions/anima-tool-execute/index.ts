@@ -299,12 +299,40 @@ serve(async (req) => {
     const mcpTools = userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
     const toolSchemas = [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
 
+    // Look up the most recent generated image in this thread, so the planner
+    // can resolve "make it darker" / "edit that" without the user repeating
+    // the storage path.
+    let lastImageHint = "";
+    if (thread_id && userId) {
+      try {
+        const { data: recent } = await supabase
+          .from("messages")
+          .select("attachments, created_at")
+          .eq("thread_id", thread_id)
+          .eq("role", "assistant")
+          .not("attachments", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        for (const m of recent ?? []) {
+          const atts = Array.isArray((m as any).attachments) ? (m as any).attachments : [];
+          const img = atts.find((a: any) => a?.type === "image" && a?.meta?.storage_path);
+          if (img) {
+            lastImageHint = `\n\nMost recent generated image in this thread:\n- storage_path: ${img.meta.storage_path}\n- prompt: ${img.meta?.prompt || "(unknown)"}\nIf the user asks to tweak/edit/iterate on "it" / "that image" / "the picture", call edit_image with this storage_path.`;
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn("last image lookup failed:", e);
+      }
+    }
+
     // Build planning messages: system + last few user/assistant messages for context
     const planningMessages = [
       {
         role: "system",
         content:
           buildPlanningSystemPrompt(mcpTools) +
+          lastImageHint +
           (custom_instructions
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
             : ""),
