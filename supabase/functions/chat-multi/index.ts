@@ -276,6 +276,8 @@ serve(async (req) => {
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
+    const shouldRunLegacyToolPlanner = explicitAgentRuntime || agentIsSystemLuca;
+
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
