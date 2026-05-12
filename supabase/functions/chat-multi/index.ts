@@ -989,25 +989,38 @@ function collectObservers(opts: {
   return [...observers.entries()].map(([agentId, contribution]) => ({ agentId, contribution }));
 }
 
-async function runToolPlanner(threadId: string, authHeader: string, messages: any[]): Promise<any[]> {
+async function runToolPlanner(threadId: string, userId: string, messages: any[]): Promise<any[]> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/anima-tool-execute`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": authHeader,
+        "Authorization": `Bearer ${serviceKey}`,
+        "apikey": serviceKey,
       },
-      body: JSON.stringify({ thread_id: threadId, messages }),
+      body: JSON.stringify({ thread_id: threadId, user_id: userId, messages }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const txt = await response.text().catch(() => "");
+      console.error("[chat-multi] tool planner non-OK:", response.status, txt.slice(0, 500));
+      return [];
+    }
     const data = await response.json();
+    if (data?.error) {
+      console.error("[chat-multi] tool planner error payload:", data.error);
+    }
+    console.log("[chat-multi] tool planner result:", {
+      used_tools: data?.used_tools,
+      msgs: Array.isArray(data?.tool_messages) ? data.tool_messages.length : 0,
+    });
     return data?.used_tools && Array.isArray(data.tool_messages) ? data.tool_messages : [];
   } catch (e) {
-    console.warn("tool planner skipped:", e);
+    console.error("[chat-multi] tool planner threw:", e);
     return [];
   }
 }
