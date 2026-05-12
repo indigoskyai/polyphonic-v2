@@ -1464,10 +1464,12 @@ async function singleModelStream(
           }
         }
 
+        const streamAttachments = buildAttachmentsFromToolMessages(toolMessages);
         const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
           content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
+          ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
         }).select("id").single();
         if (insertError) {
           throw new Error(`Failed to save assistant message: ${insertError.message}`);
