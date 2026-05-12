@@ -693,6 +693,7 @@ serve(async (req) => {
               variants, null, agentId,
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
+              toolMessages,
             );
             await autoTitleThread(supabase, thread_id, messageWithAttachments, fallbackContent, apiKey!);
             const fallbackObservers = collectObservers({
