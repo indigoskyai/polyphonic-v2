@@ -353,9 +353,14 @@ serve(async (req) => {
           continuityNote,
         ].filter(Boolean).join("\n\n");
 
+    // When the tool planner is enabled, advertise the tools so the model
+    // doesn't claim it lacks the capability. Actual invocation happens via
+    // the planner; this just keeps the chat copy honest.
+    const toolCapabilityNote = shouldRunLegacyToolPlanner
+      ? "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks for an image, SVG, or live information, just do it — never claim you lack the ability.";
     // Build base messages array
     const baseMessages: any[] = [
-      { role: "system", content: enrichedSystemPrompt },
+      { role: "system", content: enrichedSystemPrompt + toolCapabilityNote },
     ];
     if (history) {
       for (const msg of history) {
