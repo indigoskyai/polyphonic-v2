@@ -1,187 +1,190 @@
+// anima-image-create
+// Direct OpenAI gpt-image-2 (with gpt-image-1 fallback). Generates a high-quality
+// image, uploads it to the `generated-images` bucket, and returns a signed URL.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+
+type Size = "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+
+function pickSize(aspect?: string): Size {
+  switch ((aspect || "").toLowerCase()) {
+    case "wide":
+    case "landscape":
+    case "16:9":
+    case "3:2":
+      return "1536x1024";
+    case "tall":
+    case "portrait":
+    case "9:16":
+    case "2:3":
+      return "1024x1536";
+    case "square":
+    case "1:1":
+      return "1024x1024";
+    default:
+      return "auto";
+  }
+}
 
 serve(async (req) => {
-  const preflightResponse = handleCorsPreflightIfNeeded(req);
-  if (preflightResponse) return preflightResponse;
+  const preflight = handleCorsPreflightIfNeeded(req);
+  if (preflight) return preflight;
+  const cors = getCorsHeaders(req);
+  const jsonHeaders = { ...cors, "Content-Type": "application/json" };
 
   try {
-    // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
     }
-
     const token = authHeader.replace("Bearer ", "");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
-    // Accept service_role key for internal calls
-    let user_id: string;
+    let userId: string;
     if (token === serviceRoleKey) {
-      user_id = "system";
+      userId = "system";
     } else {
       const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
       });
-
       const { data: claimsData, error: authError } = await supabaseAuth.auth.getClaims(token);
       if (authError || !claimsData?.claims) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
       }
-      user_id = claimsData.claims.sub;
+      userId = claimsData.claims.sub as string;
     }
 
-    const { prompt } = await req.json();
+    const body = await req.json();
+    const prompt: string = (body?.prompt ?? "").toString();
+    const aspect: string | undefined = body?.aspect_ratio;
+    const transparent: boolean = body?.transparent === true;
 
-    if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "Prompt is required" }), {
-        status: 400,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    if (!prompt || prompt.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "Prompt is required" }), { status: 400, headers: jsonHeaders });
+    }
+
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiKey) {
+      return new Response(JSON.stringify({ error: "Image generation not configured (OPENAI_API_KEY missing)" }), {
+        status: 500,
+        headers: jsonHeaders,
       });
+    }
+
+    if (userId !== "system") {
+      try {
+        await checkAndIncrement(userId, "image-generation");
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Daily image generation limit reached" }), {
+          status: 429,
+          headers: jsonHeaders,
+        });
+      }
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get API key: try user's encrypted key first, fall back to system key
-    let apiKey: string | undefined;
-    let usingOwnKey = false;
+    const requestBody: Record<string, unknown> = {
+      model: "gpt-image-2",
+      prompt: prompt.trim(),
+      n: 1,
+      size: pickSize(aspect),
+      quality: "high",
+      output_format: "png",
+    };
+    if (transparent) requestBody.background = "transparent";
 
-    if (user_id !== "system") {
-      const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", {
-        p_user_id: user_id,
-      });
-      const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
-      if (userApiKey) {
-        apiKey = userApiKey;
-        usingOwnKey = true;
-      }
-    }
-
-    if (!apiKey) {
-      // No fallback — user must have their own key
-    }
-
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Image generation not configured" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    console.log("Generating image with prompt:", prompt.slice(0, 100));
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    let response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://polyphonic.chat",
-        "X-Title": "Polyphonic",
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.0-flash-exp:image-generation",
-        messages: [
-          {
-            role: "user",
-            content: prompt.trim(),
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    // Fallback to gpt-image-1 if gpt-image-2 isn't available on this account yet
+    if (response.status === 400 || response.status === 404) {
+      const errText = await response.clone().text();
+      if (/model/i.test(errText)) {
+        console.warn("gpt-image-2 unavailable, falling back to gpt-image-1");
+        requestBody.model = "gpt-image-1";
+        response = await fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+      }
+    }
+
     if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-        );
-      }
-      if (status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Insufficient credits for image generation." }),
-          { status: 402, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-        );
-      }
       const text = await response.text();
-      console.error("Image generation error:", status, text);
-      return new Response(JSON.stringify({ error: "Image generation failed" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      console.error("OpenAI image generation failed:", response.status, text);
+      const status = response.status === 429 ? 429 : response.status === 402 ? 402 : 500;
+      return new Response(JSON.stringify({ error: "Image generation failed", detail: text.slice(0, 300) }), {
+        status,
+        headers: jsonHeaders,
       });
     }
 
     const data = await response.json();
-    const choice = data.choices?.[0]?.message;
-    const base64Url = choice?.images?.[0]?.image_url?.url;
-    const textContent = choice?.content || "";
-
-    if (!base64Url) {
-      return new Response(
-        JSON.stringify({ error: "No image was generated. Try a different prompt.", text: textContent }),
-        { status: 422, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-      );
+    const item = data?.data?.[0];
+    const b64 = item?.b64_json as string | undefined;
+    const revisedPrompt = (item?.revised_prompt as string | undefined) || prompt.trim();
+    if (!b64) {
+      return new Response(JSON.stringify({ error: "No image returned" }), { status: 422, headers: jsonHeaders });
     }
 
-    // Upload base64 image to storage
-    const base64Data = base64Url.replace(/^data:image\/\w+;base64,/, "");
-    const mimeMatch = base64Url.match(/^data:(image\/\w+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
-    const ext = mimeType.split("/")[1] || "png";
-    const fileName = `${user_id}/${crypto.randomUUID()}.${ext}`;
-
-    const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const fileName = `${userId}/${crypto.randomUUID()}.png`;
 
     const { error: uploadError } = await supabase.storage
       .from("generated-images")
-      .upload(fileName, imageBytes, { contentType: mimeType, upsert: false });
-
+      .upload(fileName, bytes, { contentType: "image/png", upsert: false });
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
       return new Response(JSON.stringify({ error: "Failed to save generated image" }), {
         status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
-    // Generate a signed URL (1 hour expiry) since bucket is private
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+    const { data: signed, error: signedErr } = await supabase.storage
       .from("generated-images")
-      .createSignedUrl(fileName, 3600);
-
-    if (signedUrlError || !signedUrlData?.signedUrl) {
-      console.error("Signed URL error:", signedUrlError);
+      .createSignedUrl(fileName, 60 * 60 * 24 * 7); // 7 days
+    if (signedErr || !signed?.signedUrl) {
+      console.error("Signed URL error:", signedErr);
       return new Response(JSON.stringify({ error: "Failed to generate image URL" }), {
         status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
-    // Log activity
-    await logActivity(supabase, user_id, {
-      type: "image",
-      title: `Generated: ${prompt.slice(0, 60)}`,
-    });
+    if (userId !== "system") {
+      await logActivity(supabase, userId, {
+        type: "image",
+        title: `Generated: ${prompt.slice(0, 60)}`,
+      });
+    }
 
     return new Response(
-      JSON.stringify({ image_url: signedUrlData.signedUrl, storage_path: fileName, text: textContent }),
-      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      JSON.stringify({
+        image_url: signed.signedUrl,
+        storage_path: fileName,
+        revised_prompt: revisedPrompt,
+        model: requestBody.model,
+      }),
+      { status: 200, headers: jsonHeaders },
     );
   } catch (e) {
     console.error("anima-image-create error:", e);
-    return new Response(
-      JSON.stringify({ error: "An unexpected error occurred." }),
-      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "An unexpected error occurred." }), {
+      status: 500,
+      headers: getCorsHeaders(req) as any,
+    });
   }
 });
