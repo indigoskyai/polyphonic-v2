@@ -971,7 +971,7 @@ html {
   right: 0;
   top: -32px;
   height: 32px;
-  background: linear-gradient(to top, var(--floor), transparent);
+  background: linear-gradient(to top, var(--canvas), transparent);
   pointer-events: none;
   z-index: -1;
 }
