@@ -396,7 +396,7 @@ serve(async (req) => {
     }
 
     const toolMessages = shouldRunLegacyToolPlanner
-      ? await runToolPlanner(thread_id, authHeader, baseMessages.slice(1))
+      ? await runToolPlanner(thread_id, userId, baseMessages.slice(1))
       : [];
     if (toolMessages.length > 0) {
       baseMessages.push(...toolMessages);
