@@ -1837,9 +1837,9 @@ export default function ChatView() {
               }}
             >
               {/* Sphere optically centered in the upper open area */}
-              <div style={{ position: 'absolute', top: '46%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+              <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%, -50%)' }}>
                 <ExpressiveField
-                  size={Math.min(260, Math.round(window.innerWidth * 0.62))}
+                  size={mobileFieldSize}
                   state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
                   shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
                 />
