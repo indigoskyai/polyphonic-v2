@@ -357,7 +357,8 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks for an image, SVG, or live information, just do it — never claim you lack the ability.";
+      ? "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks for an image, SVG, or live information, just do it — never claim you lack the ability."
+      : "";
     // Build base messages array
     const baseMessages: any[] = [
       { role: "system", content: enrichedSystemPrompt + toolCapabilityNote },
@@ -396,7 +397,7 @@ serve(async (req) => {
     }
 
     const toolMessages = shouldRunLegacyToolPlanner
-      ? await runToolPlanner(thread_id, authHeader, baseMessages.slice(1))
+      ? await runToolPlanner(thread_id, userId, baseMessages.slice(1))
       : [];
     if (toolMessages.length > 0) {
       baseMessages.push(...toolMessages);
@@ -989,25 +990,38 @@ function collectObservers(opts: {
   return [...observers.entries()].map(([agentId, contribution]) => ({ agentId, contribution }));
 }
 
-async function runToolPlanner(threadId: string, authHeader: string, messages: any[]): Promise<any[]> {
+async function runToolPlanner(threadId: string, userId: string, messages: any[]): Promise<any[]> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    const timeout = setTimeout(() => controller.abort(), 130_000);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/anima-tool-execute`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": authHeader,
+        "Authorization": `Bearer ${serviceKey}`,
+        "apikey": serviceKey,
       },
-      body: JSON.stringify({ thread_id: threadId, messages }),
+      body: JSON.stringify({ thread_id: threadId, user_id: userId, messages }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const txt = await response.text().catch(() => "");
+      console.error("[chat-multi] tool planner non-OK:", response.status, txt.slice(0, 500));
+      return [];
+    }
     const data = await response.json();
+    if (data?.error) {
+      console.error("[chat-multi] tool planner error payload:", data.error);
+    }
+    console.log("[chat-multi] tool planner result:", {
+      used_tools: data?.used_tools,
+      msgs: Array.isArray(data?.tool_messages) ? data.tool_messages.length : 0,
+    });
     return data?.used_tools && Array.isArray(data.tool_messages) ? data.tool_messages : [];
   } catch (e) {
-    console.warn("tool planner skipped:", e);
+    console.error("[chat-multi] tool planner threw:", e);
     return [];
   }
 }

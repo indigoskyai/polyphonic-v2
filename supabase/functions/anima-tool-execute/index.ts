@@ -273,7 +273,12 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const { messages, custom_instructions, thread_id, source_message_id } = await req.json();
+    const { messages, custom_instructions, thread_id, source_message_id, user_id: bodyUserId } = await req.json();
+    // When invoked with the service role (internal call from chat-multi), the
+    // caller MUST pass user_id in the body so we can resolve their API key.
+    if (!userId && typeof bodyUserId === "string" && bodyUserId.length > 0) {
+      userId = bodyUserId;
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -443,7 +448,9 @@ serve(async (req) => {
         }
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12_000);
+        // Image gen on gpt-image-2 high quality can take 60-100s.
+        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image") ? 110_000 : 20_000;
+        const timeout = setTimeout(() => controller.abort(), toolTimeoutMs);
 
         try {
           let edgeFn: string;
