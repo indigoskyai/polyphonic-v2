@@ -1043,6 +1043,53 @@ function buildAttachmentsFromToolMessages(toolMessages: any[]): Array<{ type: st
   return out;
 }
 
+/**
+ * Pull web_search / read_url citations out of tool messages so the
+ * frontend can render them as a SearchCitationsCard.
+ */
+function buildCitationsFromToolMessages(toolMessages: any[]): { citations: Array<{ url: string; title?: string; snippet?: string }>; query?: string } {
+  const citations: Array<{ url: string; title?: string; snippet?: string }> = [];
+  let query: string | undefined;
+  if (!Array.isArray(toolMessages)) return { citations };
+  const toolCallById = new Map<string, { name: string; args: any }>();
+  for (const m of toolMessages) {
+    if (m?.role === "assistant" && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (!tc?.id || !tc?.function?.name) continue;
+        let args: any = {};
+        try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}; } catch {}
+        toolCallById.set(tc.id, { name: tc.function.name, args });
+      }
+    }
+  }
+  for (const m of toolMessages) {
+    if (m?.role !== "tool" || !m.tool_call_id) continue;
+    const meta = toolCallById.get(m.tool_call_id);
+    if (!meta) continue;
+    if (meta.name !== "web_search" && meta.name !== "read_url") continue;
+    if (meta.name === "web_search" && typeof meta.args?.query === "string") query = meta.args.query;
+    let parsed: any;
+    try { parsed = typeof m.content === "string" ? JSON.parse(m.content) : m.content; } catch { continue; }
+    const items = Array.isArray(parsed?.citations) ? parsed.citations
+      : Array.isArray(parsed?.sources) ? parsed.sources
+      : Array.isArray(parsed?.results) ? parsed.results
+      : [];
+    for (const it of items) {
+      const url = typeof it === "string" ? it : (it?.url || it?.link);
+      if (typeof url !== "string" || !/^https?:\/\//.test(url)) continue;
+      citations.push({
+        url,
+        title: typeof it === "object" ? (it?.title || it?.name) : undefined,
+        snippet: typeof it === "object" ? (it?.snippet || it?.description || it?.text) : undefined,
+      });
+    }
+  }
+  // Dedupe by url
+  const seen = new Set<string>();
+  const dedup = citations.filter((c) => { if (seen.has(c.url)) return false; seen.add(c.url); return true; });
+  return { citations: dedup, query };
+}
+
 
 /** Call a single model non-streaming, returning content and thinking. */
 async function callModelNonStreaming(
@@ -1332,6 +1379,11 @@ async function saveAssistantMessage(
   }
 
   const attachments = buildAttachmentsFromToolMessages(toolMessages);
+  const { citations, query: searchQuery } = buildCitationsFromToolMessages(toolMessages);
+  if (citations.length > 0) {
+    const base = (metadata && typeof metadata === "object") ? metadata : {};
+    metadata = { ...base, citations, ...(searchQuery ? { search_query: searchQuery } : {}) };
+  }
 
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
     thread_id: threadId,
@@ -1467,11 +1519,16 @@ async function singleModelStream(
         }
 
         const streamAttachments = buildAttachmentsFromToolMessages(toolMessages);
+        const { citations: streamCitations, query: streamQuery } = buildCitationsFromToolMessages(toolMessages);
+        const streamMetadata = streamCitations.length > 0
+          ? { citations: streamCitations, ...(streamQuery ? { search_query: streamQuery } : {}) }
+          : null;
         const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
           content: fullContent || "(empty)", model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
           ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
+          ...(streamMetadata ? { metadata: streamMetadata } : {}),
         }).select("id").single();
         if (insertError) {
           throw new Error(`Failed to save assistant message: ${insertError.message}`);

@@ -560,6 +560,24 @@ export default function ChatView() {
     if (dictationListening) stopDictation();
     else startDictation();
   }, [dictationListening, startDictation, stopDictation]);
+
+  // Allow inline UI (e.g. ImageCard "Edit with prompt") to prefill the
+  // composer and optionally auto-send. Listens for window event dispatched
+  // from MediaLightbox/ImageCard.
+  const sendMessageRef = useRef<((opts?: { text?: string }) => void) | null>(null);
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const text: string = detail.text || '';
+      if (!text) return;
+      setInput(text);
+      if (detail.autoSend) {
+        setTimeout(() => { void sendMessageRef.current?.({ text }); }, 30);
+      }
+    };
+    window.addEventListener('luca:prefill-composer', onPrefill as EventListener);
+    return () => window.removeEventListener('luca:prefill-composer', onPrefill as EventListener);
+  }, []);
   // Guardian state
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
@@ -1645,6 +1663,8 @@ export default function ChatView() {
       loadThreads();
     }
   }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
+  // Keep the prefill listener pointed at the latest sendMessage closure.
+  useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);

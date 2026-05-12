@@ -2,40 +2,32 @@
 
 Plan: `.lovable/plan.md`
 
-## Phase A — Backend image gen ✅ (shipped this turn)
-- [x] `OPENAI_API_KEY` secret added
-- [x] `anima-image-create` rewritten → OpenAI `gpt-image-2` (with `gpt-image-1` fallback), 7-day signed URLs, daily quota
-- [x] `anima-image-edit` (new) → `/v1/images/edits` with multipart source image
-- [x] `generate_image` + `edit_image` registered in `anima-tool-execute` planner schema
-- [x] Planner system prompt updated (raster vs SVG guidance, web_search→read_url chaining)
-- [x] `chat-multi` extracts image tool results into `messages.attachments` so they render inline
-- [x] Deployed: anima-image-create, anima-image-edit, anima-tool-execute, chat-multi
+## Phase A — Backend image gen ✅
+## Phase B — Perplexity browsing ✅ (already wired, citations now extracted)
 
-## Phase B — Perplexity browsing ⏭ (already wired)
-- `web_search` and `read_url` already use Perplexity Sonar via `_shared/perplexity.ts`
-- Frontend citation rendering pending (Phase C)
+## Phase C — Frontend rich media ✅ (this turn)
+- [x] `MediaLightbox.tsx` — portal, ESC, body-scroll lock, download (PNG/SVG), copy link, edit-with-prompt input
+- [x] `ImageCard.tsx` — tap-to-expand, blur-up shimmer, hover save chip, agent-tinted background
+- [x] `SvgCard.tsx` — sandboxed iframe, preview/code toggle, expand → lightbox with svg download
+- [x] `SearchCitationsCard.tsx` — Perplexity citation chips with favicon-host + snippet tooltip
+- [x] Wired into `MessageItem.tsx` (image cards via meta.kind, citations via msg.metadata.citations)
+- [x] `chat-multi` extracts `web_search`/`read_url` citations into message metadata (streaming + final paths)
+- [x] Composer prefill listener in `ChatView` (`window 'luca:prefill-composer'`) so "Edit with prompt" auto-sends an `edit_image` instruction
+- [x] Inline media CSS in `index.css` (shimmer, lightbox, citations grid, mobile-safe toolbar)
+- [x] Deployed: chat-multi
 
-## Phase C — Frontend rich media (next turn)
-- [ ] `MediaLightbox.tsx` (portal, ESC, download, copy, edit-with-prompt)
-- [ ] `ImageCard.tsx` replacing `ImagePreview` — tap to open lightbox, blur-up loader
-- [ ] `SvgCard.tsx` — sandboxed iframe + tap-to-expand + view source
-- [ ] `SearchCitationsCard.tsx` — Perplexity citations strip
-- [ ] Wire into `MessageItem.tsx`
-- [ ] Tool-status pill in streaming UX ("Generating image…", "Searching the web…")
+## Phase D — Agent prompt + autonomy tuning (next)
+- [ ] Verify `stopWhen` ≥ 5 tool hops in chat-multi (raise if needed)
+- [ ] Tool-result memory so "make it darker" → `edit_image` on last image without source path
 
-## Phase D — Agent prompt + autonomy tuning (next turn)
-- [ ] Confirm `stopWhen` ≥ 5 tool hops in chat-multi
-- [ ] Tool-result memory so "make it darker" → `edit_image` on last image
-
-## Phase E — E2E verification (final turn)
-- [ ] "Draw me a watercolor fox" → inline image, lightbox, download, edit
-- [ ] "SVG icon of a mountain" → inline SVG card
-- [ ] "What happened in AI news this week?" → citations card
-- [ ] "Read https://… and summarize" → read_url
-- [ ] Mobile viewport (390×844)
+## Phase E — E2E verification
+- [ ] Watercolor fox → inline image → lightbox → download → edit-with-prompt
+- [ ] SVG mountain icon → svg card → expand → download .svg
+- [ ] AI news this week → citations strip
+- [ ] Read URL → summary + citation
+- [ ] Mobile viewport (390×844) tap-friendly
 - [ ] Zero new console errors
 
 ## Decision log
-- Chose direct OpenAI API over OpenRouter for `gpt-image-2` (OpenRouter doesn't expose image-gen for OpenAI image models with the b64 envelope we need for storage upload).
-- Quota reuses existing `image-generation` scope (25/day default).
-- Source image for `edit_image` referenced by `storage_path` so the LLM only handles small JSON, not base64 blobs.
+- "Edit with prompt" prefills the composer with an explicit storage_path reference instead of mutating state directly — keeps the planner in the loop and visible to the user.
+- Lightbox uses a portal + body overflow lock so it works on any page; sandboxed iframe (no allow-*) keeps SVG previews safe.
