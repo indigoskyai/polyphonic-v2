@@ -1300,6 +1300,7 @@ async function saveAssistantMessage(
     critique: unknown | null;
     revised_content: string | null;
   } | null = null,
+  toolMessages: any[] = [],
 ) : Promise<string | null> {
   // Build metadata payload — when council v2 trace is provided, prefer that
   // shape (kind='council_v2'). Falls back to legacy council shape for any
