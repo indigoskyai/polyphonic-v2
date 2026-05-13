@@ -88,17 +88,22 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Use gpt-image-1 at medium quality: ~10–15s, well within edge timeout.
+    // gpt-image-2 high-quality routinely exceeds 60s and trips client-side
+    // timeouts in the chat-multi -> tool-execute -> image-create chain.
     const requestBody: Record<string, unknown> = {
-      model: "gpt-image-2",
+      model: "gpt-image-1",
       prompt: prompt.trim(),
       n: 1,
       size: pickSize(aspect),
-      quality: "high",
+      quality: "medium",
       output_format: "png",
     };
     if (transparent) requestBody.background = "transparent";
 
-    let response = await fetch("https://api.openai.com/v1/images/generations", {
+    console.log("[anima-image-create] requesting", { model: requestBody.model, size: requestBody.size, transparent });
+    const t0 = Date.now();
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openaiKey}`,
@@ -106,20 +111,7 @@ serve(async (req) => {
       },
       body: JSON.stringify(requestBody),
     });
-
-    // Fallback to gpt-image-1 if gpt-image-2 isn't available on this account yet
-    if (response.status === 400 || response.status === 404) {
-      const errText = await response.clone().text();
-      if (/model/i.test(errText)) {
-        console.warn("gpt-image-2 unavailable, falling back to gpt-image-1");
-        requestBody.model = "gpt-image-1";
-        response = await fetch("https://api.openai.com/v1/images/generations", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        });
-      }
-    }
+    console.log("[anima-image-create] openai responded", { ms: Date.now() - t0, status: response.status });
 
     if (!response.ok) {
       const text = await response.text();
