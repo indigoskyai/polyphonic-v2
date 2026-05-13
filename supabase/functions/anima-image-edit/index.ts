@@ -77,43 +77,28 @@ serve(async (req) => {
 
     const sourceBytes = new Uint8Array(await blob.arrayBuffer());
 
-    // Build multipart form
+    // Build multipart form. gpt-image-1 medium keeps us well under the
+    // chained edge-function timeout budget.
     const form = new FormData();
-    form.append("model", "gpt-image-2");
+    form.append("model", "gpt-image-1");
     form.append("prompt", prompt.trim());
     form.append("n", "1");
     form.append("size", "auto");
-    form.append("quality", "high");
+    form.append("quality", "medium");
     form.append(
       "image",
       new Blob([sourceBytes], { type: blob.type || "image/png" }),
       "source.png",
     );
 
-    let response = await fetch("https://api.openai.com/v1/images/edits", {
+    console.log("[anima-image-edit] requesting gpt-image-1");
+    const t0 = Date.now();
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: { Authorization: `Bearer ${openaiKey}` },
       body: form,
     });
-
-    if (response.status === 400 || response.status === 404) {
-      const errText = await response.clone().text();
-      if (/model/i.test(errText)) {
-        console.warn("gpt-image-2 unavailable for edits, falling back to gpt-image-1");
-        const form2 = new FormData();
-        form2.append("model", "gpt-image-1");
-        form2.append("prompt", prompt.trim());
-        form2.append("n", "1");
-        form2.append("size", "auto");
-        form2.append("quality", "high");
-        form2.append("image", new Blob([sourceBytes], { type: blob.type || "image/png" }), "source.png");
-        response = await fetch("https://api.openai.com/v1/images/edits", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${openaiKey}` },
-          body: form2,
-        });
-      }
-    }
+    console.log("[anima-image-edit] openai responded", { ms: Date.now() - t0, status: response.status });
 
     if (!response.ok) {
       const text = await response.text();
