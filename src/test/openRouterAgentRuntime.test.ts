@@ -18,7 +18,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('agent_mode: agentMode');
     expect(source).toContain('const sdkRuntimeRequested');
     expect(source).toContain('const shouldRunLegacyToolPlanner');
-    expect(source).toContain('? await runToolPlanner(thread_id, authHeader, baseMessages.slice(1))');
+    expect(source).toContain('? await runToolPlanner(thread_id, userId, baseMessages.slice(1))');
     expect(gateIndex).toBeGreaterThan(-1);
     expect(legacyPlannerIndex).toBeGreaterThan(-1);
     expect(gateIndex).toBeLessThan(legacyPlannerIndex);

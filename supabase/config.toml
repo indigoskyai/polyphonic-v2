@@ -111,6 +111,9 @@ verify_jwt = false
 [functions.agent-config-save]
 verify_jwt = false
 
+[functions.agent-identity-save]
+verify_jwt = false
+
 [functions.openclaw-pair]
 verify_jwt = false
 

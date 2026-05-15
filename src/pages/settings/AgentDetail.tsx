@@ -15,6 +15,7 @@ import VoiceCardGrid from '@/components/settings/VoiceCardGrid';
 import Keychain from '@/components/settings/Keychain';
 import StickySaveFooter from '@/components/settings/StickySaveFooter';
 import AgentPersonality from '@/components/settings/AgentPersonality';
+import IdentityEditor from '@/components/identity/IdentityEditor';
 import { Section, InlinePill } from '@/components/settings/Section';
 import {
   SettingsPage,
@@ -408,6 +409,17 @@ export default function AgentDetail() {
 
         <Section
           number="03"
+          name="Identity"
+          title="Living identity documents"
+          desc="SOUL, Convictions, User-model, Self-model — the layered identity files this agent reads from for continuity. Editable for user-created agents."
+        >
+          {user && (
+            <IdentityEditor agentId={agent.id} userId={user.id} />
+          )}
+        </Section>
+
+        <Section
+          number="04"
           name="Personality"
           title="Voice & inner life"
           desc="Voice description, inner-life signals, and thought verbosity for this agent."
@@ -416,7 +428,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="04"
+          number="05"
           name="Tools"
           title="Capabilities"
           desc="Enable capabilities. Gated tools will ask for confirmation before running."
@@ -428,7 +440,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="05"
+          number="06"
           name="MCP servers"
           title="External context sources"
           desc="External context sources attached to this agent."
@@ -440,7 +452,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="06"
+          number="07"
           name="Sub-agents"
           title="Dedicated helpers"
           desc="Dedicated helpers spawned under this orchestrator."
@@ -455,7 +467,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="07"
+          number="08"
           name="Voice"
           title="Spoken response"
           desc="TTS configuration for spoken responses."
@@ -467,7 +479,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="08"
+          number="09"
           name="Keychain"
           title="Provider keys"
           desc="Provider API keys. Only the last three characters are shown."
