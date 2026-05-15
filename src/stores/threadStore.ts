@@ -65,8 +65,16 @@ interface ThreadState {
 }
 
 const normContent = (s: string) => (s || '').trim().replace(/\s+/g, ' ');
-const CONTENT_DEDUPE_WINDOW_MS = 30_000;
-const STREAM_STUB_DEDUPE_WINDOW_MS = 60_000;
+// Window for matching a fresh DB row against an in-memory message with
+// identical normalized content. Widened from 30s to 4 minutes after Tara
+// reported (2026-05-12) a duplicate assistant message arriving 2 minutes
+// after the original — outside the previous 30s/60s windows. The new window
+// covers backend refetch / realtime replay paths that re-emit the same
+// canonical content under a different row id.
+const CONTENT_DEDUPE_WINDOW_MS = 240_000;
+// Window for matching a fresh DB row against a local optimistic stream stub
+// where the content may have drifted (Council revision). Widened in tandem.
+const STREAM_STUB_DEDUPE_WINDOW_MS = 240_000;
 
 const isLocalStreamStub = (message: Pick<Message, 'metadata'>) =>
   message.metadata?.local_stream_stub === true;
@@ -115,12 +123,19 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // produced by background processes (subagent reports, scheduled-task
   // results, future tool-led inserts) without forcing a thread reload.
   //
-  // Two de-dupe paths:
+  // Three de-dupe paths:
   //   1. Same-id row already in state → drop (re-emit safety).
-  //   2. A local optimistic stream stub with the same role + agent + content
-  //      in the recent window → replace it with the canonical DB row. For
-  //      stream stubs only, content may differ because Council critique can
-  //      revise the persisted body after the client buffered the first body.
+  //   2. Existing message with the same role + agent + normalized content
+  //      within CONTENT_DEDUPE_WINDOW_MS (4 min) → replace with the new row.
+  //      Covers the Tara-reported case (2026-05-12) where a duplicate
+  //      assistant message arrived 2 minutes after the original under a
+  //      different uuid (likely realtime replay or scheduled-task refetch
+  //      re-emitting the same canonical content). Same canonical content
+  //      under any window age is treated as one message.
+  //   3. A local optimistic stream stub with the same role + agent in the
+  //      stub window → replace with the canonical DB row. For stream stubs
+  //      only, content may differ because Council critique can revise the
+  //      persisted body after the client buffered the first body.
   subscribeMessages: (threadId) => {
     const channel = supabase
       .channel(`thread-messages-${threadId}`)

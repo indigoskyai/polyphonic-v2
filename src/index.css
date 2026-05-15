@@ -5403,10 +5403,26 @@ html {
   border-radius: 50%;
   background: var(--red-accent);
   animation: conn-pulse 1.5s ease-in-out infinite;
+  flex: 0 0 auto;
 }
 @keyframes conn-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+.conn-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.conn-banner-headline {
+  font-size: 12px;
+}
+.conn-banner-reason {
+  font-size: 11px;
+  color: rgba(248, 113, 113, 0.55);
+  letter-spacing: 0.01em;
 }
 .conn-banner-action {
   margin-left: auto;

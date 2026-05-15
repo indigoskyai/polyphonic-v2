@@ -24,6 +24,19 @@ export default function Modal({
 }: ModalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  // Keep the latest callbacks in refs so the focus-management effect can
+  // depend only on `open`. Without this, every parent re-render that
+  // creates a new `onClose` function reference triggers the effect to
+  // re-run and re-grab focus to the first focusable element — which
+  // showed up in production as a "cursor magnet" pulling focus back to
+  // the name input on the New Agent modal every ~1s while typing in
+  // other fields. Reported by Tara, 2026-05-13.
+  const onCloseRef = useRef(onClose);
+  const closeOnEscRef = useRef(closeOnEsc);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    closeOnEscRef.current = closeOnEsc;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -34,9 +47,9 @@ export default function Modal({
     });
 
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && closeOnEsc) {
+      if (e.key === 'Escape' && closeOnEscRef.current) {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === 'Tab' && containerRef.current) {
@@ -63,7 +76,7 @@ export default function Modal({
       document.removeEventListener('keydown', handleKey);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, closeOnEsc, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return createPortal(

@@ -110,13 +110,31 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
       return;
     }
     let cancelled = false;
-    isFirstRun(user.id).then((first) => {
+    // One-shot retry on isFirstRun failure — a single transient network
+    // blip would otherwise risk throwing the user back to onboarding even
+    // after they've completed it. Tara hit a related case (2026-05-10).
+    const check = async () => {
+      try {
+        return await isFirstRun(user.id);
+      } catch (err) {
+        if (cancelled) return false;
+        console.warn('[FirstRunGate] isFirstRun first attempt failed, retrying once', err);
+        await new Promise((r) => setTimeout(r, 400));
+        try {
+          return await isFirstRun(user.id);
+        } catch (err2) {
+          console.warn('[FirstRunGate] isFirstRun retry failed, defaulting to NOT first-run', err2);
+          return false;
+        }
+      }
+    };
+    check().then((first) => {
       if (cancelled) return;
       if (first) {
         navigate('/onboarding', { replace: true });
       }
       setChecked(true);
-    }).catch(() => setChecked(true));
+    });
     return () => { cancelled = true; };
   }, [user?.id, location.pathname, location.search, navigate]);
 

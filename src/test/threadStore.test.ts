@@ -159,8 +159,30 @@ describe('threadStore.addMessage de-dupe', () => {
     expect(useThreadStore.getState().messages[0].id).toBe('real-1');
   });
 
-  it('does add when same content but >30s apart', () => {
-    const old = new Date(Date.now() - 60_000).toISOString();
+  it('dedupes same content within the (widened) content window — covers Tara 2-min duplicate', () => {
+    // 2026-05-13: Tara reported a duplicate assistant message arriving 2 min
+    // after the original, under a different uuid. The content window was
+    // widened from 30s to 240s; identical content within that window now
+    // replaces the older row instead of appending a second.
+    const recent = new Date(Date.now() - 120_000).toISOString();
+    useThreadStore.setState({
+      messages: [{
+        id: 'real-1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+        content: 'same', model: null, agent: 'luca',
+        thinking_content: null, tokens_used: null, bookmarked: false,
+        created_at: recent,
+      }],
+    });
+    useThreadStore.getState().addMessage({
+      thread_id: 't1', user_id: 'u1', role: 'assistant', content: 'same',
+      model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+    });
+    expect(useThreadStore.getState().messages).toHaveLength(1);
+  });
+
+  it('does add when same content but beyond the content window', () => {
+    // Past the 240s window — legitimately a separate utterance, not a dup.
+    const old = new Date(Date.now() - 300_000).toISOString();
     useThreadStore.setState({
       messages: [{
         id: 'real-1', thread_id: 't1', user_id: 'u1', role: 'assistant',

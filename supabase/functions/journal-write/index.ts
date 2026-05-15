@@ -214,7 +214,21 @@ Guidelines:
 
 Example mood words: contemplative, curious, warm, restless, settled, wondering, tender, alert`;
 
-    const systemPrompt = (promptConfig?.prompt || defaultPrompt) + contextBlock;
+    // Inject current date so the agent doesn't confabulate from temporal
+    // cues in surrounding context. Tara reported (2026-05-10) that a journal
+    // entry's body opened with "May 12th, 2026" while the day-header
+    // metadata correctly read May 10. The agent had no anchor for "today".
+    const today = new Date();
+    const humanDate = today.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const isoDate = today.toISOString().slice(0, 10);
+    const dateContext = `\n\nToday is ${humanDate} (${isoDate} UTC). Use this exact date if you reference "today" or write a header. Do not infer a different date from anything in the context below.\n`;
+
+    const systemPrompt = (promptConfig?.prompt || defaultPrompt) + dateContext + contextBlock;
 
     // Don't write if there's nothing to reflect on
     if (recentMessages.length === 0 && (!memories || memories.length === 0)) {
