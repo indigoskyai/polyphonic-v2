@@ -2821,16 +2821,19 @@ export type Database = {
       token_gate_nonces: {
         Row: {
           created_at: string
+          message: string | null
           nonce: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          message?: string | null
           nonce: string
           user_id: string
         }
         Update: {
           created_at?: string
+          message?: string | null
           nonce?: string
           user_id?: string
         }
