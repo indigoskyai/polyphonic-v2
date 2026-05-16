@@ -108,6 +108,38 @@ describe('threadStore.addMessage de-dupe', () => {
     expect(useThreadStore.getState().messages).toHaveLength(1);
   });
 
+  it('keeps a supplied persisted id so realtime can de-dupe by canonical row', () => {
+    useThreadStore.getState().addMessage({
+      id: 'db-message-1',
+      created_at: '2026-05-13T21:11:00.000Z',
+      thread_id: 't1', user_id: 'u1', role: 'assistant', content: 'persisted',
+      model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+    });
+
+    const message = useThreadStore.getState().messages[0];
+    expect(message.id).toBe('db-message-1');
+    expect(message.created_at).toBe('2026-05-13T21:11:00.000Z');
+  });
+
+  it('skips a local add when the persisted id is already present', () => {
+    useThreadStore.setState({
+      messages: [{
+        id: 'db-message-1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+        content: 'already here', model: null, agent: 'luca',
+        thinking_content: null, tokens_used: null, bookmarked: false,
+        created_at: new Date().toISOString(),
+      }],
+    });
+
+    useThreadStore.getState().addMessage({
+      id: 'db-message-1',
+      thread_id: 't1', user_id: 'u1', role: 'assistant', content: 'already here',
+      model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
+    });
+
+    expect(useThreadStore.getState().messages).toHaveLength(1);
+  });
+
   it('skips optimistic add when realtime row with same role/agent/content exists within 30s', () => {
     useThreadStore.setState({
       messages: [{

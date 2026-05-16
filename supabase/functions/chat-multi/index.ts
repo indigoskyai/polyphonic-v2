@@ -726,7 +726,7 @@ serve(async (req) => {
               recentTurns: history || [],
               observers: fallbackObservers,
             });
-            send({ type: "done", model: "chairman-fallback", tokens_used: null });
+            send({ type: "done", model: "chairman-fallback", tokens_used: null, message_id: fallbackMessageId });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -928,7 +928,7 @@ serve(async (req) => {
             observers: synthObservers,
           });
 
-          send({ type: "done", model: "synthesis", tokens_used: tokensUsed });
+          send({ type: "done", model: "synthesis", tokens_used: tokensUsed, message_id: synthesizedMessageId });
         } catch (err) {
           console.error("Multi-model stream error:", err);
           send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
@@ -1578,7 +1578,7 @@ async function singleModelStream(
           observers: singleObservers,
         });
 
-        send({ type: "done", model: usedModel, tokens_used: tokensUsed });
+        send({ type: "done", model: usedModel, tokens_used: tokensUsed, message_id: insertedMessage?.id ?? null });
       } catch (err) {
         console.error("Single-model stream error:", err);
         send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });

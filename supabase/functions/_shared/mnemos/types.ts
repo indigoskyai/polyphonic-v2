@@ -207,8 +207,14 @@ export interface DecayResult {
 
 /** Result of a consolidation (dream) cycle. */
 export interface ConsolidationResult {
+  /** Engrams considered by this cycle. */
+  candidates_found?: number;
+  /** Pairs inspected for new connections. */
+  pairs_analyzed?: number;
   /** Engrams that were strengthened by consolidation. */
   strengthened: number;
+  /** Existing connections strengthened by consolidation. */
+  connections_strengthened?: number;
   /** New connections discovered between engrams. */
   new_connections: number;
   /** Beliefs that were created or updated. */

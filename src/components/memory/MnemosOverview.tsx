@@ -6,12 +6,14 @@
  *
  * MOCK: 24h candidate delta, last consolidation timestamp, weekly drift.
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
 import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useToast } from '@/hooks/use-toast';
 import MnemosStreamShell from './MnemosStreamShell';
 
 const ENGRAM_TYPES: Array<Engram['engram_type']> = ['episodic', 'semantic', 'procedural', 'belief'];
@@ -29,13 +31,16 @@ function timeAgo(iso: string): string {
 
 export default function MnemosOverview() {
   const user = useAuthStore((s) => s.user);
+  const { toast } = useToast();
   const setMemoryTab = useViewTabStore((s) => s.setMemoryTab);
   const memories = useMemoryStore((s) => s.memories);
   const engrams = useMemoryStore((s) => s.engrams);
   const beliefs = useMemoryStore((s) => s.beliefs);
   const connections = useMemoryStore((s) => s.connections);
+  const loadAll = useMemoryStore((s) => s.loadAll);
   const setSelectedEngram = useMemoryStore((s) => s.setSelectedEngram);
   const openDrawer = useDrawerStore((s) => s.open);
+  const [consolidating, setConsolidating] = useState(false);
 
   const candidates = useMemoryCandidatesStore((s) => s.items);
   const loadCandidates = useMemoryCandidatesStore((s) => s.load);
@@ -82,6 +87,35 @@ export default function MnemosOverview() {
   }, [engrams]);
 
   const topCandidates = useMemo(() => candidates.slice(0, 4), [candidates]);
+
+  const runConsolidation = async () => {
+    if (!user || consolidating) return;
+    setConsolidating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('mnemos-consolidate', {
+        body: { user_id: user.id, force: true, lookback_hours: 168 },
+      });
+      if (error) throw error;
+      await Promise.all([loadAll(user.id), loadCandidates(user.id)]);
+      const result = (data ?? {}) as Record<string, unknown>;
+      const candidatesFound = Number(result.candidates_found ?? 0);
+      const promoted = Number(result.promotions ?? 0);
+      const linked = Number(result.new_connections ?? 0);
+      const beliefsUpdated = Number(result.beliefs_updated ?? 0);
+      toast({
+        title: 'Consolidation finished',
+        description: `${candidatesFound} candidates reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Could not consolidate',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setConsolidating(false);
+    }
+  };
 
   return (
     <MnemosStreamShell
@@ -142,14 +176,29 @@ export default function MnemosOverview() {
         <div className="s-panel">
           <div className="s-panel-eye">
             <span>· Pending</span>
-            <button
-              type="button"
-              className="right"
-              onClick={() => setMemoryTab('Memories')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', color: 'var(--text-soft)' }}
-            >
-              {stats.candidates > 4 ? `+${stats.candidates - 4} more →` : 'review →'}
-            </button>
+            <span className="right" style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+              <button
+                type="button"
+                onClick={runConsolidation}
+                disabled={consolidating}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: consolidating ? 'default' : 'pointer',
+                  font: 'inherit',
+                  color: consolidating ? 'var(--text-whisper)' : 'var(--text-soft)',
+                }}
+              >
+                {consolidating ? 'running…' : 'consolidate →'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemoryTab('Memories')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', color: 'var(--text-soft)' }}
+              >
+                {stats.candidates > 4 ? `+${stats.candidates - 4} more →` : 'review →'}
+              </button>
+            </span>
           </div>
           <div className="s-panel-title">Candidates</div>
           <p className="s-hero-sub" style={{ fontSize: 12, marginBottom: 14 }}>

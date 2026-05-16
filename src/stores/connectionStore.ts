@@ -50,10 +50,13 @@ function openChannel(set: (partial: Partial<ConnectionState>) => void) {
       if (status === 'SUBSCRIBED') {
         set({ connected: true, reason: null });
       } else if (status === 'CHANNEL_ERROR') {
+        console.warn('[connectionStore] realtime channel status', status);
         set({ connected: false, reason: 'Channel error — check your connection or the server.' });
       } else if (status === 'TIMED_OUT') {
+        console.warn('[connectionStore] realtime channel status', status);
         set({ connected: false, reason: 'Connection timed out — server did not respond.' });
       } else if (status === 'CLOSED') {
+        console.warn('[connectionStore] realtime channel status', status);
         set({ connected: false, reason: 'Connection closed.' });
       }
     });

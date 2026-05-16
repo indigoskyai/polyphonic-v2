@@ -308,6 +308,7 @@ async function runOpenRouterAgentSdkTurn(
     model: usedModel,
     tokens_used: tokensUsed,
     tool_call_count: toolCalls.size,
+    message_id: insertedMessage?.id ?? null,
   });
 }
 

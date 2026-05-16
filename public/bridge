@@ -1,0 +1,160 @@
+#!/bin/sh
+set -eu
+
+POLYPHONIC_SUPABASE_URL="${POLYPHONIC_SUPABASE_URL:-https://kknchdnrujzheulqzowv.supabase.co}"
+POLYPHONIC_ANON_KEY="${POLYPHONIC_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrbmNoZG5ydWp6aGV1bHF6b3d2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MTIyMDgsImV4cCI6MjA3OTM4ODIwOH0.hO6owC0XhR7rLuCaBaSOyjDJjZTz3KB5GCMHyzOSaik}"
+BRIDGE_VERSION="0.1.0"
+CONFIG_DIR="${HOME}/.polyphonic"
+BIN_DIR="${HOME}/.local/bin"
+CONFIG_FILE="${CONFIG_DIR}/bridge.env"
+BRIDGE_BIN="${BIN_DIR}/polyphonic-bridge"
+
+say() { printf '%s\n' "$*"; }
+die() { say "polyphonic bridge: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
+
+need curl
+need sed
+
+PAIR_CODE="${POLYPHONIC_PAIR_CODE:-}"
+if [ -z "$PAIR_CODE" ]; then
+  if [ -r /dev/tty ]; then
+    printf 'Pairing code from Polyphonic settings: ' > /dev/tty
+    IFS= read -r PAIR_CODE < /dev/tty
+  else
+    die "set POLYPHONIC_PAIR_CODE to the code shown in Polyphonic settings"
+  fi
+fi
+
+PAIR_CODE="$(printf '%s' "$PAIR_CODE" | tr -cd '0-9')"
+[ ${#PAIR_CODE} -eq 6 ] || die "pairing code must be 6 digits"
+
+DEVICE_NAME="${POLYPHONIC_DEVICE_NAME:-$(hostname 2>/dev/null || printf 'local device')}"
+DEVICE_NAME="$(printf '%s' "$DEVICE_NAME" | tr -cd '[:alnum:] ._-' | sed 's/^ *//; s/ *$//')"
+[ -n "$DEVICE_NAME" ] || DEVICE_NAME="local device"
+PLATFORM="$(uname -s 2>/dev/null || printf 'unknown')"
+
+say "Polyphonic Bridge"
+say "Pairing ${DEVICE_NAME}..."
+
+claim_body=$(printf '{"action":"claim","code":"%s","device_name":"%s","platform":"%s","bridge_version":"%s"}' \
+  "$PAIR_CODE" "$DEVICE_NAME" "$PLATFORM" "$BRIDGE_VERSION")
+
+claim_response=$(curl -fsS \
+  -X POST "${POLYPHONIC_SUPABASE_URL}/functions/v1/openclaw-pair?action=claim" \
+  -H "apikey: ${POLYPHONIC_ANON_KEY}" \
+  -H "Content-Type: application/json" \
+  --data "$claim_body") || die "pairing request failed"
+
+DEVICE_ID=$(printf '%s' "$claim_response" | sed -n 's/.*"device_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+USER_ID=$(printf '%s' "$claim_response" | sed -n 's/.*"user_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+DEVICE_TOKEN=$(printf '%s' "$claim_response" | sed -n 's/.*"device_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+[ -n "$DEVICE_ID" ] || die "pairing response did not include a device id"
+[ -n "$DEVICE_TOKEN" ] || die "pairing response did not include a device token"
+
+mkdir -p "$CONFIG_DIR" "$BIN_DIR"
+umask 077
+cat > "$CONFIG_FILE" <<EOF
+POLYPHONIC_SUPABASE_URL='${POLYPHONIC_SUPABASE_URL}'
+POLYPHONIC_ANON_KEY='${POLYPHONIC_ANON_KEY}'
+POLYPHONIC_DEVICE_ID='${DEVICE_ID}'
+POLYPHONIC_USER_ID='${USER_ID}'
+POLYPHONIC_DEVICE_TOKEN='${DEVICE_TOKEN}'
+POLYPHONIC_BRIDGE_VERSION='${BRIDGE_VERSION}'
+POLYPHONIC_PLATFORM='${PLATFORM}'
+EOF
+
+cat > "$BRIDGE_BIN" <<'EOF'
+#!/bin/sh
+set -eu
+
+CONFIG_FILE="${HOME}/.polyphonic/bridge.env"
+[ -r "$CONFIG_FILE" ] || {
+  printf '%s\n' "polyphonic-bridge: missing ${CONFIG_FILE}; rerun the installer" >&2
+  exit 1
+}
+. "$CONFIG_FILE"
+
+heartbeat() {
+  body=$(printf '{"device_id":"%s","device_token":"%s","bridge_version":"%s","platform":"%s"}' \
+    "$POLYPHONIC_DEVICE_ID" "$POLYPHONIC_DEVICE_TOKEN" "$POLYPHONIC_BRIDGE_VERSION" "$POLYPHONIC_PLATFORM")
+  curl -fsS \
+    -X POST "${POLYPHONIC_SUPABASE_URL}/functions/v1/openclaw-heartbeat" \
+    -H "apikey: ${POLYPHONIC_ANON_KEY}" \
+    -H "Content-Type: application/json" \
+    --data "$body" >/dev/null
+}
+
+printf '%s\n' "polyphonic-bridge: running for device ${POLYPHONIC_DEVICE_ID}"
+while :; do
+  heartbeat || true
+  sleep 30
+done
+EOF
+chmod 700 "$BRIDGE_BIN"
+
+started=0
+case "$PLATFORM" in
+  Darwin)
+    launch_dir="${HOME}/Library/LaunchAgents"
+    plist="${launch_dir}/dev.polyphonic.bridge.plist"
+    mkdir -p "$launch_dir"
+    cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.polyphonic.bridge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${BRIDGE_BIN}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${CONFIG_DIR}/bridge.log</string>
+  <key>StandardErrorPath</key>
+  <string>${CONFIG_DIR}/bridge.err.log</string>
+</dict>
+</plist>
+EOF
+    launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
+    if launchctl bootstrap "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
+      started=1
+    fi
+    ;;
+  Linux)
+    if command -v systemctl >/dev/null 2>&1; then
+      svc_dir="${HOME}/.config/systemd/user"
+      svc="${svc_dir}/polyphonic-bridge.service"
+      mkdir -p "$svc_dir"
+      cat > "$svc" <<EOF
+[Unit]
+Description=Polyphonic Bridge
+
+[Service]
+ExecStart=${BRIDGE_BIN}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+      systemctl --user daemon-reload >/dev/null 2>&1 || true
+      if systemctl --user enable --now polyphonic-bridge.service >/dev/null 2>&1; then
+        started=1
+      fi
+    fi
+    ;;
+esac
+
+say "Paired device ${DEVICE_ID}."
+if [ "$started" -eq 1 ]; then
+  say "Bridge is running in the background."
+else
+  say "Bridge installed. Start it with: ${BRIDGE_BIN}"
+fi

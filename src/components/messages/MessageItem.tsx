@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useThreadStore } from '@/stores/threadStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
@@ -40,10 +40,23 @@ interface ThinkingBlockProps { content: string; state: 'complete' }
 // Local minimal ThinkingBlock for "complete" state only — the live streaming
 // variant lives in ChatView and is only used inside the streaming bubble.
 function ThinkingBlockComplete({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
   if (!content) return null;
   return (
-    <div className="thinking-block" data-state="complete">
-      <div className="thinking-header">
+    <div className={`thinking-block${expanded ? ' expanded' : ''}`} data-state="complete">
+      <div
+        className="thinking-header"
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
+      >
         <div className="thinking-dots" aria-hidden="true">
           {Array.from({ length: 9 }).map((_, i) => <span key={i} className="td" />)}
         </div>

@@ -50,7 +50,7 @@ interface ThreadState {
   loadMessages: (threadId: string) => Promise<void>;
   subscribeMessages: (threadId: string) => () => void;
   createThread: (userId: string, agentId?: string, projectId?: string | null) => Promise<string>;
-  addMessage: (msg: Omit<Message, 'id' | 'created_at'>) => void;
+  addMessage: (msg: Omit<Message, 'id' | 'created_at'> & Partial<Pick<Message, 'id' | 'created_at'>>) => void;
   patchMessage: (id: string, patch: Partial<Message>) => void;
   setStreaming: (s: boolean) => void;
   setStreamingContent: (c: string) => void;
@@ -212,6 +212,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const now = Date.now();
     const existing = get().messages;
     const incomingNorm = normContent(msg.content);
+    if (msg.id && existing.some((m) => m.id === msg.id)) return;
 
     // If realtime already delivered the canonical row for this same reply,
     // skip the local stub. Normal messages require a normalized content match;
@@ -231,8 +232,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const message: Message = {
       ...msg,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
+      id: msg.id ?? crypto.randomUUID(),
+      created_at: msg.created_at ?? new Date().toISOString(),
     };
     set({ messages: [...existing, message] });
   },

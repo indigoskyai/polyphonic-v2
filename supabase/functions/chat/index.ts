@@ -334,6 +334,7 @@ serve(async (req) => {
             type: "done",
             model: usedModel,
             tokens_used: tokensUsed,
+            message_id: insertedMessage?.id ?? null,
           });
         } catch (err) {
           console.error("Stream error:", err);

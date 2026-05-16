@@ -33,6 +33,7 @@ import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
 import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
+import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1182,8 +1183,21 @@ export default function ChatView() {
 
     // Save user message to DB — tag it as `guardian` so it stays in the
     // observer alcove and never appears in the main chat thread.
-    const { supabase } = await import('@/integrations/supabase/client');
-    await supabase.from('messages').insert({ thread_id: tid, user_id: user.id, role: 'user', content: messageText, agent: 'guardian' });
+    try {
+      await insertMessageWithFreshSession({
+        thread_id: tid,
+        user_id: user.id,
+        role: 'user',
+        content: messageText,
+        agent: 'guardian',
+      });
+    } catch (err) {
+      setGuardianMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: err instanceof Error ? `Could not save that observer note: ${err.message}` : 'Could not save that observer note.',
+      }]);
+      return;
+    }
 
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -1193,6 +1207,7 @@ export default function ChatView() {
     setGuardianStreamingContent('');
 
     try {
+      const { supabase } = await import('@/integrations/supabase/client');
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
       const controller = new AbortController();
@@ -1327,33 +1342,42 @@ export default function ChatView() {
       return;
     }
 
-    // Save to DB
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { error: insertUserError } = await supabase.from('messages').insert({
-      thread_id: tid,
-      user_id: user.id,
-      role: 'user',
-      content: messageText,
-      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
-    });
-    if (insertUserError) {
+    let persistedUserMessage: Message | null = null;
+    try {
+      const inserted = await insertMessageWithFreshSession({
+        thread_id: tid,
+        user_id: user.id,
+        role: 'user',
+        content: messageText,
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments as any : null,
+      });
+      persistedUserMessage = inserted as unknown as Message;
+    } catch (insertUserError) {
       setFirstTurnHandoff(null);
       if (isFirstTurn && !options?.text) setInput(sourceText);
+      const detail = insertUserError instanceof Error ? insertUserError.message : String(insertUserError);
+      const authExpired = isMessagePersistenceAuthError(insertUserError);
       addMessage({
         thread_id: tid, user_id: user.id, role: 'assistant',
-        content: 'Could not save your message. Please try again.',
+        content: authExpired ? 'Could not save your message. Please sign in again, then retry.' : 'Could not save your message. Please try again.',
         model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
         kind: 'agent_error',
-        metadata: { agent: activeAgentId, message: 'Could not save your message.', detail: insertUserError.message },
+        metadata: {
+          agent: activeAgentId,
+          message: authExpired ? 'Could not save your message. Sign in again, then retry.' : 'Could not save your message.',
+          detail,
+          retry_text: messageText,
+          retry_attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+          auth_expired: authExpired,
+        },
       } as any);
       return;
     }
 
     addMessage({
-      thread_id: tid, user_id: user.id, role: 'user', content: messageText,
-      model: null, agent: null, thinking_content: null, tokens_used: null, bookmarked: false,
+      ...persistedUserMessage!,
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
-    });
+    } as Message);
     setFirstTurnHandoff(null);
 
     if (!options?.text) {
@@ -1382,6 +1406,7 @@ export default function ChatView() {
     abortRef.current = controller;
 
     try {
+      const { supabase } = await import('@/integrations/supabase/client');
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
       const resp = await fetch(`${supabaseUrl}/functions/v1/chat-multi`, {
@@ -1600,6 +1625,7 @@ export default function ChatView() {
                   };
                 }
                 addMessage({
+                  id: typeof data.message_id === 'string' ? data.message_id : undefined,
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: activeAgentId,
                   thinking_content: fullThinking || null,
@@ -1752,8 +1778,7 @@ export default function ChatView() {
         metadata: md as any,
       } as any);
       try {
-        const { supabase } = await import('@/integrations/supabase/client');
-        await supabase.from('messages').insert({
+        await insertMessageWithFreshSession({
           thread_id: currentThreadId, user_id: user.id, role: 'assistant',
           content: partial || '_(canceled before any content)_',
           agent: activeAgentId,
@@ -2141,6 +2166,17 @@ export default function ChatView() {
                     detail={md.detail}
                     occurredAt={msg.created_at}
                     onRetry={() => {
+                      const retryText = typeof md.retry_text === 'string' ? md.retry_text : null;
+                      const retryAttachments = Array.isArray(md.retry_attachments)
+                        ? md.retry_attachments as PersistedAttachment[]
+                        : undefined;
+                      if (retryText || (retryAttachments && retryAttachments.length > 0)) {
+                        void sendMessage({
+                          text: retryText ?? '',
+                          attachments: retryAttachments,
+                        });
+                        return;
+                      }
                       // Re-send the most recent user message before this error
                       const idx = messages.findIndex((m) => m.id === msg.id);
                       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');

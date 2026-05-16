@@ -109,7 +109,12 @@ export class MnemosEngine {
       await dream(this.supabase, this.userId, report, options.openrouter_api_key);
     }
 
-    return result;
+    return {
+      ...result,
+      candidates_found: report.candidates_found,
+      pairs_analyzed: report.pairs_analyzed,
+      connections_strengthened: report.connections_strengthened,
+    };
   }
 
   // -------------------------------------------------------------------------
