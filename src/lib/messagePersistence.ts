@@ -8,9 +8,8 @@ const SESSION_REFRESH_BUFFER_MS = 90_000;
 
 export class MessagePersistenceAuthError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
-    super(message);
+    super(message, options);
     this.name = 'MessagePersistenceAuthError';
-    this.cause = options?.cause;
   }
 }
 
