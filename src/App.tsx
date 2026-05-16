@@ -363,7 +363,8 @@ const App = () => (
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/cron-health" element={<ProtectedRoute><AppShell><CronHealthSettings /></AppShell></ProtectedRoute>} />
-                <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+                <Route path="/onboarding" element={<ProtectedRoute skipTokenGate><Onboarding /></ProtectedRoute>} />
+                <Route path="/access" element={<ProtectedRoute skipTokenGate><AccessGatePage /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
                 <Route path="/_mockups/styles" element={<StyleGallery />} />
                 <Route path="/_mockups/composer" element={<ComposerGallery />} />
