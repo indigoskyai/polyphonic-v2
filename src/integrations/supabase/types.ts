@@ -2818,6 +2818,54 @@ export type Database = {
           },
         ]
       }
+      token_gate_nonces: {
+        Row: {
+          created_at: string
+          nonce: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          nonce: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          nonce?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      token_gate_verifications: {
+        Row: {
+          balance: number
+          expires_at: string
+          price_used: number
+          usd_value: number
+          user_id: string
+          verified_at: string
+          wallet_address: string
+        }
+        Insert: {
+          balance?: number
+          expires_at?: string
+          price_used?: number
+          usd_value?: number
+          user_id: string
+          verified_at?: string
+          wallet_address: string
+        }
+        Update: {
+          balance?: number
+          expires_at?: string
+          price_used?: number
+          usd_value?: number
+          user_id?: string
+          verified_at?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       user_api_keys: {
         Row: {
           created_at: string

@@ -75,6 +75,8 @@ const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSet
 const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
 const CronHealthSettings = lazy(() => import("./pages/settings/CronHealthSettings"));
 const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
+const AccessGatePage = lazy(() => import("./pages/AccessGatePage"));
+import AuthGate from "./components/auth/AuthGate";
 
 function AuthInit({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
@@ -141,11 +143,12 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, skipTokenGate = false }: { children: React.ReactNode; skipTokenGate?: boolean }) {
   const { user, loading } = useAuthStore();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
   if (!user) return <Navigate to="/auth/login" replace />;
-  return <>{children}</>;
+  if (skipTokenGate) return <>{children}</>;
+  return <AuthGate>{children}</AuthGate>;
 }
 
 function RouteFallback() {
@@ -360,7 +363,8 @@ const App = () => (
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/cron-health" element={<ProtectedRoute><AppShell><CronHealthSettings /></AppShell></ProtectedRoute>} />
-                <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+                <Route path="/onboarding" element={<ProtectedRoute skipTokenGate><Onboarding /></ProtectedRoute>} />
+                <Route path="/access" element={<ProtectedRoute skipTokenGate><AccessGatePage /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
                 <Route path="/_mockups/styles" element={<StyleGallery />} />
                 <Route path="/_mockups/composer" element={<ComposerGallery />} />

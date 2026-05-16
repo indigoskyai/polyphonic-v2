@@ -1,108 +1,108 @@
-# Luca Agentic Upgrade — Image Gen, SVG, Web Browsing, Inline UX
 
-Make Luca feel like ChatGPT/Claude apps: generate images (`gpt-image-2`), generate SVGs, browse the web (Perplexity Sonar), and render all of it inline in chat with expand / download / edit.
+## Goal
 
-## Research notes (locked in before coding)
+After a user signs in (Google or email/password), route them to a dedicated `/access` gate page styled like the existing login page. They connect a Solana wallet (Wallet Standard — covers Phantom, Solflare, Backpack, etc.), sign a one-time nonce to prove ownership, and the server checks they hold ≥ $50 USD of $MNEMOS (mint `BMcReKHFc5KssDgDisZBq3YmJe5RdjnBUumxpXpRpump`) using the Jupiter Price API. Verification is cached for 24 hours; admins bypass.
 
-- **OpenAI Image model**: `gpt-image-2` (latest, April 2025+ generation; `gpt-image-1` is fallback). Endpoints:
-  - `POST https://api.openai.com/v1/images/generations` — params: `model`, `prompt`, `size` (`1024x1024`, `1536x1024`, `1024x1536`, `auto`), `quality` (`low|medium|high|auto`), `n`, `output_format` (`png|jpeg|webp`), `background` (`transparent|opaque|auto`). Returns base64 (`b64_json`) by default.
-  - `POST https://api.openai.com/v1/images/edits` — multipart with `image` (PNG with alpha = mask area) + `prompt` for edits.
-- **Perplexity Sonar**: already wired in `supabase/functions/_shared/perplexity.ts` via OpenRouter (`perplexity/sonar`). Already exposed as `web_search` + `read_url` tools in `anima-tool-execute`. Needs verification + UX surfacing only.
-- **Existing image pipeline** (`anima-image-create`) uses an outdated OpenRouter Gemini path — will be replaced with direct OpenAI `gpt-image-2`.
-- **SVG path**: `create_artifact` tool already accepts `kind: "svg"` and `ArtifactRenderer.tsx` already renders it via iframe. Needs inline message-bubble rendering + expand/download/edit affordances.
+## User flow
 
-## Architecture overview
-
+```text
+Login (Google / email) ──▶ AuthGate
+                            │
+                  has valid (≤24h) verification? ──yes──▶ /chat
+                            │ no
+                            ▼
+                        /access page
+                            │
+              [Connect Wallet]  (Wallet Standard modal)
+                            │
+              [Sign verification message]  (nonce + timestamp)
+                            │
+              POST verify-token-gate edge function
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+       balance × price ≥ $50         shortfall
+              │                           │
+       insert token_gate_              show: balance, USD value,
+       verifications row                shortfall, "Buy on Jupiter" link,
+              │                           [Re-check] button
+              ▼
+            /chat
 ```
-User chat
-  └─► chat-multi (planner) ──► anima-tool-execute
-                                   ├─ generate_image  ─► anima-image-create  (gpt-image-2 / OpenAI)
-                                   ├─ edit_image      ─► anima-image-edit    (NEW, gpt-image-2 edits)
-                                   ├─ create_artifact (kind=svg) ─► artifactStore (existing)
-                                   ├─ web_search      ─► anima-web-search    (Perplexity Sonar, existing)
-                                   └─ read_url        ─► anima-web-read      (Perplexity Sonar, existing)
 
-Chat surface
-  ├─ MessageItem renders inline ImageCard / SvgCard / SearchCitations
-  └─ MediaLightbox (NEW) — fullscreen view, download, "Edit with prompt"
-```
+## Architecture
 
-## Phase plan (track in `LUCA_NEXT.md`, one commit per phase)
+### Frontend
+- **`src/pages/AccessGatePage.tsx`** — new page at `/access`. Reuses LoginPage visual tokens (`--bg-deep`, `--font-sans`, pill buttons). Three states: idle, connecting, verifying, success, denied.
+- **`src/lib/solanaWallet.ts`** — thin wrapper around `@solana/wallet-adapter-base` + `@solana/wallet-standard-wallet-adapter-react` for wallet discovery, connect, and `signMessage`.
+- **`src/components/access/WalletPickerModal.tsx`** — lists detected wallets (Phantom, Solflare, Backpack, others surfaced by Wallet Standard).
+- **`src/stores/tokenGateStore.ts`** — Zustand store: `{ status, lastVerifiedAt, balance, usdValue, walletAddress }`. Hydrates from Supabase on mount.
+- **`src/components/auth/AuthGate.tsx`** — route guard wrapping protected routes. Checks `token_gate_verifications` row newer than 24h OR admin role; otherwise redirects to `/access`.
+- **`src/App.tsx`** — add `/access` route (public-when-authed); wrap `/chat`, `/mind`, `/memory`, etc. with `<AuthGate>`.
 
-### Phase A — Backend: image generation with `gpt-image-2`
-1. Add secret `OPENAI_API_KEY` (request via `add_secret` once user confirms).
-2. Rewrite `supabase/functions/anima-image-create/index.ts`:
-   - Call `https://api.openai.com/v1/images/generations` with `gpt-image-2`, `quality: "high"`, `size: "auto"`, `output_format: "png"`.
-   - Decode `b64_json`, upload to `generated-images` bucket (existing), return signed URL + storage path + revised_prompt.
-   - Quota via `dailyQuota.checkAndIncrement(userId, "image-generation")`.
-3. New `supabase/functions/anima-image-edit/index.ts`:
-   - Multipart POST to `/v1/images/edits` with source image (downloaded from storage path) + new prompt + optional mask.
-   - Same upload + signed URL flow.
-4. Register both in tool planner (`anima-tool-execute`):
-   - `generate_image({ prompt, aspect_ratio?, transparent? })`
-   - `edit_image({ source_path, prompt })`
-5. Verify: `supabase--test_edge_functions` with sample prompt; confirm bucket write + signed URL.
+### Backend (Lovable Cloud)
 
-### Phase B — Backend: confirm Perplexity browsing path
-1. Confirm `anima-web-search` and `anima-web-read` work end-to-end (they require user OpenRouter key, which is already established).
-2. Surface citations cleanly in tool output so the frontend can render them as a card.
-3. Verify with `curl_edge_functions`.
+**New table `token_gate_verifications`**
+- `user_id uuid` (FK to auth.users, PK)
+- `wallet_address text not null`
+- `balance numeric not null` (raw $MNEMOS held)
+- `usd_value numeric not null`
+- `price_used numeric not null` (24h avg USD per $MNEMOS at verification)
+- `verified_at timestamptz not null default now()`
+- `expires_at timestamptz not null` (verified_at + 24h)
+- RLS: user can `select` their own row; only edge function (service role) writes.
 
-### Phase C — Frontend: rich inline media in chat
-1. **`ImageCard.tsx`** (new, in `src/components/messages/`):
-   - Rounded, shadow-elegant, lazy-load, blur-up placeholder, aspect-ratio preserved.
-   - Hover/tap → open `MediaLightbox`. Keyboard-accessible (Enter/Space).
-2. **`SvgCard.tsx`** (new): sandboxed iframe at natural size, same hover/tap behavior, "View source" toggle.
-3. **`MediaLightbox.tsx`** (new, portal):
-   - Fullscreen dim backdrop, ESC closes, swipe-down on mobile.
-   - Toolbar: **Download** (PNG/SVG), **Copy link**, **Edit with prompt** (opens inline prompt → calls `edit_image` tool), **Open in new tab**.
-   - Pinch/scroll zoom for images.
-4. **`SearchCitationsCard.tsx`** (new): render Perplexity results as tap-able source chips with favicon + title + snippet, like ChatGPT browsing UI.
-5. Wire renderers into `MessageItem.tsx` based on attachment/tool-result type.
-6. Streaming UX: skeleton shimmer while `generate_image` tool is in flight; tool status pill ("Generating image…", "Searching the web…") matching ChatGPT cadence.
+**New table `token_gate_nonces`** (short-lived, for sign-in-with-Solana replay protection)
+- `nonce text primary key`
+- `user_id uuid not null`
+- `created_at timestamptz default now()` (delete after 10 min via cron or on consume)
 
-### Phase D — Agent prompt + autonomy tuning
-1. Update tool-planner system prompt in `anima-tool-execute` to teach Luca when to:
-   - generate vs describe an image
-   - choose `create_artifact kind=svg` vs raster image (diagrams/icons → SVG, photographic/illustrative → image)
-   - chain `web_search` → `read_url` → reply with citations
-2. Raise `stopWhen` to allow multi-step tool loops (verify chat-multi already supports ≥5 hops; bump if not).
-3. Add lightweight tool-result memory so Luca can reference its own generated image in the next turn ("make it darker" → calls `edit_image` on last image).
+**New edge function `token-gate-nonce`** — `POST` → returns `{ nonce, message }` where `message` is `"Verify $MNEMOS holding for Polyphonic\n\nNonce: <nonce>\nIssued: <iso>"`. Requires JWT.
 
-### Phase E — E2E verification (mandatory before marking done)
-Use `browser--navigate_to_sandbox` + `browser--act` on `/chat/<thread>` and verify:
-1. "Draw me a watercolor fox" → image streams into bubble within ~10s, lightbox opens, download works, "Edit with prompt: make it nighttime" produces a new image.
-2. "Make me an SVG icon of a mountain" → inline SVG card renders, download as `.svg` works, source view toggles.
-3. "What happened in AI news this week?" → search status pill → reply with inline citations card → tapping a chip opens source.
-4. "Read https://example.com and summarize" → read_url path, citations rendered.
-5. Mobile viewport (390×844): all of the above remain tap-friendly, lightbox respects safe-area.
-6. Console: zero new errors. Network: no 4xx/5xx on tool routes.
+**New edge function `verify-token-gate`** — `POST { walletAddress, signature, nonce }`:
+  1. Validate JWT → `user_id`.
+  2. Look up nonce row; reject if missing/expired/wrong user. Delete on consume.
+  3. Verify ed25519 signature of `message` matches `walletAddress` (use `tweetnacl` via `npm:tweetnacl`).
+  4. Fetch SPL balance of $MNEMOS for `walletAddress` via Solana RPC (`getTokenAccountsByOwner` filtered by mint, sum `uiAmount`). Use public RPC `https://api.mainnet-beta.solana.com` (configurable via `SOLANA_RPC_URL` secret if rate-limited later).
+  5. Fetch 24h avg price from Jupiter Price API v2: `https://lite-api.jup.ag/price/v3?ids=BMcReKHFc5KssDgDisZBq3YmJe5RdjnBUumxpXpRpump`. Use returned `usdPrice` (Jupiter's price is already a recent VWAP; we'll store it as our reference). Cache server-side per-day in `app_config` to keep it stable across users for the calendar day.
+  6. Compute `usdValue = balance * price`. If `>= 50`, upsert `token_gate_verifications` with `expires_at = now() + 24h`. Return `{ allowed, balance, usdValue, price, shortfall }`.
 
-Loop fixes until all 6 pass.
+**Admin bypass**: AuthGate calls `has_role(auth.uid(), 'admin')` first; admins skip wallet entirely.
 
-## Files to add / change
+### Dependencies (frontend)
+- `@solana/web3.js`
+- `@solana/wallet-standard-wallet-adapter-react`
+- `@solana/wallet-adapter-react` + `@solana/wallet-adapter-react-ui` (for the picker modal styling — we'll restyle to match)
+- `bs58` (encode signature/pubkey)
 
-**New**
-- `supabase/functions/anima-image-edit/index.ts`
-- `src/components/messages/ImageCard.tsx`
-- `src/components/messages/SvgCard.tsx`
-- `src/components/messages/MediaLightbox.tsx`
-- `src/components/messages/SearchCitationsCard.tsx`
-- `LUCA_NEXT.md` (progress tracker — phase checkboxes, decision log)
+### Edge function deps (Deno)
+- `npm:tweetnacl` for signature verification
+- `npm:bs58` for decoding signature
+- `npm:@solana/web3.js` for `Connection.getParsedTokenAccountsByOwner`
 
-**Edit**
-- `supabase/functions/anima-image-create/index.ts` — switch to `gpt-image-2`
-- `supabase/functions/anima-tool-execute/index.ts` — register `generate_image`, `edit_image`, refine planner prompt
-- `src/components/messages/MessageItem.tsx` — render new cards
-- `src/lib/streamingArtifacts.ts` — surface tool-status pills
-- `index.css` — lightbox + skeleton shimmer tokens (reuse existing semantic tokens)
+## Security notes
+- Nonce required + single-use → prevents replay
+- Signature verified server-side → prevents claiming someone else's wallet
+- Price cached server-side daily → can't be manipulated per-request
+- RLS on verifications table → users can't insert/update their own row
+- 24h grace period is intentional (per spec) — if user sells mid-day they keep access until midnight UTC re-check
 
-## Secrets needed
-- `OPENAI_API_KEY` — request via `add_secret` after user confirms Phase A.
+## Open questions to resolve during build
+- If Jupiter price endpoint is rate-limited or returns null for this mint, fall back to Birdeye (would need `BIRDEYE_API_KEY` secret). Will surface only if it actually fails in testing.
 
-## Acceptance criteria
-- Inline images and SVGs render at premium quality, tappable, downloadable, editable.
-- Web browsing via Perplexity Sonar produces inline citations.
-- Tool-status pills match ChatGPT cadence; no jank, no layout shift.
-- All 6 E2E checks pass on desktop + mobile viewports with zero new console errors.
-- Single commit per phase, progress tracked in `LUCA_NEXT.md`.
+## What I'll need from you after plan approval
+- Confirm OK to add the listed npm dependencies
+- I'll request a `SOLANA_RPC_URL` secret only if the public RPC rate-limits us during testing (start without it)
+
+## Files to create
+- `src/pages/AccessGatePage.tsx`
+- `src/components/auth/AuthGate.tsx`
+- `src/components/access/WalletPickerModal.tsx`
+- `src/lib/solanaWallet.ts`
+- `src/stores/tokenGateStore.ts`
+- `supabase/functions/token-gate-nonce/index.ts`
+- `supabase/functions/verify-token-gate/index.ts`
+
+## Files to edit
+- `src/App.tsx` — add `/access` route + wrap protected routes in `<AuthGate>`
+- `src/pages/LoginPage.tsx` + `SignupPage.tsx` — redirect to `/access` instead of `/chat` (AuthGate handles forwarding to `/chat` if already verified)

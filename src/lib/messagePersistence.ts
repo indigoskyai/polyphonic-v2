@@ -7,10 +7,11 @@ export type MessageRow = Database['public']['Tables']['messages']['Row'];
 const SESSION_REFRESH_BUFFER_MS = 90_000;
 
 export class MessagePersistenceAuthError extends Error {
+  cause?: unknown;
   constructor(message: string, options?: { cause?: unknown }) {
     super(message);
     this.name = 'MessagePersistenceAuthError';
-    this.cause = options?.cause;
+    if (options?.cause !== undefined) this.cause = options.cause;
   }
 }
 
