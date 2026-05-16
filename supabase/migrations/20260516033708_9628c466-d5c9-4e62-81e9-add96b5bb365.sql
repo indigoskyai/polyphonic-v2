@@ -1,0 +1,1 @@
+ALTER TABLE public.token_gate_nonces ADD COLUMN IF NOT EXISTS message TEXT;

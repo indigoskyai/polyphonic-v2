@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     // 1. Consume nonce
     const { data: nonceRow, error: nonceErr } = await supabase
       .from('token_gate_nonces')
-      .select('user_id, created_at')
+      .select('user_id, created_at, message')
       .eq('nonce', nonce)
       .maybeSingle();
     if (nonceErr || !nonceRow) return json({ error: 'Invalid or expired challenge' }, 400);
@@ -59,9 +59,9 @@ Deno.serve(async (req) => {
       await supabase.from('token_gate_nonces').delete().eq('nonce', nonce);
       return json({ error: 'Challenge expired' }, 400);
     }
-    const issued = nonceRow.created_at;
-    // Reconstruct message — must match token-gate-nonce
-    const message = `Verify $MNEMOS holding for Polyphonic\n\nNonce: ${nonce}\nIssued: ${new Date(issued).toISOString()}`;
+    // Use the exact message that was signed (stored at issue time)
+    const message = (nonceRow as any).message
+      ?? `Verify $MNEMOS holding for Polyphonic\n\nNonce: ${nonce}\nIssued: ${new Date(nonceRow.created_at).toISOString()}`;
 
     // 2. Verify signature
     let pubkeyBytes: Uint8Array;
