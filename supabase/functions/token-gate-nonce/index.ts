@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     await supabase.from('token_gate_nonces').delete().eq('user_id', userId);
     const { error: insErr } = await supabase
       .from('token_gate_nonces')
-      .insert({ nonce, user_id: userId });
+      .insert({ nonce, user_id: userId, message });
     if (insErr) {
       return json({ error: `Failed to issue nonce: ${insErr.message}` }, 500);
     }
