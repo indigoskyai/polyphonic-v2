@@ -143,11 +143,12 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, skipTokenGate = false }: { children: React.ReactNode; skipTokenGate?: boolean }) {
   const { user, loading } = useAuthStore();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
   if (!user) return <Navigate to="/auth/login" replace />;
-  return <>{children}</>;
+  if (skipTokenGate) return <>{children}</>;
+  return <AuthGate>{children}</AuthGate>;
 }
 
 function RouteFallback() {
