@@ -75,6 +75,8 @@ const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSet
 const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
 const CronHealthSettings = lazy(() => import("./pages/settings/CronHealthSettings"));
 const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
+const AccessGatePage = lazy(() => import("./pages/AccessGatePage"));
+import AuthGate from "./components/auth/AuthGate";
 
 function AuthInit({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
