@@ -202,15 +202,10 @@ serve(async (req) => {
         }, 5000);
 
         try {
-          // Call OpenRouter
-          const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          // Call upstream chat-completions (OpenRouter or Lovable AI Gateway).
+          const orResponse = await fetch(backend.baseUrl, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`,
-              "HTTP-Referer": "https://polyphonic.chat",
-              "X-Title": "Luca",
-            },
+            headers: backend.headers,
             body: JSON.stringify({
               model,
               messages: openRouterMessages,
