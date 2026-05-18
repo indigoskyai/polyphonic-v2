@@ -20,6 +20,7 @@ import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idem
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
+import { resolveChatBackend } from "../_shared/model-backend.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -105,15 +106,18 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
+    const requestedModel = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
 
-    // Get user's OpenRouter API key (required — no platform fallback)
-    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData.trim() : null) || null;
-
-    if (!apiKey) {
-      return fail(new MissingApiKeyError("No API key configured. Add your OpenRouter key in Settings to use Polyphonic."));
+    // Resolve backend: user's OpenRouter key if present, else Lovable AI Gateway
+    // so brand-new signups can chat instantly.
+    let backend;
+    try {
+      backend = await resolveChatBackend(supabase, userId, requestedModel);
+    } catch {
+      return fail(new MissingApiKeyError("Chat is temporarily unavailable. Please try again shortly."));
     }
+    const apiKey = backend.apiKey;
+    const model = backend.model;
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
@@ -198,15 +202,10 @@ serve(async (req) => {
         }, 5000);
 
         try {
-          // Call OpenRouter
-          const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          // Call upstream chat-completions (OpenRouter or Lovable AI Gateway).
+          const orResponse = await fetch(backend.baseUrl, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`,
-              "HTTP-Referer": "https://polyphonic.chat",
-              "X-Title": "Luca",
-            },
+            headers: backend.headers,
             body: JSON.stringify({
               model,
               messages: openRouterMessages,
@@ -217,10 +216,16 @@ serve(async (req) => {
 
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
-            console.error("OpenRouter error:", orResponse.status, errBody);
+            console.error(`[chat] ${backend.provider} error:`, orResponse.status, errBody);
+            let text = `Model error (${orResponse.status}). Please try again.`;
+            if (backend.provider === "lovable" && orResponse.status === 429) {
+              text = "Free chat is busy right now — please try again in a moment, or connect your own OpenRouter key in Settings for unlimited access.";
+            } else if (backend.provider === "lovable" && orResponse.status === 402) {
+              text = "Free chat credits are exhausted for this workspace. Connect your own OpenRouter key in Settings to keep chatting.";
+            }
             send({
               type: "error",
-              text: `Model error (${orResponse.status}). Please try again.`,
+              text,
               code: "upstream_unavailable",
               request_id: requestId,
             });
