@@ -622,7 +622,11 @@ export default function ChatView() {
   const clearAttachments = useAttachmentStore((s) => s.clear);
   const setAttachmentStatus = useAttachmentStore((s) => s.setStatus);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const modelKeyMissing = modelKeyStatus === 'missing';
+  // Lovable AI Gateway provides a free default backend, so the composer is
+  // never gated on having an OpenRouter key. The banner below becomes a soft
+  // upsell instead of a hard block.
+  const modelKeyMissing = false;
+  const showFreeTierUpsell = modelKeyStatus === 'missing';
 
   useEffect(() => {
     if (!user) {
