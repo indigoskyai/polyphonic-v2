@@ -20,6 +20,7 @@ import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idem
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
+import { resolveChatBackend } from "../_shared/model-backend.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
