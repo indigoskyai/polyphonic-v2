@@ -1093,7 +1093,7 @@ export default function ChatView() {
   };
 
   const renderModelKeyNotice = () => {
-    if (!modelKeyMissing) return null;
+    if (!showFreeTierUpsell) return null;
     return (
       <div
         className="composer-key-warning"
@@ -1106,8 +1106,8 @@ export default function ChatView() {
         }}
       >
         <span style={{ flex: '1 1 auto', minWidth: 180 }}>
-          Connect OpenRouter to start chatting — sign in or create an
-          account in a popup, no key copy/paste required.
+          You're chatting on the free Polyphonic model. Connect OpenRouter for
+          premium models, the ensemble council, and agent mode.
         </span>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           <ConnectOpenRouter
