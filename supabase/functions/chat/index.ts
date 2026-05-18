@@ -106,15 +106,18 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const model = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
+    const requestedModel = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
 
-    // Get user's OpenRouter API key (required — no platform fallback)
-    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData.trim() : null) || null;
-
-    if (!apiKey) {
-      return fail(new MissingApiKeyError("No API key configured. Add your OpenRouter key in Settings to use Polyphonic."));
+    // Resolve backend: user's OpenRouter key if present, else Lovable AI Gateway
+    // so brand-new signups can chat instantly.
+    let backend;
+    try {
+      backend = await resolveChatBackend(supabase, userId, requestedModel);
+    } catch {
+      return fail(new MissingApiKeyError("Chat is temporarily unavailable. Please try again shortly."));
     }
+    const apiKey = backend.apiKey;
+    const model = backend.model;
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
