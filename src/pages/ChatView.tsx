@@ -22,6 +22,7 @@ import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
+import LocalAmbientChip from '@/components/chat/LocalAmbientChip';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
@@ -2033,17 +2034,11 @@ export default function ChatView() {
             </div>
           </div>
 
-          {/* WelcomeBack whisper chip — tiny ambient context above (visually
-              below) the composer, only when Luca did something while the
-              user was away. Click expands to the activity timeline, or
-              drops the message into the composer for explicit initiations. */}
-          {welcomeBack && !isMobile && (
+          {/* Local ambient chip — date, time, weather pulled from IP-geo
+              + Open-Meteo. Replaces the previous WelcomeBack whisper. */}
+          {!isMobile && (
             <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
-              <WelcomeBackCard
-                data={welcomeBack}
-                onUseAsInput={(t) => setInput(t)}
-                onDismiss={() => setWelcomeBack(null)}
-              />
+              <LocalAmbientChip />
             </div>
           )}
         </div>
