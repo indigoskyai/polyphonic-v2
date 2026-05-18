@@ -22,6 +22,7 @@ import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
+import LocalAmbientChip from '@/components/chat/LocalAmbientChip';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
