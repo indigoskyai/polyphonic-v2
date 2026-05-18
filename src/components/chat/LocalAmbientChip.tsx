@@ -118,32 +118,31 @@ export default function LocalAmbientChip() {
         width: 'auto',
         maxWidth: 'min(540px, calc(100vw - 32px))',
         boxSizing: 'border-box',
-        padding: '7px 16px',
+        padding: '4px 0',
         margin: '0 auto',
-        background: 'rgba(255, 255, 255, 0.018)',
-        border: '1px solid var(--border-faint)',
-        borderRadius: 999,
         color: 'var(--text-tertiary)',
         animation: 'viewFadeIn 0.6s var(--ease-out) 0.3s both',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 11,
-        letterSpacing: '0.04em',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 13,
+        fontWeight: 400,
+        letterSpacing: '0.01em',
+        textShadow: '0 1px 8px rgba(0, 0, 0, 0.55), 0 2px 20px rgba(0, 0, 0, 0.35)',
       }}
     >
       <span style={{ color: 'var(--text-soft)' }}>{dateStr}</span>
-      <span style={{ opacity: 0.35 }}>·</span>
+      <span style={{ opacity: 0.25 }}>·</span>
       <span style={{ color: 'var(--text-tertiary)' }}>{timeStr}</span>
       {weather && (
         <>
-          <span style={{ opacity: 0.35 }}>·</span>
+          <span style={{ opacity: 0.25 }}>·</span>
           <span style={{ color: 'var(--text-soft)' }}>
             {weather.description}, {tempBand(weather.tempF)}{' '}
             <span style={{ color: 'var(--text-tertiary)' }}>{weather.tempF}°F</span>
           </span>
           {weather.city && (
             <>
-              <span style={{ opacity: 0.35 }}>·</span>
-              <span style={{ color: 'var(--text-ghost)', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.1em' }}>
+              <span style={{ opacity: 0.25 }}>·</span>
+              <span style={{ color: 'var(--text-ghost)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.08em', fontWeight: 500 }}>
                 {weather.city}
               </span>
             </>
