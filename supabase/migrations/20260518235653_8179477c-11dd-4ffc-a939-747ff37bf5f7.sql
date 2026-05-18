@@ -1,0 +1,1 @@
+ALTER TABLE public.user_settings ALTER COLUMN default_model SET DEFAULT 'moonshotai/kimi-k2.6';
