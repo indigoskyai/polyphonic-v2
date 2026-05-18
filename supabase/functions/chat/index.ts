@@ -216,10 +216,16 @@ serve(async (req) => {
 
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
-            console.error("OpenRouter error:", orResponse.status, errBody);
+            console.error(`[chat] ${backend.provider} error:`, orResponse.status, errBody);
+            let text = `Model error (${orResponse.status}). Please try again.`;
+            if (backend.provider === "lovable" && orResponse.status === 429) {
+              text = "Free chat is busy right now — please try again in a moment, or connect your own OpenRouter key in Settings for unlimited access.";
+            } else if (backend.provider === "lovable" && orResponse.status === 402) {
+              text = "Free chat credits are exhausted for this workspace. Connect your own OpenRouter key in Settings to keep chatting.";
+            }
             send({
               type: "error",
-              text: `Model error (${orResponse.status}). Please try again.`,
+              text,
               code: "upstream_unavailable",
               request_id: requestId,
             });
