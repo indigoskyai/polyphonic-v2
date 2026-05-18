@@ -106,7 +106,7 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const requestedModel = modelOverride || settings?.default_model || "anthropic/claude-opus-4-7";
+    const requestedModel = modelOverride || settings?.default_model || "moonshotai/kimi-k2.6";
 
     // Resolve backend: user's OpenRouter key if present, else Lovable AI Gateway
     // so brand-new signups can chat instantly.
