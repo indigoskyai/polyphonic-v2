@@ -22,6 +22,7 @@ interface ModelDef {
 }
 
 const ENSEMBLE_MODELS: ModelDef[] = [
+  { id: 'moonshotai/kimi-k2.6', name: 'Kimi K2.6', flags: [{ label: 'Default', variant: 'default' }] },
   { id: 'anthropic/claude-opus-4-7', name: 'Claude Opus 4.7', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-opus-4.6', name: 'Claude Opus 4.6', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
