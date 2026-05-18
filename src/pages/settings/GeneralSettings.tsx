@@ -12,6 +12,7 @@ import { useClock } from '@/components/settings/useClock';
 import { RadioGroup } from '@/components/settings/FormControls';
 
 const MODEL_OPTIONS = [
+  { label: 'Kimi K2.6', value: 'moonshotai/kimi-k2.6' },
   { label: 'Claude Opus 4.7', value: 'anthropic/claude-opus-4-7' },
   { label: 'Claude Opus 4.6', value: 'anthropic/claude-opus-4.6' },
   { label: 'Claude Sonnet 4.6', value: 'anthropic/claude-sonnet-4.6' },

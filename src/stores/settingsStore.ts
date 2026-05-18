@@ -26,7 +26,7 @@ interface SettingsState extends Settings {
 }
 
 export const defaultSettings: Settings = {
-  default_model: 'anthropic/claude-opus-4-7',
+  default_model: 'moonshotai/kimi-k2.6',
   synthesis_style: 'conversational',
   stream_responses: true,
   show_thinking: true,
