@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useToast } from '@/hooks/use-toast';
-import CreateAgentModal from '@/components/settings/CreateAgentModal';
 import { ConfirmDialog } from '@/components/settings/FormControls';
 import { Section } from '@/components/settings/Section';
 import {
