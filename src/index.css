@@ -1677,12 +1677,14 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 12px 8px 18px;
+  padding: 4px 12px 12px 18px;
+  box-sizing: border-box;
   border-top: none;
   box-shadow: none;
   background-image: none;
   opacity: 1;
-  max-height: 40px;
+  min-height: 50px;
+  max-height: none;
 }
 
 .input-row,
@@ -2104,10 +2106,10 @@ html {
 .landing-composer .landing-input-shell.expanded .input-footer,
 .landing-composer .landing-input-shell:focus-within .input-footer {
   opacity: 1;
-  max-height: 44px;
-  min-height: 38px;
+  max-height: 49px;
+  min-height: 49px;
   overflow: visible;
-  padding: 4px 12px 9px 18px;
+  padding: 3px 12px 12px 18px;
   pointer-events: auto;
   transform: translateY(0);
 }

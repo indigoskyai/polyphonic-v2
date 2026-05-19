@@ -6,6 +6,18 @@ export const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
 const GUEST_UNAVAILABLE_MESSAGE =
   'Free Luca chat is temporarily unavailable. Please try again a little later.';
 
+function stashLandingHandoff(prompt: string): void {
+  sessionStorage.setItem(LANDING_PROMPT_KEY, prompt.trim());
+  sessionStorage.setItem(LANDING_AUTOSEND_KEY, '1');
+  sessionStorage.setItem(LANDING_CHAT_TRANSITION_KEY, '1');
+}
+
+function clearLandingHandoff(): void {
+  sessionStorage.removeItem(LANDING_PROMPT_KEY);
+  sessionStorage.removeItem(LANDING_AUTOSEND_KEY);
+  sessionStorage.removeItem(LANDING_CHAT_TRANSITION_KEY);
+}
+
 function normalizeGuestError(message?: string): string {
   const lower = (message || '').toLowerCase();
   if (
@@ -31,20 +43,22 @@ async function ensureSessionUserId(): Promise<string> {
 }
 
 export async function startGuestChat(prompt: string): Promise<string> {
-  const userId = await ensureSessionUserId();
-  const { data, error } = await supabase
-    .from('threads')
-    .insert({ user_id: userId, agent_id: 'luca' })
-    .select('id')
-    .single();
+  stashLandingHandoff(prompt);
+  try {
+    const userId = await ensureSessionUserId();
+    const { data, error } = await supabase
+      .from('threads')
+      .insert({ user_id: userId, agent_id: 'luca' })
+      .select('id')
+      .single();
 
-  if (error) throw new Error(normalizeGuestError(error.message));
-  if (!data?.id) throw new Error(GUEST_UNAVAILABLE_MESSAGE);
-
-  sessionStorage.setItem(LANDING_PROMPT_KEY, prompt.trim());
-  sessionStorage.setItem(LANDING_AUTOSEND_KEY, '1');
-  sessionStorage.setItem(LANDING_CHAT_TRANSITION_KEY, '1');
-  return data.id;
+    if (error) throw new Error(normalizeGuestError(error.message));
+    if (!data?.id) throw new Error(GUEST_UNAVAILABLE_MESSAGE);
+    return data.id;
+  } catch (err) {
+    clearLandingHandoff();
+    throw err;
+  }
 }
 
 export function readLandingPrompt(): string {

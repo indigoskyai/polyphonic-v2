@@ -22,6 +22,7 @@ import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
 import { isAnonymousUser } from "./lib/accessTier";
+import { readLandingChatTransitionFlag } from "./lib/guestChat";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
@@ -302,10 +303,11 @@ function DrawerRouter() {
 function RootRedirect() {
   const { user, loading } = useAuthStore();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
+  const landingChatTransition = readLandingChatTransitionFlag();
   // Authenticated users go straight to chat. Unauthenticated visitors land
   // on the public landing surface (composer + auth states), not the bare
   // login form.
-  return user ? <Navigate to="/chat" replace /> : <LandingPage initialMode="idle" />;
+  return user && !landingChatTransition ? <Navigate to="/chat" replace /> : <LandingPage initialMode="idle" />;
 }
 
 const App = () => (

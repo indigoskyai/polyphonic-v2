@@ -661,6 +661,7 @@ export default function ChatView() {
   const sendInFlightRef = useRef(false);
   const composerSendTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const landingHandoffStartedAtRef = useRef(new Date().toISOString());
   const pendingAttachments = useAttachmentStore((s) => s.pending);
   const addAttachments = useAttachmentStore((s) => s.add);
   const removeAttachment = useAttachmentStore((s) => s.remove);
@@ -2050,8 +2051,22 @@ export default function ChatView() {
     queueAttachmentFiles(e.dataTransfer?.files);
   }, [queueAttachmentFiles, resetDragState]);
 
-  const isFirstTurnHandoff = !!firstTurnHandoff && messages.length === 0 && !isStreaming;
-  const isEmpty = messages.length === 0 && !isStreaming && !firstTurnHandoff;
+  const landingAutosendPreviewText =
+    landingAutosend && messages.length === 0 && !isStreaming ? input.trim() : '';
+  const displayFirstTurnHandoff: FirstTurnHandoff | null = firstTurnHandoff ?? (
+    landingAutosendPreviewText
+      ? {
+          id: 'landing-autosend-preview',
+          text: landingAutosendPreviewText,
+          agentLabel: currentAgentLabel,
+          attachmentCount: 0,
+          startedAt: landingHandoffStartedAtRef.current,
+        }
+      : null
+  );
+  const isFirstTurnHandoff = !!displayFirstTurnHandoff && messages.length === 0 && !isStreaming;
+  const landingHandoffPending = landingThreadEnter && messages.length === 0 && !isStreaming;
+  const isEmpty = !threadId && messages.length === 0 && !isStreaming && !displayFirstTurnHandoff && !landingHandoffPending;
 
   return isEmpty ? (
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
@@ -2232,7 +2247,7 @@ export default function ChatView() {
                         void sendMessage();
                       }
                     }}
-                    disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+                    disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
                   >
                     <span className="send-icon">
                       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -2297,7 +2312,7 @@ export default function ChatView() {
               16px gap of nothing. */}
           <ContextStrip />
 
-          {firstTurnHandoff && messages.length === 0 && (
+          {displayFirstTurnHandoff && messages.length === 0 && (
             <FreshMsgRow
               className="msg-row first-turn-handoff-row"
               style={{ animation: 'msgEnter var(--dur-settle) var(--ease-premium) both' }}
@@ -2305,21 +2320,21 @@ export default function ChatView() {
               <div className="msg-sidehead">
                 {showTimestamps && (
                   <div className="msg-time">
-                    {new Date(firstTurnHandoff.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {new Date(displayFirstTurnHandoff.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                   </div>
                 )}
                 <div className="msg-author user">You</div>
               </div>
               <div className="msg-body first-turn-handoff-body">
-                <RichBody source={firstTurnHandoff.text} />
-                {firstTurnHandoff.attachmentCount > 0 && (
+                <RichBody source={displayFirstTurnHandoff.text} />
+                {displayFirstTurnHandoff.attachmentCount > 0 && (
                   <div className="first-turn-attachment-note">
-                    {firstTurnHandoff.attachmentCount} attachment{firstTurnHandoff.attachmentCount === 1 ? '' : 's'} preparing
+                    {displayFirstTurnHandoff.attachmentCount} attachment{displayFirstTurnHandoff.attachmentCount === 1 ? '' : 's'} preparing
                   </div>
                 )}
                 <div className="first-turn-status" role="status">
                   <span aria-hidden="true" />
-                  Opening the conversation with {firstTurnHandoff.agentLabel}
+                  Opening the conversation with {displayFirstTurnHandoff.agentLabel}
                 </div>
               </div>
             </FreshMsgRow>
@@ -2700,7 +2715,7 @@ export default function ChatView() {
                     void sendMessage();
                   }
                 }}
-                disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+                disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
               >
                 <span className="send-icon">
                   <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
