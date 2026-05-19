@@ -9,6 +9,7 @@ import {
   deriveTriggerKeywords,
   normalizeSkillName,
 } from "../_shared/agents/skills.ts";
+import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 const SKILL_DISTILL_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -78,7 +79,7 @@ serve(async (req) => {
       return json({ ok: true, skipped: "too_small" }, 200, corsHeaders);
     }
 
-    const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
+    const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) return json({ ok: true, skipped: "no_api_key" }, 200, corsHeaders);
 
     const [{ data: existingSkills }, { data: denials }] = await Promise.all([

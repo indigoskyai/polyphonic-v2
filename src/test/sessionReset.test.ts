@@ -180,7 +180,7 @@ describe('resetClientSessionStores', () => {
     expect(useObservabilityStore.getState().sparkline).toHaveLength(24);
     expect(useSettingsStore.getState()).toMatchObject({
       loaded: false,
-      default_model: 'anthropic/claude-opus-4-7',
+      default_model: 'moonshotai/kimi-k2.6',
       font_size: 14,
     });
     expect(useAttachmentStore.getState().pending).toEqual([]);

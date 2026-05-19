@@ -42,7 +42,9 @@ import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
-import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { claimIdempotencyKey, recordIdempotentResponse } from "../_shared/idempotency.ts";
+import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
+import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import {
   isOpenRouterAgentRuntimeEnabled,
   openRouterAgentSdkStream,
@@ -201,15 +203,19 @@ serve(async (req) => {
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Daily quota — keep the primary multi-agent runtime aligned with legacy chat.
-    try {
-      await checkAndIncrement(userId, "chat-message");
-    } catch (qErr) {
-      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
-      if (isQuota) {
-        return fail(new AppError("quota_exceeded", qErr.message, 429));
+    const idempotencyKey = req.headers.get("Idempotency-Key") || req.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const claim = await claimIdempotencyKey(supabase, idempotencyKey, userId, "chat-send");
+      if (claim.status === "cached") {
+        return sseReplayResponse(corsHeaders, claim.response as Record<string, unknown>);
       }
-      throw qErr;
+      if (claim.status === "in_progress") {
+        return sseReplayResponse(corsHeaders, {
+          ok: false,
+          status: "in_progress",
+          message: "This turn is already being processed.",
+        });
+      }
     }
 
     // Get user settings
@@ -243,15 +249,46 @@ serve(async (req) => {
       agentRuntime === "legacy_tool_planner" ||
       useAgentRuntime === true;
 
-    // Get user's OpenRouter API key (required — no platform fallback)
-    const { data: userKeyData, error: userKeyErr } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    if (userKeyErr) {
-      console.error("[chat-multi] decrypt_user_api_key error:", userKeyErr);
+    const requestedModel = normalizeModelId(settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
+    let backend: ChatBackend;
+    try {
+      backend = await resolveChatBackend(supabase, user, requestedModel);
+    } catch (err) {
+      console.error("[chat-multi] model backend unavailable:", err);
+      if (idempotencyKey) {
+        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+          ok: false,
+          error: "upstream_unavailable",
+          message: "Free chat is temporarily unavailable.",
+        }).catch(() => {});
+      }
+      return fail(new AppError(
+        "upstream_unavailable",
+        "Free chat is temporarily unavailable. Please try again shortly, or connect your OpenRouter key in Settings.",
+        503,
+      ));
     }
-    const apiKey: string | null = (typeof userKeyData === "string" ? userKeyData : null) || null;
+    const apiKey = backend.apiKey;
 
-    if (!apiKey) {
-      return fail(new MissingApiKeyError("No API key configured. Add your OpenRouter key in Settings to use Polyphonic."));
+    try {
+      await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit);
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        const dailyLimit = backend.billingTier === "guest" ? 20 : backend.billingTier === "byok" ? 500 : 50;
+        const limitCopy = backend.billingTier === "guest"
+          ? `You've reached today's ${dailyLimit}-message guest limit. Create an account to keep this conversation and unlock 50 Luca messages a day.`
+          : `You've reached today's ${dailyLimit}-message Luca limit. Come back tomorrow, verify access, or connect your own OpenRouter key in Settings.`;
+        if (idempotencyKey) {
+          await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+            ok: false,
+            error: "quota_exceeded",
+            message: limitCopy,
+          }).catch(() => {});
+        }
+        return fail(new AppError("quota_exceeded", limitCopy, 429));
+      }
+      throw qErr;
     }
 
     // Load the thread's bound agent
@@ -259,9 +296,21 @@ serve(async (req) => {
       .from("threads")
       .select("agent_id")
       .eq("id", thread_id)
+      .eq("user_id", userId)
       .maybeSingle();
+    if (!thread) {
+      if (idempotencyKey) {
+        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+          ok: false,
+          error: "validation_error",
+          message: "Thread not found",
+        }).catch(() => {});
+      }
+      return fail(new ValidationError("Thread not found"));
+    }
 
-    const agentId = (thread?.agent_id as string | undefined) || "luca";
+    const threadAgentId = (thread?.agent_id as string | undefined) || "luca";
+    const agentId = backend.keySource === "platform" ? "luca" : threadAgentId;
 
     const { data: agentConfig } = await supabase
       .from("agent_configs")
@@ -275,8 +324,8 @@ serve(async (req) => {
     const agentName = (agentConfig?.name as string | undefined) || "Luca";
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
-    const agentIsSystemLuca = agentConfig?.is_system === true && agentId === "luca";
-    const shouldRunLegacyToolPlanner = explicitAgentRuntime || agentIsSystemLuca;
+    const agentIsSystemLuca = agentId === "luca" && (agentConfig?.is_system === true || backend.keySource === "platform");
+    const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca);
 
 
     const continuity = await loadContinuityPacket(supabase, {
@@ -285,18 +334,18 @@ serve(async (req) => {
       threadId: thread_id,
       userMessage: messageWithAttachments,
       apiKey,
-      historyLimit: 50,
+      historyLimit: backend.historyLimit,
       includeIdentity: agentIsSystemLuca,
-      includePendingRevisions: agentIsSystemLuca,
-      includeFunctionalMemory: agentIsSystemLuca,
-      includeMnemos: agentIsSystemLuca,
-      includeSkills: agentIsSystemLuca,
-      includeEmotionalState: agentIsSystemLuca,
-      includeBeliefs: agentIsSystemLuca,
+      includePendingRevisions: agentIsSystemLuca && backend.allowMemoryWrites,
+      includeFunctionalMemory: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeMnemos: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeSkills: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeEmotionalState: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeBeliefs: agentIsSystemLuca && backend.billingTier !== "guest",
     });
     logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
-    const siblingContinuity = agentIsSystemLuca
+    const siblingContinuity = agentIsSystemLuca && backend.allowEnsemble
       ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, messageWithAttachments, apiKey)
       : { anima: null, vektor: null };
 
@@ -370,7 +419,7 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-    if (agentIsSystemLuca && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
+    if (agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
@@ -405,14 +454,16 @@ serve(async (req) => {
 
     // Custom / non-Luca agents always use single-model with their configured model.
     // Only the system Luca uses the multi-model ensemble path.
-    const useEnsemble = multiModelEnabled && agentIsSystemLuca;
+    const useEnsemble = backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-      const singleModel = normalizeModelId(
-        agentIsSystemLuca
-          ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
-          : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
-      ) || DEFAULT_ENSEMBLE[0];
+      const singleModel = backend.keySource === "platform"
+        ? backend.model
+        : normalizeModelId(
+            agentIsSystemLuca
+              ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
+              : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
+          ) || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
         singleModel,
@@ -427,6 +478,11 @@ serve(async (req) => {
         pendingRevisions || [],
         toolMessages,
         requestId,
+        {
+          backend,
+          idempotencyKey,
+          enableContinuityWrites: backend.allowMemoryWrites,
+        },
       );
     }
 
@@ -538,6 +594,13 @@ serve(async (req) => {
           const path = decidePathFromProposers(proposerOutcomes);
 
           if (path.kind === "none") {
+            if (idempotencyKey) {
+              recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+                ok: false,
+                error: "upstream_unavailable",
+                message: "All council proposers failed.",
+              }).catch((e) => console.warn("idempotency record failed:", e));
+            }
             send({
               type: "error",
               text: "All council proposers failed.",
@@ -712,21 +775,35 @@ serve(async (req) => {
               councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
               toolMessages,
             });
-            queueContinuityTurnWrites({
-              supabase,
-              threadId: thread_id,
-              agentId,
-              userId,
-              userMessage: messageWithAttachments,
-              agentResponse: fallbackContent,
-              sourceMessageId: fallbackMessageId,
-              apiKey,
-              authHeader,
-              pendingRevisions: pendingRevisions || [],
-              recentTurns: history || [],
-              observers: fallbackObservers,
-            });
-            send({ type: "done", model: "chairman-fallback", tokens_used: null, message_id: fallbackMessageId });
+            if (backend.allowMemoryWrites) {
+              queueContinuityTurnWrites({
+                supabase,
+                threadId: thread_id,
+                agentId,
+                userId,
+                userMessage: messageWithAttachments,
+                agentResponse: fallbackContent,
+                sourceMessageId: fallbackMessageId,
+                apiKey,
+                authHeader,
+                pendingRevisions: pendingRevisions || [],
+                recentTurns: history || [],
+                observers: fallbackObservers,
+              });
+            }
+            const donePayload = {
+              ok: true,
+              model: "chairman-fallback",
+              tokens_used: null,
+              message_id: fallbackMessageId,
+              billing_tier: backend.billingTier,
+              key_source: backend.keySource,
+            };
+            if (idempotencyKey) {
+              recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+                .catch((e) => console.warn("idempotency record failed:", e));
+            }
+            send({ type: "done", ...donePayload });
             controller.close();
             clearInterval(heartbeat);
             return;
@@ -734,6 +811,13 @@ serve(async (req) => {
 
           const reader = orResponse.body?.getReader();
           if (!reader) {
+            if (idempotencyKey) {
+              recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+                ok: false,
+                error: "upstream_unavailable",
+                message: "No chairman stream",
+              }).catch((e) => console.warn("idempotency record failed:", e));
+            }
             send({ type: "error", text: "No chairman stream", code: "upstream_unavailable", request_id: requestId });
             controller.close();
             clearInterval(heartbeat);
@@ -913,24 +997,45 @@ serve(async (req) => {
             councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
             toolMessages,
           });
-          queueContinuityTurnWrites({
-            supabase,
-            threadId: thread_id,
-            agentId,
-            userId,
-            userMessage: messageWithAttachments,
-            agentResponse: synthesizedContent,
-            sourceMessageId: synthesizedMessageId,
-            apiKey,
-            authHeader,
-            pendingRevisions: pendingRevisions || [],
-            recentTurns: history || [],
-            observers: synthObservers,
-          });
+          if (backend.allowMemoryWrites) {
+            queueContinuityTurnWrites({
+              supabase,
+              threadId: thread_id,
+              agentId,
+              userId,
+              userMessage: messageWithAttachments,
+              agentResponse: synthesizedContent,
+              sourceMessageId: synthesizedMessageId,
+              apiKey,
+              authHeader,
+              pendingRevisions: pendingRevisions || [],
+              recentTurns: history || [],
+              observers: synthObservers,
+            });
+          }
 
-          send({ type: "done", model: "synthesis", tokens_used: tokensUsed, message_id: synthesizedMessageId });
+          const donePayload = {
+            ok: true,
+            model: "synthesis",
+            tokens_used: tokensUsed,
+            message_id: synthesizedMessageId,
+            billing_tier: backend.billingTier,
+            key_source: backend.keySource,
+          };
+          if (idempotencyKey) {
+            recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+              .catch((e) => console.warn("idempotency record failed:", e));
+          }
+          send({ type: "done", ...donePayload });
         } catch (err) {
           console.error("Multi-model stream error:", err);
+          if (idempotencyKey) {
+            recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+              ok: false,
+              error: "upstream_error",
+              message: "Stream interrupted",
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
           send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
         } finally {
           clearInterval(heartbeat);
@@ -952,6 +1057,26 @@ serve(async (req) => {
     return fail(err);
   }
 });
+
+function sseReplayResponse(corsHeaders: Record<string, string>, cached: Record<string, unknown>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", duplicate: true, ...cached })}\n\n`));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Idempotent-Replay": "true",
+    },
+  });
+}
 
 /**
  * Extract observer agents + their contributions from a council pass and from
@@ -1457,6 +1582,11 @@ async function singleModelStream(
   // deno-lint-ignore no-explicit-any
   toolMessages: any[] = [],
   requestId: string = newRequestId(),
+  options: {
+    backend?: ChatBackend;
+    idempotencyKey?: string | null;
+    enableContinuityWrites?: boolean;
+  } = {},
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1472,9 +1602,10 @@ async function singleModelStream(
       }, 5000);
 
       try {
-        const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const backend = options.backend;
+        const orResponse = await fetch(backend?.baseUrl || "https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
-          headers: {
+          headers: backend?.headers || {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
             "HTTP-Referer": "https://polyphonic.chat",
@@ -1494,6 +1625,17 @@ async function singleModelStream(
           } catch {
             if (errText) message = errText.slice(0, 240);
           }
+          if (backend?.keySource === "platform" && (orResponse.status === 401 || orResponse.status === 402 || orResponse.status === 429)) {
+            message = "Free Luca chat is temporarily unavailable. Please try again shortly, or connect your own OpenRouter key in Settings.";
+          }
+          if (options.idempotencyKey) {
+            recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", {
+              ok: false,
+              error: "upstream_unavailable",
+              message,
+              status: orResponse.status,
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
           send({ type: "error", text: message, code: "upstream_unavailable", request_id: requestId });
           controller.close();
           clearInterval(heartbeat);
@@ -1502,6 +1644,13 @@ async function singleModelStream(
 
         const reader = orResponse.body?.getReader();
         if (!reader) {
+          if (options.idempotencyKey) {
+            recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", {
+              ok: false,
+              error: "upstream_unavailable",
+              message: "No stream",
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
           send({ type: "error", text: "No stream", code: "upstream_unavailable", request_id: requestId });
           controller.close();
           clearInterval(heartbeat);
@@ -1563,24 +1712,46 @@ async function singleModelStream(
           primaryAgentId: agentId,
           toolMessages,
         });
-        queueContinuityTurnWrites({
-          supabase,
-          threadId,
-          agentId,
-          userId,
-          userMessage,
-          agentResponse: fullContent,
-          sourceMessageId: insertedMessage?.id ?? null,
-          apiKey,
-          authHeader,
-          pendingRevisions: pendingRevisions || [],
-          recentTurns: messages || [],
-          observers: singleObservers,
-        });
+        if (options.enableContinuityWrites !== false) {
+          queueContinuityTurnWrites({
+            supabase,
+            threadId,
+            agentId,
+            userId,
+            userMessage,
+            agentResponse: fullContent,
+            sourceMessageId: insertedMessage?.id ?? null,
+            apiKey,
+            authHeader,
+            pendingRevisions: pendingRevisions || [],
+            recentTurns: messages || [],
+            observers: singleObservers,
+          });
+        }
 
-        send({ type: "done", model: usedModel, tokens_used: tokensUsed, message_id: insertedMessage?.id ?? null });
+        const donePayload = {
+          ok: true,
+          model: usedModel,
+          tokens_used: tokensUsed,
+          message_id: insertedMessage?.id ?? null,
+          billing_tier: options.backend?.billingTier ?? "byok",
+          key_source: options.backend?.keySource ?? "user",
+        };
+        if (options.idempotencyKey) {
+          recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", donePayload)
+            .catch((e) => console.warn("idempotency record failed:", e));
+        }
+
+        send({ type: "done", ...donePayload });
       } catch (err) {
         console.error("Single-model stream error:", err);
+        if (options.idempotencyKey) {
+          recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", {
+            ok: false,
+            error: "upstream_error",
+            message: "Stream interrupted",
+          }).catch((e) => console.warn("idempotency record failed:", e));
+        }
         send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
       } finally {
         clearInterval(heartbeat);
@@ -1609,7 +1780,7 @@ async function autoTitleThread(
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
+      model: "moonshotai/kimi-k2.6",
       messages: [
         { role: "system", content: "Generate a short title (2-5 words) for this conversation. Return only the title, no quotes or punctuation." },
         { role: "user", content: userMessage },

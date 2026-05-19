@@ -23,6 +23,23 @@ export async function getIdempotentResponse(
   return data?.response ?? null;
 }
 
+export async function claimIdempotencyKey(
+  supabase: SupabaseClient,
+  key: string,
+  userId: string,
+  scope: string,
+): Promise<{ status: "claimed" } | { status: "cached"; response: unknown } | { status: "in_progress" }> {
+  const { error } = await supabase
+    .from("idempotency_keys")
+    .insert({ key, user_id: userId, scope, response: null });
+
+  if (!error) return { status: "claimed" };
+
+  const cached = await getIdempotentResponse(supabase, key, userId, scope);
+  if (cached) return { status: "cached", response: cached };
+  return { status: "in_progress" };
+}
+
 export async function recordIdempotentResponse(
   supabase: SupabaseClient,
   key: string,

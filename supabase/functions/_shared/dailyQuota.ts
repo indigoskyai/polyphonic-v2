@@ -4,10 +4,19 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { QuotaExceededError } from "./errors.ts";
 
-export type QuotaScope = "chat-message" | "image-generation" | "web-search";
+export type QuotaScope =
+  | "chat-message"
+  | "guest-chat-message"
+  | "free-chat-message"
+  | "byok-chat-message"
+  | "image-generation"
+  | "web-search";
 
 export const DEFAULT_QUOTAS: Record<QuotaScope, number> = {
   "chat-message": 500,
+  "guest-chat-message": 20,
+  "free-chat-message": 50,
+  "byok-chat-message": 500,
   "image-generation": 25,
   "web-search": 100,
 };

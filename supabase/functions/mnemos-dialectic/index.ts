@@ -19,6 +19,7 @@ import {
   type DialecticRevision,
 } from "../_shared/mnemos/dialectic.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
 // nudge (notable activity surface). Revisions below this still persist and
@@ -61,7 +62,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
+    const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) return json({ ok: true, skipped: "no_api_key" }, 200, corsHeaders);
 
     const { data: recentMessages } = await supabase

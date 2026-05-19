@@ -21,6 +21,7 @@ import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
+import { isAnonymousUser } from "./lib/accessTier";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
@@ -105,6 +106,7 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
 
     if (isPublicRoute) { setChecked(true); return; }
     if (!user) { setChecked(true); return; }
+    if (isAnonymousUser(user)) { setChecked(true); return; }
     if (location.pathname === '/onboarding') { setChecked(true); return; }
     // Force re-entry via ?onboarding=1 (for QA)
     if (location.search.includes('onboarding=1')) {
@@ -333,8 +335,8 @@ const App = () => (
                 <Route path="/@:handle" element={<PublicProfileView mode="view" />} />
                 <Route path="/@:handle/edit" element={<ProtectedRoute><PublicProfileView mode="edit" /></ProtectedRoute>} />
                 <Route path="/settings/public-profile" element={<ProtectedRoute><AppShell><PublicProfileSettings /></AppShell></ProtectedRoute>} />
-                <Route path="/chat" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
-                <Route path="/chat/:threadId" element={<ProtectedRoute><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+                <Route path="/chat" element={<ProtectedRoute skipTokenGate><AppShell><ChatView /></AppShell></ProtectedRoute>} />
+                <Route path="/chat/:threadId" element={<ProtectedRoute skipTokenGate><AppShell><ChatView /></AppShell></ProtectedRoute>} />
                 <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
                 <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
                 <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
@@ -354,14 +356,14 @@ const App = () => (
                 <Route path="/settings/agents" element={<ProtectedRoute><AppShell><AgentsList /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/agents/:id" element={<ProtectedRoute><AppShell><AgentDetail /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/general" element={<ProtectedRoute><AppShell><GeneralSettings /></AppShell></ProtectedRoute>} />
-                <Route path="/settings/models" element={<ProtectedRoute><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/models" element={<ProtectedRoute skipTokenGate><AppShell><ModelsSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/routines" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
-                <Route path="/settings/account" element={<ProtectedRoute><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/account" element={<ProtectedRoute skipTokenGate><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/cron-health" element={<ProtectedRoute><AppShell><CronHealthSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/onboarding" element={<ProtectedRoute skipTokenGate><Onboarding /></ProtectedRoute>} />
                 <Route path="/access" element={<ProtectedRoute skipTokenGate><AccessGatePage /></ProtectedRoute>} />

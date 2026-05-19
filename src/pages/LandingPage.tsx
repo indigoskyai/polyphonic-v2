@@ -8,6 +8,8 @@ import {
   signInWithMicrosoft,
   signInWithGitHub,
 } from '@/lib/authFlow';
+import { startGuestChat } from '@/lib/guestChat';
+import { isAnonymousUser } from '@/lib/accessTier';
 import LandingParticleField, {
   type LandingFieldHandle,
   type LandingFieldState,
@@ -51,6 +53,8 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [transitioning, setTransitioning] = useState(false);
+  const [composerError, setComposerError] = useState('');
+  const [composerLaunching, setComposerLaunching] = useState(false);
 
   const fieldRef = useRef<LandingFieldHandle>(null);
   /** The actual card element on screen — composer or auth card. The
@@ -100,19 +104,21 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
   );
 
   const handleComposerSubmit = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const trimmed = text.trim();
-      if (trimmed) {
-        try {
-          sessionStorage.setItem(PROMPT_HANDOFF_KEY, trimmed);
-        } catch {
-          /* ignore quota errors */
-        }
-      }
+      if (!trimmed || composerLaunching) return;
+      setComposerError('');
+      setComposerLaunching(true);
       fieldRef.current?.ripple();
-      goTo('signup');
+      try {
+        const threadId = await startGuestChat(trimmed);
+        navigate(`/chat/${threadId}`);
+      } catch (err) {
+        setComposerError(err instanceof Error ? err.message : 'Could not open Luca right now.');
+        setComposerLaunching(false);
+      }
     },
-    [goTo]
+    [composerLaunching, navigate]
   );
 
   // Trigger composer state on first focus. Stays in composer state once
@@ -169,6 +175,8 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
             <LandingComposer
               onFocus={handleComposerFocus}
               onSubmit={handleComposerSubmit}
+              submitting={composerLaunching}
+              error={composerError}
             />
           )}
           {mode === 'signin' && <SignInCard goTo={goTo} navigate={navigate} />}
@@ -376,9 +384,13 @@ function FootnoteLinks() {
 function LandingComposer({
   onSubmit,
   onFocus,
+  submitting = false,
+  error = '',
 }: {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => void | Promise<void>;
   onFocus?: () => void;
+  submitting?: boolean;
+  error?: string;
 }) {
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
@@ -416,6 +428,18 @@ function LandingComposer({
       }}
     >
       <div className={`input-shell${focused ? ' focused' : ''}`}>
+        {error && (
+          <div
+            className="composer-key-warning"
+            role="alert"
+            style={{
+              marginBottom: 8,
+              color: '#c97c7c',
+            }}
+          >
+            {error}
+          </div>
+        )}
         <div className="input-row">
           <textarea
             ref={taRef}
@@ -430,8 +454,9 @@ function LandingComposer({
             onBlur={() => setFocused(false)}
             onKeyDown={handleKey}
             rows={1}
-            placeholder="Ask Luca anything…"
+            placeholder={submitting ? 'Opening Luca…' : 'Ask Luca anything…'}
             spellCheck={false}
+            disabled={submitting}
           />
         </div>
         <div className="input-footer">
@@ -491,9 +516,9 @@ function LandingComposer({
 
           <button
             type="submit"
-            aria-label="Send message"
-            className="send-btn"
-            disabled={sendDisabled}
+            aria-label={submitting ? 'Opening Luca' : 'Send message'}
+            className={`send-btn${!sendDisabled ? ' armed' : ''}`}
+            disabled={sendDisabled || submitting}
           >
             <span className="send-icon">
               <svg
@@ -1093,11 +1118,18 @@ function SignUpCard({ goTo }: { goTo: (m: Mode) => void }) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: authRedirectTo('/chat') },
-    });
+    const currentSession = (await supabase.auth.getSession()).data.session;
+    const currentUser = currentSession?.user;
+    const { error } = currentUser && isAnonymousUser(currentUser)
+      ? await supabase.auth.updateUser(
+          { email, password },
+          { emailRedirectTo: authRedirectTo('/chat') },
+        )
+      : await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: authRedirectTo('/chat') },
+        });
     setLoading(false);
     if (error) setError(error.message);
     else goTo('sent');

@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { writeHypomnemaEntry } from "../_shared/hypomnema/index.ts";
 import { isMemoryAugmentationEnabled } from "../_shared/config.ts";
+import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 interface WritePayload {
   user_id: string;
@@ -60,8 +61,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(url, serviceRole);
-    const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey = typeof keyData === "string" ? keyData.trim() : "";
+    const { apiKey } = await resolveOpenRouterKeyForUser(supabase, userId);
     if (!apiKey) {
       return json({ status: "skipped", reason: "no api key" }, 200, corsHeaders);
     }

@@ -9,15 +9,20 @@ function readRepoFile(path: string): string {
 describe('Phase 4 reliability guardrails', () => {
   it('enforces daily chat quota in the primary chat-multi runtime before model calls', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
-    const quotaCheckIndex = source.indexOf('await checkAndIncrement(userId, "chat-message")');
-    const keyDecryptIndex = source.indexOf('decrypt_user_api_key');
+    const backend = readRepoFile('supabase/functions/_shared/model-backend.ts');
+    const quotaCheckIndex = source.indexOf('await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit)');
+    const backendResolverIndex = source.indexOf('backend = await resolveChatBackend');
     const firstModelCallIndex = source.indexOf('https://openrouter.ai/api/v1/chat/completions');
 
     expect(source).toContain('import { checkAndIncrement } from "../_shared/dailyQuota.ts";');
+    expect(source).toContain('resolveChatBackend');
+    expect(backend).toContain('guest-chat-message');
+    expect(backend).toContain('free-chat-message');
+    expect(backend).toContain('byok-chat-message');
     expect(quotaCheckIndex).toBeGreaterThan(-1);
-    expect(keyDecryptIndex).toBeGreaterThan(-1);
+    expect(backendResolverIndex).toBeGreaterThan(-1);
     expect(firstModelCallIndex).toBeGreaterThan(-1);
-    expect(quotaCheckIndex).toBeLessThan(keyDecryptIndex);
+    expect(backendResolverIndex).toBeLessThan(quotaCheckIndex);
     expect(quotaCheckIndex).toBeLessThan(firstModelCallIndex);
     expect(source).toContain('new AppError("quota_exceeded"');
   });

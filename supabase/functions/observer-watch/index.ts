@@ -8,6 +8,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
+import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -48,8 +49,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Pull user's OpenRouter key
-    const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
+    const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) {
       // No key, nothing to do — return silently.
       return new Response(JSON.stringify({ ok: true, skipped: "no_api_key" }), {

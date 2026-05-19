@@ -11,6 +11,7 @@ import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useTokenGateStore } from '@/stores/tokenGateStore';
 
 import EchoField from '@/components/EchoField';
 import ExpressiveField from '@/components/ExpressiveField';
@@ -35,6 +36,8 @@ import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
+import { consumeLandingAutosendFlag, readLandingPrompt } from '@/lib/guestChat';
+import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -230,6 +233,25 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
 }
 
+function LucaOnlyPill() {
+  return (
+    <button type="button" className="agent-pill targeted" title="Talking to Luca" aria-label="Talking to Luca">
+      <span
+        aria-hidden="true"
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: 'var(--luca-full)',
+          display: 'inline-block',
+          marginRight: 6,
+        }}
+      />
+      luca
+    </button>
+  );
+}
+
 /* ─── Thinking Block (4-state: waiting → streaming → settling → complete) ─── */
 type ThinkingState = 'waiting' | 'streaming' | 'settling' | 'complete';
 
@@ -420,7 +442,6 @@ function FreshMsgRow({ children, className = 'msg-row', style }: {
 }
 
 /* ─── Main ChatView ─── */
-type ModelKeyStatus = 'checking' | 'present' | 'missing' | 'unknown';
 type FirstTurnHandoff = {
   id: string;
   text: string;
@@ -477,6 +498,7 @@ export default function ChatView() {
   }, [isMobile]);
 
   const user = useAuthStore((s) => s.user);
+  const tokenGateStatus = useTokenGateStore((s) => s.status);
   // Narrow selectors — the parent renders the *list shell* and the
   // streaming bubble. Individual messages are handled by <MessageItem>,
   // which subscribes to its own row. This split is what makes per-token
@@ -515,20 +537,8 @@ export default function ChatView() {
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
   const defaultEnsembleOn = useSettingsStore((s) => s.multi_model_enabled);
 
-  const [input, setInput] = useState(() => {
-    // Pick up any prompt the user typed on the public landing before
-    // they signed in. The Landing stashes it under this key; we
-    // consume it once and clear it so reloading /chat doesn't
-    // re-prefill the composer.
-    try {
-      const stashed = sessionStorage.getItem('polyphonic_landing_prompt');
-      if (stashed) {
-        sessionStorage.removeItem('polyphonic_landing_prompt');
-        return stashed;
-      }
-    } catch { /* ignore */ }
-    return '';
-  });
+  const [input, setInput] = useState(() => readLandingPrompt());
+  const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
   const [focused, setFocused] = useState(false);
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
@@ -536,10 +546,17 @@ export default function ChatView() {
   // Ensemble skill: armed = next message only; locked = persistent until toggled off
   const [ensembleArmed, setEnsembleArmed] = useState(false);
   const [ensembleLocked, setEnsembleLocked] = useState(false);
-  const ensembleActive = ensembleArmed || ensembleLocked;
+  const rawEnsembleActive = ensembleArmed || ensembleLocked;
   const [agentModeArmed, setAgentModeArmed] = useState(false);
-  const agentModeActive = agentModeArmed && activeAgentId === 'luca';
   const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
+  const accessTier = useMemo(
+    () => resolveAccessTier({ user, modelKeyStatus, gateStatus: tokenGateStatus }),
+    [user, modelKeyStatus, tokenGateStatus],
+  );
+  const byokEnabled = accessTier === 'byok';
+  const platformFundedLuca = accessTier === 'guest' || accessTier === 'account_free' || accessTier === 'advanced';
+  const ensembleActive = byokEnabled && rawEnsembleActive;
+  const agentModeActive = byokEnabled && agentModeArmed && activeAgentId === 'luca';
 
   // Dictation — Web Speech API → composer textarea. Final segments append
   // to `input` with a separating space. ExpressiveField listens for
@@ -615,6 +632,7 @@ export default function ChatView() {
   const abortRef = useRef<AbortController | null>(null);
   const guardianAbortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
+  const sendInFlightRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingAttachments = useAttachmentStore((s) => s.pending);
   const addAttachments = useAttachmentStore((s) => s.add);
@@ -626,7 +644,19 @@ export default function ChatView() {
   // never gated on having an OpenRouter key. The banner below becomes a soft
   // upsell instead of a hard block.
   const modelKeyMissing = false;
-  const showFreeTierUpsell = modelKeyStatus === 'missing';
+  const showFreeTierUpsell = platformFundedLuca && modelKeyStatus === 'missing';
+
+  useEffect(() => {
+    if (byokEnabled) return;
+    if (ensembleArmed) setEnsembleArmed(false);
+    if (ensembleLocked) setEnsembleLocked(false);
+    if (agentModeArmed) setAgentModeArmed(false);
+    if (alcoveOpen) setAlcoveOpen(false);
+    if (activeAgentId !== 'luca') {
+      setPendingAgentId('luca');
+      if (currentThreadId) updateThreadAgent(currentThreadId, 'luca');
+    }
+  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, alcoveOpen, activeAgentId, currentThreadId, updateThreadAgent]);
 
   useEffect(() => {
     if (!user) {
@@ -990,6 +1020,10 @@ export default function ChatView() {
   const queueAttachmentFiles = useCallback((filesLike: FileList | File[] | null | undefined) => {
     const files = Array.from(filesLike || []);
     if (files.length === 0) return;
+    if (!byokEnabled) {
+      setAttachmentError('File attachments are available after connecting your OpenRouter key.');
+      return;
+    }
 
     const remaining = Math.max(0, MAX_CHAT_ATTACHMENTS - pendingAttachments.length);
     const accepted: File[] = [];
@@ -1009,7 +1043,7 @@ export default function ChatView() {
 
     if (accepted.length > 0) addAttachments(accepted);
     setAttachmentError(rejected.length > 0 ? rejected.slice(0, 2).join(' · ') : null);
-  }, [addAttachments, pendingAttachments.length]);
+  }, [addAttachments, byokEnabled, pendingAttachments.length]);
 
   const uploadPendingAttachments = useCallback(async (threadForUpload: string): Promise<PersistedAttachment[]> => {
     if (!user || pendingAttachments.length === 0) return [];
@@ -1106,18 +1140,39 @@ export default function ChatView() {
         }}
       >
         <span style={{ flex: '1 1 auto', minWidth: 180 }}>
-          You're chatting on the free Polyphonic model. Connect OpenRouter for
-          premium models, the ensemble council, and agent mode.
+          {accessTier === 'guest'
+            ? "You're chatting with guest Luca. You get 20 messages today; create an account to keep this thread and unlock 50 daily messages."
+            : "You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, observer chat, attachments, and agent mode."}
         </span>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          <ConnectOpenRouter
-            variant="ghost"
-            label="Connect OpenRouter"
-            onConnected={() => setModelKeyStatus('present')}
-          />
+          {accessTier === 'guest' ? (
+            <button
+              type="button"
+              onClick={() => navigate('/auth/signup')}
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: 12,
+                color: 'var(--text-primary)',
+                background: 'transparent',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-pill)',
+                padding: '7px 11px',
+                cursor: 'pointer',
+                letterSpacing: 'var(--track-body)',
+              }}
+            >
+              Create account
+            </button>
+          ) : (
+            <ConnectOpenRouter
+              variant="ghost"
+              label="Connect OpenRouter"
+              onConnected={() => setModelKeyStatus('present')}
+            />
+          )}
           <button
             type="button"
-            onClick={() => navigate('/settings/models')}
+            onClick={() => navigate(accessTier === 'guest' ? '/auth/login' : '/settings/models')}
             style={{
               fontFamily: 'var(--font-sans)',
               fontSize: 12,
@@ -1130,7 +1185,7 @@ export default function ChatView() {
               letterSpacing: 'var(--track-body)',
             }}
           >
-            Use a key I already have
+            {accessTier === 'guest' ? 'Sign in' : 'Use a key I already have'}
           </button>
         </div>
       </div>
@@ -1174,7 +1229,7 @@ export default function ChatView() {
   }, [patchMessage, user]);
 
   const sendGuardianMessage = useCallback(async () => {
-    if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
+    if (!byokEnabled || !input.trim() || !user || guardianStreaming || modelKeyMissing) return;
 
     const messageText = input.trim();
     let tid = currentThreadId;
@@ -1294,13 +1349,16 @@ export default function ChatView() {
       guardianAbortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing]);
+  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, byokEnabled]);
 
   const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
     const replayAttachments = options?.attachments ?? null;
     if (modelKeyMissing) return;
     if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming || firstTurnHandoff) return;
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    const clientTurnId = crypto.randomUUID();
 
     // Dismiss welcome back on first message
     if (welcomeBack) setWelcomeBack(null);
@@ -1328,6 +1386,7 @@ export default function ChatView() {
         tid = await createThread(user.id, pendingAgentId);
         createdThread = true;
       } catch (err) {
+        sendInFlightRef.current = false;
         setFirstTurnHandoff(null);
         if (isFirstTurn && !options?.text) setInput(sourceText);
         setAttachmentError(err instanceof Error ? err.message : 'Could not start a new conversation');
@@ -1341,6 +1400,7 @@ export default function ChatView() {
         uploadedAttachments = await uploadPendingAttachments(tid);
       }
     } catch (err) {
+      sendInFlightRef.current = false;
       setFirstTurnHandoff(null);
       if (isFirstTurn && !options?.text) setInput(sourceText);
       setAttachmentError(err instanceof Error ? err.message : 'Attachment upload failed');
@@ -1355,9 +1415,15 @@ export default function ChatView() {
         role: 'user',
         content: messageText,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments as any : null,
+        metadata: {
+          client_turn_id: clientTurnId,
+          idempotency_key: `chat:${tid}:${clientTurnId}`,
+          access_tier: accessTier,
+        },
       });
       persistedUserMessage = inserted as unknown as Message;
     } catch (insertUserError) {
+      sendInFlightRef.current = false;
       setFirstTurnHandoff(null);
       if (isFirstTurn && !options?.text) setInput(sourceText);
       const detail = insertUserError instanceof Error ? insertUserError.message : String(insertUserError);
@@ -1385,7 +1451,7 @@ export default function ChatView() {
     } as Message);
     setFirstTurnHandoff(null);
 
-    if (!options?.text) {
+    if (!options?.text || options.text === input) {
       setInput('');
       clearAttachments();
       setAttachmentError(null);
@@ -1419,14 +1485,15 @@ export default function ChatView() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
+          'Idempotency-Key': `chat:${tid}:${clientTurnId}`,
         },
         body: JSON.stringify({
           thread_id: tid,
           message: messageText,
           attachments: uploadedAttachments,
           reasoning_effort: thinkingEffort,
-          ensemble: ensembleActive,
-          agent_mode: agentModeActive ? 'agent' : 'chat',
+          ensemble: byokEnabled && ensembleActive,
+          agent_mode: byokEnabled && agentModeActive ? 'agent' : 'chat',
         }),
         signal: controller.signal,
       });
@@ -1607,6 +1674,14 @@ export default function ChatView() {
                 }
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {
+                if (data.duplicate) {
+                  if (tid) {
+                    void loadMessages(tid);
+                    void loadThreads();
+                    void loadArtifacts(tid);
+                  }
+                  return;
+                }
                 // Hydrate council trace into message metadata. Prefer council_v2
                 // shape when the new pipeline ran; fall back to legacy 'council'
                 // for backward compat with any pre-v2 traffic.
@@ -1691,11 +1766,25 @@ export default function ChatView() {
       setCouncilPhase('idle');
       setIsSynthesizing(false);
       abortRef.current = null;
+      sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, activeAgentId, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, byokEnabled, accessTier, activeAgentId, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
+
+  const landingAutosendConsumedRef = useRef(false);
+  useEffect(() => {
+    if (!landingAutosend || landingAutosendConsumedRef.current) return;
+    if (!user || isStreaming || firstTurnHandoff) return;
+    if (threadId && currentThreadId !== threadId) return;
+    const text = input.trim();
+    if (!text) return;
+    landingAutosendConsumedRef.current = true;
+    window.setTimeout(() => {
+      void sendMessageRef.current?.({ text });
+    }, 80);
+  }, [landingAutosend, user?.id, isStreaming, firstTurnHandoff, threadId, currentThreadId, input]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -1735,6 +1824,7 @@ export default function ChatView() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
         e.preventDefault();
+        if (!byokEnabled) return;
         if (e.shiftKey) {
           setEnsembleLocked((v) => !v);
         } else {
@@ -1744,9 +1834,10 @@ export default function ChatView() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [byokEnabled]);
 
   const toggleEnsemble = (e: React.MouseEvent) => {
+    if (!byokEnabled) return;
     if (e.shiftKey) {
       setEnsembleLocked((v) => !v);
       setEnsembleArmed(false);
@@ -1970,28 +2061,34 @@ export default function ChatView() {
               </div>
               <div className="input-footer">
                 <div className="agent-pills">
-                  <button
-                    type="button"
-                    className="attach-btn"
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Attach files"
-                    title="Attach files"
-                  >
-                    <Paperclip size={15} strokeWidth={1.5} aria-hidden="true" />
-                  </button>
-                  <AgentPicker
-                    activeAgentId={activeAgentId}
-                    onChange={(id) => {
-                      setPendingAgentId(id);
-                      if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                    }}
-                  />
-                  <ObserverEyeChip
-                    threadId={currentThreadId}
-                    open={alcoveOpen}
-                    onToggle={() => setAlcoveOpen((v) => !v)}
-                  />
-                  {activeAgentId === 'luca' && (
+                  {byokEnabled && (
+                    <button
+                      type="button"
+                      className="attach-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Attach files"
+                      title="Attach files"
+                    >
+                      <Paperclip size={15} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  )}
+                  {byokEnabled ? (
+                    <AgentPicker
+                      activeAgentId={activeAgentId}
+                      onChange={(id) => {
+                        setPendingAgentId(id);
+                        if (currentThreadId) updateThreadAgent(currentThreadId, id);
+                      }}
+                    />
+                  ) : <LucaOnlyPill />}
+                  {byokEnabled && (
+                    <ObserverEyeChip
+                      threadId={currentThreadId}
+                      open={alcoveOpen}
+                      onToggle={() => setAlcoveOpen((v) => !v)}
+                    />
+                  )}
+                  {byokEnabled && activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
                       <ModesDropdown
@@ -2066,7 +2163,7 @@ export default function ChatView() {
         </span>
         <div style={{ flex: 1 }} />
         <span className="chat-header-meta">
-          luca · opus-4.7
+          {byokEnabled ? 'luca · opus-4.7' : 'luca · kimi-k2.6'}
         </span>
         <ThreadInfoButton />
       </div>
@@ -2474,7 +2571,7 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer">
             <div className="agent-pills">
-              {!alcoveOpen && (
+              {!alcoveOpen && byokEnabled && (
                 <button
                   type="button"
                   className="attach-btn"
@@ -2487,19 +2584,23 @@ export default function ChatView() {
                   </svg>
                 </button>
               )}
-              <AgentPicker
-                activeAgentId={activeAgentId}
-                onChange={(id) => {
-                  setPendingAgentId(id);
-                  if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                }}
-              />
-              <ObserverEyeChip
-                threadId={currentThreadId}
-                open={alcoveOpen}
-                onToggle={() => setAlcoveOpen((v) => !v)}
-              />
-              {!alcoveOpen && activeAgentId === 'luca' && (
+              {byokEnabled ? (
+                <AgentPicker
+                  activeAgentId={activeAgentId}
+                  onChange={(id) => {
+                    setPendingAgentId(id);
+                    if (currentThreadId) updateThreadAgent(currentThreadId, id);
+                  }}
+                />
+              ) : <LucaOnlyPill />}
+              {byokEnabled && (
+                <ObserverEyeChip
+                  threadId={currentThreadId}
+                  open={alcoveOpen}
+                  onToggle={() => setAlcoveOpen((v) => !v)}
+                />
+              )}
+              {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
                   <ModesDropdown

@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { runSalienceGate } from "../_shared/hypomnema/index.ts";
 import { isMemoryAugmentationEnabled } from "../_shared/config.ts";
+import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 interface GatePayload {
   user_id: string;
@@ -83,13 +84,12 @@ serve(async (req) => {
       return json({ should_reflect: false, reason: "memory augmentation disabled" }, 200, corsHeaders);
     }
 
-    const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey = typeof keyData === "string" ? keyData.trim() : "";
+    const { apiKey } = await resolveOpenRouterKeyForUser(supabase, userId);
     if (!apiKey) {
       await recordHypomnemaActivity(supabase, {
         userId,
         title: "Hypomnema skipped",
-        summary: "No OpenRouter key available for the user.",
+        summary: "No user or platform OpenRouter key was available.",
         severity: "warning",
         content: { should_reflect: false, reason: "no api key" },
       });

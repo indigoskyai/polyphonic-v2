@@ -18,7 +18,7 @@ import {
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
-import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { resolveChatBackend } from "../_shared/model-backend.ts";
 
@@ -61,7 +61,7 @@ serve(async (req) => {
       agent_runtime: agentRuntime,
       use_agent_runtime: useAgentRuntime,
     } = body;
-    const shouldRunLegacyToolPlanner =
+    const requestedLegacyToolPlanner =
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       agentRuntime === "legacy_tool_planner" ||
@@ -88,17 +88,6 @@ serve(async (req) => {
       }
     }
 
-    // Daily quota — soft cap, returns 429 envelope if exceeded.
-    try {
-      await checkAndIncrement(userId, "chat-message");
-    } catch (qErr) {
-      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
-      if (isQuota) {
-        return fail(new AppError("quota_exceeded", qErr.message, 429));
-      }
-      throw qErr;
-    }
-
     // Get user settings for default model
     const { data: settings } = await supabase
       .from("user_settings")
@@ -108,16 +97,38 @@ serve(async (req) => {
 
     const requestedModel = modelOverride || settings?.default_model || "moonshotai/kimi-k2.6";
 
-    // Resolve backend: user's OpenRouter key if present, else Lovable AI Gateway
-    // so brand-new signups can chat instantly.
     let backend;
     try {
-      backend = await resolveChatBackend(supabase, userId, requestedModel);
+      backend = await resolveChatBackend(supabase, user, requestedModel);
     } catch {
-      return fail(new MissingApiKeyError("Chat is temporarily unavailable. Please try again shortly."));
+      return fail(new AppError("upstream_unavailable", "Free chat is temporarily unavailable. Please try again shortly.", 503));
+    }
+    const shouldRunLegacyToolPlanner = requestedLegacyToolPlanner && backend.allowTools;
+
+    try {
+      await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit);
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        const limitCopy = backend.billingTier === "guest"
+          ? "You've reached today's 20-message guest limit. Create an account to keep this conversation and unlock 50 Luca messages a day."
+          : "You've reached today's Luca message limit. Come back tomorrow, verify access, or connect your own OpenRouter key in Settings.";
+        return fail(new AppError("quota_exceeded", limitCopy, 429));
+      }
+      throw qErr;
     }
     const apiKey = backend.apiKey;
     const model = backend.model;
+
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("id")
+      .eq("id", thread_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!thread) {
+      return fail(new ValidationError("Thread not found"));
+    }
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
@@ -125,7 +136,14 @@ serve(async (req) => {
       threadId: thread_id,
       userMessage: messageWithAttachments,
       apiKey,
-      historyLimit: 50,
+      historyLimit: backend.historyLimit,
+      includeIdentity: true,
+      includePendingRevisions: backend.allowMemoryWrites,
+      includeFunctionalMemory: backend.billingTier !== "guest",
+      includeMnemos: backend.billingTier !== "guest",
+      includeSkills: backend.billingTier !== "guest",
+      includeEmotionalState: backend.billingTier !== "guest",
+      includeBeliefs: backend.billingTier !== "guest",
     });
     logContinuityDiagnostics(continuity, "chat.continuity");
     const history = continuity.history;
@@ -218,10 +236,8 @@ serve(async (req) => {
             const errBody = await orResponse.text();
             console.error(`[chat] ${backend.provider} error:`, orResponse.status, errBody);
             let text = `Model error (${orResponse.status}). Please try again.`;
-            if (backend.provider === "lovable" && orResponse.status === 429) {
-              text = "Free chat is busy right now — please try again in a moment, or connect your own OpenRouter key in Settings for unlimited access.";
-            } else if (backend.provider === "lovable" && orResponse.status === 402) {
-              text = "Free chat credits are exhausted for this workspace. Connect your own OpenRouter key in Settings to keep chatting.";
+            if (backend.keySource === "platform" && (orResponse.status === 401 || orResponse.status === 402 || orResponse.status === 429)) {
+              text = "Free chat is temporarily unavailable. Please try again shortly, or connect your own OpenRouter key in Settings.";
             }
             send({
               type: "error",
@@ -321,25 +337,29 @@ serve(async (req) => {
           autoTitleThread(supabase, thread_id, messageWithAttachments, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
-          queueContinuityTurnWrites({
-            supabase,
-            userId,
-            threadId: thread_id,
-            agentId: "luca",
-            userMessage: messageWithAttachments,
-            agentResponse: fullContent,
-            sourceMessageId: insertedMessage?.id ?? null,
-            apiKey,
-            authHeader,
-            pendingRevisions: continuity.pendingRevisions,
-            recentTurns: openRouterMessages,
-          });
+          if (backend.allowMemoryWrites) {
+            queueContinuityTurnWrites({
+              supabase,
+              userId,
+              threadId: thread_id,
+              agentId: "luca",
+              userMessage: messageWithAttachments,
+              agentResponse: fullContent,
+              sourceMessageId: insertedMessage?.id ?? null,
+              apiKey,
+              authHeader,
+              pendingRevisions: continuity.pendingRevisions,
+              recentTurns: openRouterMessages,
+            });
+          }
 
           send({
             type: "done",
             model: usedModel,
             tokens_used: tokensUsed,
             message_id: insertedMessage?.id ?? null,
+            billing_tier: backend.billingTier,
+            key_source: backend.keySource,
           });
         } catch (err) {
           console.error("Stream error:", err);
@@ -413,7 +433,7 @@ async function autoTitleThread(
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
+      model: "moonshotai/kimi-k2.6",
       messages: [
         {
           role: "system",
