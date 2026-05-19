@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useToast } from '@/hooks/use-toast';
-import CreateAgentModal from '@/components/settings/CreateAgentModal';
 import { ConfirmDialog } from '@/components/settings/FormControls';
 import { Section } from '@/components/settings/Section';
 import {
@@ -21,7 +20,6 @@ export default function AgentsList() {
   const load = useAgentSettingsStore((s) => s.load);
   const deleteAgent = useAgentSettingsStore((s) => s.deleteAgent);
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const time = useClock();
@@ -192,22 +190,21 @@ export default function AgentsList() {
             )}
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <button
-              type="button"
-              className="set-btn"
-              onClick={() => setCreateOpen(true)}
-            >
-              + New agent
-            </button>
+          <div
+            style={{
+              marginTop: 18,
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-sans)',
+              fontStyle: 'italic',
+            }}
+          >
+            Custom agent creation is paused. Existing agents remain fully editable.
           </div>
         </Section>
       </div>
 
-      <CreateAgentModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-      />
+
 
       {target && (
         <ConfirmDialog

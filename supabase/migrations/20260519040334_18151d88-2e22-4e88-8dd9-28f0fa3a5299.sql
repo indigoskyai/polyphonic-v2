@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Users can insert own agent configs" ON public.agent_configs;

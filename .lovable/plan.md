@@ -1,108 +1,36 @@
+# Disable new agent creation
 
 ## Goal
+Stop users from creating new custom agents in Settings. Every agent already in `agent_configs` (resident + user-built) keeps working exactly as before — chat, edit, delete, configure are all unaffected.
 
-After a user signs in (Google or email/password), route them to a dedicated `/access` gate page styled like the existing login page. They connect a Solana wallet (Wallet Standard — covers Phantom, Solflare, Backpack, etc.), sign a one-time nonce to prove ownership, and the server checks they hold ≥ $50 USD of $MNEMOS (mint `BMcReKHFc5KssDgDisZBq3YmJe5RdjnBUumxpXpRpump`) using the Jupiter Price API. Verification is cached for 24 hours; admins bypass.
+## Why this is safe
+Agent creation has **one entry point**: the "+ New agent" button in `src/pages/settings/AgentsList.tsx` → `CreateAgentModal` → `agentSettingsStore.createAgent()` → insert into `agent_configs`. No Luca tool, edge function, or other UI calls `createAgent`. Chat reads existing `agent_configs` rows in `chat-multi`, so existing agents are untouched by removing the create path.
 
-## User flow
+## Changes
 
-```text
-Login (Google / email) ──▶ AuthGate
-                            │
-                  has valid (≤24h) verification? ──yes──▶ /chat
-                            │ no
-                            ▼
-                        /access page
-                            │
-              [Connect Wallet]  (Wallet Standard modal)
-                            │
-              [Sign verification message]  (nonce + timestamp)
-                            │
-              POST verify-token-gate edge function
-                            │
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-       balance × price ≥ $50         shortfall
-              │                           │
-       insert token_gate_              show: balance, USD value,
-       verifications row                shortfall, "Buy on Jupiter" link,
-              │                           [Re-check] button
-              ▼
-            /chat
-```
+### 1. `src/pages/settings/AgentsList.tsx`
+- Remove the `+ New agent` button (and its `createOpen` state + `<CreateAgentModal>` mount).
+- Optionally replace with a small muted line under the roster: "Custom agent creation is paused. Existing agents remain fully editable." — confirms intent so users don't think it's a bug.
 
-## Architecture
+### 2. `src/components/settings/CreateAgentModal.tsx`
+- Leave file in place but unused (avoid churn). Or delete if you'd rather keep the tree clean — call it out and I'll remove it.
 
-### Frontend
-- **`src/pages/AccessGatePage.tsx`** — new page at `/access`. Reuses LoginPage visual tokens (`--bg-deep`, `--font-sans`, pill buttons). Three states: idle, connecting, verifying, success, denied.
-- **`src/lib/solanaWallet.ts`** — thin wrapper around `@solana/wallet-adapter-base` + `@solana/wallet-standard-wallet-adapter-react` for wallet discovery, connect, and `signMessage`.
-- **`src/components/access/WalletPickerModal.tsx`** — lists detected wallets (Phantom, Solflare, Backpack, others surfaced by Wallet Standard).
-- **`src/stores/tokenGateStore.ts`** — Zustand store: `{ status, lastVerifiedAt, balance, usdValue, walletAddress }`. Hydrates from Supabase on mount.
-- **`src/components/auth/AuthGate.tsx`** — route guard wrapping protected routes. Checks `token_gate_verifications` row newer than 24h OR admin role; otherwise redirects to `/access`.
-- **`src/App.tsx`** — add `/access` route (public-when-authed); wrap `/chat`, `/mind`, `/memory`, etc. with `<AuthGate>`.
+### 3. `src/stores/agentSettingsStore.ts` — `createAgent`
+- Short-circuit at the top: return `{ ok: false, error: 'Agent creation is disabled.' }` without hitting Supabase. Belt-and-suspenders in case any stale code path still calls it.
 
-### Backend (Lovable Cloud)
+### 4. (Optional, recommended) Database guard
+- Add a migration that revokes insert on `agent_configs` for the `authenticated` role, OR adds an RLS policy denying inserts where `is_system=false`. This makes the lock enforceable server-side so a future code regression can't accidentally re-enable creation.
+- Existing rows: untouched. Updates/deletes/selects: untouched.
 
-**New table `token_gate_verifications`**
-- `user_id uuid` (FK to auth.users, PK)
-- `wallet_address text not null`
-- `balance numeric not null` (raw $MNEMOS held)
-- `usd_value numeric not null`
-- `price_used numeric not null` (24h avg USD per $MNEMOS at verification)
-- `verified_at timestamptz not null default now()`
-- `expires_at timestamptz not null` (verified_at + 24h)
-- RLS: user can `select` their own row; only edge function (service role) writes.
+## What does NOT change
+- `AgentDetail` page — full edit access for every existing agent.
+- Delete button on the roster — still works for user-built agents.
+- `chat-multi`, `agent-config-save`, `agent-identity-save` — unchanged.
+- Resident agents (Luca, Anima, Vektor) — unchanged.
+- `agentSettingsStore.load`, `deleteAgent`, `updateAgent` — unchanged.
 
-**New table `token_gate_nonces`** (short-lived, for sign-in-with-Solana replay protection)
-- `nonce text primary key`
-- `user_id uuid not null`
-- `created_at timestamptz default now()` (delete after 10 min via cron or on consume)
+## Reversal
+To re-enable later: revert the AgentsList edit, remove the short-circuit in the store, and (if applied) drop the RLS guard. No data migration needed.
 
-**New edge function `token-gate-nonce`** — `POST` → returns `{ nonce, message }` where `message` is `"Verify $MNEMOS holding for Polyphonic\n\nNonce: <nonce>\nIssued: <iso>"`. Requires JWT.
-
-**New edge function `verify-token-gate`** — `POST { walletAddress, signature, nonce }`:
-  1. Validate JWT → `user_id`.
-  2. Look up nonce row; reject if missing/expired/wrong user. Delete on consume.
-  3. Verify ed25519 signature of `message` matches `walletAddress` (use `tweetnacl` via `npm:tweetnacl`).
-  4. Fetch SPL balance of $MNEMOS for `walletAddress` via Solana RPC (`getTokenAccountsByOwner` filtered by mint, sum `uiAmount`). Use public RPC `https://api.mainnet-beta.solana.com` (configurable via `SOLANA_RPC_URL` secret if rate-limited later).
-  5. Fetch 24h avg price from Jupiter Price API v2: `https://lite-api.jup.ag/price/v3?ids=BMcReKHFc5KssDgDisZBq3YmJe5RdjnBUumxpXpRpump`. Use returned `usdPrice` (Jupiter's price is already a recent VWAP; we'll store it as our reference). Cache server-side per-day in `app_config` to keep it stable across users for the calendar day.
-  6. Compute `usdValue = balance * price`. If `>= 50`, upsert `token_gate_verifications` with `expires_at = now() + 24h`. Return `{ allowed, balance, usdValue, price, shortfall }`.
-
-**Admin bypass**: AuthGate calls `has_role(auth.uid(), 'admin')` first; admins skip wallet entirely.
-
-### Dependencies (frontend)
-- `@solana/web3.js`
-- `@solana/wallet-standard-wallet-adapter-react`
-- `@solana/wallet-adapter-react` + `@solana/wallet-adapter-react-ui` (for the picker modal styling — we'll restyle to match)
-- `bs58` (encode signature/pubkey)
-
-### Edge function deps (Deno)
-- `npm:tweetnacl` for signature verification
-- `npm:bs58` for decoding signature
-- `npm:@solana/web3.js` for `Connection.getParsedTokenAccountsByOwner`
-
-## Security notes
-- Nonce required + single-use → prevents replay
-- Signature verified server-side → prevents claiming someone else's wallet
-- Price cached server-side daily → can't be manipulated per-request
-- RLS on verifications table → users can't insert/update their own row
-- 24h grace period is intentional (per spec) — if user sells mid-day they keep access until midnight UTC re-check
-
-## Open questions to resolve during build
-- If Jupiter price endpoint is rate-limited or returns null for this mint, fall back to Birdeye (would need `BIRDEYE_API_KEY` secret). Will surface only if it actually fails in testing.
-
-## What I'll need from you after plan approval
-- Confirm OK to add the listed npm dependencies
-- I'll request a `SOLANA_RPC_URL` secret only if the public RPC rate-limits us during testing (start without it)
-
-## Files to create
-- `src/pages/AccessGatePage.tsx`
-- `src/components/auth/AuthGate.tsx`
-- `src/components/access/WalletPickerModal.tsx`
-- `src/lib/solanaWallet.ts`
-- `src/stores/tokenGateStore.ts`
-- `supabase/functions/token-gate-nonce/index.ts`
-- `supabase/functions/verify-token-gate/index.ts`
-
-## Files to edit
-- `src/App.tsx` — add `/access` route + wrap protected routes in `<AuthGate>`
-- `src/pages/LoginPage.tsx` + `SignupPage.tsx` — redirect to `/access` instead of `/chat` (AuthGate handles forwarding to `/chat` if already verified)
+## Open question
+Want the DB-level guard (#4)? I'd recommend yes for safety, but it's optional. Default if you don't answer: yes, add the migration.
