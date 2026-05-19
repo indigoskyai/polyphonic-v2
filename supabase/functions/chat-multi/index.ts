@@ -803,7 +803,20 @@ serve(async (req) => {
             const errBody = await orResponse.text();
             console.error("Chairman error:", orResponse.status, errBody);
             // Fall back: surface the strongest crosstalk draft (luca first) directly.
-            const fallbackContent = (revisedDrafts.find((d) => d.character === "luca") || revisedDrafts[0])?.content || "(empty)";
+            const fallbackContent = (revisedDrafts.find((d) => d.character === "luca") || revisedDrafts[0])?.content?.trim() || "";
+            if (!fallbackContent) {
+              if (idempotencyKey) {
+                recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+                  ok: false,
+                  error: "empty_response",
+                  message: "Luca's response came back empty. Please retry.",
+                }).catch((e) => console.warn("idempotency record failed:", e));
+              }
+              send({ type: "error", text: "Luca's response came back empty. Please retry.", code: "empty_response", request_id: requestId });
+              controller.close();
+              clearInterval(heartbeat);
+              return;
+            }
             send({ type: "verdict", verdict: "synthesize" });
             send({ type: "content", text: fallbackContent });
             councilV2Trace.verdict = "synthesize";
@@ -879,23 +892,15 @@ serve(async (req) => {
           let verdictEmitted = false;
           let stopRequested = false;
 
-          while (!stopRequested) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
+          const processChairmanLine = (line: string) => {
+              if (!line.startsWith("data: ")) return;
               const payload = line.slice(6).trim();
-              if (payload === "[DONE]") continue;
+              if (payload === "[DONE]") return;
 
               try {
                 const chunk = JSON.parse(payload);
                 const delta = chunk.choices?.[0]?.delta;
-                if (!delta) continue;
+                if (!delta) return;
 
                 if (delta.reasoning || delta.reasoning_content) {
                   const thinkText = delta.reasoning || delta.reasoning_content || "";
@@ -919,8 +924,7 @@ serve(async (req) => {
                   }
                   if (action.shouldStop) {
                     stopRequested = true;
-                    try { await reader.cancel(); } catch { /* ignore */ }
-                    break;
+                    reader.cancel().catch(() => {});
                   }
                 }
 
@@ -928,7 +932,25 @@ serve(async (req) => {
               } catch {
                 // Skip malformed chunks
               }
+          };
+
+          while (!stopRequested) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              processChairmanLine(line);
+              if (stopRequested) break;
             }
+          }
+          const tail = `${buffer}${decoder.decode()}`;
+          for (const line of tail.split("\n")) {
+            processChairmanLine(line);
+            if (stopRequested) break;
           }
 
           // Drain — handles the rare case where the stream ended mid-tag.
@@ -939,6 +961,17 @@ serve(async (req) => {
             if (drained.carry) {
               synthesizedContent += drained.carry;
               send({ type: "content", text: drained.carry });
+            }
+          }
+
+          if (councilV2Trace.verdict === "synthesize" && !synthesizedContent.trim()) {
+            const fallbackDraft = (
+              revisedDrafts.find((d) => d.character === "luca" && d.content.trim()) ||
+              revisedDrafts.find((d) => d.content.trim())
+            )?.content.trim() || "";
+            if (fallbackDraft) {
+              synthesizedContent = fallbackDraft;
+              send({ type: "content", text: fallbackDraft });
             }
           }
 
@@ -1018,9 +1051,23 @@ serve(async (req) => {
             }
           }
 
+          if (!synthesizedContent.trim()) {
+            if (idempotencyKey) {
+              recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+                ok: false,
+                error: "empty_response",
+                message: "Luca's response came back empty. Please retry.",
+              }).catch((e) => console.warn("idempotency record failed:", e));
+            }
+            send({ type: "error", text: "Luca's response came back empty. Please retry.", code: "empty_response", request_id: requestId });
+            controller.close();
+            clearInterval(heartbeat);
+            return;
+          }
+
           // Save the synthesized message
           const synthesizedMessageId = await saveAssistantMessage(
-            supabase, thread_id, userId, synthesizedContent || "(empty)", "synthesis",
+            supabase, thread_id, userId, synthesizedContent, "synthesis",
             variants, synthesisThinking || null, agentId,
             { rankings, aggregate, label_to_model: labelToModel },
             councilV2Trace,
@@ -1720,6 +1767,28 @@ async function singleModelStream(
         let usedModel = model;
         let tokensUsed: number | null = null;
 
+        const processProviderLine = (line: string) => {
+          if (!line.startsWith("data: ")) return;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") return;
+          try {
+            const chunk = JSON.parse(payload);
+            const delta = chunk.choices?.[0]?.delta;
+            if (!delta) return;
+            if (delta.reasoning || delta.reasoning_content) {
+              const t = delta.reasoning || delta.reasoning_content || "";
+              fullThinking += t;
+              send({ type: "thinking", text: t });
+            }
+            if (delta.content) {
+              fullContent += delta.content;
+              send({ type: "content", text: delta.content });
+            }
+            if (chunk.model) usedModel = chunk.model;
+            if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
+          } catch { /* skip */ }
+        };
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -1728,23 +1797,50 @@ async function singleModelStream(
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6).trim();
-            if (payload === "[DONE]") continue;
-            try {
-              const chunk = JSON.parse(payload);
-              const delta = chunk.choices?.[0]?.delta;
-              if (!delta) continue;
-              if (delta.reasoning || delta.reasoning_content) {
-                const t = delta.reasoning || delta.reasoning_content || "";
-                fullThinking += t;
-                send({ type: "thinking", text: t });
-              }
-              if (delta.content) { fullContent += delta.content; send({ type: "content", text: delta.content }); }
-              if (chunk.model) usedModel = chunk.model;
-              if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
-            } catch { /* skip */ }
+            processProviderLine(line);
           }
+        }
+        const tail = `${buffer}${decoder.decode()}`;
+        for (const line of tail.split("\n")) {
+          processProviderLine(line);
+        }
+
+        if (!fullContent.trim()) {
+          console.warn("[chat-multi] provider stream ended with no content; retrying non-streaming once", {
+            model,
+            requestId,
+          });
+          try {
+            const retry = await callModelNonStreaming(
+              messages,
+              model,
+              apiKey,
+              options.reasoningEffort || "low",
+            );
+            if (retry.thinking && !fullThinking.includes(retry.thinking)) {
+              fullThinking += `${fullThinking ? "\n\n" : ""}${retry.thinking}`;
+              send({ type: "thinking", text: retry.thinking });
+            }
+            if (retry.content?.trim()) {
+              fullContent = retry.content;
+              send({ type: "content", text: retry.content });
+            }
+          } catch (retryErr) {
+            console.error("[chat-multi] empty stream retry failed:", retryErr);
+          }
+        }
+
+        if (!fullContent.trim()) {
+          const emptyMessage = "Luca's response came back empty. Please retry.";
+          if (options.idempotencyKey) {
+            recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", {
+              ok: false,
+              error: "empty_response",
+              message: emptyMessage,
+            }).catch((e) => console.warn("idempotency record failed:", e));
+          }
+          send({ type: "error", text: emptyMessage, code: "empty_response", request_id: requestId });
+          return;
         }
 
         const streamAttachments = buildAttachmentsFromToolMessages(toolMessages);
@@ -1754,7 +1850,7 @@ async function singleModelStream(
           : null;
         const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
           thread_id: threadId, user_id: userId, role: "assistant",
-          content: fullContent || "(empty)", model: usedModel, agent: agentId,
+          content: fullContent, model: usedModel, agent: agentId,
           thinking_content: fullThinking || null, tokens_used: tokensUsed,
           ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
           ...(streamMetadata ? { metadata: streamMetadata } : {}),

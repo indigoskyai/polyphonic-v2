@@ -103,6 +103,15 @@ describe('Phase 4 reliability guardrails', () => {
     }
   });
 
+  it('does not persist placeholder empty assistant responses from chat-multi', () => {
+    const source = readRepoFile('supabase/functions/chat-multi/index.ts');
+
+    expect(source).toContain('provider stream ended with no content; retrying non-streaming once');
+    expect(source).toContain('error: "empty_response"');
+    expect(source).not.toContain('content: fullContent || "(empty)"');
+    expect(source).not.toContain('synthesizedContent || "(empty)"');
+  });
+
   it('keeps launch-sensitive database helpers and profile uploads hardened', () => {
     const source = readRepoFile('supabase/migrations/20260505235900_harden_launch_auth_and_profile_storage.sql');
 
