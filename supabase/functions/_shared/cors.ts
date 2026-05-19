@@ -38,7 +38,7 @@ function isAllowedOrigin(origin: string): boolean {
 }
 
 const ALLOWED_HEADERS =
-  "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version";
+  "authorization, x-client-info, apikey, content-type, idempotency-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version";
 
 /**
  * Build CORS headers for a given request.
