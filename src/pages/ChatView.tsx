@@ -52,7 +52,7 @@ import {
   safeAttachmentFileName,
   shouldInlineCodeAttachment,
 } from '@/lib/chatAttachments';
-import { Paperclip } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -239,6 +239,27 @@ function LucaOnlyPill() {
   return (
     <button type="button" className="agent-pill targeted luca-only-pill" title="Talking to Luca" aria-label="Talking to Luca">
       luca
+    </button>
+  );
+}
+
+function AttachmentPlusButton({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="attach-btn"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Attach files"
+      title="Attach files"
+    >
+      <Plus size={15} strokeWidth={1.55} aria-hidden="true" />
     </button>
   );
 }
@@ -2092,17 +2113,7 @@ export default function ChatView() {
               </div>
               <div className="input-footer">
                 <div className="agent-pills">
-                  {byokEnabled && (
-                    <button
-                      type="button"
-                      className="attach-btn"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Attach files"
-                      title="Attach files"
-                    >
-                      <Paperclip size={15} strokeWidth={1.5} aria-hidden="true" />
-                    </button>
-                  )}
+                  <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />
                   {byokEnabled ? (
                     <AgentPicker
                       activeAgentId={activeAgentId}
@@ -2133,36 +2144,38 @@ export default function ChatView() {
                     </>
                   )}
                 </div>
-                <select
-                  aria-label="Thinking effort"
-                  value={thinkingEffort}
-                  onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
-                  className="effort-select"
-                >
-                  <option value="low">Light</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">Deep</option>
-                </select>
-                <DictationButton
-                  isListening={dictationListening}
-                  supported={dictationSupported}
-                  disabled={modelKeyMissing}
-                  onClick={toggleDictation}
-                />
-                <button
-                  type="button"
-                  aria-label="Send message"
-                  className={`send-btn${(input.trim() || pendingAttachments.length > 0) && !modelKeyMissing ? ' armed' : ''}${ensembleActive ? ' ensemble-armed' : ''}`}
-                  onClick={() => { if (dictationListening) stopDictation(); sendMessage(); }}
-                  disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
-                >
-                  <span className="send-icon">
-                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
-                      <path d="M12.5 1.5 L5.6 8" />
-                    </svg>
-                  </span>
-                </button>
+                <div className="composer-actions">
+                  <select
+                    aria-label="Thinking effort"
+                    value={thinkingEffort}
+                    onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                    className="effort-select"
+                  >
+                    <option value="low">Light</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">Deep</option>
+                  </select>
+                  <DictationButton
+                    isListening={dictationListening}
+                    supported={dictationSupported}
+                    disabled={modelKeyMissing}
+                    onClick={toggleDictation}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Send message"
+                    className={`send-btn${(input.trim() || pendingAttachments.length > 0) && !modelKeyMissing ? ' armed' : ''}${ensembleActive ? ' ensemble-armed' : ''}`}
+                    onClick={() => { if (dictationListening) stopDictation(); sendMessage(); }}
+                    disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
+                  >
+                    <span className="send-icon">
+                      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
+                        <path d="M12.5 1.5 L5.6 8" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2603,19 +2616,7 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer">
             <div className="agent-pills">
-              {!alcoveOpen && byokEnabled && (
-                <button
-                  type="button"
-                  className="attach-btn"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach files"
-                  title="Attach files"
-                >
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M6.5 8.5l3.6-3.6a2.2 2.2 0 113.1 3.1l-5.4 5.4a3.4 3.4 0 01-4.8-4.8l5.2-5.2" />
-                  </svg>
-                </button>
-              )}
+              {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
               {byokEnabled ? (
                 <AgentPicker
                   activeAgentId={activeAgentId}
@@ -2647,53 +2648,54 @@ export default function ChatView() {
               )}
             </div>
 
-            {/* Thinking effort selector */}
-            <select
-              aria-label="Thinking effort"
-              value={thinkingEffort}
-              onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
-              className="effort-select"
-            >
-              <option value="low">Light</option>
-              <option value="medium">Medium</option>
-              <option value="high">Deep</option>
-            </select>
+            <div className="composer-actions">
+              <select
+                aria-label="Thinking effort"
+                value={thinkingEffort}
+                onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                className="effort-select"
+              >
+                <option value="low">Light</option>
+                <option value="medium">Medium</option>
+                <option value="high">Deep</option>
+              </select>
 
-            <DictationButton
-              isListening={dictationListening}
-              supported={dictationSupported}
-              disabled={modelKeyMissing || isStreaming || guardianStreaming}
-              onClick={toggleDictation}
-            />
+              <DictationButton
+                isListening={dictationListening}
+                supported={dictationSupported}
+                disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                onClick={toggleDictation}
+              />
 
-            <button
-              type="button"
-              aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
-              className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
-              onClick={() => {
-                if (isStreaming || guardianStreaming) {
-                  void stopStreaming();
-                  return;
-                }
-                if (dictationListening) stopDictation();
-                if (alcoveOpen) {
-                  void sendGuardianMessage();
-                } else {
-                  void sendMessage();
-                }
-              }}
-              disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
-            >
-              <span className="send-icon">
-                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
-                  <path d="M12.5 1.5 L5.6 8" />
-                </svg>
-              </span>
-              <span className="stop-icon">
-                <svg viewBox="0 0 14 14" fill="currentColor"><rect x={3} y={3} width={8} height={8} rx={1.5} /></svg>
-              </span>
-            </button>
+              <button
+                type="button"
+                aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
+                className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
+                onClick={() => {
+                  if (isStreaming || guardianStreaming) {
+                    void stopStreaming();
+                    return;
+                  }
+                  if (dictationListening) stopDictation();
+                  if (alcoveOpen) {
+                    void sendGuardianMessage();
+                  } else {
+                    void sendMessage();
+                  }
+                }}
+                disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+              >
+                <span className="send-icon">
+                  <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
+                    <path d="M12.5 1.5 L5.6 8" />
+                  </svg>
+                </span>
+                <span className="stop-icon">
+                  <svg viewBox="0 0 14 14" fill="currentColor"><rect x={3} y={3} width={8} height={8} rx={1.5} /></svg>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

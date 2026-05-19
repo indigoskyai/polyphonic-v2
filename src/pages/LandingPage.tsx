@@ -15,6 +15,7 @@ import LandingParticleField, {
   type LandingFieldHandle,
   type LandingFieldState,
 } from '@/components/LandingParticleField';
+import { Plus } from 'lucide-react';
 
 /**
  * LandingPage — public, unauthenticated entry surface.
@@ -485,17 +486,7 @@ function LandingComposer({
               aria-label="Attach files"
               title="Sign in to attach files"
             >
-              <svg
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M6.5 8.5l3.6-3.6a2.2 2.2 0 113.1 3.1l-5.4 5.4a3.4 3.4 0 01-4.8-4.8l5.2-5.2" />
-              </svg>
+              <Plus size={15} strokeWidth={1.55} aria-hidden="true" />
             </button>
 
             {/* Static "luca" pill — visually matches AgentPicker's
@@ -510,26 +501,28 @@ function LandingComposer({
             </button>
           </div>
 
-          <button
-            type="submit"
-            aria-label={submitting ? 'Opening Luca' : 'Send message'}
-            className={`send-btn${!sendDisabled ? ' armed' : ''}`}
-            disabled={sendDisabled || submitting}
-          >
-            <span className="send-icon">
-              <svg
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
-                <path d="M12.5 1.5 L5.6 8" />
-              </svg>
-            </span>
-          </button>
+          <div className="composer-actions">
+            <button
+              type="submit"
+              aria-label={submitting ? 'Opening Luca' : 'Send message'}
+              className={`send-btn${!sendDisabled ? ' armed' : ''}`}
+              disabled={sendDisabled || submitting}
+            >
+              <span className="send-icon">
+                <svg
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12.5 1.5 L1.5 6.3 L5.6 8 L7.4 12.3 Z" />
+                  <path d="M12.5 1.5 L5.6 8" />
+                </svg>
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </form>

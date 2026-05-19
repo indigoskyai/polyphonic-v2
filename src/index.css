@@ -726,15 +726,15 @@ html {
 }
 
 @keyframes userMessageSendIn {
-  0% { opacity: 0; transform: translateY(28px) scale(0.982); filter: blur(5px); }
-  48% { opacity: 0.88; filter: blur(1.6px); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  0% { opacity: 0; transform: translateY(22px); }
+  52% { opacity: 0.9; }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes composerSendSettle {
-  0% { transform: translateY(0) scale(1); border-color: rgba(232, 230, 224, 0.12); }
-  42% { transform: translateY(3px) scale(0.996); border-color: rgba(232, 230, 224, 0.18); }
-  100% { transform: translateY(0) scale(1); border-color: rgba(220, 219, 216, 0.09); }
+  0% { transform: translateY(0); border-color: rgba(232, 230, 224, 0.12); }
+  42% { transform: translateY(2px); border-color: rgba(232, 230, 224, 0.18); }
+  100% { transform: translateY(0); border-color: rgba(220, 219, 216, 0.09); }
 }
 
 @keyframes chatThreadReveal {
@@ -744,9 +744,9 @@ html {
 }
 
 @keyframes chatComposerReveal {
-  0% { opacity: 0; transform: translateY(24px) scale(0.986); filter: blur(8px); }
-  62% { opacity: 1; filter: blur(1px); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  0% { opacity: 0; transform: translateY(22px); }
+  62% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes landingHandoffContentOut {
@@ -1661,6 +1661,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 6px 12px 8px 18px;
   border-top: none;
   box-shadow: none;
@@ -1683,7 +1684,21 @@ html {
   box-shadow: none;
 }
 
-.agent-pills { display: flex; gap: 2px; align-items: center; }
+.agent-pills {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
 .agent-pill {
   padding: 3px 8px;
   border-radius: var(--radius-pill);
@@ -1955,11 +1970,10 @@ html {
   transition:
     color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-normal) var(--ease-out),
-    filter var(--dur-normal) var(--ease-out);
+    opacity var(--dur-fast) var(--ease-out);
   position: relative;
 }
-.send-btn:hover { background: var(--overlay-active); color: var(--text-body); }
+.send-btn:hover { background: transparent; color: var(--text-body); }
 .send-btn:disabled {
   opacity: 0.38;
   cursor: default;
@@ -1967,24 +1981,18 @@ html {
   color: var(--text-ghost);
 }
 
-/* ARMED state — composer has text. Keep the button neutral and precise:
-   the icon itself brightens with the same ivory tone as the animated border,
-   with a small internal flutter instead of the old filled amber button. */
+/* ARMED state — crisp Codex-like filled action: no glow, no orbit,
+   just the symbol cut cleanly against a bright surface. */
 .send-btn.armed {
-  background: rgba(244, 243, 240, 0.026);
-  color: rgba(244, 243, 240, 0.86);
-  box-shadow:
-    inset 0 0 0 1px rgba(244, 243, 240, 0.075),
-    0 0 14px rgba(232, 230, 224, 0.055);
-  filter: drop-shadow(0 0 5px rgba(232, 230, 224, 0.16));
-  animation: send-murmur 4.8s ease-in-out infinite;
+  background: rgba(244, 243, 240, 0.92);
+  color: rgba(10, 10, 12, 0.92);
+  box-shadow: none;
+  filter: none;
+  animation: none;
 }
 .send-btn.armed:hover {
-  background: rgba(244, 243, 240, 0.045);
-  color: rgba(244, 243, 240, 0.94);
-  box-shadow:
-    inset 0 0 0 1px rgba(244, 243, 240, 0.11),
-    0 0 18px rgba(232, 230, 224, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  color: rgba(8, 8, 10, 0.94);
 }
 .send-btn.armed:disabled {
   animation: none;
@@ -1992,34 +2000,8 @@ html {
   background: transparent;
 }
 
-.send-btn.armed .send-icon {
-  animation: send-icon-murmur 3.8s ease-in-out infinite;
-}
-
-@keyframes send-murmur {
-  0%, 100% {
-    color: rgba(244, 243, 240, 0.78);
-    filter: drop-shadow(0 0 4px rgba(232, 230, 224, 0.12));
-  }
-  37% {
-    color: rgba(244, 243, 240, 0.96);
-    filter: drop-shadow(0 0 8px rgba(232, 230, 224, 0.22));
-  }
-  61% {
-    color: rgba(232, 230, 224, 0.84);
-    filter: drop-shadow(0 0 5px rgba(232, 230, 224, 0.15));
-  }
-}
-
-@keyframes send-icon-murmur {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  34% { transform: translate3d(0.5px, -0.45px, 0) rotate(1.4deg); }
-  67% { transform: translate3d(-0.35px, 0.25px, 0) rotate(-0.8deg); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .send-btn.armed,
-  .send-btn.armed .send-icon { animation: none; }
+  .send-btn.armed { animation: none; }
 }
 .send-btn svg { width: 15px; height: 15px; }
 .send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
