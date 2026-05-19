@@ -330,10 +330,10 @@ function ComposerHeading({
       </h1>
       <p
         style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          fontWeight: 450,
-          letterSpacing: 'var(--track-meta)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: 10,
+          fontWeight: 420,
+          letterSpacing: '0.16em',
           textTransform: 'uppercase',
           color: 'var(--text-tertiary)',
           margin: 0,
@@ -421,13 +421,13 @@ function LandingComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="chat-empty-composer"
+      className="chat-empty-composer landing-composer"
       style={{
         animation: 'viewFadeIn 0.6s var(--ease-out) 0.05s both',
         margin: '0 auto',
       }}
     >
-      <div className={`input-shell${focused ? ' focused' : ''}`}>
+      <div className={`input-shell landing-input-shell${focused ? ' focused expanded' : ''}${text.trim() ? ' expanded has-text' : ''}`}>
         {error && (
           <div
             className="composer-key-warning"
@@ -490,26 +490,10 @@ function LandingComposer({
                 resting state. Click is a no-op (focuses textarea). */}
             <button
               type="button"
-              className="agent-pill targeted"
+              className="agent-pill targeted luca-only-pill"
               onClick={() => taRef.current?.focus()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                color: 'var(--text-body)',
-              }}
               title="Talking to Luca"
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--luca-full)',
-                  display: 'inline-block',
-                }}
-              />
               luca
             </button>
           </div>

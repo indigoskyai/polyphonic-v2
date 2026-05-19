@@ -38,6 +38,7 @@ import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
 import { consumeLandingAutosendFlag, readLandingPrompt } from '@/lib/guestChat';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
+import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -235,18 +236,7 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
 
 function LucaOnlyPill() {
   return (
-    <button type="button" className="agent-pill targeted" title="Talking to Luca" aria-label="Talking to Luca">
-      <span
-        aria-hidden="true"
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: 'var(--luca-full)',
-          display: 'inline-block',
-          marginRight: 6,
-        }}
-      />
+    <button type="button" className="agent-pill targeted luca-only-pill" title="Talking to Luca" aria-label="Talking to Luca">
       luca
     </button>
   );
@@ -1665,12 +1655,9 @@ export default function ChatView() {
                 const isCouncilTrail = collectedProposers.length > 0 && /— [A-Z]/.test(fullThinking);
                 const needsChairmanHeader = isCouncilTrail && !fullThinking.includes('— Chairman —');
                 if (needsChairmanHeader) {
-                  fullThinking += (fullThinking ? '\n\n' : '') + '— Chairman —\n' + data.text;
+                  fullThinking += (fullThinking ? '\n\n' : '') + '— Chairman —\n' + String(data.text || '').trimStart();
                 } else {
-                  if (fullThinking && !fullThinking.endsWith('\n') && !String(data.text || '').startsWith('\n')) {
-                    fullThinking += '\n\n';
-                  }
-                  fullThinking += data.text;
+                  fullThinking = appendStreamingDelta(fullThinking, data.text);
                 }
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {

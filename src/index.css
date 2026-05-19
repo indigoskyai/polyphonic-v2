@@ -626,14 +626,15 @@ html {
   line-height: 1.55;
   color: var(--text-tertiary);
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* ── Thinking Effort Selector ── */
 .effort-select {
-  height: 24px;
-  padding: 0 6px;
-  font-size: 10px;
+  height: 28px;
+  padding: 0 22px 0 9px;
+  font-size: 11px;
   font-family: var(--font-sans);
   font-weight: 420;
   letter-spacing: 0.03em;
@@ -647,8 +648,7 @@ html {
   -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23555' stroke-width='1.2'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 18px;
+  background-position: right 8px center;
   transition: border-color 150ms ease, color 150ms ease;
 }
 .effort-select:hover {
@@ -1661,6 +1661,22 @@ html {
 .agent-pill.targeted { font-weight: 500; background: transparent; }
 .agent-pill.targeted.luca { color: var(--text-body); }
 .agent-pill.targeted.guardian { color: var(--text-body); }
+.luca-only-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding-inline: 8px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  font-weight: 420;
+  letter-spacing: var(--track-body);
+  text-transform: lowercase;
+}
+.luca-only-pill:hover {
+  color: var(--text-body);
+  background: rgba(244, 243, 240, 0.025);
+}
 .pill-sep { width: 2px; height: 2px; border-radius: 50%; background: var(--text-whisper); opacity: 0.6; }
 
 /* ── Ensemble Pill (per-message skill toggle) ── */
@@ -1851,8 +1867,8 @@ html {
    (gradient + glow + slow pulse) used by send-armed, so "this surface is
    live" reads as one coherent visual language across the composer. */
 .mic-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-pill);
   background: transparent;
   border: none;
@@ -1875,7 +1891,7 @@ html {
   background: transparent;
   color: var(--text-ghost);
 }
-.mic-btn svg { width: 13px; height: 13px; }
+.mic-btn svg { width: 15px; height: 15px; }
 
 /* LISTENING — no color shift on the button, no surrounding box-glow. The
    shimmer effect lives INSIDE the SVG itself (DictationButton swaps a
@@ -1885,8 +1901,8 @@ html {
    alpha at both gradient extremes so cycle restart is invisible. */
 
 .send-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-pill);
   background: transparent;
   border: none;
@@ -1895,7 +1911,11 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-normal) var(--ease-out),
+    filter var(--dur-normal) var(--ease-out);
   position: relative;
 }
 .send-btn:hover { background: var(--overlay-active); color: var(--text-body); }
@@ -1906,22 +1926,24 @@ html {
   color: var(--text-ghost);
 }
 
-/* ARMED state — composer has text. Send button glows soft sage and pulses,
-   signaling "ready to send." Disarms the moment the message goes. */
+/* ARMED state — composer has text. Keep the button neutral and precise:
+   the icon itself brightens with the same ivory tone as the animated border,
+   with a small internal flutter instead of the old filled amber button. */
 .send-btn.armed {
-  background: linear-gradient(180deg,
-    rgba(201, 168, 124, 0.18) 0%,
-    rgba(201, 168, 124, 0.10) 100%);
-  color: var(--ink);
+  background: rgba(244, 243, 240, 0.026);
+  color: rgba(244, 243, 240, 0.86);
   box-shadow:
-    0 0 0 1px rgba(201, 168, 124, 0.30),
-    0 0 12px rgba(201, 168, 124, 0.18);
-  animation: send-armed-pulse 4s ease-in-out infinite;
+    inset 0 0 0 1px rgba(244, 243, 240, 0.075),
+    0 0 14px rgba(232, 230, 224, 0.055);
+  filter: drop-shadow(0 0 5px rgba(232, 230, 224, 0.16));
+  animation: send-murmur 4.8s ease-in-out infinite;
 }
 .send-btn.armed:hover {
-  background: linear-gradient(180deg,
-    rgba(201, 168, 124, 0.24) 0%,
-    rgba(201, 168, 124, 0.14) 100%);
+  background: rgba(244, 243, 240, 0.045);
+  color: rgba(244, 243, 240, 0.94);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 243, 240, 0.11),
+    0 0 18px rgba(232, 230, 224, 0.08);
 }
 .send-btn.armed:disabled {
   animation: none;
@@ -1929,19 +1951,27 @@ html {
   background: transparent;
 }
 
-@keyframes send-armed-pulse {
+@keyframes send-murmur {
   0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(201, 168, 124, 0.30),
-      0 0 12px rgba(201, 168, 124, 0.18);
+    color: rgba(244, 243, 240, 0.78);
+    filter: drop-shadow(0 0 4px rgba(232, 230, 224, 0.12));
+    transform: translateY(0);
   }
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(201, 168, 124, 0.45),
-      0 0 18px rgba(201, 168, 124, 0.28);
+  37% {
+    color: rgba(244, 243, 240, 0.96);
+    filter: drop-shadow(0 0 8px rgba(232, 230, 224, 0.22));
+    transform: translateY(-0.4px);
+  }
+  61% {
+    color: rgba(232, 230, 224, 0.84);
+    filter: drop-shadow(0 0 5px rgba(232, 230, 224, 0.15));
+    transform: translateY(0.2px);
   }
 }
-.send-btn svg { width: 13px; height: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  .send-btn.armed { animation: none; }
+}
+.send-btn svg { width: 15px; height: 15px; }
 .send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .send-btn .send-icon { transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .send-btn.streaming .send-icon { opacity: 0; transform: scale(0.6); }
@@ -1953,6 +1983,64 @@ html {
 .send-btn.ensemble-armed:hover {
   color: var(--text-primary);
   background: var(--overlay-active);
+}
+
+.landing-composer {
+  width: 100%;
+}
+
+.landing-composer .landing-input-shell {
+  background: color-mix(in srgb, var(--surface-1) 88%, var(--surface-2) 12%);
+  transition:
+    border-color var(--dur-normal) var(--ease-out),
+    box-shadow var(--dur-normal) var(--ease-out),
+    min-height var(--dur-normal) var(--ease-premium);
+}
+
+.landing-composer .input-row {
+  transition: padding var(--dur-normal) var(--ease-premium);
+}
+
+.landing-composer .input-textarea {
+  min-height: 54px;
+  padding-block: 15px;
+  transition:
+    min-height var(--dur-normal) var(--ease-premium),
+    padding var(--dur-normal) var(--ease-premium),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.landing-composer .landing-input-shell.expanded .input-textarea {
+  min-height: 66px;
+  padding-bottom: 12px;
+}
+
+.landing-composer .input-footer {
+  opacity: 0;
+  max-height: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 240ms var(--ease-out),
+    max-height var(--dur-normal) var(--ease-premium),
+    min-height var(--dur-normal) var(--ease-premium),
+    padding var(--dur-normal) var(--ease-premium),
+    transform var(--dur-normal) var(--ease-premium);
+}
+
+.landing-composer .landing-input-shell.expanded .input-footer,
+.landing-composer .landing-input-shell:focus-within .input-footer {
+  opacity: 1;
+  max-height: 44px;
+  min-height: 38px;
+  overflow: visible;
+  padding: 4px 12px 9px 18px;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 @media (max-width: 767px) {
@@ -7741,8 +7829,8 @@ html {
 }
 
 .attach-btn {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-pill);
   display: inline-flex;
   align-items: center;
@@ -7759,8 +7847,8 @@ html {
   background: var(--overlay-hover);
 }
 .attach-btn svg {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
 }
 
 .drag-overlay {
