@@ -278,9 +278,6 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
     const baseId = slugify(input.name) || 'agent';
     // Try base id, then base-2, base-3 if collisions exist locally
     const existing = new Set(get().agents.map((a) => a.id));
-    const baseId = slugify(input.name) || 'agent';
-    // Try base id, then base-2, base-3 if collisions exist locally
-    const existing = new Set(get().agents.map((a) => a.id));
     let id = baseId;
     let n = 2;
     while (existing.has(id)) {
