@@ -88,6 +88,41 @@ export const dedupeThreadsById = (threads: Thread[]): Thread[] => {
   });
 };
 
+export const mergeRealtimeMessage = (existing: Message[], row: Message): Message[] => {
+  if (!row?.id) return existing;
+
+  const sameIdIndex = existing.findIndex((m) => m.id === row.id);
+  if (sameIdIndex >= 0) {
+    if (isLocalStreamStub(existing[sameIdIndex])) {
+      const next = existing.slice();
+      next[sameIdIndex] = row;
+      return next;
+    }
+    return existing;
+  }
+
+  const rowTime = new Date(row.created_at).getTime();
+  const stubIndex = existing.findIndex((m) => {
+    if (m.id === row.id) return false;
+    if (m.role !== row.role) return false;
+    if ((m.agent ?? null) !== (row.agent ?? null)) return false;
+    const stubTime = new Date(m.created_at).getTime();
+    const age = Math.abs(rowTime - stubTime);
+    if (normContent(m.content) === normContent(row.content)) {
+      return age <= CONTENT_DEDUPE_WINDOW_MS;
+    }
+    return m.role === 'assistant' && isLocalStreamStub(m) && age <= STREAM_STUB_DEDUPE_WINDOW_MS;
+  });
+
+  if (stubIndex >= 0) {
+    const next = existing.slice();
+    next[stubIndex] = row;
+    return next;
+  }
+
+  return [...existing, row];
+};
+
 export const useThreadStore = create<ThreadState>((set, get) => ({
   threads: [],
   currentThreadId: null,
@@ -147,33 +182,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           if (!row?.id) return;
           if (row.agent === 'guardian' || row.agent === 'observer') return;
           const existing = get().messages;
-          if (existing.some((m) => m.id === row.id)) return;
-
-          const rowTime = new Date(row.created_at).getTime();
-          // Match only local optimistic stubs by role/agent + recency. We
-          // deliberately allow content drift for those stubs: the chairman may
-          // emit a revised body after the first body was queued, so the DB row
-          // can differ. Non-stub messages still require a content match.
-          const stubIndex = existing.findIndex((m) => {
-            if (m.id === row.id) return false;
-            if (m.role !== row.role) return false;
-            if ((m.agent ?? null) !== (row.agent ?? null)) return false;
-            const stubTime = new Date(m.created_at).getTime();
-            const age = Math.abs(rowTime - stubTime);
-            if (normContent(m.content) === normContent(row.content)) {
-              return age <= CONTENT_DEDUPE_WINDOW_MS;
-            }
-            return m.role === 'assistant' && isLocalStreamStub(m) && age <= STREAM_STUB_DEDUPE_WINDOW_MS;
-          });
-
-          if (stubIndex >= 0) {
-            const next = existing.slice();
-            next[stubIndex] = row;
-            set({ messages: next });
-            return;
-          }
-
-          set({ messages: [...existing, row] });
+          const next = mergeRealtimeMessage(existing, row);
+          if (next !== existing) set({ messages: next });
         },
       )
       .subscribe();

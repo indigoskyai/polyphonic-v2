@@ -60,6 +60,10 @@ const CROSSTALK_TIMEOUT_MS = 25_000;
 const CRITIQUE_MODEL = "anthropic/claude-haiku-4.5";
 const CRITIQUE_TIMEOUT_MS = 10_000;
 
+function isLiveCouncilCritiqueEnabled(): boolean {
+  return (Deno.env.get("COUNCIL_LIVE_CRITIQUE_ENABLED") || "").toLowerCase() === "true";
+}
+
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
 
@@ -912,8 +916,10 @@ serve(async (req) => {
           }
 
           // ─── Stage 4: voice-fidelity critique ───
-          // Skipped on diverge (nothing to critique — the drafts speak for themselves).
-          if (councilV2Trace.verdict === "synthesize" && synthesizedContent.trim().length > 0) {
+          // Disabled by default. Corrections now surface through pending
+          // revisions on later turns instead of rewriting an answer the user
+          // has already started reading.
+          if (isLiveCouncilCritiqueEnabled() && councilV2Trace.verdict === "synthesize" && synthesizedContent.trim().length > 0) {
             send({ type: "critique_starting" });
             try {
               const critiquePromptStr = buildCritiquePrompt({

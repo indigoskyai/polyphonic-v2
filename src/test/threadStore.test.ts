@@ -27,7 +27,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { dedupeThreadsById, useThreadStore } from '@/stores/threadStore';
+import { dedupeThreadsById, mergeRealtimeMessage, useThreadStore } from '@/stores/threadStore';
 
 const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState>['threads'][number]> = {}) => ({
   id: 'thread-1',
@@ -210,6 +210,30 @@ describe('threadStore.addMessage de-dupe', () => {
       model: null, agent: 'luca', thinking_content: null, tokens_used: null, bookmarked: false,
     });
     expect(useThreadStore.getState().messages).toHaveLength(1);
+  });
+
+  it('replaces a same-id local stream stub with the canonical realtime row', () => {
+    const stubTime = new Date().toISOString();
+    const existing = [{
+      id: 'db-message-1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+      content: 'streamed draft', model: null, agent: 'luca',
+      thinking_content: 'local thinking', tokens_used: null, bookmarked: false,
+      created_at: stubTime,
+      metadata: { local_stream_stub: true },
+    }];
+    const canonical = {
+      id: 'db-message-1', thread_id: 't1', user_id: 'u1', role: 'assistant',
+      content: 'canonical saved answer', model: 'moonshotai/kimi-k2.6', agent: 'luca',
+      thinking_content: null, tokens_used: 12, bookmarked: false,
+      created_at: stubTime,
+      metadata: { source: 'database' },
+    };
+
+    const next = mergeRealtimeMessage(existing as any, canonical as any);
+
+    expect(next).toHaveLength(1);
+    expect(next[0].content).toBe('canonical saved answer');
+    expect(next[0].metadata).toEqual({ source: 'database' });
   });
 
   it('does add when same content but beyond the content window', () => {
