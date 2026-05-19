@@ -623,7 +623,7 @@ export default function ChatView() {
     window.addEventListener('luca:prefill-composer', onPrefill as EventListener);
     return () => window.removeEventListener('luca:prefill-composer', onPrefill as EventListener);
   }, []);
-  // Guardian state
+  // Observer enclave state. DB rows keep the legacy agent tag "guardian".
   const [guardianMessages, setGuardianMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
   const [guardianStreaming, setGuardianStreaming] = useState(false);
   const [guardianStreamingContent, setGuardianStreamingContent] = useState('');
@@ -696,12 +696,11 @@ export default function ChatView() {
     if (ensembleArmed) setEnsembleArmed(false);
     if (ensembleLocked) setEnsembleLocked(false);
     if (agentModeArmed) setAgentModeArmed(false);
-    if (alcoveOpen) setAlcoveOpen(false);
     if (activeAgentId !== 'luca') {
       setPendingAgentId('luca');
       if (currentThreadId) updateThreadAgent(currentThreadId, 'luca');
     }
-  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, alcoveOpen, activeAgentId, currentThreadId, updateThreadAgent]);
+  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId, updateThreadAgent]);
 
   useEffect(() => {
     if (!user) {
@@ -1205,7 +1204,7 @@ export default function ChatView() {
         role="status"
       >
         <span>
-          You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, observer chat, attachments, and agent mode.
+          You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, advanced tools, and agent mode.
         </span>
         <div>
           <ConnectOpenRouter
@@ -1238,6 +1237,49 @@ export default function ChatView() {
       </button>
     );
   };
+
+  const renderObserverAlcove = () => (
+    <div className={`alcove-panel${alcoveOpen ? ' open' : ''}`}>
+      <div className="alcove-inner">
+        <div className="alcove-content">
+          <div className="alcove-header">
+            <div className="guardian-dot" />
+            <div className="guardian-label">observer</div>
+            <div className="alcove-sep" />
+            <div className="alcove-status">observing your conversation</div>
+            <div className="alcove-spacer" />
+            <button className="alcove-close" onClick={() => setAlcoveOpen(false)} aria-label="Close observer">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4" /></svg>
+            </button>
+          </div>
+          <div className="alcove-messages" ref={guardianScrollRef}>
+            {guardianMessages.length === 0 && !guardianStreaming && (
+              <div className="a-msg guardian">
+                <div className="a-msg-body">observing your conversation. ask me anything about what you and Luca have been discussing.</div>
+              </div>
+            )}
+            {guardianMessages.map((msg, i) => (
+              <div key={i} className={`a-msg ${msg.role === 'user' ? 'user' : 'guardian'}`}>
+                <div className="a-msg-body">{msg.content}</div>
+              </div>
+            ))}
+            {guardianStreaming && guardianStreamingContent && (
+              <div className="a-msg guardian">
+                <div className="a-msg-body">{guardianStreamingContent}<span className="streaming-cursor-inline" /></div>
+              </div>
+            )}
+            {guardianStreaming && !guardianStreamingContent && (
+              <div className="a-msg guardian">
+                <div className="a-msg-body alcove-thinking-dots">
+                  {[0, 1, 2].map(i => <span key={i} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const resolvePermissionMessage = useCallback(async (
     msg: Message,
@@ -1276,7 +1318,7 @@ export default function ChatView() {
   }, [patchMessage, user]);
 
   const sendGuardianMessage = useCallback(async () => {
-    if (!byokEnabled || !input.trim() || !user || guardianStreaming || modelKeyMissing) return;
+    if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
 
     const messageText = input.trim();
     let tid = currentThreadId;
@@ -1309,7 +1351,7 @@ export default function ChatView() {
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Stream Guardian response
+    // Stream Observer response
     setGuardianStreaming(true);
     setGuardianStreamingContent('');
 
@@ -1396,7 +1438,7 @@ export default function ChatView() {
       guardianAbortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, byokEnabled]);
+  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, createThread, pendingAgentId, navigate, loadThreads]);
 
   const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
@@ -1888,6 +1930,20 @@ export default function ChatView() {
     return () => window.removeEventListener('keydown', handler);
   }, [byokEnabled]);
 
+  // ⌘J / Ctrl+J opens the Observer enclave.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setAlcoveOpen((v) => !v);
+        setFocused(true);
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const toggleEnsemble = (e: React.MouseEvent) => {
     if (!byokEnabled) return;
     if (e.shiftKey) {
@@ -2082,7 +2138,7 @@ export default function ChatView() {
               wrapper instead of shrinking to its (now smaller) footer
               content after the modes consolidation. */}
           <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className={`input-shell${focused ? ' focused' : ''}${composerSending ? ' sending-turn' : ''}`}>
+            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2095,25 +2151,26 @@ export default function ChatView() {
                   e.currentTarget.value = '';
                 }}
               />
-              {renderModelKeyNotice()}
-              {renderPendingAttachments()}
+              {renderObserverAlcove()}
+              {!alcoveOpen && renderModelKeyNotice()}
+              {!alcoveOpen && renderPendingAttachments()}
               <div className="input-row">
                 <textarea
                   ref={textareaRef}
                   className="input-textarea"
-                  aria-label="Message Luca"
+                  aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
                   onFocus={() => setFocused(true)}
-                  onBlur={() => setFocused(false)}
+                  onBlur={() => { if (!alcoveOpen) setFocused(false); }}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={modelKeyMissing ? 'Add a model key to start chatting…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+                  placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to start chatting…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer">
                 <div className="agent-pills">
-                  <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />
+                  {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
                   {byokEnabled ? (
                     <AgentPicker
                       activeAgentId={activeAgentId}
@@ -2124,14 +2181,12 @@ export default function ChatView() {
                     />
                   ) : <LucaOnlyPill />}
                   {renderGuestStatusChip()}
-                  {byokEnabled && (
-                    <ObserverEyeChip
-                      threadId={currentThreadId}
-                      open={alcoveOpen}
-                      onToggle={() => setAlcoveOpen((v) => !v)}
-                    />
-                  )}
-                  {byokEnabled && activeAgentId === 'luca' && (
+                  <ObserverEyeChip
+                    threadId={currentThreadId}
+                    open={alcoveOpen}
+                    onToggle={() => setAlcoveOpen((v) => !v)}
+                  />
+                  {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
                       <ModesDropdown
@@ -2158,15 +2213,26 @@ export default function ChatView() {
                   <DictationButton
                     isListening={dictationListening}
                     supported={dictationSupported}
-                    disabled={modelKeyMissing}
+                    disabled={modelKeyMissing || isStreaming || guardianStreaming}
                     onClick={toggleDictation}
                   />
                   <button
                     type="button"
-                    aria-label="Send message"
-                    className={`send-btn${(input.trim() || pendingAttachments.length > 0) && !modelKeyMissing ? ' armed' : ''}${ensembleActive ? ' ensemble-armed' : ''}`}
-                    onClick={() => { if (dictationListening) stopDictation(); sendMessage(); }}
-                    disabled={modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)}
+                    aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
+                    className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
+                    onClick={() => {
+                      if (isStreaming || guardianStreaming) {
+                        void stopStreaming();
+                        return;
+                      }
+                      if (dictationListening) stopDictation();
+                      if (alcoveOpen) {
+                        void sendGuardianMessage();
+                      } else {
+                        void sendMessage();
+                      }
+                    }}
+                    disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!firstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
                   >
                     <span className="send-icon">
                       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -2545,56 +2611,9 @@ export default function ChatView() {
               e.currentTarget.value = '';
             }}
           />
-          {/* Guardian Alcove */}
-          <div className={`alcove-panel${alcoveOpen ? ' open' : ''}`}>
-            <div className="alcove-inner">
-              <div className="alcove-content">
-                <div className="alcove-header">
-                  <div className="guardian-dot" />
-                  <div className="guardian-label">observer</div>
-                  <div className="alcove-sep" />
-                  <div className="alcove-status">observing your conversation</div>
-                  <div className="alcove-spacer" />
-                  <button className="alcove-close" onClick={() => setAlcoveOpen(false)} aria-label="Close observer">
-                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M3 5l4 4 4-4" /></svg>
-                  </button>
-                </div>
-                <div className="alcove-messages" ref={guardianScrollRef}>
-                  {guardianMessages.length === 0 && !guardianStreaming && (
-                    <div className="a-msg guardian">
-                      <div className="a-msg-body">observing your conversation. ask me anything about what you and Luca have been discussing.</div>
-                    </div>
-                  )}
-                  {guardianMessages.map((msg, i) => (
-                    <div key={i} className={`a-msg ${msg.role === 'user' ? 'user' : 'guardian'}`}>
-                      <div className="a-msg-body">{msg.content}</div>
-                    </div>
-                  ))}
-                  {guardianStreaming && guardianStreamingContent && (
-                    <div className="a-msg guardian">
-                      <div className="a-msg-body">{guardianStreamingContent}<span className="streaming-cursor-inline" /></div>
-                    </div>
-                  )}
-                  {guardianStreaming && !guardianStreamingContent && (
-                    <div className="a-msg guardian">
-                      <div className="a-msg-body" style={{ display: 'flex', gap: 4, padding: '4px 0' }}>
-                        {[0, 1, 2].map(i => (
-                          <div key={i} style={{
-                            width: 4, height: 4, borderRadius: '50%',
-                            background: 'var(--guardian)',
-                            opacity: 0.4,
-                            animation: `breathe-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                          }} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          {renderObserverAlcove()}
 
-          {renderModelKeyNotice()}
+          {!alcoveOpen && renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
 
           {/* Textarea */}
@@ -2627,13 +2646,11 @@ export default function ChatView() {
                 />
               ) : <LucaOnlyPill />}
               {renderGuestStatusChip()}
-              {byokEnabled && (
-                <ObserverEyeChip
-                  threadId={currentThreadId}
-                  open={alcoveOpen}
-                  onToggle={() => setAlcoveOpen((v) => !v)}
-                />
-              )}
+              <ObserverEyeChip
+                threadId={currentThreadId}
+                open={alcoveOpen}
+                onToggle={() => setAlcoveOpen((v) => !v)}
+              />
               {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />

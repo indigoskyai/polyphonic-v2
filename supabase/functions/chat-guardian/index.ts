@@ -2,9 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
-import { AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
 
-const GUARDIAN_PROMPT = `You are the Guardian — an observer presence in this conversation. You have been watching everything that was said between the user and Luca. You see the full thread.
+const OBSERVER_PROMPT = `You are the Observer — an observer presence in this conversation. You have been watching everything that was said between the user and Luca. You see the full thread.
 
 Your role:
 - You notice patterns the user might miss from inside the conversation
@@ -62,23 +64,43 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user's API key (required)
-    const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-    const apiKey: string | null = userKeyData || null;
-    if (!apiKey) {
-      return fail(new MissingApiKeyError());
-    }
-
-    // Get user's default model for Guardian
+    // Get user's default model for BYOK Observer. Platform-funded tiers are
+    // resolved to the free Luca model by resolveChatBackend.
     const { data: settings } = await supabase
       .from("user_settings")
       .select("synthesis_model")
       .eq("user_id", userId)
       .maybeSingle();
 
-    const model = settings?.synthesis_model || "anthropic/claude-opus-4-7";
+    const requestedModel = settings?.synthesis_model || "anthropic/claude-opus-4-7";
+    let backend: ChatBackend;
+    try {
+      backend = await resolveChatBackend(supabase, user, requestedModel);
+    } catch (err) {
+      console.error("[chat-guardian] model backend unavailable:", err);
+      return fail(new AppError(
+        "upstream_unavailable",
+        "Observer is temporarily unavailable. Please try again shortly, or connect your OpenRouter key in Settings.",
+        503,
+      ));
+    }
+    const model = backend.keySource === "platform" ? backend.model : requestedModel;
 
-    // Load Guardian's custom system prompt if configured (maybeSingle to avoid error when no row exists)
+    try {
+      await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit);
+    } catch (qErr) {
+      const isQuota = qErr instanceof Error && qErr.message.startsWith("Daily quota exceeded");
+      if (isQuota) {
+        const dailyLimit = backend.billingTier === "guest" ? 20 : backend.billingTier === "byok" ? 500 : 50;
+        const limitCopy = backend.billingTier === "guest"
+          ? `You've reached today's ${dailyLimit}-message guest limit. Create an account to keep this conversation and unlock 50 Luca and Observer messages a day.`
+          : `You've reached today's ${dailyLimit}-message Luca and Observer limit. Come back tomorrow, verify access, or connect your own OpenRouter key in Settings.`;
+        return fail(new AppError("quota_exceeded", limitCopy, 429));
+      }
+      throw qErr;
+    }
+
+    // Load the legacy Guardian/Observer custom system prompt if configured.
     const { data: agentConfig } = await supabase
       .from("agent_config")
       .select("system_prompt")
@@ -86,9 +108,9 @@ serve(async (req) => {
       .eq("agent_name", "guardian")
       .maybeSingle();
 
-    const systemPrompt = agentConfig?.system_prompt || GUARDIAN_PROMPT;
+    const systemPrompt = agentConfig?.system_prompt || OBSERVER_PROMPT;
 
-    // Load FULL conversation history for this thread (Guardian sees everything)
+    // Load FULL conversation history for this thread (Observer sees everything)
     const { data: history } = await supabase
       .from("messages")
       .select("role, content, agent")
@@ -96,42 +118,45 @@ serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(200);
 
-    // Retrieve relevant memories from Mnemos
+    // Retrieve relevant memories from Mnemos for saved/BYOK users. Guests get
+    // thread-local observation without broader memory retrieval.
     let memoryContext = "";
-    try {
-      const mnemos = new MnemosEngine(supabase, userId);
-      const memories = await mnemos.retrieve(message, { limit: 5, spread_activation: true });
-      if (memories.length > 0) {
-        const snippets = memories
-          .map((m) => `- ${m.engram.content.slice(0, 200)}`)
-          .join("\n");
-        memoryContext = `\n\nRelevant memories about this person:\n${snippets}`;
+    if (backend.billingTier !== "guest") {
+      try {
+        const mnemos = new MnemosEngine(supabase, userId);
+        const memories = await mnemos.retrieve(message, { limit: 5, spread_activation: true });
+        if (memories.length > 0) {
+          const snippets = memories
+            .map((m) => `- ${m.engram.content.slice(0, 200)}`)
+            .join("\n");
+          memoryContext = `\n\nRelevant memories about this person:\n${snippets}`;
+        }
+      } catch (e) {
+        console.warn("Mnemos retrieval failed (non-fatal):", e);
       }
-    } catch (e) {
-      console.warn("Mnemos retrieval failed (non-fatal):", e);
     }
 
-    // Build messages array — Guardian gets the full conversation as context
+    // Build messages array — Observer gets the full conversation as context
     const openRouterMessages: Array<{ role: string; content: string }> = [
       { role: "system", content: systemPrompt + memoryContext },
     ];
 
     // Add the full conversation history, labeling who said what
     if (history && history.length > 0) {
-      // Build a conversation transcript for Guardian's context
+      // Build a conversation transcript for Observer's context
       const transcript = history.map((msg: { role: string; content: string; agent: string | null }) => {
-        const speaker = msg.role === "user" ? "User" : (msg.agent === "guardian" ? "Guardian" : "Luca");
+        const speaker = msg.role === "user" ? "User" : (msg.agent === "guardian" ? "Observer" : "Luca");
         return `${speaker}: ${msg.content}`;
       }).join("\n\n");
 
       openRouterMessages.push({
         role: "user",
-        content: `Here is the full conversation you have been observing:\n\n---\n${transcript}\n---\n\nThe user is now speaking directly to you, the Guardian. They ask:\n\n${message}`,
+        content: `Here is the full conversation you have been observing:\n\n---\n${transcript}\n---\n\nThe user is now speaking directly to you, the Observer. They ask:\n\n${message}`,
       });
     } else {
       openRouterMessages.push({
         role: "user",
-        content: `There is no conversation yet — the thread is empty. The user asks:\n\n${message}`,
+        content: `There is no conversation yet — the thread is empty. The user is speaking directly to you, the Observer. They ask:\n\n${message}`,
       });
     }
 
@@ -150,14 +175,9 @@ serve(async (req) => {
         }, 5000);
 
         try {
-          const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const orResponse = await fetch(backend.baseUrl, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`,
-              "HTTP-Referer": "https://polyphonic.chat",
-              "X-Title": "Polyphonic Guardian",
-            },
+            headers: backend.headers,
             body: JSON.stringify({
               model,
               messages: openRouterMessages,
@@ -168,10 +188,13 @@ serve(async (req) => {
 
           if (!orResponse.ok) {
             const errBody = await orResponse.text();
-            console.error("Guardian model error:", orResponse.status, errBody);
+            console.error("Observer model error:", orResponse.status, errBody);
+            const text = backend.keySource === "platform" && (orResponse.status === 401 || orResponse.status === 402 || orResponse.status === 429)
+              ? "Observer is temporarily unavailable. Please try again shortly, or connect your own OpenRouter key in Settings."
+              : `Observer error (${orResponse.status}). Please try again.`;
             send({
               type: "error",
-              text: `Guardian error (${orResponse.status}). Please try again.`,
+              text,
               code: "upstream_unavailable",
               request_id: requestId,
             });
@@ -230,7 +253,9 @@ serve(async (req) => {
             }
           }
 
-          // Save Guardian's response
+          // Save Observer's response. We keep the historical agent tag
+          // "guardian" so existing hidden-alcove filtering and old threads
+          // continue to work.
           await supabase.from("messages").insert({
             thread_id,
             user_id: userId,
@@ -250,7 +275,7 @@ serve(async (req) => {
 
           send({ type: "done", model: usedModel, tokens_used: tokensUsed });
         } catch (err) {
-          console.error("Guardian stream error:", err);
+          console.error("Observer stream error:", err);
           send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
         } finally {
           clearInterval(heartbeat);

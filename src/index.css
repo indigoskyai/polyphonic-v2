@@ -1625,6 +1625,21 @@ html {
 .a-msg-role { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-ghost); }
 .a-msg-body { font-size: 13px; line-height: 1.6; color: var(--text-secondary); font-weight: 400; }
 .a-msg.guardian .a-msg-body { padding-left: 12px; border-left: 2px solid rgba(140, 168, 156, 0.12); }
+.alcove-thinking-dots {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+.alcove-thinking-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--guardian);
+  opacity: 0.4;
+  animation: breathe-dot 1.4s ease-in-out infinite;
+}
+.alcove-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.alcove-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
 .a-msg.user .a-msg-body {
   color: var(--text-secondary);
   font-weight: 420;
