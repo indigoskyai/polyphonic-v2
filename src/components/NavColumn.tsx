@@ -34,6 +34,7 @@ import SidebarJournal from './sidebar/SidebarJournal';
 // ─────────────────────────────────────────────────────────────────────────────
 const COLLAPSED_WIDTH = 36;
 const EXPANDED_WIDTH = 256;
+const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
 
 interface EmotionalIndicator {
   breatheSpeed: number;
@@ -65,19 +66,28 @@ function computeEmotionalIndicator(state: Record<string, number> | null): Emotio
   };
 }
 
+function hasLandingChatTransitionFlag(path: string): boolean {
+  if (!path.startsWith('/chat')) return false;
+  try {
+    return sessionStorage.getItem(LANDING_CHAT_TRANSITION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function NavColumn() {
   const [emotionalIndicator, setEmotionalIndicator] = useState<EmotionalIndicator>({ breatheSpeed: 4, tint: 'var(--text-secondary)', label: 'present' });
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
   const { createThread } = useThreadStore();
-  const expanded = useSidebarStore((s) => s.visible);
+  const path = location.pathname;
+  const sidebarVisible = useSidebarStore((s) => s.visible);
+  const expanded = sidebarVisible && !hasLandingChatTransitionFlag(path);
   const toggle = useSidebarStore((s) => s.toggle);
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
-
-  const path = location.pathname;
   const settingsOpen = path.startsWith('/settings')
     || path.startsWith('/profile/skills')
     || path.startsWith('/profile/schedule');

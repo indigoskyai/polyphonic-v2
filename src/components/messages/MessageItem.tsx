@@ -131,7 +131,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
 
   return (
     <div
-      className="msg-row"
+      className={`msg-row${msg.role === 'user' ? ' msg-row--user' : ''}`}
       data-fresh={isFirstMount ? 'true' : undefined}
     >
       <div className="msg-sidehead">

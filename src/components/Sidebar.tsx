@@ -10,6 +10,17 @@ import SidebarProjects from './sidebar/SidebarProjects';
 import SidebarSettings from './sidebar/SidebarSettings';
 import SidebarJournal from './sidebar/SidebarJournal';
 
+const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
+
+function hasLandingChatTransitionFlag(path: string): boolean {
+  if (!path.startsWith('/chat')) return false;
+  try {
+    return sessionStorage.getItem(LANDING_CHAT_TRANSITION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Sidebar — toggleable per-section content panel.
  *
@@ -21,10 +32,11 @@ import SidebarJournal from './sidebar/SidebarJournal';
  * the affordance is discoverable without visual noise.
  */
 export default function Sidebar() {
-  const visible = useSidebarStore((s) => s.visible);
+  const storeVisible = useSidebarStore((s) => s.visible);
   const width = useSidebarStore((s) => s.width);
   const setWidth = useSidebarStore((s) => s.setWidth);
   const path = useLocation().pathname;
+  const visible = storeVisible && !hasLandingChatTransitionFlag(path);
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);

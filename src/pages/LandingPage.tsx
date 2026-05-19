@@ -10,6 +10,7 @@ import {
 } from '@/lib/authFlow';
 import { startGuestChat } from '@/lib/guestChat';
 import { isAnonymousUser } from '@/lib/accessTier';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import LandingParticleField, {
   type LandingFieldHandle,
   type LandingFieldState,
@@ -42,6 +43,7 @@ type Mode = 'idle' | 'composer' | 'signin' | 'signup' | 'forgot' | 'sent';
 
 const PROMPT_HANDOFF_KEY = 'polyphonic_landing_prompt';
 const FADE_MS = 280;
+const CHAT_HANDOFF_MIN_MS = 1250;
 
 interface LandingPageProps {
   initialMode?: Mode;
@@ -50,6 +52,7 @@ interface LandingPageProps {
 export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [transitioning, setTransitioning] = useState(false);
@@ -65,7 +68,9 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
   // Field state mapping: idle = chaotic drift, composer = soft halo
   // around composer card, all auth states = halo around auth card.
   const fieldState: LandingFieldState =
-    mode === 'idle'
+    composerLaunching
+      ? 'handoff'
+      : mode === 'idle'
       ? 'idle'
       : mode === 'composer'
       ? 'composer'
@@ -109,16 +114,23 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
       if (!trimmed || composerLaunching) return;
       setComposerError('');
       setComposerLaunching(true);
-      fieldRef.current?.ripple();
+      const startedAt = performance.now();
+      fieldRef.current?.beginHandoff();
       try {
         const threadId = await startGuestChat(trimmed);
+        const elapsed = performance.now() - startedAt;
+        const remaining = CHAT_HANDOFF_MIN_MS - elapsed;
+        if (remaining > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, remaining));
+        }
+        setSidebarVisible(false);
         navigate(`/chat/${threadId}`);
       } catch (err) {
         setComposerError(err instanceof Error ? err.message : 'Could not open Luca right now.');
         setComposerLaunching(false);
       }
     },
-    [composerLaunching, navigate]
+    [composerLaunching, navigate, setSidebarVisible]
   );
 
   // Trigger composer state on first focus. Stays in composer state once
@@ -137,7 +149,7 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
 
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden"
+      className={`landing-shell relative h-screen w-screen overflow-hidden${composerLaunching ? ' landing-shell--handoff' : ''}`}
       style={{ background: 'var(--floor)' }}
       data-landing-mode={mode}
       data-field-state={fieldState}

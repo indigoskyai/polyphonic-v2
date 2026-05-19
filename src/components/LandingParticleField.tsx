@@ -17,6 +17,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
  *
  *   auth       — same model with the auth card's larger rectangle.
  *
+ *   handoff    — first chat send. Particles leave the card geometry and
+ *                drift outward while the shell fades to the thread view.
+ *
  *   dissipate  — exit. Canvas opacity ramps to 0 while particles drift
  *                outward.
  */
@@ -33,7 +36,7 @@ function computeN(): number {
 
 const MAX_RIPPLES = 6;
 
-export type LandingFieldState = "idle" | "composer" | "auth" | "dissipate";
+export type LandingFieldState = "idle" | "composer" | "auth" | "handoff" | "dissipate";
 
 interface ShapeProfile {
   /** When true, the particle field carves an exclusion rectangle
@@ -119,6 +122,21 @@ const PROFILES: Record<LandingFieldState, ShapeProfile> = {
     opacity: 1.0,
     outwardDrift: 0,
   },
+  handoff: {
+    useCard: false,
+    cardOutsetPx: 0,
+    cloudSigmaX: 840,
+    cloudSigmaY: 620,
+    smoothMin: 0.12,
+    smoothMax: 0.42,
+    noiseAmp: 2.7,
+    flowAmp: 36,
+    cursorRepels: false,
+    echoIntervalMs: 0,
+    brightness: 1.28,
+    opacity: 0.36,
+    outwardDrift: 260,
+  },
   dissipate: {
     useCard: false,
     cardOutsetPx: 0,
@@ -139,6 +157,8 @@ const PROFILES: Record<LandingFieldState, ShapeProfile> = {
 export interface LandingFieldHandle {
   /** Emit an excitement ripple at the given page coordinates (defaults to center). */
   ripple: (x?: number, y?: number) => void;
+  /** Launch the first-chat handoff burst. */
+  beginHandoff: () => void;
 }
 
 interface LandingFieldProps {
@@ -172,6 +192,7 @@ const LandingParticleField = forwardRef<LandingFieldHandle, LandingFieldProps>(
     const stateRef = useRef<LandingFieldState>(state);
     const cardRefRef = useRef<typeof cardRef>(cardRef);
     const rippleQueue = useRef<Array<{ x: number; y: number }>>([]);
+    const handoffUntilRef = useRef(0);
 
     useEffect(() => {
       stateRef.current = state;
@@ -187,6 +208,14 @@ const LandingParticleField = forwardRef<LandingFieldHandle, LandingFieldProps>(
           const px = typeof x === "number" ? x : window.innerWidth / 2;
           const py = typeof y === "number" ? y : window.innerHeight / 2;
           rippleQueue.current.push({ x: px, y: py });
+        },
+        beginHandoff() {
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight / 2;
+          handoffUntilRef.current = performance.now() + 1800;
+          rippleQueue.current.push({ x: cx, y: cy });
+          rippleQueue.current.push({ x: cx * 0.72, y: cy * 1.08 });
+          rippleQueue.current.push({ x: cx * 1.28, y: cy * 0.92 });
         },
       }),
       []
@@ -417,6 +446,7 @@ const LandingParticleField = forwardRef<LandingFieldHandle, LandingFieldProps>(
 
         // Smooth profile params toward target state.
         const profile = PROFILES[stateRef.current];
+        const handoffActive = stateRef.current === "handoff" || time < handoffUntilRef.current;
         const profileAlpha = 1 - Math.exp(-1.6 * dt);
 
         // Measure the card's actual rectangle when state.useCard is on.
@@ -462,6 +492,13 @@ const LandingParticleField = forwardRef<LandingFieldHandle, LandingFieldProps>(
             for (let k = 0; k < 240; k++) {
               const idx = (Math.random() * N) | 0;
               EXC[idx] = 0.7 + Math.random() * 0.3;
+            }
+          } else if (stateRef.current === "handoff") {
+            contagion = Math.max(contagion, 1);
+            addRipple(W / 2, H / 2);
+            for (let k = 0; k < 720; k++) {
+              const idx = (Math.random() * N) | 0;
+              EXC[idx] = 0.82 + Math.random() * 0.18;
             }
           }
           prevState = stateRef.current;
@@ -561,12 +598,14 @@ const LandingParticleField = forwardRef<LandingFieldHandle, LandingFieldProps>(
           SX[i] += (tx - SX[i]) * alpha;
           SY[i] += (ty - SY[i]) * alpha;
 
-          if (liveOutward > 0.5) {
+          if (handoffActive || liveOutward > 0.5) {
             const dxOut = SX[i] - cx;
             const dyOut = SY[i] - cy;
             const d = Math.sqrt(dxOut * dxOut + dyOut * dyOut) + 0.001;
-            EVX[i] = (dxOut / d) * liveOutward;
-            EVY[i] = (dyOut / d) * liveOutward;
+            const launch = handoffActive ? Math.max(liveOutward, 220) : liveOutward;
+            const fan = 0.72 + DLAYER[i] * 0.52;
+            EVX[i] = (dxOut / d) * launch * fan;
+            EVY[i] = (dyOut / d) * launch * fan;
           } else {
             EVX[i] += (0 - EVX[i]) * alphaV;
             EVY[i] += (0 - EVY[i]) * alphaV;

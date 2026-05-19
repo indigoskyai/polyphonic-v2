@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useTokenGateStore } from '@/stores/tokenGateStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 
 import EchoField from '@/components/EchoField';
 import ExpressiveField from '@/components/ExpressiveField';
@@ -36,7 +37,7 @@ import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
-import { consumeLandingAutosendFlag, readLandingPrompt } from '@/lib/guestChat';
+import { clearLandingChatTransitionFlag, consumeLandingAutosendFlag, readLandingChatTransitionFlag, readLandingPrompt } from '@/lib/guestChat';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
@@ -444,6 +445,9 @@ export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
+
+  const [landingThreadEnter] = useState(() => readLandingChatTransitionFlag());
 
   // iOS Safari keyboard handling: with `interactive-widget=resizes-content`
   // in the viewport meta + `100dvh` on the shell, the layout reflows
@@ -460,6 +464,15 @@ export default function ChatView() {
     vv.addEventListener('resize', onResize);
     return () => { vv.removeEventListener('resize', onResize); };
   }, [isMobile]);
+
+  React.useLayoutEffect(() => {
+    if (landingThreadEnter && !isMobile) {
+      setSidebarVisible(false);
+    }
+    if (!landingThreadEnter) return;
+    const timeout = window.setTimeout(() => clearLandingChatTransitionFlag(), 900);
+    return () => window.clearTimeout(timeout);
+  }, [landingThreadEnter, isMobile, setSidebarVisible]);
 
   // Reactive viewport-aware sphere size for mobile. Scales with both width
   // and height so the field always has a comfortable margin and never
@@ -531,6 +544,8 @@ export default function ChatView() {
   const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
   const [focused, setFocused] = useState(false);
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
+  const [guestNoticeDismissed, setGuestNoticeDismissed] = useState(false);
+  const [composerSending, setComposerSending] = useState(false);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
   // Ensemble skill: armed = next message only; locked = persistent until toggled off
@@ -623,6 +638,7 @@ export default function ChatView() {
   const guardianAbortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
   const sendInFlightRef = useRef(false);
+  const composerSendTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingAttachments = useAttachmentStore((s) => s.pending);
   const addAttachments = useAttachmentStore((s) => s.add);
@@ -635,6 +651,24 @@ export default function ChatView() {
   // upsell instead of a hard block.
   const modelKeyMissing = false;
   const showFreeTierUpsell = platformFundedLuca && modelKeyStatus === 'missing';
+
+  useEffect(() => {
+    if (accessTier !== 'guest' || !showFreeTierUpsell) {
+      setGuestNoticeDismissed(false);
+      return;
+    }
+    setGuestNoticeDismissed(false);
+    const timeout = window.setTimeout(() => setGuestNoticeDismissed(true), 6500);
+    return () => window.clearTimeout(timeout);
+  }, [accessTier, showFreeTierUpsell, currentThreadId]);
+
+  useEffect(() => {
+    return () => {
+      if (composerSendTimeoutRef.current) {
+        window.clearTimeout(composerSendTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (byokEnabled) return;
@@ -1118,67 +1152,69 @@ export default function ChatView() {
 
   const renderModelKeyNotice = () => {
     if (!showFreeTierUpsell) return null;
-    return (
-      <div
-        className="composer-key-warning"
-        role="status"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <span style={{ flex: '1 1 auto', minWidth: 180 }}>
-          {accessTier === 'guest'
-            ? "You're chatting with guest Luca. You get 20 messages today; create an account to keep this thread and unlock 50 daily messages."
-            : "You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, observer chat, attachments, and agent mode."}
-        </span>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          {accessTier === 'guest' ? (
+    if (accessTier === 'guest') {
+      if (guestNoticeDismissed) return null;
+      return (
+        <div className="guest-access-brief" role="status">
+          <div className="guest-access-actions">
             <button
               type="button"
+              className="guest-access-action primary"
               onClick={() => navigate('/auth/signup')}
-              style={{
-                fontFamily: 'var(--font-sans)',
-                fontSize: 12,
-                color: 'var(--text-primary)',
-                background: 'transparent',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-pill)',
-                padding: '7px 11px',
-                cursor: 'pointer',
-                letterSpacing: 'var(--track-body)',
-              }}
             >
               Create account
             </button>
-          ) : (
-            <ConnectOpenRouter
-              variant="ghost"
-              label="Connect OpenRouter"
-              onConnected={() => setModelKeyStatus('present')}
-            />
-          )}
+            <button
+              type="button"
+              className="guest-access-action secondary"
+              onClick={() => navigate('/auth/login')}
+            >
+              Sign in
+            </button>
+          </div>
+          <p>
+            Guest Luca includes 20 messages today. Create an account to keep this thread and unlock 50 daily messages.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div
+        className="composer-key-warning composer-key-warning--compact"
+        role="status"
+      >
+        <span>
+          You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, observer chat, attachments, and agent mode.
+        </span>
+        <div>
+          <ConnectOpenRouter
+            variant="ghost"
+            label="Connect OpenRouter"
+            onConnected={() => setModelKeyStatus('present')}
+          />
           <button
             type="button"
-            onClick={() => navigate(accessTier === 'guest' ? '/auth/login' : '/settings/models')}
-            style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 12,
-              color: 'var(--text-tertiary)',
-              background: 'transparent',
-              border: 'none',
-              padding: '4px 0',
-              textDecoration: 'underline',
-              cursor: 'pointer',
-              letterSpacing: 'var(--track-body)',
-            }}
+            onClick={() => navigate('/settings/models')}
           >
-            {accessTier === 'guest' ? 'Sign in' : 'Use a key I already have'}
+            Use a key I already have
           </button>
         </div>
       </div>
+    );
+  };
+
+  const renderGuestStatusChip = () => {
+    if (accessTier !== 'guest' || !showFreeTierUpsell || !guestNoticeDismissed) return null;
+    return (
+      <button
+        type="button"
+        className="guest-status-chip"
+        onClick={() => setGuestNoticeDismissed(false)}
+        aria-label="Guest chat limit"
+        title="Guest Luca includes 20 messages today"
+      >
+        guest · 20/day
+      </button>
     );
   };
 
@@ -1355,6 +1391,14 @@ export default function ChatView() {
 
     const messageText = sourceText.trim() || 'Uploaded attachments.';
     inputCaptureRef.current = messageText;
+    setComposerSending(true);
+    if (composerSendTimeoutRef.current) {
+      window.clearTimeout(composerSendTimeoutRef.current);
+    }
+    composerSendTimeoutRef.current = window.setTimeout(() => {
+      setComposerSending(false);
+      composerSendTimeoutRef.current = null;
+    }, 720);
 
     const isFirstTurn = !currentThreadId && messages.length === 0 && !options?.text;
     if (isFirstTurn) {
@@ -2017,7 +2061,7 @@ export default function ChatView() {
               wrapper instead of shrinking to its (now smaller) footer
               content after the modes consolidation. */}
           <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className={`input-shell${focused ? ' focused' : ''}`}>
+            <div className={`input-shell${focused ? ' focused' : ''}${composerSending ? ' sending-turn' : ''}`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2068,6 +2112,7 @@ export default function ChatView() {
                       }}
                     />
                   ) : <LucaOnlyPill />}
+                  {renderGuestStatusChip()}
                   {byokEnabled && (
                     <ObserverEyeChip
                       threadId={currentThreadId}
@@ -2135,8 +2180,8 @@ export default function ChatView() {
     ) : (
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div
-      className={`chat-view flex flex-col flex-1 min-h-0 overflow-hidden${isFirstTurnHandoff ? ' chat-view--handoff' : ''}`}
-      style={{ animation: skipMountFade ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+      className={`chat-view flex flex-col flex-1 min-h-0 overflow-hidden${isFirstTurnHandoff ? ' chat-view--handoff' : ''}${landingThreadEnter ? ' chat-view--landing-enter' : ''}`}
+      style={{ animation: (skipMountFade || landingThreadEnter) ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -2474,7 +2519,7 @@ export default function ChatView() {
 
       {/* Input zone */}
       <div className="input-zone">
-        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}`}>
+        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
           <input
             ref={fileInputRef}
             type="file"
@@ -2580,6 +2625,7 @@ export default function ChatView() {
                   }}
                 />
               ) : <LucaOnlyPill />}
+              {renderGuestStatusChip()}
               {byokEnabled && (
                 <ObserverEyeChip
                   threadId={currentThreadId}

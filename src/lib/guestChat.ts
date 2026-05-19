@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export const LANDING_PROMPT_KEY = 'polyphonic_landing_prompt';
 export const LANDING_AUTOSEND_KEY = 'polyphonic_landing_autosend';
+export const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
 const GUEST_UNAVAILABLE_MESSAGE =
   'Free Luca chat is temporarily unavailable. Please try again a little later.';
 
@@ -42,6 +43,7 @@ export async function startGuestChat(prompt: string): Promise<string> {
 
   sessionStorage.setItem(LANDING_PROMPT_KEY, prompt.trim());
   sessionStorage.setItem(LANDING_AUTOSEND_KEY, '1');
+  sessionStorage.setItem(LANDING_CHAT_TRANSITION_KEY, '1');
   return data.id;
 }
 
@@ -62,5 +64,21 @@ export function consumeLandingAutosendFlag(): boolean {
     return flag === '1';
   } catch {
     return false;
+  }
+}
+
+export function readLandingChatTransitionFlag(): boolean {
+  try {
+    return sessionStorage.getItem(LANDING_CHAT_TRANSITION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearLandingChatTransitionFlag(): void {
+  try {
+    sessionStorage.removeItem(LANDING_CHAT_TRANSITION_KEY);
+  } catch {
+    // ignore unavailable storage
   }
 }
