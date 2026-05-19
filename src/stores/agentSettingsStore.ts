@@ -267,6 +267,11 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   },
 
   createAgent: async (userId, input) => {
+    // Custom agent creation is currently disabled. Existing agents remain
+    // fully editable and chat works as normal — only new inserts are blocked.
+    return { ok: false, error: 'Agent creation is currently disabled.' };
+    // eslint-disable-next-line no-unreachable
+    void userId; void input;
     const baseId = slugify(input.name) || 'agent';
     // Try base id, then base-2, base-3 if collisions exist locally
     const existing = new Set(get().agents.map((a) => a.id));
