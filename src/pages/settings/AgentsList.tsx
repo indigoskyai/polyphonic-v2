@@ -191,22 +191,21 @@ export default function AgentsList() {
             )}
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <button
-              type="button"
-              className="set-btn"
-              onClick={() => setCreateOpen(true)}
-            >
-              + New agent
-            </button>
+          <div
+            style={{
+              marginTop: 18,
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-sans)',
+              fontStyle: 'italic',
+            }}
+          >
+            Custom agent creation is paused. Existing agents remain fully editable.
           </div>
         </Section>
       </div>
 
-      <CreateAgentModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-      />
+
 
       {target && (
         <ConfirmDialog
