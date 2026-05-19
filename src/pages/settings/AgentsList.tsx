@@ -20,7 +20,6 @@ export default function AgentsList() {
   const load = useAgentSettingsStore((s) => s.load);
   const deleteAgent = useAgentSettingsStore((s) => s.deleteAgent);
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const time = useClock();
