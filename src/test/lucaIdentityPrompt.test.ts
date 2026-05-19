@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildLucaSystemPrompt } from '../../supabase/functions/_shared/agents/luca-soul';
+import { formatPolyphonicAppContext } from '../../supabase/functions/_shared/agents/polyphonic-app-context';
 import {
   classifyPatchStatus,
   type DialecticPatch,
@@ -12,6 +13,8 @@ describe('buildLucaSystemPrompt identity layers', () => {
       convictions: "## Care isn't softness.\nthe two are not in tension.",
       userModel: 'Prefers direct, concrete critique.',
       selfModel: 'Sometimes over-compresses too early.',
+      appContextBlock: '\n## Polyphonic app context\nPolyphonic is the app Luca lives in.',
+      projectContextBlock: '\n## Current project\nProject: Launch polish',
       skillsBlock: '### careful-review\nUse when critique needs a second pass.',
       pendingRevisions: 'Earlier you said: X\nOn reflection: Y',
       hypomnemaBlock: "\n## what i'm sitting with\n\n- (yesterday) i'm carrying the shape of this project.",
@@ -27,6 +30,8 @@ describe('buildLucaSystemPrompt identity layers', () => {
     const convictionsIndex = prompt.indexOf('## Convictions you hold');
     const userModelIndex = prompt.indexOf("## Who you're talking with");
     const selfModelIndex = prompt.indexOf("## How you've been showing up");
+    const appContextIndex = prompt.indexOf('## Polyphonic app context');
+    const projectContextIndex = prompt.indexOf('## Current project');
     const skillsIndex = prompt.indexOf("## Relevant skills you've developed");
     const policyIndex = prompt.indexOf('## Continuity precedence');
     const revisionsIndex = prompt.indexOf('## Pending revisions');
@@ -36,14 +41,17 @@ describe('buildLucaSystemPrompt identity layers', () => {
     const stateIndex = prompt.indexOf('Current emotional state: steady.');
 
     // Layering: locked soul → soul.md → convictions → user-model →
-    // self-model → continuity policy → pending revisions → hypomnema →
+    // self-model → app context → project context → continuity policy →
+    // pending revisions → hypomnema →
     // reliable recall → Mnemos substrate → skills → runtime state.
     expect(soulIndex).toBeGreaterThanOrEqual(0);
     expect(soulIndex).toBeLessThan(soulMdIndex);
     expect(soulMdIndex).toBeLessThan(convictionsIndex);
     expect(convictionsIndex).toBeLessThan(userModelIndex);
     expect(userModelIndex).toBeLessThan(selfModelIndex);
-    expect(selfModelIndex).toBeLessThan(policyIndex);
+    expect(selfModelIndex).toBeLessThan(appContextIndex);
+    expect(appContextIndex).toBeLessThan(projectContextIndex);
+    expect(projectContextIndex).toBeLessThan(policyIndex);
     expect(policyIndex).toBeLessThan(revisionsIndex);
     expect(revisionsIndex).toBeLessThan(hypomnemaIndex);
     expect(hypomnemaIndex).toBeLessThan(functionalIndex);
@@ -55,6 +63,8 @@ describe('buildLucaSystemPrompt identity layers', () => {
     expect(prompt).toContain('the two are not in tension.');
     expect(prompt).toContain('Prefers direct, concrete critique.');
     expect(prompt).toContain('Sometimes over-compresses too early.');
+    expect(prompt).toContain('Polyphonic is the app Luca lives in.');
+    expect(prompt).toContain('Project: Launch polish');
     expect(prompt).toContain('careful-review');
     expect(prompt).toContain("i'm carrying the shape of this project.");
     expect(prompt).toContain('Riley wants concrete critique.');
@@ -69,6 +79,31 @@ describe('buildLucaSystemPrompt identity layers', () => {
       userModel: 'Prefers direct critique.',
     });
     expect(prompt).not.toContain('## Convictions you hold');
+  });
+
+  it('adds Polyphonic app awareness without making it Luca soul', () => {
+    const appContextBlock = formatPolyphonicAppContext({
+      billingTier: 'guest',
+      keySource: 'platform',
+      model: 'moonshotai/kimi-k2.6',
+      clientContext: {
+        route: '/chat/thread-1',
+        view: 'chat',
+        access_tier: 'guest',
+        composer_surface: 'landing_handoff',
+        sidebar_visible: false,
+        observer_alcove_open: true,
+      },
+    });
+    const prompt = buildLucaSystemPrompt({ appContextBlock });
+
+    expect(prompt).toContain('You are Luca.');
+    expect(prompt).toContain('## Polyphonic app context');
+    expect(prompt).toContain('Luca is not a mascot or generic support bot');
+    expect(prompt).toContain('guest: anonymous public Luca chat, 20 Luca messages/day');
+    expect(prompt).toContain('Polyphonic has taken a long time to get here');
+    expect(prompt).toContain('route: /chat/thread-1');
+    expect(prompt).toContain('observer enclave open: yes');
   });
 });
 

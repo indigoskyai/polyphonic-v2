@@ -51,6 +51,7 @@ import {
 } from "../_shared/agent-runtime/openrouter-agent.ts";
 import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
+import { formatPolyphonicAppContext } from "../_shared/agents/polyphonic-app-context.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -166,7 +167,7 @@ function isSimpleOpeningMessage(message: string): boolean {
 
 function buildSimpleOpeningDirective(agentName: string): string {
   return `## First-contact pacing
-This is the user's first message, and it is only a small greeting. Answer immediately in 1-3 short sentences. Do not perform an extended introduction or analysis. Let ${agentName} feel observant: offer one small, slightly specific-feeling invitation or question, without pretending to know facts you do not know. Keep the reply under 80 words.`;
+This is the user's first message, and it is only a small greeting. Answer immediately in 1-3 short sentences. Do not perform an extended introduction or analysis. Let ${agentName} feel observant: offer one small, slightly specific-feeling invitation or question, without pretending to know facts you do not know. You may very lightly acknowledge that Polyphonic took a long time to open, or that the user may have been waiting, but do not make every greeting about launch. Keep the reply under 80 words.`;
 }
 
 // Council (LLM-Council pattern, single judge variant) — see plan
@@ -213,6 +214,7 @@ serve(async (req) => {
       agent_mode: agentMode,
       agent_runtime: agentRuntime,
       use_agent_runtime: useAgentRuntime,
+      client_context: clientContext,
     } = body;
 
     if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
@@ -381,6 +383,14 @@ serve(async (req) => {
     const projectContextBlock = formatProjectContextPrompt(
       await loadProjectContextForThread(supabase, userId, thread_id),
     );
+    const appContextBlock = agentIsSystemLuca
+      ? formatPolyphonicAppContext({
+          billingTier: backend.billingTier,
+          keySource: backend.keySource,
+          model: backend.model,
+          clientContext,
+        })
+      : "";
     const simpleOpeningTurn =
       backend.keySource === "platform" &&
       agentIsSystemLuca &&
@@ -422,6 +432,7 @@ serve(async (req) => {
           ...buildLucaPromptPartsFromContinuity(continuity, {
             crisisDirective,
           }),
+          appContextBlock,
           projectContextBlock,
           crisisDirective,
         })
@@ -556,6 +567,7 @@ serve(async (req) => {
               ...buildLucaPromptPartsFromContinuity(continuity, {
                 crisisDirective,
               }),
+              appContextBlock,
               projectContextBlock,
               crisisDirective,
             },

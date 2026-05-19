@@ -467,6 +467,7 @@ export default function ChatView() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const setSidebarVisible = useSidebarStore((s) => s.setVisible);
+  const sidebarVisible = useSidebarStore((s) => s.visible);
 
   const [landingThreadEnter] = useState(() => readLandingChatTransitionFlag());
 
@@ -1592,6 +1593,17 @@ export default function ChatView() {
           reasoning_effort: thinkingEffort,
           ensemble: byokEnabled && ensembleActive,
           agent_mode: byokEnabled && agentModeActive ? 'agent' : 'chat',
+          client_context: {
+            route: window.location.pathname,
+            view: 'chat',
+            thread_id: tid,
+            active_agent_id: activeAgentId,
+            active_agent_name: currentAgentLabel,
+            access_tier: accessTier,
+            composer_surface: landingAutosend ? 'landing_handoff' : 'chat',
+            sidebar_visible: sidebarVisible,
+            observer_alcove_open: alcoveOpen,
+          },
         }),
         signal: controller.signal,
       });
@@ -1864,7 +1876,7 @@ export default function ChatView() {
       sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, byokEnabled, accessTier, activeAgentId, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, byokEnabled, accessTier, activeAgentId, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
