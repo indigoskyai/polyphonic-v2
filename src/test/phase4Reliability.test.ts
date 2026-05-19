@@ -108,6 +108,11 @@ describe('Phase 4 reliability guardrails', () => {
 
     expect(source).toContain('provider stream ended with no content; retrying non-streaming once');
     expect(source).toContain('error: "empty_response"');
+    expect(source).toContain('function buildSimpleOpeningReasoningParams()');
+    expect(source).toContain('effort: "none"');
+    expect(source).toContain('exclude: true');
+    expect(source).toContain('if (agentIsSystemLuca && !simpleOpeningTurn)');
+    expect(source).toContain('maxTokens: simpleOpeningTurn ? 1024 : undefined');
     expect(source).not.toContain('content: fullContent || "(empty)"');
     expect(source).not.toContain('synthesizedContent || "(empty)"');
   });

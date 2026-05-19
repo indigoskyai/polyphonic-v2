@@ -167,7 +167,16 @@ function isSimpleOpeningMessage(message: string): boolean {
 
 function buildSimpleOpeningDirective(agentName: string): string {
   return `## First-contact pacing
-This is the user's first message, and it is only a small greeting. Answer immediately in 1-3 short sentences. Do not perform an extended introduction or analysis. Let ${agentName} feel observant: offer one small, slightly specific-feeling invitation or question, without pretending to know facts you do not know. You may very lightly acknowledge that Polyphonic took a long time to open, or that the user may have been waiting, but do not make every greeting about launch. Keep the reply under 80 words.`;
+This is the user's first message, and it is only a small greeting. Reply immediately as ${agentName} in 1-2 short sentences. Return only the visible reply — no analysis, no options list, no extended introduction. You may very lightly acknowledge that Polyphonic took a long time to open, or that the user may have been waiting, but do not make every greeting about launch. Keep the reply under 45 words.`;
+}
+
+function buildSimpleOpeningReasoningParams(): Record<string, unknown> {
+  return {
+    reasoning: {
+      effort: "none",
+      exclude: true,
+    },
+  };
 }
 
 // Council (LLM-Council pattern, single judge variant) — see plan
@@ -401,8 +410,10 @@ serve(async (req) => {
     const simpleOpeningDirective = simpleOpeningTurn ? buildSimpleOpeningDirective(agentName) : "";
 
     // L12 — crisis classification on the user message (system-Luca path only).
+    // Safe tiny greetings already pass SIMPLE_OPENING_RISK_RE, so skip the
+    // extra classifier call to keep first contact fast.
     let crisisDirective = "";
-    if (agentIsSystemLuca) {
+    if (agentIsSystemLuca && !simpleOpeningTurn) {
       const classification = await classifyCrisis(apiKey, history ?? [], message);
       if (
         classification.level === "moderate" ||
@@ -525,7 +536,8 @@ serve(async (req) => {
           idempotencyKey,
           enableContinuityWrites: backend.allowMemoryWrites,
           reasoningEffort: effectiveReasoningEffort,
-          maxTokens: simpleOpeningTurn ? 320 : undefined,
+          reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
+          maxTokens: simpleOpeningTurn ? 1024 : undefined,
         },
       );
     }
@@ -1340,8 +1352,9 @@ async function callModelNonStreaming(
   model: string,
   apiKey: string,
   effort: ReasoningEffort = "medium",
+  reasoningParamsOverride?: Record<string, unknown>,
 ): Promise<{ content: string; thinking: string | null }> {
-  const reasoningParams = buildReasoningParams(model, effort);
+  const reasoningParams = reasoningParamsOverride ?? buildReasoningParams(model, effort);
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -1681,6 +1694,7 @@ async function singleModelStream(
     idempotencyKey?: string | null;
     enableContinuityWrites?: boolean;
     reasoningEffort?: ReasoningEffort;
+    reasoningParams?: Record<string, unknown>;
     maxTokens?: number;
   } = {},
 ): Promise<Response> {
@@ -1699,7 +1713,7 @@ async function singleModelStream(
 
       try {
         const backend = options.backend;
-        const reasoningParams = buildReasoningParams(model, options.reasoningEffort || "medium");
+        const reasoningParams = options.reasoningParams ?? buildReasoningParams(model, options.reasoningEffort || "medium");
         const orResponse = await fetch(backend?.baseUrl || "https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: backend?.headers || {
@@ -1816,6 +1830,7 @@ async function singleModelStream(
               model,
               apiKey,
               options.reasoningEffort || "low",
+              options.reasoningParams,
             );
             if (retry.thinking && !fullThinking.includes(retry.thinking)) {
               fullThinking += `${fullThinking ? "\n\n" : ""}${retry.thinking}`;
