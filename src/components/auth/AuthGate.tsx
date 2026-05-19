@@ -47,7 +47,7 @@ export default function AuthGate({ children }: Props) {
   }, [user?.id]);
 
   if (loading) return null;
-  if (!session) return <Navigate to="/auth/login" replace state={{ from: location }} />;
+  if (!session) return <Navigate to="/" replace state={{ from: location }} />;
   if (keyCheckedFor !== user?.id || status === 'unknown' || status === 'checking') {
     return (
       <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-deep)' }}>

@@ -56,7 +56,7 @@ export default function AccessGatePage() {
     [wallets],
   );
 
-  if (!session) return <Navigate to="/auth/login" replace />;
+  if (!session) return <Navigate to="/" replace />;
 
   const verify = async (w: DetectedWallet) => {
     setPhase('signing');
@@ -136,7 +136,7 @@ export default function AccessGatePage() {
           type="button"
           onClick={async () => {
             await signOut();
-            navigate('/auth/login', { replace: true });
+            navigate('/', { replace: true });
           }}
           className="transition-all"
           style={{

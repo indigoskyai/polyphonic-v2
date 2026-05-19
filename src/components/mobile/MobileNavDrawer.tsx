@@ -123,7 +123,7 @@ export default function MobileNavDrawer() {
   const handleSignOut = async () => {
     await signOut();
     close();
-    navigate('/auth/login', { replace: true });
+    navigate('/', { replace: true });
   };
 
   return (
