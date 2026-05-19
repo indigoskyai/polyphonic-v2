@@ -59,7 +59,27 @@ async function loadUserOpenRouterKey(supabase: any, userId: string): Promise<str
   return key || null;
 }
 
-async function hasAdvancedAccess(supabase: any, userId: string): Promise<boolean> {
+function normalizeEmail(email: unknown): string {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+async function hasEmailAllowlistBypass(supabase: any, email: string): Promise<boolean> {
+  if (!email) return false;
+  const { data, error } = await supabase
+    .from("token_gate_email_allowlist")
+    .select("email")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[model-backend] token_gate_email_allowlist check error:", error);
+    return false;
+  }
+
+  return Boolean(data);
+}
+
+async function hasAdvancedAccess(supabase: any, userId: string, email = ""): Promise<boolean> {
   const { data: role } = await supabase
     .from("user_roles")
     .select("role")
@@ -68,6 +88,8 @@ async function hasAdvancedAccess(supabase: any, userId: string): Promise<boolean
     .maybeSingle();
 
   if (role) return true;
+
+  if (await hasEmailAllowlistBypass(supabase, email)) return true;
 
   const { data: verification } = await supabase
     .from("token_gate_verifications")
@@ -144,6 +166,9 @@ export async function resolveChatBackend(
   requestedModel: string = FREE_LUCA_MODEL,
 ): Promise<ChatBackend> {
   const userId = typeof userOrId === "string" ? userOrId : ((userOrId as { id?: string } | null)?.id || "");
+  const userEmail = typeof userOrId === "string"
+    ? ""
+    : normalizeEmail((userOrId as { email?: string } | null)?.email);
   if (!userId) throw new Error("no_user");
 
   const userKey = await loadUserOpenRouterKey(supabase, userId);
@@ -153,7 +178,7 @@ export async function resolveChatBackend(
   if (!platformKey) throw new Error("no_backend_available");
 
   const anonymous = typeof userOrId !== "string" && isAnonymousAuthUser(userOrId);
-  const advanced = !anonymous && await hasAdvancedAccess(supabase, userId);
+  const advanced = !anonymous && await hasAdvancedAccess(supabase, userId, userEmail);
   const billingTier: Exclude<BillingTier, "byok"> = anonymous
     ? "guest"
     : advanced

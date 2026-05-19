@@ -43,6 +43,16 @@ export const useTokenGateStore = create<TokenGateState>((set) => ({
       set({ status: 'bypass' });
       return;
     }
+
+    const callRpc = supabase.rpc as unknown as (
+      fn: string
+    ) => Promise<{ data: boolean | null; error: unknown }>;
+    const { data: emailBypass } = await callRpc('current_user_token_gate_email_bypass');
+    if (emailBypass === true) {
+      set({ status: 'bypass' });
+      return;
+    }
+
     const { data } = await supabase
       .from('token_gate_verifications' as any)
       .select('wallet_address,balance,usd_value,price_used,expires_at')
