@@ -2044,9 +2044,7 @@ html {
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 54%, rgba(12, 12, 14, 0.12), rgba(3, 3, 5, 0.82) 68%),
-    rgba(0, 0, 0, 0.72);
+  background: #000;
   opacity: 0;
 }
 
