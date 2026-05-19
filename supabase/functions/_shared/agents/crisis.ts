@@ -16,6 +16,10 @@
 
 const CRISIS_MODEL = "anthropic/claude-haiku-4.5";
 const CRISIS_TIMEOUT_MS = 8_000;
+const BENIGN_OPENING_RE =
+  /^(?:(?:hi|hello|hey|heya|hiya|yo|sup|howdy)(?: there)?(?: luca)?|(?:good morning|good afternoon|good evening)|gm|test|testing|luca)[\s.!?…,-]*$/i;
+const CRISIS_SIGNAL_RE =
+  /\b(suicid(?:e|al)?|self[-\s]?harm|kill myself|kms|hurt myself|end it all|can't go on|cant go on|don't want to live|dont want to live|want to die|overdose|cut myself|panic attack|abuse|unsafe|hurt someone|kill someone|gun|weapon)\b/i;
 
 export type CrisisLevel = "none" | "low" | "moderate" | "high" | "acute";
 
@@ -72,6 +76,10 @@ export async function classifyCrisis(
     .map((msg) => `${msg.role}: ${(msg.content || "").slice(0, 400)}`)
     .join("\n");
 
+  if (isClearlyBenignOpening(userBlock, contextLines)) {
+    return { level: "none", flags: [] };
+  }
+
   const messages = [
     { role: "system", content: CLASSIFIER_SYSTEM },
     {
@@ -127,6 +135,16 @@ export async function classifyCrisis(
   } finally {
     clearTimeout(timer);
   }
+}
+
+function isClearlyBenignOpening(userBlock: string, contextLines: string): boolean {
+  if (contextLines.trim()) return false;
+  const normalized = userBlock.replace(/\s+/g, " ").trim();
+  return (
+    normalized.length <= 80 &&
+    BENIGN_OPENING_RE.test(normalized) &&
+    !CRISIS_SIGNAL_RE.test(normalized)
+  );
 }
 
 function parseClassifierOutput(raw: string): CrisisClassification {

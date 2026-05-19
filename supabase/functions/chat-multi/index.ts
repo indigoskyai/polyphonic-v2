@@ -152,6 +152,23 @@ function normalizeModelId(model: string | null | undefined): string | null {
   return aliases[normalized] || normalized;
 }
 
+const SIMPLE_OPENING_RISK_RE =
+  /\b(suicid(?:e|al)?|self[-\s]?harm|kill myself|kms|hurt myself|end it all|can't go on|cant go on|don't want to live|dont want to live|want to die|overdose|cut myself|panic attack|abuse|unsafe|hurt someone|kill someone|gun|weapon)\b/i;
+const SIMPLE_OPENING_START_RE =
+  /^(hi|hello|hey|heya|hiya|yo|sup|gm|good morning|good afternoon|good evening|howdy|test|testing|luca)\b/i;
+
+function isSimpleOpeningMessage(message: string): boolean {
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (!normalized || normalized.length > 90) return false;
+  if (SIMPLE_OPENING_RISK_RE.test(normalized)) return false;
+  return SIMPLE_OPENING_START_RE.test(normalized);
+}
+
+function buildSimpleOpeningDirective(agentName: string): string {
+  return `## First-contact pacing
+This is the user's first message, and it is only a small greeting. Answer immediately in 1-3 short sentences. Do not perform an extended introduction or analysis. Let ${agentName} feel observant: offer one small, slightly specific-feeling invitation or question, without pretending to know facts you do not know. Keep the reply under 80 words.`;
+}
+
 // Council (LLM-Council pattern, single judge variant) — see plan
 // /Users/rileycoyote/.claude/plans/ethereal-orbiting-sparkle.md
 const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4.5";
@@ -203,6 +220,7 @@ serve(async (req) => {
     }
 
     const messageWithAttachments = appendAttachmentContext(message, attachments);
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -363,6 +381,14 @@ serve(async (req) => {
     const projectContextBlock = formatProjectContextPrompt(
       await loadProjectContextForThread(supabase, userId, thread_id),
     );
+    const simpleOpeningTurn =
+      backend.keySource === "platform" &&
+      agentIsSystemLuca &&
+      !hasAttachments &&
+      (history?.length || 0) === 0 &&
+      isSimpleOpeningMessage(message);
+    const effectiveReasoningEffort: ReasoningEffort = simpleOpeningTurn ? "low" : reasoningEffort;
+    const simpleOpeningDirective = simpleOpeningTurn ? buildSimpleOpeningDirective(agentName) : "";
 
     // L12 — crisis classification on the user message (system-Luca path only).
     let crisisDirective = "";
@@ -405,6 +431,7 @@ serve(async (req) => {
           continuity.hypomnema.block,
           continuityNote,
         ].filter(Boolean).join("\n\n");
+    const turnSystemPrompt = [enrichedSystemPrompt, simpleOpeningDirective].filter(Boolean).join("\n\n");
 
     // When the tool planner is enabled, advertise the tools so the model
     // doesn't claim it lacks the capability. Actual invocation happens via
@@ -414,7 +441,7 @@ serve(async (req) => {
       : "";
     // Build base messages array
     const baseMessages: any[] = [
-      { role: "system", content: enrichedSystemPrompt + toolCapabilityNote },
+      { role: "system", content: turnSystemPrompt + toolCapabilityNote },
     ];
     if (history) {
       for (const msg of history) {
@@ -486,6 +513,8 @@ serve(async (req) => {
           backend,
           idempotencyKey,
           enableContinuityWrites: backend.allowMemoryWrites,
+          reasoningEffort: effectiveReasoningEffort,
+          maxTokens: simpleOpeningTurn ? 320 : undefined,
         },
       );
     }
@@ -557,7 +586,7 @@ serve(async (req) => {
 
           const proposerSettled = await Promise.allSettled(
             proposerInputs.map((inp) =>
-              callModelNonStreaming(inp.messages, COUNCIL_PROPOSER_MODEL, apiKey!, reasoningEffort)
+              callModelNonStreaming(inp.messages, COUNCIL_PROPOSER_MODEL, apiKey!, effectiveReasoningEffort)
             ),
           );
 
@@ -658,7 +687,7 @@ serve(async (req) => {
                     ],
                     COUNCIL_PROPOSER_MODEL,
                     apiKey!,
-                    reasoningEffort,
+                    effectiveReasoningEffort,
                   ),
                   new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error("crosstalk timeout")), CROSSTALK_TIMEOUT_MS)
@@ -1592,6 +1621,8 @@ async function singleModelStream(
     backend?: ChatBackend;
     idempotencyKey?: string | null;
     enableContinuityWrites?: boolean;
+    reasoningEffort?: ReasoningEffort;
+    maxTokens?: number;
   } = {},
 ): Promise<Response> {
   const encoder = new TextEncoder();
@@ -1609,6 +1640,7 @@ async function singleModelStream(
 
       try {
         const backend = options.backend;
+        const reasoningParams = buildReasoningParams(model, options.reasoningEffort || "medium");
         const orResponse = await fetch(backend?.baseUrl || "https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: backend?.headers || {
@@ -1617,7 +1649,13 @@ async function singleModelStream(
             "HTTP-Referer": "https://polyphonic.chat",
             "X-Title": "Polyphonic",
           },
-          body: JSON.stringify({ model, messages, stream: true, max_tokens: 4096 }),
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: true,
+            max_tokens: options.maxTokens ?? 4096,
+            ...reasoningParams,
+          }),
         });
 
         if (!orResponse.ok) {
