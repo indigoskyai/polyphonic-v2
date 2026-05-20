@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -10,6 +11,7 @@ import {
   DangerButton,
   ConfirmDialog,
   GhostButton,
+  PrimaryButton,
 } from '@/components/settings/FormControls';
 import MnemosStreamShell from './MnemosStreamShell';
 
@@ -42,6 +44,9 @@ export default function MemorySettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetText, setResetText] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   // Load settings from backend
   useEffect(() => {
@@ -101,6 +106,33 @@ export default function MemorySettingsPanel() {
     ]);
     setClearing(false);
     setShowClearConfirm(false);
+  };
+
+  const resetCognition = async () => {
+    if (!user || resetText !== 'RESET') return;
+    setResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-user-cognition', {
+        body: { confirm: 'RESET' },
+      });
+      if (error) throw error;
+      const total = (data as { total_deleted?: number })?.total_deleted ?? 0;
+      toast.success('Luca has been reset', {
+        description: `Cleared ${total} inferred record${total === 1 ? '' : 's'} across memory, beliefs, and mind state.`,
+      });
+      setShowResetModal(false);
+      setResetText('');
+      // Hard refresh so every store rehydrates from an empty backend.
+      setTimeout(() => {
+        window.location.assign('/mind');
+      }, 600);
+    } catch (e) {
+      toast.error('Reset failed', {
+        description: e instanceof Error ? e.message : 'Unknown error',
+      });
+    } finally {
+      setResetting(false);
+    }
   };
 
   return (
@@ -202,10 +234,37 @@ export default function MemorySettingsPanel() {
       </SettingRow>
 
       <SectionTitle>Danger zone</SectionTitle>
-      <DangerButton
-        label={clearing ? 'Clearing…' : 'Clear all memory'}
-        onClick={() => setShowClearConfirm(true)}
-      />
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8, lineHeight: 1.5 }}>
+          Wipes the live mind state (recent thoughts, cognitive state, engrams, connections, beliefs, memory events). Imports, raw memories, and inferred profile remain.
+        </div>
+        <DangerButton
+          label={clearing ? 'Clearing…' : 'Clear all memory'}
+          onClick={() => setShowClearConfirm(true)}
+        />
+      </div>
+
+      <div
+        style={{
+          marginTop: 24,
+          padding: 16,
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md, 10px)',
+          background: 'var(--bg-elevated)',
+        }}
+      >
+        <div style={{ fontSize: 13, color: 'var(--text-body)', marginBottom: 6, fontWeight: 500 }}>
+          Reset Luca's understanding of me
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.55 }}>
+          Wipes everything Luca has learned or inferred about you — memories, beliefs, engrams, hypomnema, mind state, emotional history, imports, curiosity questions, profile facets. Keeps your chat threads, agent configs, and account.
+        </div>
+        <DangerButton
+          label={resetting ? 'Resetting…' : 'Reset Luca'}
+          onClick={() => setShowResetModal(true)}
+        />
+      </div>
 
       {showClearConfirm && (
         <ConfirmDialog
@@ -214,6 +273,70 @@ export default function MemorySettingsPanel() {
           onConfirm={clearAll}
           onCancel={() => setShowClearConfirm(false)}
         />
+      )}
+
+      {showResetModal && (
+        <div
+          onClick={() => !resetting && setShowResetModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md, 10px)',
+              padding: 28,
+              maxWidth: 480,
+              width: '90%',
+            }}
+          >
+            <div style={{ fontFamily: 'var(--font-grotesque)', fontSize: 18, fontWeight: 500, color: 'var(--ink)', marginBottom: 10 }}>
+              Reset Luca's understanding of me
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.55, marginBottom: 16 }}>
+              This permanently deletes every inferred record across memories, beliefs, engrams, hypomnema, mind/emotional state, imports, curiosity questions, and profile facets. Chat threads and account stay. This cannot be undone.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>
+              Type <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink)' }}>RESET</span> to confirm:
+            </div>
+            <input
+              autoFocus
+              value={resetText}
+              onChange={(e) => setResetText(e.target.value)}
+              disabled={resetting}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm, 6px)',
+                color: 'var(--ink)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                marginBottom: 20,
+                outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <GhostButton label="Cancel" onClick={() => { setShowResetModal(false); setResetText(''); }} />
+              {resetText === 'RESET' ? (
+                <DangerButton label={resetting ? 'Resetting…' : 'Reset everything'} onClick={resetCognition} />
+              ) : (
+                <PrimaryButton label="Reset everything" onClick={() => {}} />
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </MnemosStreamShell>
   );
