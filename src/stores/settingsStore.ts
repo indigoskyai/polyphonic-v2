@@ -17,6 +17,10 @@ export interface Settings {
   ensemble_models: string[];
   synthesis_model: string;
   reasoning_effort: 'low' | 'medium' | 'high';
+  // Voice
+  default_voice_id: string;
+  elevenlabs_agent_id: string | null;
+  voice_autospeak: boolean;
 }
 
 interface SettingsState extends Settings {
@@ -48,6 +52,9 @@ export const defaultSettings: Settings = {
   ],
   synthesis_model: 'anthropic/claude-opus-4-7',
   reasoning_effort: 'medium',
+  default_voice_id: 'EXAVITQu4vr4xnSDxMaL',
+  elevenlabs_agent_id: null,
+  voice_autospeak: false,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

@@ -72,6 +72,7 @@ const SettingsPlaceholder = lazy(() => import("./pages/settings/SettingsPlacehol
 const GeneralSettings = lazy(() => import("./pages/settings/GeneralSettings"));
 const ModelsSettings = lazy(() => import("./pages/settings/ModelsSettings"));
 const AppearanceSettings = lazy(() => import("./pages/settings/AppearanceSettings"));
+const VoiceSettings = lazy(() => import("./pages/settings/VoiceSettings"));
 const AccountSettings = lazy(() => import("./pages/settings/AccountSettings"));
 const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSettings"));
 const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
@@ -362,7 +363,7 @@ const App = () => (
                 <Route path="/settings/appearance" element={<ProtectedRoute><AppShell><AppearanceSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/routines" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
-                <Route path="/settings/voice" element={<ProtectedRoute><AppShell><SettingsPlaceholder eyebrow="§ 09 / VOICE & SECURITY" title="Voice & security" description="Voice identity, wake phrase, biometric unlock, and session security." /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/voice" element={<ProtectedRoute><AppShell><VoiceSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/account" element={<ProtectedRoute skipTokenGate><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />

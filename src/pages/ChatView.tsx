@@ -6,6 +6,9 @@ import { AgentPicker } from '@/components/composer/AgentPicker';
 import { ObserverEyeChip } from '@/components/composer/ObserverEyeChip';
 import ModesDropdown from '@/components/composer/ModesDropdown';
 import DictationButton from '@/components/composer/DictationButton';
+import VoiceModeButton from '@/components/voice/VoiceModeButton';
+import { LiveCallOverlay } from '@/components/voice/LiveCallOverlay';
+import { speak, stopSpeaking } from '@/lib/voicePlayback';
 import { useDictation } from '@/hooks/useDictation';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -571,6 +574,8 @@ export default function ChatView() {
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
   const [guestNoticeDismissed, setGuestNoticeDismissed] = useState(false);
   const [composerSending, setComposerSending] = useState(false);
+  const [liveCallOpen, setLiveCallOpen] = useState(false);
+  const lastSpokenIdRef = useRef<string | null>(null);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
   // Ensemble skill: armed = next message only; locked = persistent until toggled off
@@ -798,6 +803,35 @@ export default function ChatView() {
     }, 4000);
     return () => clearTimeout(timeout);
   }, [lingeringStream, messages, activeAgentId]);
+
+  // Auto-speak finished assistant messages via ElevenLabs TTS when the user
+  // has enabled "Auto-speak replies" in Voice settings. Triggers once per
+  // message id, after streaming settles, and only for the active agent's
+  // latest assistant turn so we don't replay historical messages on load.
+  const voiceAutospeak = useSettingsStore((s) => s.voice_autospeak);
+  const defaultVoiceId = useSettingsStore((s) => s.default_voice_id);
+  useEffect(() => {
+    if (!voiceAutospeak || isStreaming) return;
+    const last = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (!last || !last.content?.trim()) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    // Skip messages older than 30s (page load, history scroll) to avoid replaying.
+    const ageMs = Date.now() - new Date(last.created_at).getTime();
+    if (ageMs > 30_000) { lastSpokenIdRef.current = last.id; return; }
+    lastSpokenIdRef.current = last.id;
+    // Strip markdown fences / inline formatting for cleaner speech.
+    const spoken = last.content
+      .replace(/```[\s\S]*?```/g, ' code block omitted ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[*_#>~]/g, '')
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+      .trim();
+    if (spoken) void speak(spoken, defaultVoiceId).catch((e) => console.error('autospeak failed', e));
+  }, [messages, isStreaming, voiceAutospeak, defaultVoiceId]);
+
+  // Stop any in-flight speech when leaving the chat view.
+  useEffect(() => () => { stopSpeaking(); }, []);
+
 
   // User-scroll-aware auto-scroll. We follow the bottom of the stream as
   // long as the user is "pinned" there; the moment they scroll up, we stop
@@ -2231,6 +2265,10 @@ export default function ChatView() {
                     disabled={modelKeyMissing || isStreaming || guardianStreaming}
                     onClick={toggleDictation}
                   />
+                  <VoiceModeButton
+                    disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                    onStartLiveCall={() => setLiveCallOpen(true)}
+                  />
                   <button
                     type="button"
                     aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
@@ -2699,6 +2737,11 @@ export default function ChatView() {
                 onClick={toggleDictation}
               />
 
+              <VoiceModeButton
+                disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                onStartLiveCall={() => setLiveCallOpen(true)}
+              />
+
               <button
                 type="button"
                 aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
@@ -2732,6 +2775,10 @@ export default function ChatView() {
         </div>
       </div>
       <AttachmentDropOverlay visible={isDragging} />
+      <LiveCallOverlay
+        open={liveCallOpen}
+        onClose={() => setLiveCallOpen(false)}
+      />
     </div>
   );
 }

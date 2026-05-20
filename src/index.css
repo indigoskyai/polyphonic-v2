@@ -10114,3 +10114,15 @@ html {
   font-family: var(--font-mono); font-size: 10px; color: var(--text-ghost);
   text-transform: lowercase;
 }
+
+/* Voice picker — used in Settings → Voice */
+.voice-picker { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 12px; padding: 6px; background: var(--surface-1); }
+.voice-picker-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.voice-picker-row:hover { background: var(--surface-2); }
+.voice-picker-row.selected { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.voice-picker-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.voice-picker-name { font-size: 13px; color: var(--text-body); }
+.voice-picker-tone { font-size: 11px; color: var(--text-ghost); letter-spacing: 0.02em; }
+.voice-picker-test { flex-shrink: 0; padding: 6px 14px; border-radius: 999px; background: transparent; border: 1px solid var(--border); color: var(--text-body); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.voice-picker-test:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-ghost); }
+.voice-picker-test:disabled { opacity: 0.5; cursor: not-allowed; }
