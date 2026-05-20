@@ -2265,6 +2265,10 @@ export default function ChatView() {
                     disabled={modelKeyMissing || isStreaming || guardianStreaming}
                     onClick={toggleDictation}
                   />
+                  <VoiceModeButton
+                    disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                    onStartLiveCall={() => setLiveCallOpen(true)}
+                  />
                   <button
                     type="button"
                     aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
@@ -2731,6 +2735,11 @@ export default function ChatView() {
                 supported={dictationSupported}
                 disabled={modelKeyMissing || isStreaming || guardianStreaming}
                 onClick={toggleDictation}
+              />
+
+              <VoiceModeButton
+                disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                onStartLiveCall={() => setLiveCallOpen(true)}
               />
 
               <button
