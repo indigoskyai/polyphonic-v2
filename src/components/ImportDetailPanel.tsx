@@ -199,6 +199,7 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
           </>
         )}
 
+        <button
           onClick={handleReprofile}
           disabled={reprofiling}
           className="text-[11px] px-3 py-2 rounded w-full"
