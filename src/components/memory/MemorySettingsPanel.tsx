@@ -108,6 +108,33 @@ export default function MemorySettingsPanel() {
     setShowClearConfirm(false);
   };
 
+  const resetCognition = async () => {
+    if (!user || resetText !== 'RESET') return;
+    setResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-user-cognition', {
+        body: { confirm: 'RESET' },
+      });
+      if (error) throw error;
+      const total = (data as { total_deleted?: number })?.total_deleted ?? 0;
+      toast.success('Luca has been reset', {
+        description: `Cleared ${total} inferred record${total === 1 ? '' : 's'} across memory, beliefs, and mind state.`,
+      });
+      setShowResetModal(false);
+      setResetText('');
+      // Hard refresh so every store rehydrates from an empty backend.
+      setTimeout(() => {
+        window.location.assign('/mind');
+      }, 600);
+    } catch (e) {
+      toast.error('Reset failed', {
+        description: e instanceof Error ? e.message : 'Unknown error',
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <MnemosStreamShell
       num="06"
