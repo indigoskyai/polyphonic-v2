@@ -1,83 +1,86 @@
-## Problem
+## Voice for Luca — two modes, one toggle
 
-Deleting an import (or hitting "Clear all memory" in Memory settings) doesn't actually reset what Luca knows about you. The /mind page, beliefs, hypomnema, profile facets, emotional history, and Mnemos digests all keep the stuff that was inferred from imports because derived rows have no `import_id` provenance.
+ElevenLabs is now connected (`ELEVENLABS_API_KEY` lives server-side). We'll build two parallel voice experiences and let the user pick per chat.
 
-You asked for: an honest **Reset Luca's understanding of me** that wipes the inferred layer and keeps your chat threads/messages, agent configs, and account.
+### Mode A — Voice-over (your agent, ElevenLabs voice)
+Your existing Luca/Guardian/custom agent runs normally (same model, same memory, same tools). ElevenLabs only does ears and mouth.
 
-## Scope of the "inferred layer"
+- **STT**: ElevenLabs Scribe v2 realtime via `@elevenlabs/react`'s `useScribe`. Mic streams → partial + committed transcripts. Committed transcript gets sent to the existing `chat-multi` flow as if typed.
+- **TTS**: As Luca's reply streams in, sentence-chunk it and pipe each chunk to ElevenLabs TTS, play sequentially for low time-to-first-audio. Uses the agent's `voices[0]` config if present, otherwise the global default voice.
+- Pros: keeps every existing capability (tools, memory, multi-model ensemble, Guardian observer).
+- Cons: slightly higher latency than native, no barge-in/interruption.
 
-These tables get cleared on reset (all filtered by `user_id`):
+### Mode B — Native conversational (ElevenLabs Agent)
+`@elevenlabs/react`'s `useConversation` runs WebRTC directly to an ElevenLabs agent. End-to-end speech-to-speech, true interruption, VAD, lowest latency.
 
-- Memory: `memories`, `memory_candidates`, `memory_events`, `engrams`, `engram_archive`, `connections`, `beliefs`, `hypomnema_entry`
-- Psyche/state: `psychological_profile`, `cognitive_state`, `emotional_state`, `emotional_history`, `mnemos_emotional_state`, `mnemos_digests`, `profile_daily_pulse`
-- Activity/thought: `thought_stream`, `thought_initiations`, `activity_events`, `entity_activity_log`, `observer_notes`, `observer_logs`, `daily_logs`
-- Curiosity & imports: `curiosity_questions`, `pending_revisions`, `chat_imports` (and the related `conversations` rows produced *only* by imports — see note)
-- Reset the `profiles.last_seen_activity_at` cursor used by background jobs
+- Default: one shared "Luca Voice" ElevenLabs agent ID (stored in app config / env).
+- Override: each Luca agent in Settings → Agents can paste its own ElevenLabs agent ID to use instead.
+- Trade-off: this loop runs in ElevenLabs, so it doesn't go through `chat-multi` — no Mnemos writes, no Guardian, no tool calls. We'll surface this clearly in the UI when the user enters Mode B.
+- After the call ends, we save the transcript back into the current conversation so memory continuity isn't lost.
 
-Explicitly **kept**: `auth.users`, `profiles` (display name etc.), `user_settings`, `memory_settings`, `agent_configs`, `agent_identity`, `agent_skills`, `user_api_keys`, `threads`, `messages`, `journal_entries`, `projects`, `artifacts`, `dashboard_widgets`, `user_roles`, `token_gate_*`.
+### Toggle
+Composer gains a voice button next to mic. Clicking opens a small popover:
+- **Text only** (default)
+- **Voice-over** (Mode A)
+- **Live voice** (Mode B)
 
-Note on `conversations`: this table is populated by the ChatGPT importer, not by live chat (live chat uses `threads`/`messages`). Safe to clear on reset.
+The current mode is remembered per-conversation in `conversations.voice_mode`.
 
-## Deliverables
+### Settings → Voice & security
+The placeholder page becomes real:
+- **Default voice** picker (curated ElevenLabs voice list with a Test button that hits TTS).
+- **Default ElevenLabs agent ID** for live mode (optional text input).
+- Connection status pill confirming ElevenLabs is linked.
 
-### 1. New edge function `reset-user-cognition`
+### Settings → Agents → [agent] → Voice
+- Voice override (provider/voiceId/rate/pitch) — already in the data model, just wire UI inputs.
+- ElevenLabs agent ID override for live mode.
 
-`supabase/functions/reset-user-cognition/index.ts`
+---
 
-- Auth: validate JWT via anon client → `user.id`
-- Body: `{ confirm: "RESET" }` required (server-side guard against accidental POSTs)
-- Uses service role to run `DELETE FROM <table> WHERE user_id = $1` for every table in the inferred-layer list above, inside best-effort sequential calls (each wrapped in try/catch so one missing table doesn't abort the rest)
-- Returns `{ success: true, deleted: { <table>: <count>, ... } }`
-- Updates `profiles.last_seen_activity_at = now()` so background jobs don't immediately re-process pre-reset signals
-- Add to `supabase/config.toml` with `verify_jwt = false` (we validate in code, matches project convention)
+## Technical section
 
-### 2. Fix `delete-import` to actually clean its own scope
+**Backend (edge functions)**
 
-Currently only deletes `memories` (by provenance) + `curiosity_questions` (by time window). Extend it to also delete, for that user, rows in `conversations` whose `import_id` matches, and any `memory_candidates` / `pending_revisions` in the import's time window. Keep behavior conservative — anything not tied to the import stays. Document in the response what was removed.
+1. `voice-tts` — POST `{ text, voiceId, modelId? }` → streams MP3 from ElevenLabs `/v1/text-to-speech/{voiceId}/stream?output_format=mp3_44100_128`. Validates JWT. Streams response body straight through with `Content-Type: audio/mpeg`.
+2. `voice-scribe-token` — POST → mints a single-use realtime Scribe token from `/v1/single-use-token/realtime_scribe`. Returns `{ token }`.
+3. `voice-conversation-token` — POST `{ agentId? }` → mints WebRTC token from `/v1/convai/conversation/token?agent_id=...`. Falls back to global default agent ID from `app_config.elevenlabs_default_agent_id`.
+4. `voice-save-transcript` — POST `{ conversationId, turns: [{role, text, ts}] }` → writes turns into existing `messages` table so live-mode chats persist into history.
 
-(We are intentionally NOT retrofitting `import_id` provenance onto engrams/beliefs/etc. — that was the rejected option. Per-import delete remains best-effort; the new Reset is the honest "start fresh".)
+All four use `corsHeaders`, validate the user's JWT via the anon client, and read `ELEVENLABS_API_KEY` from env.
 
-### 3. UI: "Reset Luca's understanding of me" in Memory settings
+**Database (migration)**
 
-`src/components/memory/MemorySettingsPanel.tsx`
+- `conversations.voice_mode text default 'text'` — one of `text | voiceover | live`.
+- `agent_configs.elevenlabs_agent_id text null` — per-agent live override.
+- `app_config` row: `elevenlabs_default_agent_id` (nullable text).
+- `user_settings.default_voice_id text default 'EXAVITQu4vr4xnSDxMaL'` (Sarah) and `default_voice_provider text default 'elevenlabs'`.
 
-- New danger-zone section below the existing "Clear all memory" control, visually separated
-- Button label: **Reset Luca's understanding of me**
-- Helper copy: "Wipes everything Luca has learned or inferred about you — memories, beliefs, engrams, mind state, imports, curiosity questions. Keeps your chat history, agent configs, and account."
-- Confirmation: two-step. Click → modal with a typed `RESET` confirmation field (matches GitHub-style destructive UX) → calls the edge function
-- On success: toast with summary count, then trigger a refresh of the relevant Zustand stores (mind/memory/imports) and route the user to `/mind` so they see the clean slate
+**Frontend**
 
-The existing "Clear all memory" button stays as-is (lighter-touch action that only clears the live mind state).
+- `bun add @elevenlabs/react`.
+- New store `src/stores/voiceStore.ts` — current mode per conversation, current playback queue, mic state, live-call status.
+- New `src/lib/voicePlayback.ts` — sentence-chunker + sequential `Audio` queue, fades on stop.
+- New components:
+  - `src/components/composer/VoiceModeButton.tsx` — toggle + popover.
+  - `src/components/voice/LiveCallOverlay.tsx` — full-screen-ish call UI for Mode B (waveform, end-call, transcript overlay).
+  - `src/components/voice/VoicePicker.tsx` — voice list + Test button, reused in global + per-agent settings.
+- Hook into existing chat send path: when Mode A is active and a message is sent, after the stream finishes (or per sentence flush), call `voice-tts` and enqueue audio.
+- Hook into dictation: when Mode A active, replace the existing Web Speech mic with `useScribe`; committed transcript auto-submits.
+- `src/pages/settings/VoiceSettings.tsx` — replace `SettingsPlaceholder` for `/settings/voice`. Wire into `SidebarSettings` (already has the entry).
+- Extend `AgentDetail` Voice section with ElevenLabs agent ID input + voice picker (already has the slot in `VoiceCardGrid`).
 
-### 4. Store invalidation
+**Mode B transcript persistence**
 
-After a successful reset, clear in-memory caches so the UI doesn't show stale data:
+`useConversation`'s `onMessage` collects `user_transcript` + `agent_response` events. On `endSession`, batch-send to `voice-save-transcript`. Messages saved with a `voice_call` metadata flag so the UI can render them with a small "live call" badge.
 
-- `useMindStore`, `useMemoryStore`, `useImportStore`, `useThoughtStreamStore`, `useEmotionalStateStore`, `useCuriosityStore`, any Mnemos store
-- Approach: each store exposes a `reset()` already in most cases (Zustand convention here); add where missing. Call them all from the panel after the edge function returns.
+**Order of work**
 
-## Technical details
+1. Migration (schema additions).
+2. Four edge functions + deploy.
+3. Settings → Voice page (so user can pick default voice + verify TTS works end-to-end).
+4. Composer VoiceModeButton + Mode A (voice-over) — TTS playback of streamed replies, Scribe-based dictation.
+5. Mode B (live call) overlay + transcript save-back.
+6. Per-agent overrides in AgentDetail.
 
-**Why edge function vs. direct client deletes:** RLS would block some of these tables for the user role, and we want a single atomic-ish operation with a server-side confirmation guard. Service role + `user_id` filter is the standard pattern in this repo (see `delete-import`).
-
-**Why no SQL function:** keeps the table list editable without a migration each time and lets us return per-table counts for the toast.
-
-**Background jobs:** pg_cron jobs that read recent activity will simply find nothing for this user after reset — no special handling needed. They re-bootstrap naturally on next live activity.
-
-**Idempotency:** safe to run twice; second run returns all-zero counts.
-
-## Out of scope
-
-- Per-import cascade deletes of derived data (rejected)
-- Wiping chat threads/messages (rejected — kept)
-- Deleting the user account itself
-- Backfilling `import_id` onto historical engrams/beliefs
-
-## Verification
-
-1. Seed: confirm imports + /mind shows engrams, beliefs, hypomnema entries
-2. Run reset → toast shows non-zero counts
-3. /mind, /memory tabs, imports list all appear empty and freshly bootstrapped
-4. Chat threads still present, agent configs intact, OpenRouter key intact
-5. Re-running reset returns zero counts; no errors
-6. Send a new chat message → live mind state begins populating again normally
+Verification after each step: TTS plays clean audio, Scribe produces transcripts, live call connects and disconnects cleanly, transcripts land in the conversation, mode persists per conversation across reloads.
