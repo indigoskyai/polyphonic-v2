@@ -574,6 +574,8 @@ export default function ChatView() {
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
   const [guestNoticeDismissed, setGuestNoticeDismissed] = useState(false);
   const [composerSending, setComposerSending] = useState(false);
+  const [liveCallOpen, setLiveCallOpen] = useState(false);
+  const lastSpokenIdRef = useRef<string | null>(null);
   const [alcoveOpen, setAlcoveOpen] = useState(false);
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>(defaultEffort || 'medium');
   // Ensemble skill: armed = next message only; locked = persistent until toggled off
