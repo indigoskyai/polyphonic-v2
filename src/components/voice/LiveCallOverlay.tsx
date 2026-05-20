@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useConversation } from '@elevenlabs/react';
+import { ConversationProvider, useConversation } from '@elevenlabs/react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
@@ -14,34 +14,14 @@ interface TranscriptLine {
   ts: number;
 }
 
-export function LiveCallOverlay({ open, agentIdOverride, onClose }: Props) {
+function LiveCallInner({ agentIdOverride, onClose }: { agentIdOverride?: string | null; onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const transcriptRef = useRef<TranscriptLine[]>([]);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const startedRef = useRef(false);
 
-  const conversation = useConversation({
-    onConnect: () => setConnecting(false),
-    onError: (err: unknown) => {
-      console.error('[live-call] error', err);
-      const msg = err instanceof Error ? err.message : 'Connection error';
-      setError(msg);
-    },
-    onMessage: (msg: any) => {
-      try {
-        if (msg?.source === 'user' && typeof msg?.message === 'string') {
-          const line: TranscriptLine = { role: 'user', text: msg.message, ts: Date.now() };
-          transcriptRef.current = [...transcriptRef.current, line];
-          setTranscript(transcriptRef.current);
-        } else if (msg?.source === 'ai' && typeof msg?.message === 'string') {
-          const line: TranscriptLine = { role: 'assistant', text: msg.message, ts: Date.now() };
-          transcriptRef.current = [...transcriptRef.current, line];
-          setTranscript(transcriptRef.current);
-        }
-      } catch { /* noop */ }
-    },
-  });
+  const conversation = useConversation();
 
   const handleStart = useCallback(async () => {
     setError(null);
@@ -60,6 +40,7 @@ export function LiveCallOverlay({ open, agentIdOverride, onClose }: Props) {
         conversationToken: data.token,
         connectionType: 'webrtc',
       });
+      setConnecting(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -72,27 +53,14 @@ export function LiveCallOverlay({ open, agentIdOverride, onClose }: Props) {
     onClose();
   }, [conversation, onClose]);
 
-  // Auto-start on open
   useEffect(() => {
-    if (open && !startedRef.current) {
+    if (!startedRef.current) {
       startedRef.current = true;
       void handleStart();
     }
-    if (!open) {
-      startedRef.current = false;
-      transcriptRef.current = [];
-      setTranscript([]);
-      setError(null);
-    }
-  }, [open, handleStart]);
-
-  // Cleanup on unmount
-  useEffect(() => {
     return () => { try { void conversation.endSession(); } catch { /* noop */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  if (!open) return null;
 
   const status = conversation.status;
   const isSpeaking = conversation.isSpeaking;
@@ -180,6 +148,36 @@ export function LiveCallOverlay({ open, agentIdOverride, onClose }: Props) {
           End call
         </button>
       </div>
+      {/* Hidden hook to capture transcript via onMessage callbacks */}
+      <TranscriptCapture
+        onLine={(line) => {
+          transcriptRef.current = [...transcriptRef.current, line];
+          setTranscript(transcriptRef.current);
+        }}
+      />
     </div>
+  );
+}
+
+function TranscriptCapture({ onLine }: { onLine: (line: TranscriptLine) => void }) {
+  // Re-subscribe via useConversation with onMessage callback
+  useConversation({
+    onMessage: (msg: { source?: string; message?: string }) => {
+      if (msg?.source === 'user' && typeof msg?.message === 'string') {
+        onLine({ role: 'user', text: msg.message, ts: Date.now() });
+      } else if (msg?.source === 'ai' && typeof msg?.message === 'string') {
+        onLine({ role: 'assistant', text: msg.message, ts: Date.now() });
+      }
+    },
+  });
+  return null;
+}
+
+export function LiveCallOverlay({ open, agentIdOverride, onClose }: Props) {
+  if (!open) return null;
+  return (
+    <ConversationProvider>
+      <LiveCallInner agentIdOverride={agentIdOverride} onClose={onClose} />
+    </ConversationProvider>
   );
 }
