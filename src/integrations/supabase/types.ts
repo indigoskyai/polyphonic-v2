@@ -79,6 +79,7 @@ export type Database = {
           avatar_color: string | null
           created_at: string
           created_by: string
+          elevenlabs_agent_id: string | null
           env: string
           id: string
           is_system: boolean
@@ -101,6 +102,7 @@ export type Database = {
           avatar_color?: string | null
           created_at?: string
           created_by?: string
+          elevenlabs_agent_id?: string | null
           env?: string
           id: string
           is_system?: boolean
@@ -123,6 +125,7 @@ export type Database = {
           avatar_color?: string | null
           created_at?: string
           created_by?: string
+          elevenlabs_agent_id?: string | null
           env?: string
           id?: string
           is_system?: boolean
@@ -2777,6 +2780,7 @@ export type Database = {
           title: string | null
           updated_at: string
           user_id: string
+          voice_mode: string
         }
         Insert: {
           agent_id?: string
@@ -2792,6 +2796,7 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id: string
+          voice_mode?: string
         }
         Update: {
           agent_id?: string
@@ -2807,6 +2812,7 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id?: string
+          voice_mode?: string
         }
         Relationships: [
           {
@@ -2944,7 +2950,9 @@ export type Database = {
           clockbar_visible: boolean
           created_at: string
           default_model: string
+          default_voice_id: string
           dreamer_model: string | null
+          elevenlabs_agent_id: string | null
           ensemble_models: Json | null
           font_size: number
           id: string
@@ -2967,7 +2975,9 @@ export type Database = {
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          default_voice_id?: string
           dreamer_model?: string | null
+          elevenlabs_agent_id?: string | null
           ensemble_models?: Json | null
           font_size?: number
           id?: string
@@ -2990,7 +3000,9 @@ export type Database = {
           clockbar_visible?: boolean
           created_at?: string
           default_model?: string
+          default_voice_id?: string
           dreamer_model?: string | null
+          elevenlabs_agent_id?: string | null
           ensemble_models?: Json | null
           font_size?: number
           id?: string
@@ -3019,6 +3031,7 @@ export type Database = {
           title: string | null
           updated_at: string | null
           user_id: string | null
+          voice_mode: string | null
         }
         Insert: {
           created_at?: string | null
@@ -3026,6 +3039,7 @@ export type Database = {
           title?: string | null
           updated_at?: string | null
           user_id?: string | null
+          voice_mode?: string | null
         }
         Update: {
           created_at?: string | null
@@ -3033,6 +3047,7 @@ export type Database = {
           title?: string | null
           updated_at?: string | null
           user_id?: string | null
+          voice_mode?: string | null
         }
         Relationships: []
       }
