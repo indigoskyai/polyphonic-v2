@@ -262,7 +262,10 @@ serve(async (req) => {
     // - true → force ensemble path
     // - false → force single-model path
     // - undefined → fall back to saved default
-    const defaultMultiModel = settings?.multi_model_enabled !== false;
+    // NULL/missing column values now correctly default OFF, matching the
+    // migration default (20260429110000_default_ensemble_off.sql). The prior
+    // `!== false` check treated NULL as ON and silently auto-armed the lock.
+    const defaultMultiModel = settings?.multi_model_enabled === true;
     const multiModelEnabled = typeof ensembleOverride === "boolean" ? ensembleOverride : defaultMultiModel;
     const ensembleModels: string[] = ((settings?.ensemble_models as string[] | null) || DEFAULT_ENSEMBLE)
       .map((model) => normalizeModelId(model))
