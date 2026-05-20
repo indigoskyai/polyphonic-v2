@@ -17,6 +17,7 @@
     "verify": "bash scripts/verify.sh"
   },
   "dependencies": {
+    "@elevenlabs/react": "^1.6.2",
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/cloud-auth-js": "^1.1.2",
     "@radix-ui/react-accordion": "^1.2.11",
