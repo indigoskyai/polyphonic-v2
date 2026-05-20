@@ -804,6 +804,35 @@ export default function ChatView() {
     return () => clearTimeout(timeout);
   }, [lingeringStream, messages, activeAgentId]);
 
+  // Auto-speak finished assistant messages via ElevenLabs TTS when the user
+  // has enabled "Auto-speak replies" in Voice settings. Triggers once per
+  // message id, after streaming settles, and only for the active agent's
+  // latest assistant turn so we don't replay historical messages on load.
+  const voiceAutospeak = useSettingsStore((s) => s.voice_autospeak);
+  const defaultVoiceId = useSettingsStore((s) => s.default_voice_id);
+  useEffect(() => {
+    if (!voiceAutospeak || isStreaming) return;
+    const last = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (!last || !last.content?.trim()) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    // Skip messages older than 30s (page load, history scroll) to avoid replaying.
+    const ageMs = Date.now() - new Date(last.created_at).getTime();
+    if (ageMs > 30_000) { lastSpokenIdRef.current = last.id; return; }
+    lastSpokenIdRef.current = last.id;
+    // Strip markdown fences / inline formatting for cleaner speech.
+    const spoken = last.content
+      .replace(/```[\s\S]*?```/g, ' code block omitted ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[*_#>~]/g, '')
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+      .trim();
+    if (spoken) void speak(spoken, defaultVoiceId).catch((e) => console.error('autospeak failed', e));
+  }, [messages, isStreaming, voiceAutospeak, defaultVoiceId]);
+
+  // Stop any in-flight speech when leaving the chat view.
+  useEffect(() => () => { stopSpeaking(); }, []);
+
+
   // User-scroll-aware auto-scroll. We follow the bottom of the stream as
   // long as the user is "pinned" there; the moment they scroll up, we stop
   // following and surface the scroll-to-bottom pill. Pinning resumes when
