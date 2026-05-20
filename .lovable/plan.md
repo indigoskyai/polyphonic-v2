@@ -1,86 +1,96 @@
-## Voice for Luca — two modes, one toggle
+## Diagnosis
 
-ElevenLabs is now connected (`ELEVENLABS_API_KEY` lives server-side). We'll build two parallel voice experiences and let the user pick per chat.
+Your stuck import (`f268e815…`, 55/117, started May 20 13:31, no progress in 6+ hours) is a symptom of an architectural issue in the import pipeline, not a momentary glitch.
 
-### Mode A — Voice-over (your agent, ElevenLabs voice)
-Your existing Luca/Guardian/custom agent runs normally (same model, same memory, same tools). ElevenLabs only does ears and mouth.
+**Root cause:** the entire chunk-extraction loop runs *in the browser tab*.
 
-- **STT**: ElevenLabs Scribe v2 realtime via `@elevenlabs/react`'s `useScribe`. Mic streams → partial + committed transcripts. Committed transcript gets sent to the existing `chat-multi` flow as if typed.
-- **TTS**: As Luca's reply streams in, sentence-chunk it and pipe each chunk to ElevenLabs TTS, play sequentially for low time-to-first-audio. Uses the agent's `voices[0]` config if present, otherwise the global default voice.
-- Pros: keeps every existing capability (tools, memory, multi-model ensemble, Guardian observer).
-- Cons: slightly higher latency than native, no barge-in/interruption.
+```
+src/stores/importStore.ts:301  for (let i = 0; i < totalChunks; i++) {
+                                  await fetch(.../import-chatgpt, { conversations: chunk[i] })
+                                }
+```
 
-### Mode B — Native conversational (ElevenLabs Agent)
-`@elevenlabs/react`'s `useConversation` runs WebRTC directly to an ElevenLabs agent. End-to-end speech-to-speech, true interruption, VAD, lowest latency.
+Each chunk is one ~15–30s HTTP call to the `import-chatgpt` edge function. The function processes that one chunk, updates `chat_imports.processed_conversations`, and returns. The **next** chunk is only kicked off if your browser tab is still open and the JS loop is still running.
 
-- Default: one shared "Luca Voice" ElevenLabs agent ID (stored in app config / env).
-- Override: each Luca agent in Settings → Agents can paste its own ElevenLabs agent ID to use instead.
-- Trade-off: this loop runs in ElevenLabs, so it doesn't go through `chat-multi` — no Mnemos writes, no Guardian, no tool calls. We'll surface this clearly in the UI when the user enters Mode B.
-- After the call ends, we save the transcript back into the current conversation so memory continuity isn't lost.
+If anything kills the loop — tab closed, browser slept, laptop lid shut, navigation away from /import, network blip beyond the retry budget, refresh — the import row stays in `processing` forever. Nothing on the server tries to resume it. That's exactly what your row looks like.
 
-### Toggle
-Composer gains a voice button next to mic. Clicking opens a small popover:
-- **Text only** (default)
-- **Voice-over** (Mode A)
-- **Live voice** (Mode B)
+Secondary issues found while reading the code:
 
-The current mode is remembered per-conversation in `conversations.voice_mode`.
+1. **No resume.** There's no way to pick up at chunk 56 — the prepared conversations live only in the Zustand store, which is gone after refresh.
+2. **No staleness detection.** Nothing flips long-idle `processing` rows to `failed`, so the UI and ImportsTab list keep showing them as live.
+3. **No cancel.** There's no UI affordance to abandon a stuck import — you'd have to manually update the row.
+4. **Synthesize + profile stages also run from the tab** (`memory-synthesize`, `profile-deep-analysis`). Same fragility, just shorter windows.
+5. **N+1 reads per chunk.** Each chunk fetches up to 150 existing memories from DB before calling the LLM. With 12 chunks that's fine; with 60+ it adds up.
 
-### Settings → Voice & security
-The placeholder page becomes real:
-- **Default voice** picker (curated ElevenLabs voice list with a Test button that hits TTS).
-- **Default ElevenLabs agent ID** for live mode (optional text input).
-- Connection status pill confirming ElevenLabs is linked.
+## Plan
 
-### Settings → Agents → [agent] → Voice
-- Voice override (provider/voiceId/rate/pitch) — already in the data model, just wire UI inputs.
-- ElevenLabs agent ID override for live mode.
+Two-part fix: immediate recovery for the stuck row, and a structural change so this can't silently happen again.
 
----
+### Part 1 — Immediate recovery (small, safe)
 
-## Technical section
+1. **Mark the stuck import as failed.** Migration-driven one-shot: any `chat_imports` row with `status='processing'` and no progress for >30 min → `status='failed'`, `pipeline_stage='error'`, `completed_at=now()`. Runs once on apply, and we also schedule it as a pg_cron job every 5 min so future zombies are auto-reaped.
+2. **Add a "Cancel import" button** to the in-progress banner and to ImportsTab rows in `processing`. Calls a small edge function (`import-cancel`) that flips the row to `failed`.
+3. **Stale banner state.** `ImportProgressBanner` already polls — add a check: if `status==='processing'` but the row hasn't advanced in 5 min, show an "import appears stalled — cancel or retry" affordance instead of the pulse.
 
-**Backend (edge functions)**
+### Part 2 — Make imports resumable & tab-independent (the real fix)
 
-1. `voice-tts` — POST `{ text, voiceId, modelId? }` → streams MP3 from ElevenLabs `/v1/text-to-speech/{voiceId}/stream?output_format=mp3_44100_128`. Validates JWT. Streams response body straight through with `Content-Type: audio/mpeg`.
-2. `voice-scribe-token` — POST → mints a single-use realtime Scribe token from `/v1/single-use-token/realtime_scribe`. Returns `{ token }`.
-3. `voice-conversation-token` — POST `{ agentId? }` → mints WebRTC token from `/v1/convai/conversation/token?agent_id=...`. Falls back to global default agent ID from `app_config.elevenlabs_default_agent_id`.
-4. `voice-save-transcript` — POST `{ conversationId, turns: [{role, text, ts}] }` → writes turns into existing `messages` table so live-mode chats persist into history.
+1. **Persist the chunk queue.** New table `chat_import_chunks(import_id, chunk_index, payload_jsonb, status, attempts, last_error, processed_at)`. When the user uploads, we slice the conversations into chunks and insert all of them as `pending` before any AI work starts. The Zustand store no longer holds the conversation array.
+2. **Server-driven worker.** New edge function `import-worker` that:
+   - Picks N pending chunks for an import (ordered by `chunk_index`)
+   - Calls the existing chunk-extraction logic per chunk (refactored out of `import-chatgpt`'s HTTP handler into a shared function)
+   - Updates each chunk row to `done` / `error` with `attempts++`
+   - When all chunks for an import are `done`, advances the import to `synthesizing` and chains `memory-synthesize` → `profile-deep-analysis` from the server side
+3. **pg_cron heartbeat.** A 1-minute cron calls `import-worker` for any import where pending chunks exist. This is the same pattern used elsewhere in this project (luca-pulse, scheduled-task-run).
+4. **Client becomes a thin observer.** `ImportView` still uploads & parses the file in-browser (cheap), inserts the import row + chunk rows, then just subscribes via Supabase Realtime to `chat_imports` and `chat_import_chunks` for live progress. Closing the tab no longer kills anything.
+5. **Idempotency.** `chat_import_chunks` has `unique(import_id, chunk_index)` so re-enqueues are safe. Worker uses `update … where status='pending' returning *` to atomically claim chunks.
 
-All four use `corsHeaders`, validate the user's JWT via the anon client, and read `ELEVENLABS_API_KEY` from env.
+### Part 3 — Backend asks for Lovable
 
-**Database (migration)**
+The pieces that need Riley to dispatch via Lovable (per CLAUDE.md `[B]` rule):
 
-- `conversations.voice_mode text default 'text'` — one of `text | voiceover | live`.
-- `agent_configs.elevenlabs_agent_id text null` — per-agent live override.
-- `app_config` row: `elevenlabs_default_agent_id` (nullable text).
-- `user_settings.default_voice_id text default 'EXAVITQu4vr4xnSDxMaL'` (Sarah) and `default_voice_provider text default 'elevenlabs'`.
+- Migration: `chat_import_chunks` table + indexes + RLS (owner-only) + the auto-reap function + pg_cron schedule for `import-worker`.
+- Edge functions: `import-worker` (new), `import-cancel` (new), refactor of `import-chatgpt` to expose chunk-extraction as an internal helper.
 
-**Frontend**
+### Technical notes
 
-- `bun add @elevenlabs/react`.
-- New store `src/stores/voiceStore.ts` — current mode per conversation, current playback queue, mic state, live-call status.
-- New `src/lib/voicePlayback.ts` — sentence-chunker + sequential `Audio` queue, fades on stop.
-- New components:
-  - `src/components/composer/VoiceModeButton.tsx` — toggle + popover.
-  - `src/components/voice/LiveCallOverlay.tsx` — full-screen-ish call UI for Mode B (waveform, end-call, transcript overlay).
-  - `src/components/voice/VoicePicker.tsx` — voice list + Test button, reused in global + per-agent settings.
-- Hook into existing chat send path: when Mode A is active and a message is sent, after the stream finishes (or per sentence flush), call `voice-tts` and enqueue audio.
-- Hook into dictation: when Mode A active, replace the existing Web Speech mic with `useScribe`; committed transcript auto-submits.
-- `src/pages/settings/VoiceSettings.tsx` — replace `SettingsPlaceholder` for `/settings/voice`. Wire into `SidebarSettings` (already has the entry).
-- Extend `AgentDetail` Voice section with ElevenLabs agent ID input + voice picker (already has the slot in `VoiceCardGrid`).
+- **Schema sketch**
+  ```sql
+  create table chat_import_chunks (
+    id uuid primary key default gen_random_uuid(),
+    import_id uuid not null references chat_imports(id) on delete cascade,
+    chunk_index int not null,
+    payload jsonb not null,
+    status text not null default 'pending', -- pending|running|done|error
+    attempts int not null default 0,
+    last_error text,
+    claimed_at timestamptz,
+    processed_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique(import_id, chunk_index)
+  );
+  create index on chat_import_chunks (import_id, status);
+  ```
+- **Reap function** (also runs once on apply):
+  ```sql
+  update chat_imports
+     set status='failed', pipeline_stage='error', completed_at=now()
+   where status='processing'
+     and created_at < now() - interval '30 minutes'
+     and not exists (
+       select 1 from chat_import_chunks c
+       where c.import_id = chat_imports.id and c.status='running'
+         and c.claimed_at > now() - interval '5 minutes'
+     );
+  ```
+- **Worker concurrency.** Process chunks sequentially per import (the AI calls are heavy; parallel would blow the gateway budget). Across imports, the worker can fan out.
+- **No client API changes** beyond ImportView — the existing `chat_imports` shape stays the same, so `ImportsTab`, banner, and detail panel keep working.
 
-**Mode B transcript persistence**
+### What this does NOT change
 
-`useConversation`'s `onMessage` collects `user_transcript` + `agent_response` events. On `endSession`, batch-send to `voice-save-transcript`. Messages saved with a `voice_call` metadata flag so the UI can render them with a small "live call" badge.
+- The actual extraction prompt and tool schema in `import-chatgpt/index.ts` stay as-is. We're moving where the orchestration happens, not how memories are extracted.
+- Memory dedup, confidence ceilings, curiosity-question generation, conflicts — all untouched.
 
-**Order of work**
+### Suggested order of execution
 
-1. Migration (schema additions).
-2. Four edge functions + deploy.
-3. Settings → Voice page (so user can pick default voice + verify TTS works end-to-end).
-4. Composer VoiceModeButton + Mode A (voice-over) — TTS playback of streamed replies, Scribe-based dictation.
-5. Mode B (live call) overlay + transcript save-back.
-6. Per-agent overrides in AgentDetail.
-
-Verification after each step: TTS plays clean audio, Scribe produces transcripts, live call connects and disconnects cleanly, transcripts land in the conversation, mode persists per conversation across reloads.
+1. Land Part 1 today (cleanup + cancel button) so you can dismiss the stuck row and move on.
+2. Land Part 2 over a follow-up phase — it's larger and needs the backend migrations.

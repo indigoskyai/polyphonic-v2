@@ -36,6 +36,36 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reprofiling, setReprofiling] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const startedMs = Date.now() - new Date(imp.created_at).getTime();
+  const isProcessing = imp.status === 'processing';
+  const isStalled = isProcessing && startedMs > 5 * 60 * 1000;
+
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-cancel`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ import_id: imp.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Cancel failed (${res.status})`);
+      }
+      toast({ title: 'Import cancelled', description: 'The stuck import has been marked failed.' });
+      onDeleted();
+    } catch (e: any) {
+      toast({ title: 'Cancel failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -136,6 +166,39 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
       </div>
 
       <div className="space-y-2">
+        {isProcessing && (
+          <>
+            {isStalled && (
+              <div
+                className="text-[11px] px-3 py-2 rounded"
+                style={{
+                  background: 'rgba(234,179,8,0.08)',
+                  border: '1px solid rgba(234,179,8,0.25)',
+                  color: '#facc15',
+                  lineHeight: 1.5,
+                }}
+              >
+                This import looks stalled — no progress in over 5 minutes. Imports run inside
+                the browser tab, so closing the tab or losing network stops them. Cancel and
+                retry, or wait for the 5-minute auto-reaper.
+              </div>
+            )}
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="text-[11px] px-3 py-2 rounded w-full"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                color: cancelling ? 'var(--text-ghost)' : 'var(--text-primary)',
+                cursor: cancelling ? 'wait' : 'pointer',
+              }}
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel this import'}
+            </button>
+          </>
+        )}
+
         <button
           onClick={handleReprofile}
           disabled={reprofiling}
