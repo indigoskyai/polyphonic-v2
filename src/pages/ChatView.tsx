@@ -2775,6 +2775,10 @@ export default function ChatView() {
         </div>
       </div>
       <AttachmentDropOverlay visible={isDragging} />
+      <LiveCallOverlay
+        open={liveCallOpen}
+        onClose={() => setLiveCallOpen(false)}
+      />
     </div>
   );
 }
