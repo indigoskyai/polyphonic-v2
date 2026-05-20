@@ -166,7 +166,39 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
       </div>
 
       <div className="space-y-2">
-        <button
+        {isProcessing && (
+          <>
+            {isStalled && (
+              <div
+                className="text-[11px] px-3 py-2 rounded"
+                style={{
+                  background: 'rgba(234,179,8,0.08)',
+                  border: '1px solid rgba(234,179,8,0.25)',
+                  color: '#facc15',
+                  lineHeight: 1.5,
+                }}
+              >
+                This import looks stalled — no progress in over 5 minutes. Imports run inside
+                the browser tab, so closing the tab or losing network stops them. Cancel and
+                retry, or wait for the 5-minute auto-reaper.
+              </div>
+            )}
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="text-[11px] px-3 py-2 rounded w-full"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                color: cancelling ? 'var(--text-ghost)' : 'var(--text-primary)',
+                cursor: cancelling ? 'wait' : 'pointer',
+              }}
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel this import'}
+            </button>
+          </>
+        )}
+
           onClick={handleReprofile}
           disabled={reprofiling}
           className="text-[11px] px-3 py-2 rounded w-full"
