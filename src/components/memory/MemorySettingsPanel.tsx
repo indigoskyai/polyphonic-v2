@@ -44,6 +44,9 @@ export default function MemorySettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetText, setResetText] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   // Load settings from backend
   useEffect(() => {
