@@ -104,119 +104,117 @@ export default function MemorySettingsPanel() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <PageHeader
-        folio="§ 02 / SETTINGS"
-        title="Memory settings"
-        description="How memory is captured, consolidated, and surfaced. Destructive operations live here."
-      />
-
-      <div style={{ padding: '0 32px 80px', maxWidth: 720 }}>
-        <SectionTitle>Import conversations</SectionTitle>
+    <MnemosStreamShell
+      num="06"
+      streamLabel="SETTINGS"
+      title="Memory settings"
+      subtitle="How memory is captured, consolidated, and surfaced. Destructive operations live here."
+      hideToolbar
+    >
+      <SectionTitle>Import conversations</SectionTitle>
+      <div
+        style={{
+          marginBottom: 8,
+          padding: 16,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+        }}
+      >
         <div
           style={{
-            marginBottom: 8,
-            padding: 16,
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            marginBottom: 12,
+            lineHeight: 1.5,
           }}
         >
-          <div
-            style={{
-              fontSize: 13,
-              color: 'var(--text-secondary)',
-              marginBottom: 12,
-              lineHeight: 1.5,
-            }}
-          >
-            Upload conversation exports from other AI platforms to build a deep psychological profile.
-          </div>
-          <GhostButton
-            label="Import conversations →"
-            onClick={() => navigate('/import')}
-          />
+          Upload conversation exports from other AI platforms to build a deep psychological profile.
         </div>
-
-        <SectionTitle>
-          Memory system
-          {saving && (
-            <span style={{ marginLeft: 12, fontSize: 10, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              saving…
-            </span>
-          )}
-        </SectionTitle>
-
-        <SettingRow
-          label="Enable mnemos memory"
-          description="Master switch — when off, decay and consolidation cron jobs skip your account"
-        >
-          <Toggle on={settings.mnemos_enabled} onChange={() => update('mnemos_enabled', !settings.mnemos_enabled)} />
-        </SettingRow>
-
-        <SettingRow label="Memory decay rate" description="How quickly older memories fade (50 = baseline)">
-          <div className="flex items-center gap-3 shrink-0">
-            <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Slow</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={settings.decay_rate}
-              onChange={(e) => update('decay_rate', parseInt(e.target.value, 10))}
-              disabled={!settings.mnemos_enabled}
-              style={{
-                width: 120,
-                height: 3,
-                borderRadius: 2,
-                background: 'var(--bg-surface)',
-                outline: 'none',
-                appearance: 'none',
-                cursor: settings.mnemos_enabled ? 'pointer' : 'not-allowed',
-                opacity: settings.mnemos_enabled ? 1 : 0.4,
-              }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Fast</span>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {settings.decay_rate}
-            </span>
-          </div>
-        </SettingRow>
-
-        <SettingRow label="Dream frequency" description="How often consolidation/dreaming runs">
-          <SelectInput
-            value={settings.dream_frequency}
-            onChange={(v) => update('dream_frequency', v as DreamFreq)}
-            options={[
-              { label: 'Every hour', value: 'hourly' },
-              { label: 'Every 6 hours', value: '6h' },
-              { label: 'Daily', value: 'daily' },
-              { label: 'Weekly', value: 'weekly' },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow label="Enable consolidation" description="Merge related memories and update beliefs during dreams">
-          <Toggle
-            on={settings.consolidation_enabled}
-            onChange={() => update('consolidation_enabled', !settings.consolidation_enabled)}
-          />
-        </SettingRow>
-
-        <SectionTitle>Danger zone</SectionTitle>
-        <DangerButton
-          label={clearing ? 'Clearing…' : 'Clear all memory'}
-          onClick={() => setShowClearConfirm(true)}
+        <GhostButton
+          label="Import conversations →"
+          onClick={() => navigate('/import')}
         />
-
-        {showClearConfirm && (
-          <ConfirmDialog
-            title="Clear all memory"
-            message="This will permanently delete all memory events, thoughts, cognitive state, engrams, connections, and beliefs. This cannot be undone."
-            onConfirm={clearAll}
-            onCancel={() => setShowClearConfirm(false)}
-          />
-        )}
       </div>
-    </div>
+
+      <SectionTitle>
+        Memory system
+        {saving && (
+          <span style={{ marginLeft: 12, fontSize: 10, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            saving…
+          </span>
+        )}
+      </SectionTitle>
+
+      <SettingRow
+        label="Enable mnemos memory"
+        description="Master switch — when off, decay and consolidation cron jobs skip your account"
+      >
+        <Toggle on={settings.mnemos_enabled} onChange={() => update('mnemos_enabled', !settings.mnemos_enabled)} />
+      </SettingRow>
+
+      <SettingRow label="Memory decay rate" description="How quickly older memories fade (50 = baseline)">
+        <div className="flex items-center gap-3 shrink-0">
+          <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Slow</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={settings.decay_rate}
+            onChange={(e) => update('decay_rate', parseInt(e.target.value, 10))}
+            disabled={!settings.mnemos_enabled}
+            style={{
+              width: 120,
+              height: 3,
+              borderRadius: 2,
+              background: 'var(--bg-surface)',
+              outline: 'none',
+              appearance: 'none',
+              cursor: settings.mnemos_enabled ? 'pointer' : 'not-allowed',
+              opacity: settings.mnemos_enabled ? 1 : 0.4,
+            }}
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Fast</span>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            {settings.decay_rate}
+          </span>
+        </div>
+      </SettingRow>
+
+      <SettingRow label="Dream frequency" description="How often consolidation/dreaming runs">
+        <SelectInput
+          value={settings.dream_frequency}
+          onChange={(v) => update('dream_frequency', v as DreamFreq)}
+          options={[
+            { label: 'Every hour', value: 'hourly' },
+            { label: 'Every 6 hours', value: '6h' },
+            { label: 'Daily', value: 'daily' },
+            { label: 'Weekly', value: 'weekly' },
+          ]}
+        />
+      </SettingRow>
+
+      <SettingRow label="Enable consolidation" description="Merge related memories and update beliefs during dreams">
+        <Toggle
+          on={settings.consolidation_enabled}
+          onChange={() => update('consolidation_enabled', !settings.consolidation_enabled)}
+        />
+      </SettingRow>
+
+      <SectionTitle>Danger zone</SectionTitle>
+      <DangerButton
+        label={clearing ? 'Clearing…' : 'Clear all memory'}
+        onClick={() => setShowClearConfirm(true)}
+      />
+
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Clear all memory"
+          message="This will permanently delete all memory events, thoughts, cognitive state, engrams, connections, and beliefs. This cannot be undone."
+          onConfirm={clearAll}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
+    </MnemosStreamShell>
   );
 }
