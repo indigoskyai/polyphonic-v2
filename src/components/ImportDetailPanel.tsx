@@ -36,6 +36,36 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reprofiling, setReprofiling] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const startedMs = Date.now() - new Date(imp.created_at).getTime();
+  const isProcessing = imp.status === 'processing';
+  const isStalled = isProcessing && startedMs > 5 * 60 * 1000;
+
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-cancel`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ import_id: imp.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Cancel failed (${res.status})`);
+      }
+      toast({ title: 'Import cancelled', description: 'The stuck import has been marked failed.' });
+      onDeleted();
+    } catch (e: any) {
+      toast({ title: 'Cancel failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
