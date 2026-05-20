@@ -26,50 +26,63 @@ export const useTokenGateStore = create<TokenGateState>((set) => ({
   error: null,
   hydrate: async () => {
     set({ status: 'checking' });
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
-    if (!userId) {
-      set({ status: 'unknown' });
-      return;
-    }
-    // Admin bypass
-    const { data: roleData } = await supabase
-      .from('user_roles' as any)
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    if (roleData) {
-      set({ status: 'bypass' });
-      return;
-    }
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) {
+        set({ status: 'unknown' });
+        return;
+      }
+      // Admin bypass
+      const { data: roleData } = await supabase
+        .from('user_roles' as any)
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+      if (roleData) {
+        set({ status: 'bypass' });
+        return;
+      }
 
-    const callRpc = supabase.rpc as unknown as (
-      fn: string
-    ) => Promise<{ data: boolean | null; error: unknown }>;
-    const { data: emailBypass } = await callRpc('current_user_token_gate_email_bypass');
-    if (emailBypass === true) {
-      set({ status: 'bypass' });
-      return;
-    }
+      // Email allowlist bypass.
+      // NOTE: must call supabase.rpc directly so the `this` binding is
+      // preserved — assigning to a bare variable (e.g. `const callRpc =
+      // supabase.rpc`) loses `this` and the rpc impl throws
+      // "Cannot read properties of undefined (reading 'rest')", which
+      // would strand status at 'checking' (→ "Verifying access…" hangs).
+      const { data: emailBypass } = await (supabase.rpc as any)(
+        'current_user_token_gate_email_bypass'
+      );
+      if (emailBypass === true) {
+        set({ status: 'bypass' });
+        return;
+      }
 
-    const { data } = await supabase
-      .from('token_gate_verifications' as any)
-      .select('wallet_address,balance,usd_value,price_used,expires_at')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data && new Date((data as any).expires_at).getTime() > Date.now()) {
-      const d = data as any;
-      set({
-        status: 'verified',
-        walletAddress: d.wallet_address,
-        balance: Number(d.balance),
-        usdValue: Number(d.usd_value),
-        priceUsed: Number(d.price_used),
-        expiresAt: d.expires_at,
-      });
-    } else {
-      set({ status: 'denied' });
+      const { data } = await supabase
+        .from('token_gate_verifications' as any)
+        .select('wallet_address,balance,usd_value,price_used,expires_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (data && new Date((data as any).expires_at).getTime() > Date.now()) {
+        const d = data as any;
+        set({
+          status: 'verified',
+          walletAddress: d.wallet_address,
+          balance: Number(d.balance),
+          usdValue: Number(d.usd_value),
+          priceUsed: Number(d.price_used),
+          expiresAt: d.expires_at,
+        });
+      } else {
+        set({ status: 'denied' });
+      }
+    } catch (err) {
+      // Belt-and-suspenders: any unexpected throw must still land in a
+      // terminal state so AuthGate stops showing "Verifying access…".
+      // Denied is the safer default — the user can re-verify from /access.
+      console.error('[tokenGate] hydrate failed:', err);
+      set({ status: 'denied', error: err instanceof Error ? err.message : String(err) });
     }
   },
   setResult: (r) => set(r as any),
