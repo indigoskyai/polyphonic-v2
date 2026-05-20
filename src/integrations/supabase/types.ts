@@ -2968,6 +2968,7 @@ export type Database = {
           synthesis_style: string
           updated_at: string
           user_id: string
+          voice_autospeak: boolean
           voice_model: string | null
         }
         Insert: {
@@ -2993,6 +2994,7 @@ export type Database = {
           synthesis_style?: string
           updated_at?: string
           user_id: string
+          voice_autospeak?: boolean
           voice_model?: string | null
         }
         Update: {
@@ -3018,6 +3020,7 @@ export type Database = {
           synthesis_style?: string
           updated_at?: string
           user_id?: string
+          voice_autospeak?: boolean
           voice_model?: string | null
         }
         Relationships: []
