@@ -2818,6 +2818,27 @@ export type Database = {
           },
         ]
       }
+      token_gate_email_allowlist: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          note: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          note?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
       token_gate_nonces: {
         Row: {
           created_at: string
@@ -3020,6 +3041,7 @@ export type Database = {
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
       cleanup_daily_usage: { Args: never; Returns: number }
       cleanup_idempotency_keys: { Args: never; Returns: number }
+      current_user_token_gate_email_bypass: { Args: never; Returns: boolean }
       decrypt_user_api_key: { Args: { p_user_id: string }; Returns: string }
       delete_user_api_key: { Args: never; Returns: undefined }
       get_app_config: { Args: { config_key: string }; Returns: string }

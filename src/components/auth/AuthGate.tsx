@@ -29,20 +29,21 @@ export default function AuthGate({ children }: Props) {
     }
     let canceled = false;
     setKeyCheckedFor(null);
-    supabase
-      .from('user_api_keys')
-      .select('key_preview')
-      .maybeSingle()
-      .then(({ data }) => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('user_api_keys')
+          .select('key_preview')
+          .maybeSingle();
         if (canceled) return;
         setHasModelKey(Boolean(data?.key_preview));
         setKeyCheckedFor(user.id);
-      })
-      .catch(() => {
+      } catch {
         if (canceled) return;
         setHasModelKey(false);
         setKeyCheckedFor(user.id);
-      });
+      }
+    })();
     return () => { canceled = true; };
   }, [user?.id]);
 
