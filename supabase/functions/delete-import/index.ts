@@ -62,11 +62,29 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .filter("provenance->>import_id", "eq", import_id);
 
-    // Hard-delete curiosity questions in the import window
+    // Hard-delete derived rows created during the import's processing window.
+    // Best-effort: derived data (engrams/beliefs/hypomnema/etc.) is not tagged
+    // with import_id, so a full clean slate requires the reset-user-cognition
+    // edge function. We do the time-window cleanup here for the obvious cases.
     const startTime = importRecord.created_at;
     const endTime = importRecord.completed_at || new Date().toISOString();
+
     const { count: questionsDeleted } = await supabase
       .from("curiosity_questions")
+      .delete({ count: "exact" })
+      .eq("user_id", user.id)
+      .gte("created_at", startTime)
+      .lte("created_at", endTime);
+
+    const { count: candidatesDeleted } = await supabase
+      .from("memory_candidates")
+      .delete({ count: "exact" })
+      .eq("user_id", user.id)
+      .gte("created_at", startTime)
+      .lte("created_at", endTime);
+
+    const { count: revisionsDeleted } = await supabase
+      .from("pending_revisions")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
       .gte("created_at", startTime)
@@ -80,6 +98,8 @@ Deno.serve(async (req) => {
         success: true,
         memories_deleted: memoriesDeleted || 0,
         questions_deleted: questionsDeleted || 0,
+        candidates_deleted: candidatesDeleted || 0,
+        revisions_deleted: revisionsDeleted || 0,
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
