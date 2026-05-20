@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  PageHeader,
   SectionTitle,
   SettingRow,
   Toggle,
@@ -12,6 +11,7 @@ import {
   ConfirmDialog,
   GhostButton,
 } from '@/components/settings/FormControls';
+import MnemosStreamShell from './MnemosStreamShell';
 
 type DreamFreq = 'hourly' | '6h' | 'daily' | 'weekly';
 
