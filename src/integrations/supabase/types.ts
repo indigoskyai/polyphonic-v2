@@ -3161,6 +3161,7 @@ export type Database = {
         Args: { p_device_id: string; p_token: string }
         Returns: boolean
       }
+      reap_stuck_imports: { Args: never; Returns: number }
       record_cron_run: {
         Args: {
           p_duration_ms: number
