@@ -560,7 +560,10 @@ export default function ChatView() {
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
-  const defaultEnsembleOn = useSettingsStore((s) => s.multi_model_enabled);
+  // NOTE: ensemble is intentionally NOT read from settings here. The composer
+  // toggle (⌘E / shift-click) is the sole source of truth so the visual state
+  // always matches reality. The Settings page's `multi_model_enabled` row is
+  // preserved for future use but does not auto-arm the composer.
 
   const [input, setInput] = useState(() => readLandingPrompt());
   const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
@@ -1910,21 +1913,6 @@ export default function ChatView() {
       setAgentModeArmed(false);
     }
   }, [activeAgentId, agentModeArmed]);
-
-  // Sync default ensemble preference → lock flag (persistent, not auto-disarming).
-  // When user flips the setting off in Settings, also clear the lock so ensemble
-  // truly stops firing on every message.
-  const didInitEnsembleDefault = useRef(false);
-  useEffect(() => {
-    if (!didInitEnsembleDefault.current) {
-      didInitEnsembleDefault.current = true;
-      setEnsembleLocked(!!defaultEnsembleOn);
-      return;
-    }
-    // Setting changed after initial mount — mirror it into lock state
-    setEnsembleLocked(!!defaultEnsembleOn);
-    if (!defaultEnsembleOn) setEnsembleArmed(false);
-  }, [defaultEnsembleOn]);
 
   // ⌘E / Ctrl+E toggles ensemble arm
   useEffect(() => {
