@@ -147,6 +147,7 @@ export interface DreamReport {
 async function storeDreamReport(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   report: DreamReport
 ): Promise<void> {
   // Try the journal_entries table with dream type
@@ -154,6 +155,7 @@ async function storeDreamReport(
     .from("journal_entries")
     .insert({
       user_id: userId,
+      agent_id: agentId,
       content: report.narrative,
       entry_type: "dream",
       metadata: report.consolidation_summary,
@@ -167,6 +169,7 @@ async function storeDreamReport(
       .from("engrams")
       .insert({
         user_id: userId,
+        agent_id: agentId,
         content: report.narrative,
         engram_type: "semantic",
         strength: 0.5,
@@ -203,7 +206,8 @@ export async function dream(
   supabase: SupabaseClient,
   userId: string,
   report: ConsolidationReport,
-  openrouterApiKey: string
+  openrouterApiKey: string,
+  agentId = "luca"
 ): Promise<string | null> {
   // Skip dreaming if nothing happened during consolidation
   if (
@@ -231,7 +235,7 @@ export async function dream(
       },
     };
 
-    await storeDreamReport(supabase, userId, dreamReport);
+    await storeDreamReport(supabase, userId, agentId, dreamReport);
 
     return narrative;
   } catch (err) {

@@ -98,6 +98,7 @@ export async function retrieve(
 
   const supabase = engine.getClient();
   const userId = engine.getUserId();
+  const agentId = engine.getAgentId();
 
   // ── Step 1: Seed via hybrid retrieval (M4) ─────────────────────────────
   // Default: trigram-only via match_engrams (existing behavior).
@@ -106,7 +107,7 @@ export async function retrieve(
   // ranked lists. Spreading activation continues unchanged from the fused
   // seed set.
   const seedCount = Math.max(limit, 10);
-  const seeds = await hybridSeed(supabase, query, userId, seedCount, options.api_key);
+  const seeds = await hybridSeed(supabase, query, userId, agentId, seedCount, options.api_key);
 
   if (!seeds || seeds.length === 0) {
     return [];
@@ -139,6 +140,7 @@ export async function retrieve(
     await spreadActivation(
       supabase,
       userId,
+      agentId,
       activationMap,
       spread_depth,
       min_activation,
@@ -170,6 +172,7 @@ async function spreadActivation(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
   supabase: { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any },
   userId: string,
+  agentId: string,
   activationMap: Map<string, ActivationResult>,
   maxDepth: number,
   threshold: number,
@@ -193,6 +196,7 @@ async function spreadActivation(
       .from("connections")
       .select("id, source_id, target_id, connection_type, weight")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .in("source_id", frontierIds);
 
     if (connError || !connections || connections.length === 0) break;
@@ -202,6 +206,7 @@ async function spreadActivation(
       .from("connections")
       .select("id, source_id, target_id, connection_type, weight")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .in("target_id", frontierIds);
 
     const allConnections: Connection[] = [
@@ -258,6 +263,7 @@ async function spreadActivation(
       .from("engrams")
       .select("*")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .in("id", targetIdArray)
       .neq("state", "archived");
 
@@ -358,6 +364,7 @@ async function hybridSeed(
   supabase: any,
   query: string,
   userId: string,
+  agentId: string,
   matchCount: number,
   apiKey?: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- match_engrams row shape varies
@@ -366,6 +373,7 @@ async function hybridSeed(
     query_text: query,
     match_count: matchCount,
     p_user_id: userId,
+    p_agent_id: agentId,
   }).then(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (r: { data: any[] | null; error: any }) => ({ rows: r.data ?? [], err: r.error }),
@@ -380,6 +388,7 @@ async function hybridSeed(
         query_embedding: embed.vector,
         match_count: matchCount,
         p_user_id: userId,
+        p_agent_id: agentId,
         min_strength: 0.05,
       });
       return { rows: r.data ?? [], err: r.error };
@@ -419,7 +428,8 @@ async function hybridSeed(
   if (missingIds.length > 0) {
     const { data: hydrated, error: hydErr } = await supabase
       .from("engrams")
-      .select("id, user_id, content, engram_type, strength, stability, accessibility, emotional_valence, emotional_arousal, surprise_score, source_context, tags, state, last_accessed_at, access_count, created_at, updated_at")
+      .select("id, user_id, agent_id, content, engram_type, strength, stability, accessibility, emotional_valence, emotional_arousal, surprise_score, source_context, tags, state, last_accessed_at, access_count, created_at, updated_at")
+      .eq("agent_id", agentId)
       .in("id", missingIds);
     if (hydErr) {
       console.warn("[mnemos.retrieve] vector-only hydration failed:", hydErr.message);
@@ -456,6 +466,7 @@ function seedToEngram(
   return {
     id: seed.id,
     user_id: seed.user_id,
+    agent_id: seed.agent_id || "luca",
     content: seed.content,
     engram_type: seed.engram_type,
     strength: seed.strength ?? 0.5,

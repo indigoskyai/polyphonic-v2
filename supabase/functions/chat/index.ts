@@ -170,11 +170,11 @@ serve(async (req) => {
       historyLimit: backend.historyLimit,
       includeIdentity: true,
       includePendingRevisions: agentIsLuca && backend.allowMemoryWrites,
-      includeFunctionalMemory: agentIsLuca && backend.billingTier !== "guest",
-      includeMnemos: agentIsLuca && backend.billingTier !== "guest",
+      includeFunctionalMemory: backend.billingTier !== "guest",
+      includeMnemos: backend.billingTier !== "guest",
       includeSkills: agentIsLuca && backend.billingTier !== "guest",
-      includeEmotionalState: agentIsLuca && backend.billingTier !== "guest",
-      includeBeliefs: agentIsLuca && backend.billingTier !== "guest",
+      includeEmotionalState: backend.billingTier !== "guest",
+      includeBeliefs: backend.billingTier !== "guest",
     });
     logContinuityDiagnostics(continuity, "chat.continuity");
     const history = continuity.history;

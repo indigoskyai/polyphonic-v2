@@ -7,6 +7,7 @@
 import { useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useDigestStore } from '@/stores/digestStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import DigestEngramCard from './DigestEngramCard';
 
 const TYPE_ORDER = ['episodic', 'semantic', 'procedural', 'belief'] as const;
@@ -30,6 +31,7 @@ function fmtClock(iso: string): string {
 
 export default function DailyDigest() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const digest = useDigestStore((s) => s.digest);
   const engrams = useDigestStore((s) => s.engrams);
   const loading = useDigestStore((s) => s.loading);
@@ -44,10 +46,10 @@ export default function DailyDigest() {
 
   useEffect(() => {
     if (!user) return;
-    load(user.id);
-    const unsub = subscribe(user.id);
+    load(user.id, activeAgentId);
+    const unsub = subscribe(user.id, activeAgentId);
     return unsub;
-  }, [user, load, subscribe]);
+  }, [user, activeAgentId, load, subscribe]);
 
   const grouped = useMemo(() => {
     const g: Record<string, typeof engrams> = {};
@@ -82,7 +84,8 @@ export default function DailyDigest() {
           <button
             type="button"
             className="mn-action ghost"
-            onClick={refresh}
+            onClick={() => refresh(activeAgentId)}
+            aria-label="Refresh digest"
             disabled={refreshing}
             style={{ marginLeft: 10 }}
           >

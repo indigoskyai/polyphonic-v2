@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type Section = 'modulators' | 'memory' | 'emotions' | 'events' | 'thoughts';
 type ThoughtFilter = 'all' | 'dream' | 'reflection' | 'observation' | 'decision';
@@ -17,13 +18,14 @@ export default function DashboardView() {
   const [active, setActive] = useState<Section>('modulators');
   const { user } = useAuthStore();
   const { load, subscribe, loaded } = useCognitiveStore();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
 
   useEffect(() => {
     if (!user) return;
-    load(user.id);
-    const unsub = subscribe(user.id);
+    load(user.id, activeAgentId);
+    const unsub = subscribe(user.id, activeAgentId);
     return unsub;
-  }, [user?.id]);
+  }, [user?.id, activeAgentId, load, subscribe]);
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>

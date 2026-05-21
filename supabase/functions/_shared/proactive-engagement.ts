@@ -15,6 +15,8 @@ export type ProactiveSeverity = "info" | "notable" | "important";
 
 export interface ProactiveTrigger {
   userId: string;
+  /** Agent whose activity this belongs to. Defaults to Luca for legacy callers. */
+  agentId?: string;
   /** A short identifier for who/what surfaced this (e.g. `subagent_run`, `scheduled_task`, `mnemos_consolidate`). */
   source: string;
   severity: ProactiveSeverity;
@@ -74,6 +76,7 @@ export async function dispatchProactiveEngagement(
 
   if (trigger.severity === "info") {
     const logged = await logActivity(supabase, trigger.userId, {
+      agentId: trigger.agentId || "luca",
       type: trigger.activityType || trigger.source,
       title: trigger.title,
       summary: trigger.summary,
@@ -92,12 +95,13 @@ export async function dispatchProactiveEngagement(
     const since24h = new Date(now - DAY_MS).toISOString();
     const sinceHour = new Date(now - MIN_INTERVAL_MS).toISOString();
 
-    const dailyCount = await countProactive(supabase, trigger.userId, since24h);
+    const agentId = trigger.agentId || "luca";
+    const dailyCount = await countProactive(supabase, trigger.userId, agentId, since24h);
     if (dailyCount >= DAILY_PROACTIVE_CAP) {
       return { allowed: false, reason: "daily_cap_reached" };
     }
 
-    const hourlyCount = await countProactive(supabase, trigger.userId, sinceHour);
+    const hourlyCount = await countProactive(supabase, trigger.userId, agentId, sinceHour);
     if (hourlyCount >= 1) {
       return { allowed: false, reason: "hourly_cap_reached" };
     }
@@ -105,6 +109,7 @@ export async function dispatchProactiveEngagement(
     const quiet = await loadQuietHours(supabase, trigger.userId);
     if (quiet.isQuiet) {
       const logged = await logActivity(supabase, trigger.userId, {
+        agentId: trigger.agentId || "luca",
         type: trigger.activityType || trigger.source,
         title: trigger.title,
         summary: trigger.summary,
@@ -122,6 +127,7 @@ export async function dispatchProactiveEngagement(
   }
 
   const logged = await logActivity(supabase, trigger.userId, {
+    agentId: trigger.agentId || "luca",
     type: trigger.activityType || trigger.source,
     title: trigger.title,
     summary: trigger.summary,
@@ -141,6 +147,7 @@ export async function dispatchProactiveEngagement(
       },
       body: JSON.stringify({
         user_id: trigger.userId,
+        agent_id: trigger.agentId || "luca",
         activity_id: logged?.id,
         severity: trigger.severity,
         title: trigger.title,
@@ -162,11 +169,12 @@ export async function dispatchProactiveEngagement(
   return { allowed: true, activityId: logged?.id, delivered };
 }
 
-async function countProactive(supabase: any, userId: string, sinceIso: string): Promise<number> {
+async function countProactive(supabase: any, userId: string, agentId: string, sinceIso: string): Promise<number> {
   const { count, error } = await supabase
     .from("entity_activity_log")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .eq("surface_to_user", true)
     .in("severity", ["notable", "important"])
     .gte("created_at", sinceIso);

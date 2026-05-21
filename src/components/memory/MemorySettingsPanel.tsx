@@ -14,6 +14,7 @@ import {
   PrimaryButton,
 } from '@/components/settings/FormControls';
 import MnemosStreamShell from './MnemosStreamShell';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type DreamFreq = 'hourly' | '6h' | 'daily' | 'weekly';
 
@@ -38,6 +39,8 @@ const DEFAULTS: MemorySettings = {
  */
 export default function MemorySettingsPanel() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const navigate = useNavigate();
   const [settings, setSettings] = useState<MemorySettings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
@@ -97,12 +100,12 @@ export default function MemorySettingsPanel() {
     if (!user) return;
     setClearing(true);
     await Promise.allSettled([
-      supabase.from('memory_events').delete().eq('user_id', user.id),
-      supabase.from('thought_stream').delete().eq('user_id', user.id),
-      supabase.from('cognitive_state').delete().eq('user_id', user.id),
-      supabase.from('engrams').delete().eq('user_id', user.id),
-      supabase.from('connections').delete().eq('user_id', user.id),
-      supabase.from('beliefs').delete().eq('user_id', user.id),
+      supabase.from('memory_events').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
+      supabase.from('thought_stream').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
+      supabase.from('cognitive_state').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
+      supabase.from('engrams').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
+      supabase.from('connections').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
+      supabase.from('beliefs').delete().eq('user_id', user.id).eq('agent_id', activeAgentId),
     ]);
     setClearing(false);
     setShowClearConfirm(false);
@@ -113,11 +116,11 @@ export default function MemorySettingsPanel() {
     setResetting(true);
     try {
       const { data, error } = await supabase.functions.invoke('reset-user-cognition', {
-        body: { confirm: 'RESET' },
+        body: { confirm: 'RESET', agent_id: activeAgentId },
       });
       if (error) throw error;
       const total = (data as { total_deleted?: number })?.total_deleted ?? 0;
-      toast.success('Luca has been reset', {
+      toast.success(`${activeAgentName} has been reset`, {
         description: `Cleared ${total} inferred record${total === 1 ? '' : 's'} across memory, beliefs, and mind state.`,
       });
       setShowResetModal(false);
@@ -140,7 +143,7 @@ export default function MemorySettingsPanel() {
       num="06"
       streamLabel="SETTINGS"
       title="Memory settings"
-      subtitle="How memory is captured, consolidated, and surfaced. Destructive operations live here."
+      subtitle={`How ${activeAgentName}'s memory is captured, consolidated, and surfaced. Destructive operations live here.`}
       hideToolbar
     >
       <SectionTitle>Import conversations</SectionTitle>
@@ -255,13 +258,13 @@ export default function MemorySettingsPanel() {
         }}
       >
         <div style={{ fontSize: 13, color: 'var(--text-body)', marginBottom: 6, fontWeight: 500 }}>
-          Reset Luca's understanding of me
+          Reset {activeAgentName}'s understanding of me
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.55 }}>
-          Wipes everything Luca has learned or inferred about you — memories, beliefs, engrams, hypomnema, mind state, emotional history, imports, curiosity questions, profile facets. Keeps your chat threads, agent configs, and account.
+          Wipes everything {activeAgentName} has learned or inferred about you — memories, beliefs, engrams, hypomnema, mind state, emotional history, and curiosity questions. Keeps your chat threads, agent configs, imports, and account.
         </div>
         <DangerButton
-          label={resetting ? 'Resetting…' : 'Reset Luca'}
+          label={resetting ? 'Resetting…' : `Reset ${activeAgentName}`}
           onClick={() => setShowResetModal(true)}
         />
       </div>
@@ -301,10 +304,10 @@ export default function MemorySettingsPanel() {
             }}
           >
             <div style={{ fontFamily: 'var(--font-grotesque)', fontSize: 18, fontWeight: 500, color: 'var(--ink)', marginBottom: 10 }}>
-              Reset Luca's understanding of me
+              Reset {activeAgentName}'s understanding of me
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.55, marginBottom: 16 }}>
-              This permanently deletes every inferred record across memories, beliefs, engrams, hypomnema, mind/emotional state, imports, curiosity questions, and profile facets. Chat threads and account stay. This cannot be undone.
+              This permanently deletes this agent's inferred records across memories, beliefs, engrams, hypomnema, mind/emotional state, and curiosity questions. Chat threads, imports, agent configs, and account stay. This cannot be undone.
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>
               Type <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink)' }}>RESET</span> to confirm:

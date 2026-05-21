@@ -3,6 +3,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useViewTabStore, MemoryTab } from '@/stores/viewTabStore';
 import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
+import AgentScopeSelect from './AgentScopeSelect';
 
 interface NavItem { name: MemoryTab; meta: string; }
 
@@ -12,14 +14,18 @@ export default function SidebarMemory() {
   const engrams = useMemoryStore((s) => s.engrams);
   const beliefs = useMemoryStore((s) => s.beliefs);
   const connections = useMemoryStore((s) => s.connections);
-  const loadMemories = useMemoryStore((s) => s.loadMemories);
+  const loadAll = useMemoryStore((s) => s.loadAll);
   const memoryTab = useViewTabStore((s) => s.memoryTab);
   const setMemoryTab = useViewTabStore((s) => s.setMemoryTab);
   const candidates = useMemoryCandidatesStore((s) => s.items);
+  const loadCandidates = useMemoryCandidatesStore((s) => s.load);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
 
   useEffect(() => {
-    if (user && memories.length === 0) loadMemories(user.id);
-  }, [user]);
+    if (!user) return;
+    loadAll(user.id, activeAgentId);
+    loadCandidates(user.id, activeAgentId);
+  }, [user, activeAgentId, loadAll, loadCandidates]);
 
   const counts = useMemo(() => {
     const activeEngrams = engrams.filter((e) => e.state === 'active' || e.state === 'consolidating').length;
@@ -46,6 +52,7 @@ export default function SidebarMemory() {
       <div className="sidebar-head">
         <h2 className="sidebar-head-title">Memory</h2>
       </div>
+      <AgentScopeSelect />
 
       <div className="sidebar-search">
         <span className="sidebar-search-glyph">⌕</span>

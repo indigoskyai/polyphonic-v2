@@ -98,6 +98,7 @@ serve(async (req) => {
     // commit / pin paths — both write to memories
     const memoryRow: Record<string, unknown> = {
       user_id: userId,
+      agent_id: candidate.agent_id || "luca",
       content: candidate.content,
       memory_type: candidate.memory_type,
       confidence: candidate.confidence,

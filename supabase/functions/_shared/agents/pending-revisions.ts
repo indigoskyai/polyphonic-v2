@@ -17,6 +17,7 @@ export async function loadPendingRevisions(
   supabase: SupabaseLike,
   userId: string,
   threadId: string,
+  agentId = "luca",
 ): Promise<PendingRevision[]> {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
@@ -24,6 +25,7 @@ export async function loadPendingRevisions(
     .select("id, revision_type, what_was_said, what_to_say_now, rationale, created_at")
     .eq("user_id", userId)
     .eq("thread_id", threadId)
+    .eq("agent_id", agentId)
     .eq("status", "pending")
     .gte("created_at", cutoff)
     .order("created_at", { ascending: true })

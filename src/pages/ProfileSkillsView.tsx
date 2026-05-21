@@ -7,6 +7,7 @@ import RichBody from '@/components/rich/RichBody';
 import { Section, InlinePill } from '@/components/settings/Section';
 import { SettingsPage, AgentDot } from '@/components/settings/SettingsPage';
 import { useClock } from '@/components/settings/useClock';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type AgentSkill = {
   id: string;
@@ -39,6 +40,8 @@ export default function ProfileSkillsView() {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
   const time = useClock();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [skills, setSkills] = useState<AgentSkill[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +51,7 @@ export default function ProfileSkillsView() {
       .from('agent_skills')
       .select('id, name, description, trigger_keywords, content, source_thread_id, use_count, last_used_at, created_at, updated_at')
       .eq('user_id', user.id)
-      .eq('agent_id', 'luca')
+      .eq('agent_id', activeAgentId)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -64,14 +67,14 @@ export default function ProfileSkillsView() {
     setLoading(true);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, activeAgentId]);
 
   return (
     <SettingsPage
       folio={{
         left: (
           <>
-            <span><AgentDot /> luca</span>
+            <span><AgentDot /> {activeAgentName.toLowerCase()}</span>
             <span>settings · <span className="v">self-model</span></span>
           </>
         ),
@@ -89,9 +92,9 @@ export default function ProfileSkillsView() {
           <span>·</span>
           <span className="v">Self-model</span>
         </div>
-        <h1 className="set-head-title">Luca&apos;s self-model</h1>
+        <h1 className="set-head-title">{activeAgentName}&apos;s self-model</h1>
         <p className="set-head-sub">
-          The commitments, operating principles, and procedural patterns Luca has formed across your conversations. Distilled in the background, loaded back into Luca&apos;s prompt at runtime, and editable here. This is Luca writing itself in front of you.
+          The commitments, operating principles, and procedural patterns {activeAgentName} has formed across your conversations. Distilled in the background, loaded back into {activeAgentName}&apos;s prompt at runtime, and editable here.
         </p>
       </div>
 
@@ -108,7 +111,7 @@ export default function ProfileSkillsView() {
           number="01"
           name="Pending review"
           title="Candidate entries"
-          desc="Drafts the distiller proposes from your recent threads. Approve to commit them into Luca's active self-model, or reject so they don't get recreated."
+          desc={`Drafts the distiller proposes from your recent threads. Approve to commit them into ${activeAgentName}'s active self-model, or reject so they don't get recreated.`}
           pill={<InlinePill variant="amber">Pipeline TBD</InlinePill>}
         >
           <EmptyState>
@@ -120,14 +123,14 @@ export default function ProfileSkillsView() {
         <Section
           number="02"
           name="Living self-model"
-          title="Commitments Luca has formed"
-          desc="Each entry is something Luca has come to do consistently — a commitment, an operating principle, or a procedural pattern. They load back into Luca's prompt at runtime when their triggers fit. Click to expand."
+          title={`Commitments ${activeAgentName} has formed`}
+          desc={`Each entry is something ${activeAgentName} has come to do consistently — a commitment, an operating principle, or a procedural pattern. They load back into ${activeAgentName}'s prompt at runtime when their triggers fit. Click to expand.`}
         >
           {loading ? (
             <p style={{ color: 'var(--text-ghost)', fontSize: 13 }}>Loading…</p>
           ) : skills.length === 0 ? (
             <EmptyState>
-              The self-model is empty. Luca has not yet formed any patterns worth holding onto.
+              The self-model is empty. {activeAgentName} has not yet formed any patterns worth holding onto.
             </EmptyState>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -385,7 +388,7 @@ function SkillCard({ skill, onChanged }: { skill: AgentSkill; onChanged: () => v
                   tone="danger"
                 />
                 <ActionButton
-                  onClick={() => { if (window.confirm(`Reject ${skill.name}? Luca will avoid recreating it.`)) runAction('reject'); }}
+                  onClick={() => { if (window.confirm(`Reject ${skill.name}? ${activeAgentName} will avoid recreating it.`)) runAction('reject'); }}
                   disabled={busy}
                   icon={<Ban size={13} />}
                   label="Reject"

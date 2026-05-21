@@ -38,6 +38,7 @@ export type ConfidenceTier =
 export interface Engram {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   engram_type: EngramType;
   // Dual-trace encoding
@@ -63,6 +64,7 @@ export interface Engram {
 export interface Connection {
   id: string;
   user_id: string;
+  agent_id: string;
   source_id: string;
   target_id: string;
   connection_type: ConnectionType;
@@ -74,6 +76,7 @@ export interface Connection {
 export interface Belief {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   confidence: number;
   /** Generated column — computed from `confidence`. */
@@ -88,6 +91,7 @@ export interface Belief {
 export interface EmotionalState {
   id?: string;
   user_id?: string;
+  agent_id?: string;
   valence: number;    // negative to positive (-1..1)
   arousal: number;    // calm to excited (-1..1)
   dominance: number;  // submissive to dominant (-1..1)
@@ -101,6 +105,7 @@ export interface EmotionalState {
 export interface EngramArchive {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   engram_type: EngramType;
   original_strength: number | null;
@@ -162,6 +167,8 @@ export interface RetrievalOptions {
 
 /** Options for the decay process. */
 export interface DecayOptions {
+  /** Agent whose substrate should decay. */
+  agentId?: string;
   /** Only decay engrams older than this many hours since last access. */
   min_hours_since_access?: number;
   /** If true, archive engrams that fall below the archive threshold. */

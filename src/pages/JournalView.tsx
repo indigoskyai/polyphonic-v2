@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import MindStreamShell, { StreamFilter } from '@/components/mind/MindStreamShell';
 
 function moodColor(mood: string): string {
@@ -19,17 +20,19 @@ function moodColor(mood: string): string {
 export default function JournalView() {
   const user = useAuthStore((s) => s.user);
   const { load, loadMindData, subscribe, journalEntries } = useCognitiveStore();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [filter, setFilter] = useState<StreamFilter>('all');
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (user) {
-      load(user.id);
-      loadMindData(user.id);
-      const unsub = subscribe(user.id);
+      load(user.id, activeAgentId);
+      loadMindData(user.id, activeAgentId);
+      const unsub = subscribe(user.id, activeAgentId);
       return unsub;
     }
-  }, [user]);
+  }, [user, activeAgentId, load, loadMindData, subscribe]);
 
   const filtered = journalEntries
     .filter((e) => {
@@ -59,7 +62,7 @@ export default function JournalView() {
           num="08"
           streamLabel="JOURNAL"
           title="Journal"
-          subtitle={`${journalEntries.length} entries. Luca's autonomous journal — periodic introspective entries written between conversations.`}
+          subtitle={`${journalEntries.length} entries. ${activeAgentName}'s autonomous journal — periodic introspective entries written between conversations.`}
           searchPlaceholder="Search journal entries…"
           filter={filter} onFilterChange={setFilter}
           query={query} onQueryChange={setQuery}

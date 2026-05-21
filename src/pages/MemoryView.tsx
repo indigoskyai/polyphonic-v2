@@ -16,6 +16,7 @@ import MemorySettingsPanel from '@/components/memory/MemorySettingsPanel';
 import MnemosOverview from '@/components/memory/MnemosOverview';
 import MnemosModeToggle from '@/components/memory/MnemosModeToggle';
 import DailyDigest from '@/components/memory/DailyDigest';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 export default function MemoryView() {
   const activeTab = useViewTabStore((s) => s.memoryTab);
@@ -23,11 +24,12 @@ export default function MemoryView() {
   const user = useAuthStore((s) => s.user);
   const loadAll = useMemoryStore((s) => s.loadAll);
   const loadErrors = useMemoryStore((s) => s.loadErrors);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const loadErrorEntries = Object.entries(loadErrors);
 
   useEffect(() => {
-    if (user) loadAll(user.id);
-  }, [user, loadAll]);
+    if (user) loadAll(user.id, activeAgentId);
+  }, [user, activeAgentId, loadAll]);
 
   return (
     <div

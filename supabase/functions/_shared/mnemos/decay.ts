@@ -146,6 +146,7 @@ export function determineState(
 
 async function countConnections(
   supabase: SupabaseClient,
+  agentId: string,
   engramIds: string[]
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
@@ -155,11 +156,13 @@ async function countConnections(
   const { data: sourceRows } = await supabase
     .from("connections")
     .select("source_id")
+    .eq("agent_id", agentId)
     .in("source_id", engramIds);
 
   const { data: targetRows } = await supabase
     .from("connections")
     .select("target_id")
+    .eq("agent_id", agentId)
     .in("target_id", engramIds);
 
   for (const r of (sourceRows ?? []) as Array<{ source_id: string }>) {
@@ -177,6 +180,7 @@ export async function runDecayCycle(
   options: DecayOptions = {}
 ): Promise<DecayResult> {
   const { min_hours_since_access = 1, archive_below_threshold = true, rate_multiplier = 1 } = options;
+  const agentId = (options as DecayOptions & { agentId?: string }).agentId || "luca";
 
   const now = new Date();
   let totalProcessed = 0;
@@ -191,6 +195,7 @@ export async function runDecayCycle(
         "id, strength, stability, accessibility, state, last_accessed_at, content, engram_type, tags, source_context, created_at"
       )
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .in("state", ["active", "consolidating", "dormant"])
       .order("last_accessed_at", { ascending: true })
       .range(offset, offset + BATCH_SIZE - 1);
@@ -199,7 +204,7 @@ export async function runDecayCycle(
     if (!engrams || engrams.length === 0) break;
 
     const ids = (engrams as Array<{ id: string }>).map((e) => e.id);
-    const connectionCounts = await countConnections(supabase, ids);
+    const connectionCounts = await countConnections(supabase, agentId, ids);
 
     const toUpdate: Array<{
       id: string;
@@ -242,6 +247,7 @@ export async function runDecayCycle(
         toArchive.push({
           id: engram.id,
           user_id: userId,
+          agent_id: agentId,
           content: engram.content,
           engram_type: engram.engram_type,
           original_strength: engram.strength,
@@ -290,6 +296,7 @@ export async function runDecayCycle(
           await supabase
             .from("connections")
             .delete()
+            .eq("agent_id", agentId)
             .or(`source_id.eq.${id},target_id.eq.${id}`);
         }
       }

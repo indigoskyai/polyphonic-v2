@@ -61,13 +61,15 @@ function simpleHash(content: string): string {
  */
 async function findSofteningCandidates(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  agentId = "luca",
 ): Promise<Engram[]> {
   // Get low-strength active engrams
   const { data: candidates, error } = await supabase
     .from("engrams")
     .select("*")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("state", ["active", "consolidating"])
     .lt("strength", SOFTENING_STRENGTH_THRESHOLD)
     .order("strength", { ascending: true })
@@ -86,6 +88,7 @@ async function findSofteningCandidates(
     const { count, error: countError } = await supabase
       .from("connections")
       .select("id", { count: "exact", head: true })
+      .eq("agent_id", agentId)
       .or(`source_id.eq.${engram.id},target_id.eq.${engram.id}`);
 
     if (countError) {
@@ -151,9 +154,10 @@ async function compressContent(
 export async function runSofteningCycle(
   supabase: SupabaseClient,
   userId: string,
-  openrouterApiKey: string
+  openrouterApiKey: string,
+  agentId = "luca",
 ): Promise<SofteningResult[]> {
-  const candidates = await findSofteningCandidates(supabase, userId);
+  const candidates = await findSofteningCandidates(supabase, userId, agentId);
 
   if (candidates.length === 0) return [];
 
@@ -182,7 +186,8 @@ export async function runSofteningCycle(
           },
           updated_at: new Date().toISOString(),
         })
-        .eq("id", engram.id);
+        .eq("id", engram.id)
+        .eq("agent_id", agentId);
 
       if (updateError) {
         console.error(`Softening: failed to update engram ${engram.id} — ${updateError.message}`);

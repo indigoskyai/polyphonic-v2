@@ -3,6 +3,7 @@ import { Pause, Play, Trash2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type ScheduledTask = {
   id: string;
@@ -42,6 +43,8 @@ function formatTime(value: string | null) {
 export default function ProfileScheduleView() {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -58,6 +61,7 @@ export default function ProfileScheduleView() {
       .from('scheduled_tasks')
       .select('id, name, schedule_expr, prompt, delivery_mode, enabled, last_run_at, next_run_at, last_run_status')
       .eq('user_id', user.id)
+      .eq('agent_id', activeAgentId)
       .order('created_at', { ascending: false });
     if (error) {
       if (!error.message.toLowerCase().includes('scheduled_tasks')) {
@@ -72,12 +76,12 @@ export default function ProfileScheduleView() {
 
   useEffect(() => {
     load();
-  }, [user?.id]);
+  }, [user?.id, activeAgentId]);
 
   async function createTask() {
     if (!user || !name.trim() || !prompt.trim()) return;
     if (tasks.length >= 20) {
-      toast({ title: 'Schedule full', description: 'Luca can keep 20 scheduled tasks for now.', variant: 'destructive' });
+      toast({ title: 'Schedule full', description: `${activeAgentName} can keep 20 scheduled tasks for now.`, variant: 'destructive' });
       return;
     }
 
@@ -91,7 +95,7 @@ export default function ProfileScheduleView() {
     const nextRun = cadence === 'cron' ? nextDailyIso(time, day) : nextDailyIso(time, cadence === 'weekly' ? day : undefined);
     const { error } = await supabase.from('scheduled_tasks').insert({
       user_id: user.id,
-      agent_id: 'luca',
+      agent_id: activeAgentId,
       name: name.trim(),
       prompt: prompt.trim(),
       schedule_expr: scheduleExpr,
@@ -108,14 +112,14 @@ export default function ProfileScheduleView() {
   }
 
   async function updateTask(id: string, patch: Partial<ScheduledTask>) {
-    const { error } = await supabase.from('scheduled_tasks').update(patch).eq('id', id);
+    const { error } = await supabase.from('scheduled_tasks').update(patch).eq('id', id).eq('agent_id', activeAgentId);
     if (error) toast({ title: 'Could not update task', description: error.message, variant: 'destructive' });
     else load();
   }
 
   async function deleteTask(id: string, taskName: string) {
     if (!window.confirm(`Delete ${taskName}?`)) return;
-    const { error } = await supabase.from('scheduled_tasks').delete().eq('id', id);
+    const { error } = await supabase.from('scheduled_tasks').delete().eq('id', id).eq('agent_id', activeAgentId);
     if (error) toast({ title: 'Could not delete task', description: error.message, variant: 'destructive' });
     else load();
   }
@@ -128,7 +132,7 @@ export default function ProfileScheduleView() {
             § L8 / schedule
           </div>
           <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 42, lineHeight: 1, color: 'var(--text-primary)', margin: 0 }}>
-            Luca's schedule
+            {activeAgentName}'s schedule
           </h1>
         </div>
 
@@ -158,7 +162,7 @@ export default function ProfileScheduleView() {
             <p style={{ color: 'var(--text-ghost)', fontSize: 14 }}>Loading schedule...</p>
           ) : tasks.length === 0 ? (
             <p style={{ color: 'var(--text-ghost)', fontSize: 14, lineHeight: 1.7, paddingTop: 24 }}>
-              Nothing scheduled yet. Luca is quiet until you ask for a rhythm.
+              Nothing scheduled yet. {activeAgentName} is quiet until you ask for a rhythm.
             </p>
           ) : tasks.map((task) => (
             <div key={task.id} className="profile-schedule-task-row flex items-start gap-4" style={{ padding: '20px 0', borderBottom: '1px solid var(--border-faint)' }}>

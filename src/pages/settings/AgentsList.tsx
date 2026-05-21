@@ -224,9 +224,10 @@ export default function AgentsList() {
               lineHeight: 1.5,
             }}
           >
-            New custom agents can be created and edited here. Chatting with them
-            uses BYOK routing until their memory and journal layers are fully
-            agent-scoped.
+            New custom agents can be created here or by asking Luca in chat.
+            Forge proposals appear inline for approval, and chatting with custom
+            agents uses BYOK routing until their memory and journal layers are
+            fully agent-scoped.
           </div>
         </Section>
       </div>

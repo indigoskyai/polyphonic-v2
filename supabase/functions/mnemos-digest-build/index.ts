@@ -6,12 +6,12 @@
  *
  * - Selects the user's engrams created today that have not been reviewed.
  * - Caps the digest at 30 (highest surprise first).
- * - Upserts a row in mnemos_digests for (user_id, today) and stamps
+ * - Upserts a row in mnemos_digests for (user_id, agent_id, today) and stamps
  *   engram.digest_id back on the included engrams.
  * - Auto-finalizes any prior "open" digest older than 48h.
  *
  * Body:
- *   { user_id?: string }   // service-role can target a specific user
+ *   { user_id?: string, agent_id?: string }   // service-role can target a specific user/agent
  *                          // omitted in cron mode → process all eligible users
  *   { force?: boolean }    // user-triggered refresh
  */
@@ -31,6 +31,10 @@ interface EngramRow {
 }
 
 async function buildForUser(supabase: SupabaseClient, userId: string) {
+  return buildForAgent(supabase, userId, "luca");
+}
+
+async function buildForAgent(supabase: SupabaseClient, userId: string, agentId: string) {
   // Skip if user disabled mnemos
   const { data: settings } = await supabase
     .from("memory_settings")
@@ -49,6 +53,7 @@ async function buildForUser(supabase: SupabaseClient, userId: string) {
     .from("engrams")
     .select("id, engram_type, surprise_score, created_at")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .is("reviewed_at", null)
     .in("state", ["active", "consolidating"])
     .gte("created_at", since)
@@ -64,12 +69,13 @@ async function buildForUser(supabase: SupabaseClient, userId: string) {
     .upsert(
       {
         user_id: userId,
+        agent_id: agentId,
         digest_date: today,
         engram_count: rows.length,
         status: "open",
         generated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,digest_date" },
+      { onConflict: "user_id,agent_id,digest_date" },
     )
     .select("id")
     .single();
@@ -89,6 +95,7 @@ async function buildForUser(supabase: SupabaseClient, userId: string) {
     .from("mnemos_digests")
     .update({ status: "auto_finalized", finalized_at: new Date().toISOString() })
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .eq("status", "open")
     .lt("generated_at", cutoff);
 
@@ -111,7 +118,7 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
 
-  let body: { user_id?: string; force?: boolean } = {};
+  let body: { user_id?: string; agent_id?: string; force?: boolean } = {};
   try { body = await req.json(); } catch { /* empty body ok */ }
 
   try {
@@ -123,7 +130,8 @@ serve(async (req) => {
           status: 401, headers: { ...cors, "Content-Type": "application/json" },
         });
       }
-      const result = await buildForUser(supabase, auth.userId);
+      const agentId = typeof body.agent_id === "string" ? body.agent_id : "luca";
+      const result = await buildForAgent(supabase, auth.userId, agentId);
       return new Response(JSON.stringify({ ok: true, ...result }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
@@ -131,7 +139,7 @@ serve(async (req) => {
 
     // Service-role mode
     if (body.user_id) {
-      const result = await buildForUser(supabase, body.user_id);
+      const result = await buildForAgent(supabase, body.user_id, body.agent_id || "luca");
       await recordCronSuccess("mnemos-digest-build", Date.now() - start);
       return new Response(JSON.stringify({ ok: true, ...result }), {
         headers: { ...cors, "Content-Type": "application/json" },
@@ -142,19 +150,21 @@ serve(async (req) => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: rows } = await supabase
       .from("engrams")
-      .select("user_id")
+      .select("user_id, agent_id")
       .gte("created_at", since)
       .limit(2000);
-    const userIds = [...new Set((rows ?? []).map((r: { user_id: string }) => r.user_id))];
+    const scopes = [...new Map((rows ?? []).map((r: { user_id: string; agent_id?: string | null }) =>
+      [`${r.user_id}:${r.agent_id || "luca"}`, { userId: r.user_id, agentId: r.agent_id || "luca" }]
+    )).values()];
 
     const results: Record<string, unknown> = {};
-    for (const uid of userIds) {
-      try { results[uid] = await buildForUser(supabase, uid); }
-      catch (e) { results[uid] = { error: (e as Error).message }; }
+    for (const scope of scopes) {
+      try { results[`${scope.userId}:${scope.agentId}`] = await buildForAgent(supabase, scope.userId, scope.agentId); }
+      catch (e) { results[`${scope.userId}:${scope.agentId}`] = { error: (e as Error).message }; }
     }
 
     await recordCronSuccess("mnemos-digest-build", Date.now() - start);
-    return new Response(JSON.stringify({ ok: true, users_processed: userIds.length, results }), {
+    return new Response(JSON.stringify({ ok: true, scopes_processed: scopes.length, results }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useHypomnemaStore } from '@/stores/hypomnemaStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import HypomnemaEntryCard from './HypomnemaEntry';
 
 const AGENT_ORDER = ['luca', 'anima', 'vektor'];
@@ -17,6 +18,7 @@ export default function HypomnemaList() {
   const load = useHypomnemaStore((s) => s.load);
   const subscribe = useHypomnemaStore((s) => s.subscribe);
   const forget = useHypomnemaStore((s) => s.forget);
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
 
   useEffect(() => {
     if (!user) return;
@@ -35,6 +37,28 @@ export default function HypomnemaList() {
     }
     return map;
   }, [entries]);
+
+  const agentOrder = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const agent of AGENT_ORDER) {
+      seen.add(agent);
+      ordered.push(agent);
+    }
+    for (const agent of availableAgents) {
+      if (!seen.has(agent.id)) {
+        seen.add(agent.id);
+        ordered.push(agent.id);
+      }
+    }
+    for (const agent of grouped.keys()) {
+      if (!seen.has(agent)) ordered.push(agent);
+    }
+    return ordered;
+  }, [availableAgents, grouped]);
+
+  const labelForAgent = (agentId: string) =>
+    availableAgents.find((agent) => agent.id === agentId)?.name || AGENT_LABEL[agentId] || agentId;
 
   return (
     <section
@@ -88,7 +112,7 @@ export default function HypomnemaList() {
           Nothing here yet. The first entries land after substantive turns.
         </p>
       ) : (
-        AGENT_ORDER.map((agent) => {
+        agentOrder.map((agent) => {
           const list = grouped.get(agent) || [];
           if (list.length === 0) return null;
           return (
@@ -103,7 +127,7 @@ export default function HypomnemaList() {
                   marginBottom: 10,
                 }}
               >
-                {AGENT_LABEL[agent] || agent} · {list.length}
+                {labelForAgent(agent)} · {list.length}
               </div>
               {list.map((entry) => (
                 <HypomnemaEntryCard

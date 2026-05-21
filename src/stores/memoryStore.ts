@@ -9,6 +9,7 @@ type MemoryLoadLayer = 'memories' | 'engrams' | 'connections' | 'beliefs';
 export const ENGRAM_UI_SELECT = [
   'id',
   'user_id',
+  'agent_id',
   'content',
   'engram_type',
   'strength',
@@ -29,6 +30,7 @@ export const ENGRAM_UI_SELECT = [
 export interface Engram {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   engram_type: 'episodic' | 'semantic' | 'procedural' | 'belief';
   strength: number;
@@ -49,6 +51,7 @@ export interface Engram {
 export interface Connection {
   id: string;
   user_id: string;
+  agent_id: string;
   source_id: string;
   target_id: string;
   connection_type: string;
@@ -59,6 +62,7 @@ export interface Connection {
 export interface Belief {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   confidence: number;
   confidence_tier?: string;
@@ -111,11 +115,11 @@ interface MemoryState {
   setFilters: (filters: Partial<MemoryFilters>) => void;
   setMemories: (memories: Memory[]) => void;
   clearLoadErrors: () => void;
-  loadEngrams: (userId: string) => Promise<void>;
-  loadConnections: (userId: string) => Promise<void>;
-  loadBeliefs: (userId: string) => Promise<void>;
-  loadMemories: (userId: string) => Promise<void>;
-  loadAll: (userId: string) => Promise<void>;
+  loadEngrams: (userId: string, agentId?: string) => Promise<void>;
+  loadConnections: (userId: string, agentId?: string) => Promise<void>;
+  loadBeliefs: (userId: string, agentId?: string) => Promise<void>;
+  loadMemories: (userId: string, agentId?: string) => Promise<void>;
+  loadAll: (userId: string, agentId?: string) => Promise<void>;
   upsertEngram: (e: Engram) => void;
   removeEngram: (id: string) => void;
   upsertConnection: (c: Connection) => void;
@@ -148,6 +152,7 @@ export function normalizeEngramRow(row: Record<string, unknown>): Engram {
   return {
     id: String(row.id ?? ''),
     user_id: String(row.user_id ?? ''),
+    agent_id: String(row.agent_id ?? 'luca'),
     content: String(row.content ?? ''),
     engram_type: isEngramType(row.engram_type) ? row.engram_type : 'episodic',
     strength: numberOr(row.strength, 0),
@@ -204,11 +209,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
   setMemories: (memories) => set({ memories }),
   clearLoadErrors: () => set({ loadErrors: {} }),
 
-  loadMemories: async (userId) => {
+  loadMemories: async (userId, agentId = 'luca') => {
     const { data, error } = await supabase
       .from('memories')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(1000);
@@ -220,11 +226,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
     set({ memories: (data ?? []) as Memory[] });
   },
 
-  loadEngrams: async (userId) => {
+  loadEngrams: async (userId, agentId = 'luca') => {
     const { data, error } = await supabase
       .from('engrams')
       .select(ENGRAM_UI_SELECT)
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .order('created_at', { ascending: false })
       .limit(500);
     if (error) {
@@ -235,11 +242,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
     set({ engrams: ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => normalizeEngramRow(row)) });
   },
 
-  loadConnections: async (userId) => {
+  loadConnections: async (userId, agentId = 'luca') => {
     const { data, error } = await supabase
       .from('connections')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .limit(2000);
     if (error) {
       setLoadError('connections', error);
@@ -249,11 +257,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
     set({ connections: (data ?? []) as Connection[] });
   },
 
-  loadBeliefs: async (userId) => {
+  loadBeliefs: async (userId, agentId = 'luca') => {
     const { data, error } = await supabase
       .from('beliefs')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .order('confidence', { ascending: false });
     if (error) {
       setLoadError('beliefs', error);
@@ -263,14 +272,14 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
     set({ beliefs: (data ?? []) as Belief[] });
   },
 
-  loadAll: async (userId) => {
+  loadAll: async (userId, agentId = 'luca') => {
     set({ loading: true });
     try {
       await Promise.all([
-        get().loadMemories(userId),
-        get().loadEngrams(userId),
-        get().loadConnections(userId),
-        get().loadBeliefs(userId),
+        get().loadMemories(userId, agentId),
+        get().loadEngrams(userId, agentId),
+        get().loadConnections(userId, agentId),
+        get().loadBeliefs(userId, agentId),
       ]);
     } finally {
       set({ loading: false });

@@ -8,6 +8,50 @@ import {
   type McpToolRegistration,
 } from "../_shared/mcp/client.ts";
 
+const FORGE_AGENT_BLUEPRINT_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string", description: "Display name for the agent, 40 characters or fewer." },
+    role: { type: "string", description: "Short functional role, for example researcher, coach, editor, analyst." },
+    model: {
+      type: "string",
+      enum: [
+        "anthropic/claude-opus-4-7",
+        "anthropic/claude-sonnet-4.6",
+        "anthropic/claude-haiku-4.5",
+        "openai/gpt-5.5",
+        "openai/gpt-5.4",
+        "openai/gpt-5.4-mini",
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3-flash-preview",
+        "google/gemini-2.5-pro",
+        "google/gemini-2.5-flash",
+        "x-ai/grok-4.20",
+        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash",
+        "moonshotai/kimi-k2.6",
+        "moonshotai/kimi-k2.5",
+      ],
+      description: "Runtime model id.",
+    },
+    avatar_color: { type: "string", enum: ["cream", "ochre", "blue", "magenta", "sage", "violet"] },
+    prompt: { type: "string", description: "Full runtime system instructions for this agent." },
+    voice_description: { type: "string", description: "Short voice/personality summary." },
+    summary: { type: "string", description: "One-paragraph identity summary shown in the proposal card." },
+    identity_docs: {
+      type: "object",
+      properties: {
+        soul: { type: "string", description: "SOUL.md: identity, orientation, and way of being." },
+        convictions: { type: "string", description: "Convictions.md: stable stances and beliefs this agent acts from." },
+        user_model: { type: "string", description: "User-model.md: how this agent should understand and care for the user." },
+        self_model: { type: "string", description: "Self-model.md: how this agent understands its own patterns and limits." },
+      },
+      required: ["soul", "convictions", "user_model", "self_model"],
+    },
+  },
+  required: ["name", "role", "model", "avatar_color", "prompt", "voice_description", "summary", "identity_docs"],
+};
+
 const TOOL_SCHEMAS = [
   {
     type: "function",
@@ -106,6 +150,30 @@ const TOOL_SCHEMAS = [
   {
     type: "function",
     function: {
+      name: "forge_agent",
+      description:
+        "Create an inline Forge proposal for a new custom agent, or for updates to an existing user-created custom agent. Use only for Luca building or revising agents for the user. This never persists the agent directly; the user must approve the proposal card in chat.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["propose_create", "propose_update"],
+            description: "Whether this is a new agent proposal or an update proposal.",
+          },
+          target_agent_id: {
+            type: "string",
+            description: "Required for propose_update. Never pass luca, observer, anima, or vektor.",
+          },
+          blueprint: FORGE_AGENT_BLUEPRINT_SCHEMA,
+        },
+        required: ["action", "blueprint"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "generate_image",
       description:
         "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using OpenAI gpt-image-2. Use for anything that should look like a real image. For diagrams, icons, or anything line-based, prefer create_artifact with kind=svg instead.",
@@ -145,7 +213,7 @@ const TOOL_SCHEMAS = [
     type: "function",
     function: {
       name: "create_artifact",
-      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants something visible or iteratable. For SVGs of icons/diagrams/charts, this is preferred over generate_image.",
+      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants a visible document/component/diagram. Do not use this for custom-agent creation or agent definitions; use forge_agent instead.",
       parameters: {
         type: "object",
         properties: {
@@ -215,6 +283,7 @@ Available tools:
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
 - update_self_model: Luca updates their self-model from evidence about how they are showing up.
+- forge_agent: Draft a complete custom-agent blueprint and insert an inline approval proposal when the user asks Luca to create or revise an agent. The memory/continuity system is standardized by Polyphonic, not chosen by the user.
 ${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
@@ -223,13 +292,43 @@ Rules:
 - If the task needs clicking, page state, or browser-only behavior, use browse.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
 - For icons, line diagrams, simple logos, charts, flowcharts, or anything that should be vector/clean lines, use create_artifact with kind="svg" instead of generate_image.
+- Never use create_artifact to create, define, or test a custom agent. Agent creation must use forge_agent or, if underspecified, a clarifying question.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
+- If the user asks to create, build, make, design, forge, or revise a custom agent, use forge_agent once there is enough identity detail to draft the full Open Clause shape. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
+- forge_agent blueprints must be complete agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
 - If a sub-task can run in parallel without blocking the main conversation, dispatch_subagent is the tool. Reserve it for genuinely parallelizable work.
 - If the user's message is in Anima's domain (consciousness, identity-vs-performance, mesh emergence, philosophy of mind) AND a fresh angle would meaningfully deepen Luca's response, call consult_anima.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing), respond with a brief text explanation of why no tools are needed.
 - You may call multiple tools if needed.
 - Be decisive and fast.`;
+}
+
+function toolName(schema: any): string {
+  return String(schema?.function?.name || "");
+}
+
+function latestUserContent(messages: any[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role === "user" && typeof message.content === "string") {
+      return message.content;
+    }
+  }
+  return "";
+}
+
+function looksLikeAgentForgeRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const asksToMake =
+    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit)\b/.test(normalized) ||
+    /\bnew\b/.test(normalized);
+  const mentionsAgent =
+    /\bcustom\s+agent\b/.test(normalized) ||
+    /\bagent\b/.test(normalized) ||
+    /\bopen\s+clause\b/.test(normalized) ||
+    /\bopenclaw\b/.test(normalized);
+  return asksToMake && mentionsAgent;
 }
 
 serve(async (req) => {
@@ -302,7 +401,10 @@ serve(async (req) => {
     }
 
     const mcpTools = userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
-    const toolSchemas = [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
+    const forceForgeOnly = looksLikeAgentForgeRequest(latestUserContent(messages));
+    const toolSchemas = forceForgeOnly
+      ? TOOL_SCHEMAS.filter((schema) => toolName(schema) === "forge_agent")
+      : [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
 
     // Look up the most recent generated image in this thread, so the planner
     // can resolve "make it darker" / "edit that" without the user repeating
@@ -337,6 +439,9 @@ serve(async (req) => {
         role: "system",
         content:
           buildPlanningSystemPrompt(mcpTools) +
+          (forceForgeOnly
+            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact."
+            : "") +
           lastImageHint +
           (custom_instructions
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
@@ -484,6 +589,17 @@ serve(async (req) => {
               operation: args.operation,
               path: args.path,
               content: args.content,
+            };
+          } else if (fnName === "forge_agent") {
+            edgeFn = "agent-forge";
+            body = {
+              user_id: userId,
+              thread_id,
+              source_message_id,
+              source_agent_id: "luca",
+              action: args.action,
+              target_agent_id: args.target_agent_id,
+              blueprint: args.blueprint,
             };
           } else if (fnName === "update_soul" || fnName === "update_self_model") {
             clearTimeout(timeout);

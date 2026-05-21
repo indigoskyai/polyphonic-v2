@@ -7,6 +7,7 @@ export type CandidateStatus = 'pending' | 'pinned' | 'committed' | 'rejected';
 export interface MemoryCandidate {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   memory_type: string;
   confidence: number;
@@ -22,8 +23,8 @@ interface MemoryCandidatesState {
   items: MemoryCandidate[];
   loading: boolean;
   error: string | null;
-  load: (userId: string) => Promise<void>;
-  subscribe: (userId: string) => () => void;
+  load: (userId: string, agentId?: string) => Promise<void>;
+  subscribe: (userId: string, agentId?: string) => () => void;
   pin: (id: string) => Promise<void>;
   commit: (id: string) => Promise<void>;
   edit: (id: string, patch: Partial<Pick<MemoryCandidate, 'content' | 'memory_type'>>) => Promise<void>;
@@ -50,12 +51,13 @@ export const useMemoryCandidatesStore = create<MemoryCandidatesState>((set, get)
   loading: false,
   error: null,
 
-  load: async (userId) => {
+  load: async (userId, agentId = 'luca') => {
     set({ loading: true, error: null });
     const { data, error } = await supabase
       .from('memory_candidates')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(100);
@@ -66,15 +68,16 @@ export const useMemoryCandidatesStore = create<MemoryCandidatesState>((set, get)
     set({ items: (data ?? []) as MemoryCandidate[], loading: false });
   },
 
-  subscribe: (userId) => {
+  subscribe: (userId, agentId = 'luca') => {
     const channel = supabase
-      .channel(`memory_candidates:${userId}`)
+      .channel(`memory_candidates:${userId}:${agentId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'memory_candidates', filter: `user_id=eq.${userId}` },
         (payload) => {
           const row = (payload.new ?? payload.old) as MemoryCandidate | undefined;
           if (!row) return;
+          if ((row.agent_id || 'luca') !== agentId) return;
           if (payload.eventType === 'INSERT') {
             if (row.status !== 'pending') return;
             set((s) => ({ items: [row, ...s.items] }));

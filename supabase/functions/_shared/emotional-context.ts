@@ -66,11 +66,13 @@ function describeLevel(value: number): "high" | "moderate" | "low" {
 export async function loadEmotionalState(
   supabase: SupabaseClient,
   userId: string,
+  agentId = "luca",
 ): Promise<EmotionalState | null> {
   const { data, error } = await supabase
     .from("emotional_state")
     .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation, mood_summary")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .maybeSingle();
 
   if (error || !data) return null;

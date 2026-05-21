@@ -20,6 +20,7 @@
  */
 import { useViewTabStore } from '@/stores/viewTabStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import CognitiveStateRadar from './CognitiveStateRadar';
 import MemoryPulseChart from './MemoryPulseChart';
 
@@ -59,7 +60,7 @@ interface StreamDef {
 }
 
 const STREAMS: StreamDef[] = [
-  { name: 'Thoughts', countKey: 'thoughts', emptyPreview: 'No thoughts yet. Luca will start surfacing observations as you talk.', footLabel: 'autonomous' },
+  { name: 'Thoughts', countKey: 'thoughts', emptyPreview: 'No thoughts yet. This agent will start surfacing observations as you talk.', footLabel: 'autonomous' },
   { name: 'Dreams', countKey: 'dreams', emptyPreview: 'No dreams yet. Overnight consolidations will appear after enough conversation.', footLabel: 'offline' },
   { name: 'Wanderings', countKey: 'wanderings', emptyPreview: 'No wanderings yet. Idle drifts will show up here over time.', footLabel: 'untethered' },
   { name: 'Insights', countKey: 'insights', emptyPreview: 'No insights yet. Patterns will crystallize as Luca learns you.', footLabel: 'crystallized' },
@@ -72,6 +73,7 @@ const MOCK_DOMAINS = ['Working style', 'Aesthetic', 'Communication', 'Process', 
 export default function MindOverview() {
   const setMindTab = useViewTabStore((s) => s.setMindTab);
   const { modulators, beliefs, memoryStats, activityLog, thoughts, dreams, insights, reflections, wanderings } = useCognitiveStore();
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
 
   const counts = {
     thoughts: thoughts.length,
@@ -109,7 +111,7 @@ export default function MindOverview() {
 
       {/* Hero */}
       <div className="m-hero">
-        <h1 className="m-hero-title">Luca's mind</h1>
+        <h1 className="m-hero-title">{activeAgentName}'s mind</h1>
         <p className="m-hero-sub">
           {(() => {
             const total = counts.thoughts + counts.dreams + counts.wanderings + counts.insights + counts.reflections;
@@ -117,7 +119,7 @@ export default function MindOverview() {
               return (
                 <>
                   <span className="accent">Quiet. Just getting to know you.</span>{' '}
-                  Nothing has formed yet — thoughts, dreams, and insights will appear here as you and Luca talk.
+                  Nothing has formed yet — thoughts, dreams, and insights will appear here as you and {activeAgentName} talk.
                 </>
               );
             }

@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
 import MindOverview from '@/components/mind/MindOverview';
 import MindStreamShell, { StreamFilter, applyStreamFilter } from '@/components/mind/MindStreamShell';
@@ -99,6 +100,7 @@ function StreamTab<T extends { id: string; content: string; created_at: string; 
 /* ─── Beliefs — own dedicated tab (not Journal) ─── */
 function BeliefsTab() {
   const { beliefs, memoryStats } = useCognitiveStore();
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [filter, setFilter] = useState<StreamFilter>('all');
   const [query, setQuery] = useState('');
 
@@ -116,7 +118,7 @@ function BeliefsTab() {
       num="06"
       streamLabel="BELIEFS"
       title="Beliefs"
-      subtitle={`${memoryStats.beliefs_count || beliefs.length} beliefs. What Luca holds true — ranked by confidence.`}
+      subtitle={`${memoryStats.beliefs_count || beliefs.length} beliefs. What ${activeAgentName} holds true — ranked by confidence.`}
       searchPlaceholder="Search beliefs…"
       filter={filter} onFilterChange={setFilter}
       query={query} onQueryChange={setQuery}
@@ -151,6 +153,7 @@ function BeliefsTab() {
 /* ─── Activity — autonomous action log ─── */
 function ActivityTab() {
   const { activityLog } = useCognitiveStore();
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [filter, setFilter] = useState<StreamFilter>('all');
   const [query, setQuery] = useState('');
 
@@ -169,7 +172,7 @@ function ActivityTab() {
       num="07"
       streamLabel="ACTIVITY"
       title="Activity"
-      subtitle={`${activityLog.length} events. Everything Luca did between conversations.`}
+      subtitle={`${activityLog.length} events. Everything ${activeAgentName} did between conversations.`}
       searchPlaceholder="Search activity…"
       filter={filter} onFilterChange={setFilter}
       query={query} onQueryChange={setQuery}
@@ -216,15 +219,16 @@ export default function MindView() {
   const activeTab = useViewTabStore((s) => s.mindTab);
   const user = useAuthStore((s) => s.user);
   const { load, loadMindData, subscribe, thoughts, dreams, insights, reflections, wanderings } = useCognitiveStore();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
 
   useEffect(() => {
     if (user) {
-      load(user.id);
-      loadMindData(user.id);
-      const unsub = subscribe(user.id);
+      load(user.id, activeAgentId);
+      loadMindData(user.id, activeAgentId);
+      const unsub = subscribe(user.id, activeAgentId);
       return unsub;
     }
-  }, [user]);
+  }, [user, activeAgentId, load, loadMindData, subscribe]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>

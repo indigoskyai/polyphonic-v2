@@ -16,12 +16,14 @@ async function maybeSurfaceConsolidation(
   supabaseUrl: string,
   serviceRole: string,
   userId: string,
+  agentId: string,
   result: ConsolidationCounts | null | undefined,
 ): Promise<void> {
   if (!consolidationIsNoteworthy(result)) return;
   try {
     await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRole, {
       userId,
+      agentId,
       source: "mnemos_consolidate",
       severity: "notable",
       title: "I noticed something while you were away",
@@ -53,6 +55,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const userId = body.user_id;
+    const requestedAgentId = typeof body.agent_id === "string" ? body.agent_id : null;
     const force = !!body.force; // bypass cadence check (manual trigger from UI)
     const authHeader = req.headers.get("Authorization") || "";
     const calledWithServiceRole = authHeader === `Bearer ${supabaseServiceKey}`;
@@ -85,7 +88,7 @@ serve(async (req) => {
       }
     }
 
-    const runForUser = async (uid: string) => {
+    const runForUser = async (uid: string, agentId = "luca") => {
       const settings = await getMemorySettings(supabase, uid);
       if (!settings.mnemos_enabled) {
         console.log("[mnemos-consolidate] skipped", { user_id: uid, reason: "mnemos_disabled", force });
@@ -117,7 +120,7 @@ serve(async (req) => {
       const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: uid });
       const userApiKey = (keyData as string | null) ?? null;
 
-      const engine = new MnemosEngine(supabase, uid);
+      const engine = new MnemosEngine(supabase, uid, agentId);
       const userResult = await engine.consolidate({
         lookback_hours: body.lookback_hours || 24,
         openrouter_api_key: userApiKey || undefined,
@@ -142,12 +145,12 @@ serve(async (req) => {
         duration_ms: userResult.duration_ms ?? 0,
       });
 
-      await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, userResult);
+      await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, agentId, userResult);
       return userResult;
     };
 
     if (callerUserId) {
-      const result = await runForUser(callerUserId);
+      const result = await runForUser(callerUserId, requestedAgentId || "luca");
       await recordCronSuccess("mnemos-consolidate", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, manual: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -162,7 +165,7 @@ serve(async (req) => {
     }
 
     if (userId) {
-      const result = await runForUser(userId);
+      const result = await runForUser(userId, requestedAgentId || "luca");
       await recordCronSuccess("mnemos-consolidate", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -173,23 +176,25 @@ serve(async (req) => {
     const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString();
     const { data: users } = await supabase
       .from("engrams")
-      .select("user_id")
+      .select("user_id, agent_id")
       .gte("last_accessed_at", cutoff)
       .limit(100);
 
-    const uniqueUsers = [...new Set((users ?? []).map((u: { user_id: string }) => u.user_id))];
+    const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
+      [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }]
+    )).values()];
     const results: Record<string, unknown> = {};
 
-    for (const uid of uniqueUsers) {
+    for (const scope of uniqueScopes) {
       try {
-        results[uid] = await runForUser(uid);
+        results[`${scope.userId}:${scope.agentId}`] = await runForUser(scope.userId, scope.agentId);
       } catch (e) {
-        results[uid] = { error: (e as Error).message };
+        results[`${scope.userId}:${scope.agentId}`] = { error: (e as Error).message };
       }
     }
 
     await recordCronSuccess("mnemos-consolidate", Date.now() - __jobStart);
-    return new Response(JSON.stringify({ success: true, users_processed: uniqueUsers.length, results }), {
+    return new Response(JSON.stringify({ success: true, scopes_processed: uniqueScopes.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

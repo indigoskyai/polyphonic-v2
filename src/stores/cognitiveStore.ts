@@ -25,6 +25,7 @@ interface Belief {
 
 interface Thought {
   id: string;
+  agent_id?: string;
   type: string;
   content: string;
   trigger: string | null;
@@ -35,6 +36,7 @@ interface Thought {
 
 interface MemoryEvent {
   id: string;
+  agent_id?: string;
   type: string;
   content: string;
   salience: number;
@@ -43,6 +45,7 @@ interface MemoryEvent {
 
 interface ActivityEntry {
   id: string;
+  agent_id?: string;
   activity_type: string;
   title: string | null;
   summary: string | null;
@@ -73,6 +76,7 @@ interface MemoryStats {
 
 interface JournalEntry {
   id: string;
+  agent_id?: string;
   content: string;
   mood: string | null;
   trigger_type: string | null;
@@ -81,6 +85,7 @@ interface JournalEntry {
 
 interface MindEngram {
   id: string;
+  agent_id?: string;
   content: string;
   engram_type: string;
   strength: number;
@@ -114,9 +119,9 @@ interface CognitiveState {
   /** Set of thought IDs that arrived via realtime (so the UI can animate them in then clear the flag). */
   newThoughtIds: Set<string>;
   clearNewThoughtFlag: (id: string) => void;
-  load: (userId: string) => Promise<void>;
-  loadMindData: (userId: string) => Promise<void>;
-  subscribe: (userId: string) => () => void;
+  load: (userId: string, agentId?: string) => Promise<void>;
+  loadMindData: (userId: string, agentId?: string) => Promise<void>;
+  subscribe: (userId: string, agentId?: string) => () => void;
 }
 
 const defaultModulators: Modulators = {
@@ -135,6 +140,10 @@ const defaultEmotions: Emotions = {
   novelty: 0.5,
   social: 0.5,
 };
+
+function rowMatchesAgent(row: { agent_id?: string | null } | null | undefined, agentId: string): boolean {
+  return (row?.agent_id || 'luca') === agentId;
+}
 
 export const useCognitiveStore = create<CognitiveState>((set) => ({
   modulators: defaultModulators,
@@ -159,13 +168,13 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   memoryStats: { total_engrams: 0, active: 0, dormant: 0, archived: 0, connections: 0, beliefs_count: 0 },
   loaded: false,
 
-  load: async (userId: string) => {
+  load: async (userId: string, agentId = 'luca') => {
     const settled = await Promise.allSettled([
-      supabase.from('cognitive_state').select('*').eq('user_id', userId).maybeSingle(),
-      supabase.from('thought_stream').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('memory_events').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
-      supabase.from('entity_activity_log').select('id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(40),
-      supabase.from('emotional_state').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('cognitive_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
+      supabase.from('thought_stream').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(50),
+      supabase.from('memory_events').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('entity_activity_log').select('id, agent_id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(40),
+      supabase.from('emotional_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
     ]);
     const cogRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: null };
     const thoughtsRes = settled[1].status === 'fulfilled' ? settled[1].value : { data: [] };
@@ -190,12 +199,13 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     });
   },
 
-  loadMindData: async (userId: string) => {
+  loadMindData: async (userId: string, agentId = 'luca') => {
     // Load dreams (engrams with dream tags or source_context type)
     const dreamsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .or('tags.cs.{dream},tags.cs.{consolidation}')
       .order('created_at', { ascending: false })
       .limit(50);
@@ -203,8 +213,9 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load insights
     const insightsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .contains('tags', ['insight'])
       .order('created_at', { ascending: false })
       .limit(50);
@@ -212,8 +223,9 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load reflections
     const reflectionsPromise = supabase
       .from('engrams')
-      .select('id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .contains('tags', ['reflection'])
       .order('created_at', { ascending: false })
       .limit(50);
@@ -223,6 +235,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .from('thought_stream')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .in('type', ['wandering', 'musing', 'observation'])
       .order('created_at', { ascending: false })
       .limit(50);
@@ -230,8 +243,9 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     // Load journal entries
     const journalPromise = supabase
       .from('journal_entries')
-      .select('id, content, mood, trigger_type, created_at')
+      .select('id, agent_id, content, mood, trigger_type, created_at')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -240,18 +254,19 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .from('beliefs')
       .select('id, content, confidence, domain, active')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .eq('active', true)
       .order('confidence', { ascending: false })
       .limit(20);
 
     // Memory stats
     const statsPromises = [
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('state', 'active'),
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('state', 'dormant'),
-      supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'active'),
+      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'dormant'),
+      supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+      supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+      supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
     ];
 
     // Use allSettled so a single failure (e.g. missing journal_entries table) doesn't nuke all mind data.
@@ -294,11 +309,12 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     });
   },
 
-  subscribe: (userId: string) => {
+  subscribe: (userId: string, agentId = 'luca') => {
     const cogChannel = supabase
-      .channel('cognitive-state')
+      .channel(`cognitive-state:${userId}:${agentId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cognitive_state', filter: `user_id=eq.${userId}` }, (payload) => {
         const row = payload.new as any;
+        if (!rowMatchesAgent(row, agentId)) return;
         if (row) {
           const mods = row.modulators as Record<string, number> | null;
           const emos = row.emotions as Record<string, number> | null;
@@ -313,9 +329,10 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .subscribe();
 
     const thoughtChannel = supabase
-      .channel('thought-stream')
+      .channel(`thought-stream:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'thought_stream', filter: `user_id=eq.${userId}` }, (payload) => {
         const newThought = payload.new as Thought;
+        if (!rowMatchesAgent(newThought, agentId)) return;
         set((s) => {
           const flagged = new Set(s.newThoughtIds);
           flagged.add(newThought.id);
@@ -328,25 +345,28 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .subscribe();
 
     const eventChannel = supabase
-      .channel('memory-events')
+      .channel(`memory-events:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'memory_events', filter: `user_id=eq.${userId}` }, (payload) => {
         const newEvent = payload.new as MemoryEvent;
+        if (!rowMatchesAgent(newEvent, agentId)) return;
         set((s) => ({ recentEvents: [newEvent, ...s.recentEvents].slice(0, 50) }));
       })
       .subscribe();
 
     const activityChannel = supabase
-      .channel('entity-activity-log')
+      .channel(`entity-activity-log:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${userId}` }, (payload) => {
         const entry = payload.new as ActivityEntry;
+        if (!rowMatchesAgent(entry, agentId)) return;
         set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 40) }));
       })
       .subscribe();
 
     const weatherChannel = supabase
-      .channel('emotional-state')
+      .channel(`emotional-state:${userId}:${agentId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'emotional_state', filter: `user_id=eq.${userId}` }, (payload) => {
         const w = payload.new as EmotionalWeather;
+        if (!rowMatchesAgent(w as EmotionalWeather & { agent_id?: string }, agentId)) return;
         if (w) set({ emotionalWeather: w });
       })
       .subscribe();

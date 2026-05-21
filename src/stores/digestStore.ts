@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface DigestRow {
   id: string;
   user_id: string;
+  agent_id: string;
   digest_date: string;
   generated_at: string;
   finalized_at: string | null;
@@ -24,6 +25,7 @@ export interface DigestRow {
 export interface DigestEngram {
   id: string;
   user_id: string;
+  agent_id: string;
   content: string;
   engram_type: string;
   strength: number;
@@ -46,9 +48,9 @@ interface DigestState {
   loading: boolean;
   refreshing: boolean;
   error: string | null;
-  load: (userId: string) => Promise<void>;
-  refresh: () => Promise<void>;
-  subscribe: (userId: string) => () => void;
+  load: (userId: string, agentId?: string) => Promise<void>;
+  refresh: (agentId?: string) => Promise<void>;
+  subscribe: (userId: string, agentId?: string) => () => void;
   confirm: (engramId: string) => Promise<void>;
   reject: (engramId: string) => Promise<void>;
   edit: (engramId: string, patch: { content?: string; tags?: string[] }) => Promise<void>;
@@ -74,24 +76,26 @@ export const useDigestStore = create<DigestState>((set, get) => ({
   refreshing: false,
   error: null,
 
-  load: async (userId) => {
+  load: async (userId, agentId = 'luca') => {
     set({ loading: true, error: null });
     const today = new Date().toISOString().slice(0, 10);
     let { data: digest } = await supabase
       .from('mnemos_digests')
       .select('*')
       .eq('user_id', userId)
+      .eq('agent_id', agentId)
       .eq('digest_date', today)
       .maybeSingle();
 
     // Build on-demand if no digest yet for today
     if (!digest) {
       try {
-        await supabase.functions.invoke('mnemos-digest-build', { body: {} });
+        await supabase.functions.invoke('mnemos-digest-build', { body: { agent_id: agentId } });
         const { data: rebuilt } = await supabase
           .from('mnemos_digests')
           .select('*')
           .eq('user_id', userId)
+          .eq('agent_id', agentId)
           .eq('digest_date', today)
           .maybeSingle();
         digest = rebuilt;
@@ -109,6 +113,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
       .from('engrams')
       .select('*')
       .eq('digest_id', digest.id)
+      .eq('agent_id', agentId)
       .order('surprise_score', { ascending: false });
 
     if (error) {
@@ -118,21 +123,22 @@ export const useDigestStore = create<DigestState>((set, get) => ({
     set({ digest: digest as DigestRow, engrams: (engrams ?? []) as DigestEngram[], loading: false });
   },
 
-  refresh: async () => {
+  refresh: async (agentId) => {
     set({ refreshing: true });
     try {
-      await supabase.functions.invoke('mnemos-digest-build', { body: {} });
+      const activeAgentId = agentId || get().digest?.agent_id || 'luca';
+      await supabase.functions.invoke('mnemos-digest-build', { body: { agent_id: activeAgentId } });
       // Re-load with the same user
       const userId = get().digest?.user_id;
-      if (userId) await get().load(userId);
+      if (userId) await get().load(userId, activeAgentId);
     } finally {
       set({ refreshing: false });
     }
   },
 
-  subscribe: (userId) => {
+  subscribe: (userId, agentId = 'luca') => {
     const channel = supabase
-      .channel(`digest:${userId}`)
+      .channel(`digest:${userId}:${agentId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'engrams', filter: `user_id=eq.${userId}` },
@@ -141,6 +147,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
           if (!digestId) return;
           const row = (payload.new ?? payload.old) as DigestEngram;
           if (!row || row.digest_id !== digestId) return;
+          if ((row.agent_id || 'luca') !== agentId) return;
           if (payload.eventType === 'UPDATE') {
             set((s) => ({
               engrams: s.engrams.map((e) => (e.id === row.id ? (payload.new as DigestEngram) : e)),
@@ -155,6 +162,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
         { event: 'UPDATE', schema: 'public', table: 'mnemos_digests', filter: `user_id=eq.${userId}` },
         (payload) => {
           const next = payload.new as DigestRow;
+          if ((next.agent_id || 'luca') !== agentId) return;
           if (get().digest?.id === next.id) set({ digest: next });
         },
       )

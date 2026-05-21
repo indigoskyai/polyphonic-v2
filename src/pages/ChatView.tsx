@@ -37,10 +37,13 @@ import SubAgentRow from '@/components/subagents/SubAgentRow';
 import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
 import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
+import AgentForgeCard from '@/components/agents/AgentForgeCard';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
+import { supabase } from '@/integrations/supabase/client';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
 import { clearLandingChatTransitionFlag, consumeLandingAutosendFlag, readLandingChatTransitionFlag, readLandingPrompt } from '@/lib/guestChat';
+import { getForgeProposalMetadata } from '@/lib/agentForge';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
@@ -555,6 +558,7 @@ export default function ChatView() {
     [artifactsByThread, currentThreadId],
   );
   const agents = useAgentSettingsStore((s) => s.agents);
+  const loadAgentSettings = useAgentSettingsStore((s) => s.load);
   const currentThread = threads.find((t) => t.id === currentThreadId);
   // Pending agent id: used when there's no thread yet (empty state). Once a
   // thread exists, it always wins so the picker reflects the persisted value.
@@ -569,6 +573,8 @@ export default function ChatView() {
   // preserved for future use but does not auto-arm the composer.
 
   const [input, setInput] = useState(() => readLandingPrompt());
+  const [forgeBusyById, setForgeBusyById] = useState<Record<string, boolean>>({});
+  const [forgeErrorById, setForgeErrorById] = useState<Record<string, string | null>>({});
   const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
   const [focused, setFocused] = useState(false);
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
@@ -1000,7 +1006,7 @@ export default function ChatView() {
 
       if (initiations && initiations.length > 0) {
         setWelcomeBack({ type: 'initiation', content: initiations[0].message });
-        setDynamicPlaceholder('Luca wants to tell you something...');
+        setDynamicPlaceholder(`${currentAgentLabel} wants to tell you something...`);
         return;
       }
 
@@ -1015,6 +1021,7 @@ export default function ChatView() {
         .from('entity_activity_log')
         .select('title, summary, severity, created_at')
         .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
         .eq('surface_to_user', true)
         .in('severity', ['notable', 'important'])
         .gt('created_at', seenIso)
@@ -1047,6 +1054,7 @@ export default function ChatView() {
           .from('journal_entries')
           .select('content, mood, created_at')
           .eq('user_id', user.id)
+          .eq('agent_id', activeAgentId)
           .gt('created_at', new Date(lastTime).toISOString())
           .order('created_at', { ascending: false })
           .limit(1);
@@ -1059,7 +1067,7 @@ export default function ChatView() {
             type: isDream ? 'thought' : 'journal',
             content: snippet,
           });
-          setDynamicPlaceholder(isDream ? 'Luca dreamed about something...' : 'Luca has been reflecting...');
+          setDynamicPlaceholder(isDream ? `${currentAgentLabel} dreamed about something...` : `${currentAgentLabel} has been reflecting...`);
           return;
         }
 
@@ -1068,13 +1076,14 @@ export default function ChatView() {
           .from('thought_stream')
           .select('content, created_at')
           .eq('user_id', user.id)
+          .eq('agent_id', activeAgentId)
           .gt('created_at', new Date(lastTime).toISOString())
           .order('salience', { ascending: false })
           .limit(1);
 
         if (recentThought && recentThought.length > 0) {
           setWelcomeBack({ type: 'thought', content: recentThought[0].content.slice(0, 150) });
-          setDynamicPlaceholder('Luca has been thinking...');
+          setDynamicPlaceholder(`${currentAgentLabel} has been thinking...`);
           return;
         }
       }
@@ -1084,10 +1093,10 @@ export default function ChatView() {
       if (hour >= 23 || hour < 5) {
         setDynamicPlaceholder('still here...');
       } else {
-        setDynamicPlaceholder('Message Luca...');
+        setDynamicPlaceholder(`Message ${currentAgentLabel}...`);
       }
     })();
-  }, [user]);
+  }, [user, activeAgentId, currentAgentLabel]);
 
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
@@ -1355,6 +1364,93 @@ export default function ChatView() {
       });
     }
   }, [patchMessage, user]);
+
+  const commitForgeProposal = useCallback(async (msg: Message) => {
+    if (!user) return;
+    const proposal = getForgeProposalMetadata(msg);
+    if (!proposal || proposal.forge_status !== 'pending') return;
+
+    setForgeBusyById((state) => ({ ...state, [msg.id]: true }));
+    setForgeErrorById((state) => ({ ...state, [msg.id]: null }));
+    patchMessage(msg.id, {
+      metadata: {
+        ...((msg.metadata as Record<string, unknown> | null) || {}),
+        forge_status: 'committing',
+      },
+    });
+
+    const { data, error } = await supabase.functions.invoke('agent-forge', {
+      body: { action: 'commit', proposal_message_id: msg.id },
+    });
+
+    setForgeBusyById((state) => ({ ...state, [msg.id]: false }));
+
+    if (error || !data?.ok) {
+      const message = error?.message || data?.error || 'Could not save this agent.';
+      setForgeErrorById((state) => ({ ...state, [msg.id]: message }));
+      patchMessage(msg.id, {
+        metadata: {
+          ...((msg.metadata as Record<string, unknown> | null) || {}),
+          forge_status: 'pending',
+          error: message,
+        },
+      });
+      return;
+    }
+
+    const nextMetadata = (data?.proposal?.metadata as Record<string, unknown> | undefined) || {
+      ...((msg.metadata as Record<string, unknown> | null) || {}),
+      forge_status: 'approved',
+      created_agent_id: data.created_agent_id || data.agent?.id || proposal.target_agent_id || null,
+    };
+    patchMessage(msg.id, { metadata: nextMetadata });
+    await loadAgentSettings(user.id);
+    await loadThreads();
+  }, [loadAgentSettings, loadThreads, patchMessage, user]);
+
+  const cancelForgeProposal = useCallback(async (msg: Message) => {
+    if (!user) return;
+    const proposal = getForgeProposalMetadata(msg);
+    if (!proposal || proposal.forge_status !== 'pending') return;
+
+    setForgeBusyById((state) => ({ ...state, [msg.id]: true }));
+    setForgeErrorById((state) => ({ ...state, [msg.id]: null }));
+
+    const { data, error } = await supabase.functions.invoke('agent-forge', {
+      body: { action: 'cancel', proposal_message_id: msg.id },
+    });
+
+    setForgeBusyById((state) => ({ ...state, [msg.id]: false }));
+
+    if (error || !data?.ok) {
+      const message = error?.message || data?.error || 'Could not cancel this proposal.';
+      setForgeErrorById((state) => ({ ...state, [msg.id]: message }));
+      return;
+    }
+
+    const nextMetadata = (data?.proposal?.metadata as Record<string, unknown> | undefined) || {
+      ...((msg.metadata as Record<string, unknown> | null) || {}),
+      forge_status: 'canceled',
+    };
+    patchMessage(msg.id, { metadata: nextMetadata });
+  }, [patchMessage, user]);
+
+  const reviseForgeProposal = useCallback((msg: Message) => {
+    const proposal = getForgeProposalMetadata(msg);
+    if (!proposal) return;
+    const target = proposal.target_agent_id ? ` Target agent id: ${proposal.target_agent_id}.` : '';
+    setInput(
+      `Revise this Forge proposal for ${proposal.blueprint.name}.${target} Please keep the full Open Clause shape, but change: `,
+    );
+  }, []);
+
+  const switchToForgedAgent = useCallback(async (agentId: string) => {
+    setPendingAgentId(agentId);
+    if (currentThreadId) {
+      await updateThreadAgent(currentThreadId, agentId);
+      await loadThreads();
+    }
+  }, [currentThreadId, loadThreads, updateThreadAgent]);
 
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
@@ -1626,6 +1722,7 @@ export default function ChatView() {
         body: JSON.stringify({
           thread_id: tid,
           message: messageText,
+          source_message_id: persistedUserMessage?.id,
           attachments: uploadedAttachments,
           reasoning_effort: thinkingEffort,
           ensemble: byokEnabled && ensembleActive,
@@ -2393,6 +2490,24 @@ export default function ChatView() {
               (msg.agent ?? null) === (activeAgentId ?? null) &&
               Date.now() - new Date(msg.created_at).getTime() < 60_000;
             if (isLastAssistant) return null;
+
+            const forgeProposal = getForgeProposalMetadata(msg);
+            if (forgeProposal) {
+              return (
+                <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
+                  <AgentForgeCard
+                    proposal={forgeProposal}
+                    busy={!!forgeBusyById[msg.id]}
+                    error={forgeErrorById[msg.id]}
+                    onCommit={() => { void commitForgeProposal(msg); }}
+                    onCancel={() => { void cancelForgeProposal(msg); }}
+                    onRevise={() => reviseForgeProposal(msg)}
+                    onSwitch={(agentId) => { void switchToForgedAgent(agentId); }}
+                    onOpenSettings={(agentId) => navigate(`/settings/agents/${agentId}`)}
+                  />
+                </div>
+              );
+            }
 
             // B.2 — permission_request branch: render inline card instead of msg-row
             if (msg.kind === 'permission_request') {

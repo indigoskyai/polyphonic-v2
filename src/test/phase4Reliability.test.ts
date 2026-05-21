@@ -133,14 +133,16 @@ describe('Phase 4 reliability guardrails', () => {
     expect(source).toContain('Custom agents require your own OpenRouter key');
     expect(source).not.toContain('backend.keySource === "platform" ? "luca" : threadAgentId');
     expect(source).toContain('includeIdentity: true');
-    expect(source).toContain('includeFunctionalMemory: agentIsSystemLuca && backend.billingTier !== "guest"');
+    expect(source).toContain('includeFunctionalMemory: backend.billingTier !== "guest"');
+    expect(source).toContain('includeMnemos: backend.billingTier !== "guest"');
     expect(source).toContain('identityDocs: continuity.identityDocs');
     expect(source).toContain('agent: agentId');
 
     expect(legacySource).toContain('.select("id, agent_id, primary_agent_id")');
     expect(legacySource).toContain('const agentId = resolveThreadAgentId(thread)');
     expect(legacySource).toContain('agentId,');
-    expect(legacySource).toContain('includeFunctionalMemory: agentIsLuca && backend.billingTier !== "guest"');
+    expect(legacySource).toContain('includeFunctionalMemory: backend.billingTier !== "guest"');
+    expect(legacySource).toContain('includeMnemos: backend.billingTier !== "guest"');
     expect(legacySource).toContain('buildCustomAgentSystemPrompt');
     expect(legacySource).toContain('agent: agentId');
 

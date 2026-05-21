@@ -21,11 +21,13 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = typeof body.agent_id === "string" ? body.agent_id : "luca";
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -72,6 +74,7 @@ serve(async (req) => {
         .from("journal_entries")
         .select("content, mood, created_at")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .gte("created_at", since48h)
         .order("created_at", { ascending: false })
         .limit(10),
@@ -79,6 +82,7 @@ serve(async (req) => {
         .from("memories")
         .select("id, content, memory_type, tags, emotional_intensity, emotional_valence, access_count, last_accessed_at, decay_factor, created_at")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(200),
@@ -86,6 +90,7 @@ serve(async (req) => {
         .from("beliefs")
         .select("id")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("active", true)
         .eq("stagnant", true),
       supabase
@@ -97,6 +102,7 @@ serve(async (req) => {
         .from("emotional_state")
         .select("*")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .maybeSingle(),
     ]);
 
@@ -202,6 +208,7 @@ serve(async (req) => {
     // Upsert emotional state
     const stateRow = {
       user_id,
+      agent_id,
       ...smoothed,
       mood_summary: moodSummary,
       updated_at: new Date().toISOString(),
@@ -211,7 +218,8 @@ serve(async (req) => {
       const { error: updErr } = await supabase
         .from("emotional_state")
         .update(stateRow)
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id);
       if (updErr) console.error("[anima-emotional-state] emotional_state update failed:", updErr);
     } else {
       const { error: insErr } = await supabase.from("emotional_state").insert(stateRow);
@@ -221,6 +229,7 @@ serve(async (req) => {
     // Append snapshot to emotional_history (for trend graphs)
     const { error: histErr } = await supabase.from("emotional_history").insert({
       user_id,
+      agent_id,
       state: { ...smoothed, mood_summary: moodSummary },
     });
     if (histErr) console.error("[anima-emotional-state] emotional_history insert failed:", histErr);
@@ -236,6 +245,7 @@ serve(async (req) => {
       }
       if (totalDelta > 0.15) {
         await logActivity(supabase, user_id, {
+          agentId: agent_id,
           type: "mood_shift",
           title: `Mood: ${moodSummary}`,
           summary: `Emotional state shifted (total delta: ${totalDelta.toFixed(2)}): ${moodSummary}`,

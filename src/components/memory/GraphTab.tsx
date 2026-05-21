@@ -21,6 +21,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMemoryRealtime } from '@/hooks/useMemoryRealtime';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { generateMockGraph } from '@/lib/mockGraphData';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
 const TYPE_TINTS: Record<string, [number, number, number]> = {
@@ -133,10 +134,11 @@ export default function GraphTab() {
   const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
   const userId = useAuthStore((s) => s.user?.id);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   // Subscribe to live updates
-  useMemoryRealtime(userId);
+  useMemoryRealtime(userId, activeAgentId);
 
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
@@ -148,12 +150,12 @@ export default function GraphTab() {
   useEffect(() => {
     if (demoMode) {
       const uid = userId ?? 'demo-user';
-      const { engrams: mockE, connections: mockC } = generateMockGraph(uid, 140, 7);
+      const { engrams: mockE, connections: mockC } = generateMockGraph(uid, 140, 7, activeAgentId);
       useMemoryStore.setState({ engrams: mockE, connections: mockC });
     } else if (userId) {
-      loadAll(userId);
+      loadAll(userId, activeAgentId);
     }
-  }, [demoMode, userId, loadAll]);
+  }, [demoMode, userId, activeAgentId, loadAll]);
 
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<GraphEdge[]>([]);

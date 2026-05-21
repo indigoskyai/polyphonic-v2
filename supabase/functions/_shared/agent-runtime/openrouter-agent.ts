@@ -50,6 +50,24 @@ interface RuntimeToolResult {
 
 const DEFAULT_MAX_AGENT_STEPS = 5;
 const DEFAULT_MAX_AGENT_COST_USD = 0.35;
+const FORGE_MODELS = [
+  "anthropic/claude-opus-4-7",
+  "anthropic/claude-sonnet-4.6",
+  "anthropic/claude-haiku-4.5",
+  "openai/gpt-5.5",
+  "openai/gpt-5.4",
+  "openai/gpt-5.4-mini",
+  "google/gemini-3.1-pro-preview",
+  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-pro",
+  "google/gemini-2.5-flash",
+  "x-ai/grok-4.20",
+  "deepseek/deepseek-v4-pro",
+  "deepseek/deepseek-v4-flash",
+  "moonshotai/kimi-k2.6",
+  "moonshotai/kimi-k2.5",
+] as const;
+const FORGE_AVATAR_COLORS = ["cream", "ochre", "blue", "magenta", "sage", "violet"] as const;
 
 export function isOpenRouterAgentRuntimeEnabled(userId?: string | null): boolean {
   const enabled = (Deno.env.get("OPENROUTER_AGENT_SDK_ENABLED") || "").toLowerCase() === "true";
@@ -350,6 +368,42 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
         recordTrace(`Reading ${url}.`);
         send({ type: "tool_progress", tool: "read_url", text: `Reading: ${url}` });
         return await invokeEdgeJson(options, "anima-web-read", { user_id: options.userId, url, focus });
+      },
+    }),
+    tool({
+      name: "forge_agent",
+      description:
+        "Draft a complete custom-agent blueprint and insert an inline Forge approval proposal in this chat. Use when the user asks Luca to create, build, design, forge, or revise a custom agent. Ask about identity, purpose, voice, and boundaries; do not ask the user to choose memory architecture because every agent uses the standard Polyphonic continuity substrate. Never changes agent data directly; the user must approve the proposal card.",
+      inputSchema: z.object({
+        action: z.enum(["propose_create", "propose_update"]),
+        target_agent_id: z.string().optional().describe("Required for propose_update. Never use luca, observer, anima, or vektor."),
+        blueprint: z.object({
+          name: z.string().min(1).max(40),
+          role: z.string().min(1).max(80),
+          model: z.enum(FORGE_MODELS),
+          avatar_color: z.enum(FORGE_AVATAR_COLORS),
+          prompt: z.string().min(1).describe("Full runtime system instructions for this agent."),
+          voice_description: z.string().min(1).describe("Short voice/personality summary."),
+          summary: z.string().min(1).describe("One-paragraph identity summary shown in the proposal card."),
+          identity_docs: z.object({
+            soul: z.string().min(1).describe("SOUL.md: identity, orientation, and way of being."),
+            convictions: z.string().min(1).describe("Convictions.md: stable stances and beliefs this agent acts from."),
+            user_model: z.string().min(1).describe("User-model.md: how this agent understands and cares for the user."),
+            self_model: z.string().min(1).describe("Self-model.md: how this agent understands its own patterns and limits."),
+          }),
+        }),
+      }),
+      execute: async ({ action, target_agent_id, blueprint }) => {
+        recordTrace(`Drafting a Forge ${action === "propose_update" ? "update" : "create"} proposal for ${blueprint.name}.`);
+        send({ type: "tool_progress", tool: "forge_agent", text: `Drafting Forge proposal: ${blueprint.name}` });
+        return await invokeEdgeJson(options, "agent-forge", {
+          user_id: options.userId,
+          thread_id: options.threadId,
+          source_agent_id: options.agentId,
+          action,
+          target_agent_id,
+          blueprint,
+        });
       },
     }),
   ];

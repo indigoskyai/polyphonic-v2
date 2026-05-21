@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 
-// Tables that hold inferred/derived cognition for a user. All are filtered
-// by user_id. Kept intentionally OUT of this list: profiles, user_settings,
-// memory_settings, agent_configs, agent_identity, agent_skills,
+// Tables that hold inferred/derived cognition for an agent. All are filtered
+// by user_id + agent_id. Kept intentionally OUT of this list: profiles,
+// user_settings, memory_settings, agent_configs, agent_identity, agent_skills,
 // user_api_keys, threads, messages, journal_entries, projects, artifacts,
 // dashboard_widgets, user_roles, token_gate_*.
-const INFERRED_TABLES = [
+const AGENT_SCOPED_INFERRED_TABLES = [
   // Memory
   "memories",
   "memory_candidates",
@@ -17,13 +17,11 @@ const INFERRED_TABLES = [
   "beliefs",
   "hypomnema_entry",
   // Psyche / state
-  "psychological_profile",
   "cognitive_state",
   "emotional_state",
   "emotional_history",
   "mnemos_emotional_state",
   "mnemos_digests",
-  "profile_daily_pulse",
   // Activity / thought
   "thought_stream",
   "thought_initiations",
@@ -35,9 +33,25 @@ const INFERRED_TABLES = [
   // Curiosity & imports
   "curiosity_questions",
   "pending_revisions",
+] as const;
+
+// Legacy/import profile tables are still account-scoped. They are not touched
+// by the normal per-agent reset path because doing so would erase shared user
+// substrate for every agent.
+const ACCOUNT_SCOPED_INFERRED_TABLES = [
+  "psychological_profile",
+  "profile_daily_pulse",
+  "observer_notes",
+  "observer_logs",
   "conversations",
   "chat_imports",
 ] as const;
+
+function normalizeAgentId(value: unknown): string {
+  if (typeof value !== "string") return "luca";
+  const trimmed = value.trim();
+  return trimmed || "luca";
+}
 
 Deno.serve(async (req) => {
   const pre = handleCorsPreflightIfNeeded(req);
@@ -68,6 +82,8 @@ Deno.serve(async (req) => {
         { status: 400, headers: cors }
       );
     }
+    const agentId = normalizeAgentId(body?.agent_id);
+    const includeAccountScoped = body?.scope === "account";
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -77,16 +93,32 @@ Deno.serve(async (req) => {
     const deleted: Record<string, number> = {};
     const failed: Record<string, string> = {};
 
-    for (const table of INFERRED_TABLES) {
+    for (const table of AGENT_SCOPED_INFERRED_TABLES) {
       try {
         const { count, error } = await admin
           .from(table)
           .delete({ count: "exact" })
-          .eq("user_id", user.id);
+          .eq("user_id", user.id)
+          .eq("agent_id", agentId);
         if (error) failed[table] = error.message;
         else deleted[table] = count ?? 0;
       } catch (e) {
         failed[table] = e instanceof Error ? e.message : "unknown error";
+      }
+    }
+
+    if (includeAccountScoped) {
+      for (const table of ACCOUNT_SCOPED_INFERRED_TABLES) {
+        try {
+          const { count, error } = await admin
+            .from(table)
+            .delete({ count: "exact" })
+            .eq("user_id", user.id);
+          if (error) failed[table] = error.message;
+          else deleted[table] = count ?? 0;
+        } catch (e) {
+          failed[table] = e instanceof Error ? e.message : "unknown error";
+        }
       }
     }
 
@@ -103,7 +135,7 @@ Deno.serve(async (req) => {
     const total = Object.values(deleted).reduce((a, b) => a + b, 0);
 
     return new Response(
-      JSON.stringify({ success: true, total_deleted: total, deleted, failed }),
+      JSON.stringify({ success: true, agent_id: agentId, total_deleted: total, deleted, failed }),
       { headers: cors }
     );
   } catch (e) {

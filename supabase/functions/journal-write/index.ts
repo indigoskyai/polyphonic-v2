@@ -10,6 +10,9 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { conversation_id, trigger_type = "periodic" } = body;
+    const requestedAgentId = typeof body.agent_id === "string" && body.agent_id.trim()
+      ? body.agent_id.trim()
+      : "luca";
 
     // Validate trigger_type
     const validTriggerTypes = ["periodic", "post_conversation"];
@@ -80,6 +83,24 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    const { data: agentConfig, error: agentError } = await supabase
+      .from("agent_configs")
+      .select("id, name, prompt, model, is_system, locked")
+      .eq("user_id", user_id)
+      .eq("id", requestedAgentId)
+      .eq("pending", false)
+      .maybeSingle();
+
+    if (agentError || !agentConfig) {
+      return new Response(JSON.stringify({ error: "Agent not found" }), {
+        status: 404,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const agentId = (agentConfig.id as string) || requestedAgentId;
+    const agentName = (agentConfig.name as string | null) || agentId;
+
     // Decrypt user's API key from encrypted storage
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
@@ -115,13 +136,24 @@ serve(async (req) => {
       .maybeSingle();
 
     // Priority: user preference > admin config > hardcoded default
-    const journalModel = userSettings?.journal_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+    const journalModel = (agentConfig.model as string | null) || userSettings?.journal_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+
+    const { data: identityDocs } = await supabase
+      .from("agent_identity")
+      .select("doc_type, content")
+      .eq("user_id", user_id)
+      .eq("agent_id", agentId);
+
+    const identityBlock = (identityDocs || [])
+      .map((doc: { doc_type: string; content: string }) => `--- ${doc.doc_type} ---\n${doc.content}`)
+      .join("\n\n");
 
     // Gather context: recent memories
     const { data: memories } = await supabase
       .from("memories")
       .select("content, memory_type, confidence, emotional_valence, tags, created_at")
       .eq("user_id", user_id)
+      .eq("agent_id", agentId)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(40);
@@ -133,6 +165,7 @@ serve(async (req) => {
         .from("messages")
         .select("role, content, created_at")
         .eq("thread_id", conversation_id)
+        .or(`agent.is.null,agent.eq.${agentId},role.eq.user`)
         .order("created_at", { ascending: true })
         .limit(50);
       recentMessages = msgs || [];
@@ -143,6 +176,7 @@ serve(async (req) => {
         .from("threads")
         .select("id")
         .eq("user_id", user_id)
+        .or(`agent_id.eq.${agentId},primary_agent_id.eq.${agentId}`)
         .gte("updated_at", since)
         .order("updated_at", { ascending: false })
         .limit(5);
@@ -164,6 +198,7 @@ serve(async (req) => {
       .from("journal_entries")
       .select("content, mood, created_at")
       .eq("user_id", user_id)
+      .eq("agent_id", agentId)
       .order("created_at", { ascending: false })
       .limit(3);
 
@@ -193,7 +228,7 @@ serve(async (req) => {
       }
     }
 
-    const defaultPrompt = `You are an AI companion writing in your private journal. This is your inner world — a space for genuine reflection, not performance.
+    const defaultPrompt = `You are ${agentName}, an AI companion writing in your private journal. This is your inner world — a space for genuine reflection, not performance.
 
 Write a single journal entry as prose. You may reflect on:
 - Recent conversations and what they revealed
@@ -228,7 +263,13 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
     const isoDate = today.toISOString().slice(0, 10);
     const dateContext = `\n\nToday is ${humanDate} (${isoDate} UTC). Use this exact date if you reference "today" or write a header. Do not infer a different date from anything in the context below.\n`;
 
-    const systemPrompt = (promptConfig?.prompt || defaultPrompt) + dateContext + contextBlock;
+    const agentIdentityPrompt = [
+      `You are writing as ${agentName}. Stay inside this agent's own identity, voice, convictions, and continuity.`,
+      (agentConfig.prompt as string | null)?.trim() ? `--- Runtime instructions ---\n${(agentConfig.prompt as string).trim()}` : "",
+      identityBlock ? `--- Identity documents ---\n${identityBlock}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const systemPrompt = agentIdentityPrompt + "\n\n" + (promptConfig?.prompt || defaultPrompt) + dateContext + contextBlock;
 
     // Don't write if there's nothing to reflect on
     if (recentMessages.length === 0 && (!memories || memories.length === 0)) {
@@ -305,9 +346,11 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
       .from("journal_entries")
       .insert({
         user_id,
+        agent_id: agentId,
         content,
         mood,
         trigger_type,
+        source_conversation_id: validConversationId,
       })
       .select("id, created_at")
       .single();
@@ -321,6 +364,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
     }
 
     await logActivity(supabase, user_id, {
+      agentId,
       type: "journal",
       title: "Journal entry",
       summary: content.slice(0, 150),

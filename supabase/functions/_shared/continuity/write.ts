@@ -117,6 +117,7 @@ export function queueContinuityTurnWrites(
     () => (deps.encodeMnemosExchange || encodeMnemosExchange)(
       opts.supabase,
       opts.userId,
+      agentId,
       opts.userMessage,
       opts.agentResponse,
       apiKey || undefined,
@@ -184,11 +185,12 @@ export function queueContinuityTurnWrites(
 export async function encodeMnemosExchange(
   supabase: SupabaseLike,
   userId: string,
+  agentId: string,
   userMessage: string,
   assistantResponse: string,
   apiKey?: string,
 ): Promise<void> {
-  const mnemos = new MnemosEngine(supabase as any, userId);
+  const mnemos = new MnemosEngine(supabase as any, userId, agentId || "luca");
   await mnemos.encode(
     `User: ${userMessage}\nAssistant: ${assistantResponse.slice(0, 500)}`,
     {

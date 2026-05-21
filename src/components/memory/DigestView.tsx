@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Pill, EmptyState } from '@/components/ui/luca';
 import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import CandidateCard from './CandidateCard';
 
 function digestTitle(): string {
@@ -13,6 +14,7 @@ function digestTitle(): string {
 
 export default function DigestView() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const items = useMemoryCandidatesStore((s) => s.items);
   const loading = useMemoryCandidatesStore((s) => s.loading);
   const load = useMemoryCandidatesStore((s) => s.load);
@@ -24,10 +26,10 @@ export default function DigestView() {
 
   useEffect(() => {
     if (!user) return;
-    load(user.id);
-    const unsub = subscribe(user.id);
+    load(user.id, activeAgentId);
+    const unsub = subscribe(user.id, activeAgentId);
     return unsub;
-  }, [user, load, subscribe]);
+  }, [user, activeAgentId, load, subscribe]);
 
   const { pinGroup, standardGroup } = useMemo(() => {
     const pinGroup = items.filter((i) => i.candidate_type === 'pin');

@@ -20,6 +20,7 @@ import CommandPalette from "./components/palette/CommandPalette";
 import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
+import { useAgentScopeStore } from "./stores/agentScopeStore";
 import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
 import { isAnonymousUser } from "./lib/accessTier";
 import { readLandingChatTransitionFlag } from "./lib/guestChat";
@@ -187,11 +188,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const loadNotifications = useNotificationStore((s) => s.load);
   const subscribeNotifications = useNotificationStore((s) => s.subscribe);
+  const loadAgentScopes = useAgentScopeStore((s) => s.load);
   const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) loadSettings(user.id);
-  }, [user]);
+    if (user) loadAgentScopes(user.id);
+  }, [user, loadSettings, loadAgentScopes]);
 
   useEffect(() => {
     if (!user) return;

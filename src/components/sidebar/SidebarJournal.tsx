@@ -2,12 +2,15 @@
  * SidebarJournal — minimal sidebar for the Journal view.
  * Single section for now; reserved space for future filters (mood, trigger, period).
  */
+import AgentScopeSelect from './AgentScopeSelect';
+
 export default function SidebarJournal() {
   return (
     <div className="r2-sidebar">
       <div className="sidebar-head">
         <h2 className="sidebar-head-title">Journal</h2>
       </div>
+      <AgentScopeSelect />
 
       <div className="sidebar-search">
         <span className="sidebar-search-glyph">⌕</span>

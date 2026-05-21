@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type RevisionType = 'correction' | 'reconsideration' | 'new_thought' | 'disagreement' | string;
 
@@ -46,6 +47,8 @@ export default function ProfileRevisionsView() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [revisions, setRevisions] = useState<PendingRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -57,6 +60,7 @@ export default function ProfileRevisionsView() {
       .from('pending_revisions')
       .select('id, thread_id, source_message_id, revision_type, what_was_said, what_to_say_now, rationale, status, created_at, surfaced_at')
       .eq('user_id', user.id)
+      .eq('agent_id', activeAgentId)
       .in('status', ['pending', 'surfaced'])
       .order('created_at', { ascending: false })
       .limit(50);
@@ -76,7 +80,7 @@ export default function ProfileRevisionsView() {
     if (!user) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, activeAgentId]);
 
   async function dismissRevision(id: string) {
     setBusyId(id);
@@ -129,7 +133,7 @@ export default function ProfileRevisionsView() {
               margin: 0,
             }}
           >
-            What Luca's been reconsidering
+            What {activeAgentName}'s been reconsidering
           </h1>
           <p
             style={{
@@ -140,7 +144,7 @@ export default function ProfileRevisionsView() {
               margin: '16px 0 0',
             }}
           >
-            Sometimes Luca will re-read what they said earlier and want to change something. Those reconsiderations live here until they're surfaced or expire.
+            Sometimes {activeAgentName} will re-read what they said earlier and want to change something. Those reconsiderations live here until they&apos;re surfaced or expire.
           </p>
         </div>
 
@@ -149,7 +153,7 @@ export default function ProfileRevisionsView() {
         ) : revisions.length === 0 ? (
           <section style={{ borderTop: '1px solid var(--border-faint)', padding: '28px 0' }}>
             <p style={{ color: 'var(--text-ghost)', fontSize: 14, lineHeight: 1.7, margin: 0 }}>
-              Nothing pending. Luca isn't sitting with second thoughts right now.
+              Nothing pending. {activeAgentName} isn&apos;t sitting with second thoughts right now.
             </p>
           </section>
         ) : (
@@ -224,11 +228,11 @@ function RevisionCard({
             {revision.status === 'surfaced' && revision.surfaced_at && ` · surfaced ${formatTime(revision.surfaced_at)}`}
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={labelStyle}>What Luca said</div>
+            <div style={labelStyle}>What {activeAgentName} said</div>
             <p style={quoteStyle}>{revision.what_was_said}</p>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={labelStyle}>What Luca would say now</div>
+            <div style={labelStyle}>What {activeAgentName} would say now</div>
             <p style={{ ...quoteStyle, color: 'var(--text-primary)' }}>{revision.what_to_say_now}</p>
           </div>
           {revision.rationale && (

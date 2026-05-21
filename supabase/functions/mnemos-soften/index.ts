@@ -20,6 +20,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const userId = body.user_id;
+    const requestedAgentId = typeof body.agent_id === "string" ? body.agent_id : null;
 
     // Get OpenRouter API key for LLM compression
     let apiKey: string | null = null;
@@ -37,9 +38,10 @@ serve(async (req) => {
     }
 
     if (userId) {
-      const results = await runSofteningCycle(supabase, userId, apiKey);
+      const agentId = requestedAgentId || "luca";
+      const results = await runSofteningCycle(supabase, userId, apiKey, agentId);
       await recordCronSuccess("mnemos-soften", Date.now() - __jobStart);
-      return new Response(JSON.stringify({ success: true, softened: results.length, results }), {
+      return new Response(JSON.stringify({ success: true, agent_id: agentId, softened: results.length, results }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -47,29 +49,31 @@ serve(async (req) => {
     // Cron mode
     const { data: users } = await supabase
       .from("engrams")
-      .select("user_id")
+      .select("user_id, agent_id")
       .eq("state", "active")
       .lt("strength", 0.3)
       .limit(100);
 
-    const uniqueUsers = [...new Set((users ?? []).map((u: { user_id: string }) => u.user_id))];
+    const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
+      [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }],
+    )).values()];
     const allResults: Record<string, unknown> = {};
 
-    for (const uid of uniqueUsers) {
+    for (const scope of uniqueScopes) {
       try {
         let userApiKey = apiKey;
-        const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: uid });
+        const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: scope.userId });
         if (keyData) userApiKey = keyData;
 
-        const results = await runSofteningCycle(supabase, uid, userApiKey!);
-        allResults[uid] = { softened: results.length };
+        const results = await runSofteningCycle(supabase, scope.userId, userApiKey!, scope.agentId);
+        allResults[`${scope.userId}:${scope.agentId}`] = { softened: results.length };
       } catch (e) {
-        allResults[uid] = { error: (e as Error).message };
+        allResults[`${scope.userId}:${scope.agentId}`] = { error: (e as Error).message };
       }
     }
 
     await recordCronSuccess("mnemos-soften", Date.now() - __jobStart);
-    return new Response(JSON.stringify({ success: true, users_processed: uniqueUsers.length, results: allResults }), {
+    return new Response(JSON.stringify({ success: true, scopes_processed: uniqueScopes.length, results: allResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

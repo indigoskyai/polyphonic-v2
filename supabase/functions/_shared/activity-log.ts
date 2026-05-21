@@ -14,6 +14,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 export type ActivitySeverity = "info" | "notable" | "important";
 
 export interface ActivityEntry {
+  agentId?: string;
   type: string;
   title?: string;
   summary?: string;
@@ -38,6 +39,7 @@ export async function logActivity(
       .from("entity_activity_log")
       .insert({
         user_id: userId,
+        agent_id: entry.agentId || "luca",
         activity_type: entry.type,
         title: entry.title ?? null,
         summary: entry.summary ?? null,

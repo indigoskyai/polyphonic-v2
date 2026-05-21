@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { trackCronJob } from "../_shared/cronHealth.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
+import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
 import {
   buildLucaPromptPartsFromContinuity,
   loadContinuityPacket,
@@ -84,14 +85,15 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
       metadata: { scheduled_task_id: task.id },
     });
 
-    const response = await callLuca(supabase, task.user_id, threadId, scheduledPrompt, apiKey);
+    const agentId = task.agent_id || "luca";
+    const result = await callAgent(supabase, task.user_id, agentId, threadId, scheduledPrompt, apiKey);
     await supabase.from("messages").insert({
       user_id: task.user_id,
       thread_id: threadId,
       role: "assistant",
-      content: response,
+      content: result.content,
       agent: task.agent_id || "luca",
-      model: SCHEDULED_MODEL,
+      model: result.model,
       kind: "scheduled_task_result",
       metadata: { scheduled_task_id: task.id },
     });
@@ -103,9 +105,10 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
         source: "scheduled_task",
         severity,
         title: task.name,
-        summary: response.slice(0, 240),
+        summary: result.content.slice(0, 240),
         rationale: `Scheduled task "${task.name}" finished (cadence: ${task.schedule_expr}).`,
         activityType: "scheduled_task_run",
+        agentId,
         content: {
           scheduled_task_id: task.id,
           thread_id: threadId,
@@ -133,10 +136,24 @@ async function runTask(supabase: any, url: string, serviceRole: string, task: an
   }
 }
 
-async function callLuca(supabase: any, userId: string, threadId: string, prompt: string, apiKey: string): Promise<string> {
+async function callAgent(
+  supabase: any,
+  userId: string,
+  agentId: string,
+  threadId: string,
+  prompt: string,
+  apiKey: string,
+): Promise<{ content: string; model: string }> {
+  const { data: agentConfig } = await supabase
+    .from("agent_configs")
+    .select("id, name, prompt, model")
+    .eq("user_id", userId)
+    .eq("id", agentId)
+    .maybeSingle();
+  const agentName = agentConfig?.name || (agentId === "luca" ? "Luca" : agentId);
   const continuity = await loadContinuityPacket(supabase, {
     userId,
-    agentId: "luca",
+    agentId,
     threadId,
     userMessage: prompt,
     apiKey,
@@ -145,17 +162,25 @@ async function callLuca(supabase: any, userId: string, threadId: string, prompt:
   });
   logContinuityDiagnostics(continuity, "scheduled-task.continuity");
 
-  const systemPrompt = buildLucaSystemPrompt({
-    ...buildLucaPromptPartsFromContinuity(continuity, {
-      continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
-    }),
+  const continuityParts = buildLucaPromptPartsFromContinuity(continuity, {
+    continuityNote: "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
   });
+  const systemPrompt = agentId === "luca"
+    ? buildLucaSystemPrompt(continuityParts)
+    : buildCustomAgentSystemPrompt({
+      agentName,
+      agentPrompt: agentConfig?.prompt,
+      identityDocs: continuity.identityDocs,
+      hypomnemaBlock: continuity.hypomnema.block,
+      continuityNote: continuity.continuityNote + "\n\n[This is a scheduled task. Complete it directly and briefly. Do not pretend the user is present in real time.]",
+    });
 
   const messages = [
     { role: "system", content: systemPrompt },
     ...continuity.history.map((m: any) => ({ role: m.role, content: m.content })),
   ];
 
+  const model = agentConfig?.model || SCHEDULED_MODEL;
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -165,7 +190,7 @@ async function callLuca(supabase: any, userId: string, threadId: string, prompt:
       "X-Title": "Polyphonic Scheduled Task",
     },
     body: JSON.stringify({
-      model: SCHEDULED_MODEL,
+      model,
       messages,
       temperature: 0.5,
       max_tokens: 1800,
@@ -174,7 +199,10 @@ async function callLuca(supabase: any, userId: string, threadId: string, prompt:
 
   if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content || "I ran the scheduled task, but there was no response content.";
+  return {
+    content: data?.choices?.[0]?.message?.content || "I ran the scheduled task, but there was no response content.",
+    model,
+  };
 }
 
 function nextRunAt(expr: string, from: Date): Date {

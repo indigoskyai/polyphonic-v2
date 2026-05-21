@@ -58,7 +58,6 @@ serve(async (req) => {
     const force = body.force === true;
 
     if (!threadId) return json({ error: "Missing thread_id" }, 400, corsHeaders);
-    if (agentId !== "luca") return json({ ok: true, skipped: "non_luca_agent" }, 200, corsHeaders);
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
@@ -74,7 +73,7 @@ serve(async (req) => {
 
     const history = (recentMessages || []).reverse();
     const assistantCount = history.filter((m: { role: string; agent?: string | null }) =>
-      m.role === "assistant" && (m.agent || "luca") === "luca"
+      m.role === "assistant" && (m.agent || "luca") === agentId
     ).length;
 
     if (!force && assistantCount > 0 && assistantCount % DIALECTIC_TURN_CADENCE !== 0) {
@@ -91,14 +90,14 @@ serve(async (req) => {
       .filter(Boolean);
 
     const [identityDocs, notesRes, emotionalRes, memories] = await Promise.all([
-      loadOrCreateLucaIdentity(supabase, user.id, "luca"),
+      loadOrCreateLucaIdentity(supabase, user.id, agentId),
       supabase.from("observer_notes")
         .select("kind, content, created_at")
         .eq("thread_id", threadId)
         .order("created_at", { ascending: false })
         .limit(10),
-      loadEmotionalState(supabase, user.id),
-      loadRecentMemoryContext(supabase, user.id, lastUserMessage?.content || ""),
+      loadEmotionalState(supabase, user.id, agentId),
+      loadRecentMemoryContext(supabase, user.id, agentId, lastUserMessage?.content || ""),
     ]);
 
     const transcript = history
@@ -150,14 +149,15 @@ serve(async (req) => {
     const raw = data?.choices?.[0]?.message?.content || "";
     const result = parseDialecticResult(raw);
 
-    const patchCounts = await persistPatches(supabase, user.id, threadId, sourceMessageIds, result.patches);
-    const revisionCount = await persistPendingRevisions(supabase, user.id, threadId, history, result.pending_revisions);
+    const patchCounts = await persistPatches(supabase, user.id, agentId, threadId, sourceMessageIds, result.patches);
+    const revisionCount = await persistPendingRevisions(supabase, user.id, agentId, threadId, history, result.pending_revisions);
 
     const urgentSurfaced = await maybeSurfaceOfflineRevision(
       supabase,
       supabaseUrl,
       serviceKey,
       user.id,
+      agentId,
       threadId,
       lastUserMessage?.created_at ?? null,
       result.pending_revisions,
@@ -183,6 +183,7 @@ async function maybeSurfaceOfflineRevision(
   supabaseUrl: string,
   serviceRole: string,
   userId: string,
+  agentId: string,
   threadId: string,
   lastUserMessageAt: string | null,
   revisions: DialecticRevision[],
@@ -204,6 +205,7 @@ async function maybeSurfaceOfflineRevision(
   try {
     const result = await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRole, {
       userId,
+      agentId,
       source: "pending_revision_urgent",
       severity: "notable",
       title: "I've been reconsidering something",
@@ -223,10 +225,10 @@ async function maybeSurfaceOfflineRevision(
   }
 }
 
-async function loadRecentMemoryContext(supabase: any, userId: string, query: string): Promise<string> {
+async function loadRecentMemoryContext(supabase: any, userId: string, agentId: string, query: string): Promise<string> {
   if (!query.trim()) return "";
   try {
-    const mnemos = new MnemosEngine(supabase, userId);
+    const mnemos = new MnemosEngine(supabase, userId, agentId);
     const memories = await mnemos.retrieve(query, { limit: 5, spread_activation: true });
     return memories
       .map((m) => `- ${m.engram.content.slice(0, 220)}`)
@@ -240,6 +242,7 @@ async function loadRecentMemoryContext(supabase: any, userId: string, query: str
 async function persistPatches(
   supabase: any,
   userId: string,
+  agentId: string,
   threadId: string,
   sourceMessageIds: string[],
   patches: DialecticPatch[],
@@ -254,7 +257,7 @@ async function persistPatches(
       .from("agent_identity_patches")
       .insert({
         user_id: userId,
-        agent_id: "luca",
+        agent_id: agentId,
         doc_type: patch.doc_type,
         section: patch.section,
         operation: patch.operation,
@@ -281,7 +284,7 @@ async function persistPatches(
       .from("agent_identity")
       .select("content, version")
       .eq("user_id", userId)
-      .eq("agent_id", "luca")
+      .eq("agent_id", agentId)
       .eq("doc_type", patch.doc_type)
       .maybeSingle();
 
@@ -299,7 +302,7 @@ async function persistPatches(
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId)
-      .eq("agent_id", "luca")
+      .eq("agent_id", agentId)
       .eq("doc_type", patch.doc_type);
 
     if (updateError) {
@@ -313,6 +316,7 @@ async function persistPatches(
 async function persistPendingRevisions(
   supabase: any,
   userId: string,
+  agentId: string,
   threadId: string,
   history: Array<{ id: string; role: string; content: string }>,
   revisions: DialecticRevision[],
@@ -325,6 +329,7 @@ async function persistPendingRevisions(
 
   const rows = valid.map((revision) => ({
     user_id: userId,
+    agent_id: agentId,
     thread_id: threadId,
     source_message_id: findSourceMessageId(history, revision.what_was_said),
     revision_type: revision.revision_type,

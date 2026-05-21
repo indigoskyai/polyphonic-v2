@@ -89,12 +89,14 @@ async function computeSurprise(
 ): Promise<number> {
   const client = engine.getClient();
   const userId = engine.getUserId();
+  const agentId = engine.getAgentId();
 
   // Fetch recent active engrams to compare against (limit to a reasonable set)
   const { data: existingEngrams, error } = await client
     .from("engrams")
     .select("content")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("state", ["active", "consolidating"])
     .order("created_at", { ascending: false })
     .limit(100);
@@ -201,6 +203,7 @@ async function discoverConnections(
 ): Promise<DiscoveredConnection[]> {
   const client = engine.getClient();
   const userId = engine.getUserId();
+  const agentId = engine.getAgentId();
   const connections: DiscoveredConnection[] = [];
 
   // 1. Add explicit connections provided by the caller
@@ -217,6 +220,7 @@ async function discoverConnections(
     .from("engrams")
     .select("id, content, engram_type")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("state", ["active", "consolidating"])
     .order("created_at", { ascending: false })
     .limit(50);
@@ -304,6 +308,7 @@ export async function encode(
 ): Promise<EncodingResult> {
   const client = engine.getClient();
   const userId = engine.getUserId();
+  const agentId = engine.getAgentId();
 
   // 1. Surprise detection
   const surpriseScore = context.surprise_score ?? await computeSurprise(engine, content);
@@ -326,6 +331,7 @@ export async function encode(
     .from("engrams")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("state", ["active", "consolidating"]);
 
   const decision = computeEncodingSalience({
@@ -355,6 +361,7 @@ export async function encode(
   // 4. Insert engram
   const engramRow = {
     user_id: userId,
+    agent_id: agentId,
     content,
     engram_type: context.engram_type ?? "episodic",
     strength: traces.strength,
@@ -418,6 +425,7 @@ export async function encode(
   for (const disc of discovered) {
     const connRow = {
       user_id: userId,
+      agent_id: agentId,
       source_id: engram.id,
       target_id: disc.targetId,
       connection_type: disc.connectionType,
@@ -451,7 +459,7 @@ export async function encode(
     temporal: 0,
   };
 
-  await recordEmotionalSnapshot(client, userId, emotionalState);
+  await recordEmotionalSnapshot(client, userId, agentId, emotionalState);
 
   return {
     engram,
@@ -474,10 +482,12 @@ async function recordEmotionalSnapshot(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
   client: { from: (table: string) => any },
   userId: string,
+  agentId: string,
   state: EmotionalState
 ): Promise<void> {
   await client.from("mnemos_emotional_state").insert({
     user_id: userId,
+    agent_id: agentId,
     valence: state.valence,
     arousal: state.arousal,
     dominance: state.dominance,
@@ -496,11 +506,13 @@ export async function getCurrentEmotionalState(
 ): Promise<EmotionalState> {
   const client = engine.getClient();
   const userId = engine.getUserId();
+  const agentId = engine.getAgentId();
 
   const { data, error } = await client
     .from("mnemos_emotional_state")
     .select("valence, arousal, dominance, certainty, social, temporal")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .order("recorded_at", { ascending: false })
     .limit(EMOTIONAL_STATE_WINDOW);
 
@@ -536,5 +548,5 @@ export async function recordEmotionalState(
   engine: MnemosEngine,
   state: EmotionalState
 ): Promise<void> {
-  await recordEmotionalSnapshot(engine.getClient(), engine.getUserId(), state);
+  await recordEmotionalSnapshot(engine.getClient(), engine.getUserId(), engine.getAgentId(), state);
 }

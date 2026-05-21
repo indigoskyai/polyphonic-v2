@@ -21,13 +21,14 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const userId = body.user_id;
+    const requestedAgentId = typeof body.agent_id === "string" ? body.agent_id : null;
 
-    const runForUser = async (uid: string) => {
+    const runForUser = async (uid: string, agentId = "luca") => {
       const settings = await getMemorySettings(supabase, uid);
       if (!settings.mnemos_enabled) {
         return { skipped: true, reason: "mnemos_disabled" };
       }
-      const engine = new MnemosEngine(supabase, uid);
+      const engine = new MnemosEngine(supabase, uid, agentId);
       return engine.decay({
         min_hours_since_access: 1,
         archive_below_threshold: true,
@@ -36,7 +37,7 @@ serve(async (req) => {
     };
 
     if (userId) {
-      const result = await runForUser(userId);
+      const result = await runForUser(userId, requestedAgentId || "luca");
       await recordCronSuccess("mnemos-decay", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -46,23 +47,25 @@ serve(async (req) => {
     // Cron mode
     const { data: users } = await supabase
       .from("engrams")
-      .select("user_id")
+      .select("user_id, agent_id")
       .in("state", ["active", "consolidating", "dormant"])
       .limit(100);
 
-    const uniqueUsers = [...new Set((users ?? []).map((u: { user_id: string }) => u.user_id))];
+    const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
+      [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }]
+    )).values()];
     const results: Record<string, unknown> = {};
 
-    for (const uid of uniqueUsers) {
+    for (const scope of uniqueScopes) {
       try {
-        results[uid] = await runForUser(uid);
+        results[`${scope.userId}:${scope.agentId}`] = await runForUser(scope.userId, scope.agentId);
       } catch (e) {
-        results[uid] = { error: (e as Error).message };
+        results[`${scope.userId}:${scope.agentId}`] = { error: (e as Error).message };
       }
     }
 
     await recordCronSuccess("mnemos-decay", Date.now() - __jobStart);
-    return new Response(JSON.stringify({ success: true, users_processed: uniqueUsers.length, results }), {
+    return new Response(JSON.stringify({ success: true, scopes_processed: uniqueScopes.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

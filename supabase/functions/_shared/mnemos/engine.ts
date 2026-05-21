@@ -46,10 +46,12 @@ type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?:
 export class MnemosEngine {
   private readonly supabase: SupabaseClient;
   private readonly userId: string;
+  private readonly agentId: string;
 
-  constructor(supabaseClient: SupabaseClient, userId: string) {
+  constructor(supabaseClient: SupabaseClient, userId: string, agentId = "luca") {
     this.supabase = supabaseClient;
     this.userId = userId;
+    this.agentId = agentId || "luca";
   }
 
   // -------------------------------------------------------------------------
@@ -64,6 +66,11 @@ export class MnemosEngine {
   /** The user ID this engine operates on. */
   getUserId(): string {
     return this.userId;
+  }
+
+  /** The agent ID this engine operates on. */
+  getAgentId(): string {
+    return this.agentId;
   }
 
   // -------------------------------------------------------------------------
@@ -93,7 +100,7 @@ export class MnemosEngine {
    * Optionally archives engrams below threshold.
    */
   async decay(options?: DecayOptions): Promise<DecayResult> {
-    return runDecayCycle(this.supabase, this.userId, options);
+    return runDecayCycle(this.supabase, this.userId, { ...options, agentId: this.agentId });
   }
 
   /**
@@ -102,11 +109,11 @@ export class MnemosEngine {
    * promotes episodic memories to semantic, and updates beliefs.
    */
   async consolidate(options?: ConsolidationOptions & { openrouter_api_key?: string }): Promise<ConsolidationResult> {
-    const { result, report } = await runConsolidation(this.supabase, this.userId, options);
+    const { result, report } = await runConsolidation(this.supabase, this.userId, { ...options, agentId: this.agentId });
 
     // Generate dream narrative if OpenRouter key is available
     if (options?.openrouter_api_key) {
-      await dream(this.supabase, this.userId, report, options.openrouter_api_key);
+      await dream(this.supabase, this.userId, report, options.openrouter_api_key, this.agentId);
     }
 
     return {
@@ -128,6 +135,7 @@ export class MnemosEngine {
   async updateBelief(content: string, evidence: { id: string }[]): Promise<Belief> {
     const client = this.supabase;
     const userId = this.userId;
+    const agentId = this.agentId;
     const evidenceIds = evidence.map((e) => e.id);
 
     // Check if a belief with this content already exists
@@ -135,6 +143,7 @@ export class MnemosEngine {
       .from("beliefs")
       .select("*")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .eq("content", content)
       .limit(1);
 
@@ -152,6 +161,7 @@ export class MnemosEngine {
           updated_at: new Date().toISOString(),
         })
         .eq("id", belief.id)
+        .eq("agent_id", agentId)
         .select()
         .single();
 
@@ -165,6 +175,7 @@ export class MnemosEngine {
       .from("beliefs")
       .insert({
         user_id: userId,
+        agent_id: agentId,
         content,
         confidence,
         supporting_engram_ids: evidenceIds,
@@ -185,11 +196,13 @@ export class MnemosEngine {
   async getBeliefs(tier?: ConfidenceTier): Promise<Belief[]> {
     const client = this.supabase;
     const userId = this.userId;
+    const agentId = this.agentId;
 
     let query = client
       .from("beliefs")
       .select("*")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .order("confidence", { ascending: false });
 
     if (tier) {

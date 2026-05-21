@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import RichBody from '@/components/rich/RichBody';
 import HypomnemaList from '@/components/identity/HypomnemaList';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type IdentityDocType = 'soul' | 'self_model' | 'user_model' | 'convictions';
 
@@ -65,9 +66,11 @@ function formatUpdated(value?: string) {
   }).format(new Date(value));
 }
 
-function IdentityDocument({ docType, doc }: { docType: IdentityDocType; doc?: IdentityDoc }) {
+function IdentityDocument({ docType, doc, agentName }: { docType: IdentityDocType; doc?: IdentityDoc; agentName: string }) {
   const meta = DOC_META[docType];
   const content = doc?.content?.trim();
+  const title = meta.title.replaceAll('Luca', agentName);
+  const empty = meta.empty.replaceAll('Luca', agentName);
 
   return (
     <section
@@ -99,7 +102,7 @@ function IdentityDocument({ docType, doc }: { docType: IdentityDocType; doc?: Id
               margin: 0,
             }}
           >
-            {meta.title}
+            {title}
           </h2>
         </div>
         <div
@@ -127,7 +130,7 @@ function IdentityDocument({ docType, doc }: { docType: IdentityDocType; doc?: Id
             margin: 0,
           }}
         >
-          {meta.empty}
+          {empty}
         </p>
       )}
     </section>
@@ -207,6 +210,8 @@ function formatTimeAgo(d: Date): string {
 
 export default function ProfileIdentityView() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [docs, setDocs] = useState<IdentityDoc[]>([]);
   const [patches, setPatches] = useState<IdentityPatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,12 +227,12 @@ export default function ProfileIdentityView() {
           .from('agent_identity')
           .select('doc_type, content, version, updated_at')
           .eq('user_id', user.id)
-          .eq('agent_id', 'luca'),
+          .eq('agent_id', activeAgentId),
         supabase
           .from('agent_identity_patches')
           .select('id, doc_type, section, operation, patch_content, rationale, status, confidence, applied_at, created_at')
           .eq('user_id', user.id)
-          .eq('agent_id', 'luca')
+          .eq('agent_id', activeAgentId)
           .in('status', ['applied', 'queued'])
           .order('applied_at', { ascending: false, nullsFirst: false })
           .limit(10),
@@ -243,7 +248,7 @@ export default function ProfileIdentityView() {
 
     load();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, activeAgentId]);
 
   const docsByType = useMemo(() => {
     return new Map(docs.map((doc) => [doc.doc_type, doc]));
@@ -274,7 +279,7 @@ export default function ProfileIdentityView() {
               margin: 0,
             }}
           >
-            Luca's living identity
+            {activeAgentName}'s living identity
           </h1>
           <p
             style={{
@@ -285,7 +290,7 @@ export default function ProfileIdentityView() {
               margin: '16px 0 0',
             }}
           >
-            These are the agent-managed documents Luca can use to stay continuous with you. You can read them. Luca writes them slowly, from evidence.
+            These are the agent-managed documents {activeAgentName} can use to stay continuous with you. You can read them as they evolve from evidence.
           </p>
         </div>
 
@@ -302,6 +307,7 @@ export default function ProfileIdentityView() {
                   key={docType}
                   docType={docType}
                   doc={docsByType.get(docType)}
+                  agentName={activeAgentName}
                 />
               ))
             )}
@@ -324,7 +330,7 @@ export default function ProfileIdentityView() {
               <p style={{ color: 'var(--text-ghost)', fontSize: 12 }}>Loading…</p>
             ) : patches.length === 0 ? (
               <p style={{ color: 'var(--text-ghost)', fontSize: 12, lineHeight: 1.6 }}>
-                No edits yet. The dialectic layer fills this in as Luca develops.
+                No edits yet. The dialectic layer fills this in as {activeAgentName} develops.
               </p>
             ) : (
               patches.map((patch) => <PatchEntry key={patch.id} patch={patch} />)

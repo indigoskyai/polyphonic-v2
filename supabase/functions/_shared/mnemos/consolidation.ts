@@ -96,6 +96,7 @@ function clamp(value: number, min: number, max: number): number {
 async function selectCandidates(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   lookbackHours: number
 ): Promise<Engram[]> {
   const cutoff = new Date(Date.now() - lookbackHours * 3600_000).toISOString();
@@ -104,6 +105,7 @@ async function selectCandidates(
     .from("engrams")
     .select("*")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("state", ["active", "consolidating"])
     .gte("last_accessed_at", cutoff)
     .order("access_count", { ascending: false })
@@ -134,6 +136,7 @@ interface NewConnectionCandidate {
 async function analyzePairs(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   candidates: Engram[]
 ): Promise<NewConnectionCandidate[]> {
   if (candidates.length < 2) return [];
@@ -144,12 +147,14 @@ async function analyzePairs(
     .from("connections")
     .select("source_id, target_id")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("source_id", candidateIds);
 
   const { data: existingConnsReverse } = await supabase
     .from("connections")
     .select("source_id, target_id")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("target_id", candidateIds);
 
   // Build a set of existing pairs for O(1) lookup
@@ -225,6 +230,7 @@ function inferConnectionType(a: Engram, b: Engram, similarity: number): Connecti
 async function strengthenConnections(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   candidates: Engram[]
 ): Promise<number> {
   if (candidates.length < 2) return 0;
@@ -237,6 +243,7 @@ async function strengthenConnections(
     .from("connections")
     .select("id, source_id, target_id, weight")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .in("source_id", candidateIds)
     .in("target_id", candidateIds)
     .gte("weight", CONSOLIDATION_MIN_WEIGHT);
@@ -274,6 +281,7 @@ async function strengthenConnections(
  */
 async function strengthenEngrams(
   supabase: SupabaseClient,
+  agentId: string,
   candidates: Engram[]
 ): Promise<number> {
   let strengthened = 0;
@@ -283,6 +291,7 @@ async function strengthenEngrams(
     const { count, error: countError } = await supabase
       .from("connections")
       .select("id", { count: "exact", head: true })
+      .eq("agent_id", agentId)
       .or(`source_id.eq.${engram.id},target_id.eq.${engram.id}`);
 
     if (countError || (count ?? 0) < 2) continue;
@@ -358,6 +367,7 @@ async function promoteEngrams(
 async function formBeliefs(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   candidates: Engram[]
 ): Promise<number> {
   if (candidates.length < 3) return 0;
@@ -417,6 +427,7 @@ async function formBeliefs(
       .from("beliefs")
       .select("*")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .contains("supporting_engram_ids", [seed.id]);
 
     const existingBelief = (existingBeliefs as Belief[] | null)?.[0];
@@ -449,6 +460,7 @@ async function formBeliefs(
         .from("beliefs")
         .insert({
           user_id: userId,
+          agent_id: agentId,
           content: beliefContent,
           confidence,
           supporting_engram_ids: [seed.id, ...supporting],
@@ -469,6 +481,7 @@ async function formBeliefs(
 async function persistNewConnections(
   supabase: SupabaseClient,
   userId: string,
+  agentId: string,
   connections: NewConnectionCandidate[]
 ): Promise<number> {
   let created = 0;
@@ -478,6 +491,7 @@ async function persistNewConnections(
       .from("connections")
       .insert({
         user_id: userId,
+        agent_id: agentId,
         source_id: conn.sourceId,
         target_id: conn.targetId,
         connection_type: conn.connectionType,
@@ -504,6 +518,8 @@ async function persistNewConnections(
 export interface ConsolidationOptions {
   /** How far back to look for candidates (hours). Default: 24. */
   lookback_hours?: number;
+  /** Agent substrate to consolidate. */
+  agentId?: string;
   /** Whether to run softening after consolidation. Default: false (handled by decay). */
   run_softening?: boolean;
   /** OpenRouter API key (needed if run_softening is true). */
@@ -546,10 +562,11 @@ export async function runConsolidation(
   options: ConsolidationOptions = {}
 ): Promise<{ result: ConsolidationResult; report: ConsolidationReport }> {
   const { lookback_hours = DEFAULT_LOOKBACK_HOURS } = options;
+  const agentId = options.agentId || "luca";
   const startTime = Date.now();
 
   // 1. Select candidates
-  const candidates = await selectCandidates(supabase, userId, lookback_hours);
+  const candidates = await selectCandidates(supabase, userId, agentId, lookback_hours);
 
   if (candidates.length === 0) {
     const emptyResult: ConsolidationResult = {
@@ -578,31 +595,33 @@ export async function runConsolidation(
   await supabase
     .from("engrams")
     .update({ state: "consolidating", updated_at: new Date().toISOString() })
+    .eq("agent_id", agentId)
     .in("id", candidateIds);
 
   // 2. Pair analysis — discover new connections
-  const newConnections = await analyzePairs(supabase, userId, candidates);
+  const newConnections = await analyzePairs(supabase, userId, agentId, candidates);
 
   // 3. Persist new connections
-  const connectionsCreated = await persistNewConnections(supabase, userId, newConnections);
+  const connectionsCreated = await persistNewConnections(supabase, userId, agentId, newConnections);
 
   // 4. Strengthen co-activated connections
-  const connectionsStrengthened = await strengthenConnections(supabase, userId, candidates);
+  const connectionsStrengthened = await strengthenConnections(supabase, userId, agentId, candidates);
 
   // 5. Strengthen well-connected engrams
-  const engramsStrengthened = await strengthenEngrams(supabase, candidates);
+  const engramsStrengthened = await strengthenEngrams(supabase, agentId, candidates);
 
   // 6. Promote episodic -> semantic
   const promotions = await promoteEngrams(supabase, candidates);
 
   // 7. Belief formation
-  const beliefsUpdated = await formBeliefs(supabase, userId, candidates);
+  const beliefsUpdated = await formBeliefs(supabase, userId, agentId, candidates);
 
   // Return candidates to active state
   await supabase
     .from("engrams")
     .update({ state: "active", updated_at: new Date().toISOString() })
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .eq("state", "consolidating");
 
   const duration = Date.now() - startTime;

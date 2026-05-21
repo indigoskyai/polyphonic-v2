@@ -13,6 +13,7 @@ import { useMemoryStore, type Engram } from '@/stores/memoryStore';
 import { useMemoryCandidatesStore } from '@/stores/memoryCandidatesStore';
 import { useViewTabStore } from '@/stores/viewTabStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useToast } from '@/hooks/use-toast';
 import MnemosStreamShell from './MnemosStreamShell';
 
@@ -40,6 +41,7 @@ export default function MnemosOverview() {
   const loadAll = useMemoryStore((s) => s.loadAll);
   const setSelectedEngram = useMemoryStore((s) => s.setSelectedEngram);
   const openDrawer = useDrawerStore((s) => s.open);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const [consolidating, setConsolidating] = useState(false);
 
   const candidates = useMemoryCandidatesStore((s) => s.items);
@@ -50,10 +52,10 @@ export default function MnemosOverview() {
 
   useEffect(() => {
     if (!user) return;
-    loadCandidates(user.id);
-    const unsub = subscribeCandidates(user.id);
+    loadCandidates(user.id, activeAgentId);
+    const unsub = subscribeCandidates(user.id, activeAgentId);
     return unsub;
-  }, [user, loadCandidates, subscribeCandidates]);
+  }, [user, activeAgentId, loadCandidates, subscribeCandidates]);
 
   const stats = useMemo(() => {
     const active = engrams.filter((e) => e.state === 'active').length;
@@ -93,10 +95,10 @@ export default function MnemosOverview() {
     setConsolidating(true);
     try {
       const { data, error } = await supabase.functions.invoke('mnemos-consolidate', {
-        body: { user_id: user.id, force: true, lookback_hours: 168 },
+        body: { user_id: user.id, agent_id: activeAgentId, force: true, lookback_hours: 168 },
       });
       if (error) throw error;
-      await Promise.all([loadAll(user.id), loadCandidates(user.id)]);
+      await Promise.all([loadAll(user.id, activeAgentId), loadCandidates(user.id, activeAgentId)]);
       const result = (data ?? {}) as Record<string, unknown>;
       const candidatesFound = Number(result.candidates_found ?? 0);
       const promoted = Number(result.promotions ?? 0);

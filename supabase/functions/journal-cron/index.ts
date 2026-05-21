@@ -17,11 +17,11 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Find users who have had conversations (threads) in the last 24 hours
+    // Find user/agent scopes that have had conversations in the last 24 hours
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: activeConvos } = await supabase
       .from("threads")
-      .select("user_id")
+      .select("user_id, agent_id, primary_agent_id")
       .gte("updated_at", since);
 
     if (!activeConvos || activeConvos.length === 0) {
@@ -31,24 +31,28 @@ serve(async (req) => {
       });
     }
 
-    // Deduplicate user IDs
-    const userIds = [...new Set(activeConvos.map((c: any) => c.user_id))];
+    // Deduplicate user/agent scopes
+    const scopes = [...new Map(activeConvos.map((c: any) => {
+      const agentId = c.agent_id || c.primary_agent_id || "luca";
+      return [`${c.user_id}:${agentId}`, { userId: c.user_id, agentId }];
+    })).values()];
 
     // For each user, check they don't already have a recent periodic entry (last 3 hours)
     const recentCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     const results: any[] = [];
 
-    for (const userId of userIds) {
+    for (const scope of scopes) {
       const { data: recentEntry } = await supabase
         .from("journal_entries")
         .select("id")
-        .eq("user_id", userId)
+        .eq("user_id", scope.userId)
+        .eq("agent_id", scope.agentId)
         .eq("trigger_type", "periodic")
         .gte("created_at", recentCutoff)
         .maybeSingle();
 
       if (recentEntry) {
-        results.push({ user_id: userId, skipped: true, reason: "Recent entry exists" });
+        results.push({ user_id: scope.userId, agent_id: scope.agentId, skipped: true, reason: "Recent entry exists" });
         continue;
       }
 
@@ -60,12 +64,12 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceRoleKey}`,
           },
-          body: JSON.stringify({ user_id: userId, trigger_type: "periodic" }),
+          body: JSON.stringify({ user_id: scope.userId, agent_id: scope.agentId, trigger_type: "periodic" }),
         });
         const result = await resp.json();
-        results.push({ user_id: userId, ...result });
+        results.push({ user_id: scope.userId, agent_id: scope.agentId, ...result });
       } catch (e) {
-        results.push({ user_id: userId, error: e instanceof Error ? e.message : "Unknown" });
+        results.push({ user_id: scope.userId, agent_id: scope.agentId, error: e instanceof Error ? e.message : "Unknown" });
       }
     }
 
@@ -75,7 +79,7 @@ serve(async (req) => {
 
     const dreamResults: any[] = [];
     if (isQuietHours) {
-      for (const userId of userIds) {
+      for (const scope of scopes.filter((s: any) => s.agentId === "luca")) {
         try {
           const resp = await fetch(`${supabaseUrl}/functions/v1/anima-dream`, {
             method: "POST",
@@ -83,19 +87,19 @@ serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${serviceRoleKey}`,
             },
-            body: JSON.stringify({ user_id: userId }),
+            body: JSON.stringify({ user_id: scope.userId, agent_id: scope.agentId }),
           });
           const result = await resp.json();
-          dreamResults.push({ user_id: userId, ...result });
+          dreamResults.push({ user_id: scope.userId, agent_id: scope.agentId, ...result });
         } catch (e) {
-          dreamResults.push({ user_id: userId, error: e instanceof Error ? e.message : "Unknown" });
+          dreamResults.push({ user_id: scope.userId, agent_id: scope.agentId, error: e instanceof Error ? e.message : "Unknown" });
         }
       }
     }
 
     // ─── Anima: Update emotional state for all active users ───
     const emotionResults: any[] = [];
-    for (const userId of userIds) {
+    for (const scope of scopes) {
       try {
         const resp = await fetch(`${supabaseUrl}/functions/v1/anima-emotional-state`, {
           method: "POST",
@@ -103,18 +107,18 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceRoleKey}`,
           },
-          body: JSON.stringify({ user_id: userId }),
+          body: JSON.stringify({ user_id: scope.userId, agent_id: scope.agentId }),
         });
         const result = await resp.json();
-        emotionResults.push({ user_id: userId, ...result });
+        emotionResults.push({ user_id: scope.userId, agent_id: scope.agentId, ...result });
       } catch (e) {
-        emotionResults.push({ user_id: userId, error: e instanceof Error ? e.message : "Unknown" });
+        emotionResults.push({ user_id: scope.userId, agent_id: scope.agentId, error: e instanceof Error ? e.message : "Unknown" });
       }
     }
 
     // ─── Anima: Check thought initiation for all active users ───
     const initiationResults: any[] = [];
-    for (const userId of userIds) {
+    for (const scope of scopes.filter((s: any) => s.agentId === "luca")) {
       try {
         const resp = await fetch(`${supabaseUrl}/functions/v1/anima-initiate`, {
           method: "POST",
@@ -122,12 +126,12 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceRoleKey}`,
           },
-          body: JSON.stringify({ user_id: userId, action: "check" }),
+          body: JSON.stringify({ user_id: scope.userId, agent_id: scope.agentId, action: "check" }),
         });
         const result = await resp.json();
-        initiationResults.push({ user_id: userId, ...result });
+        initiationResults.push({ user_id: scope.userId, agent_id: scope.agentId, ...result });
       } catch (e) {
-        initiationResults.push({ user_id: userId, error: e instanceof Error ? e.message : "Unknown" });
+        initiationResults.push({ user_id: scope.userId, agent_id: scope.agentId, error: e instanceof Error ? e.message : "Unknown" });
       }
     }
 

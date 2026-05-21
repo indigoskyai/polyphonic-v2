@@ -18,7 +18,8 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('agent_mode: agentMode');
     expect(source).toContain('const sdkRuntimeRequested');
     expect(source).toContain('const shouldRunLegacyToolPlanner');
-    expect(source).toContain('? await runToolPlanner(thread_id, userId, baseMessages.slice(1))');
+    expect(source).toContain('? await runToolPlanner(');
+    expect(source).toContain('sourceMessageId');
     expect(gateIndex).toBeGreaterThan(-1);
     expect(legacyPlannerIndex).toBeGreaterThan(-1);
     expect(gateIndex).toBeLessThan(legacyPlannerIndex);
@@ -40,6 +41,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('name: "memory_read"');
     expect(source).toContain('name: "web_search"');
     expect(source).toContain('name: "read_url"');
+    expect(source).toContain('name: "forge_agent"');
     expect(source).toContain('callMcpTool(registration');
 
     expect(source).toContain('agent_tool_result');

@@ -139,13 +139,13 @@ export interface ContinuityLoadOptions {
 export interface ContinuityLoaders {
   history?: (supabase: SupabaseLike, opts: ContinuityLoadOptions) => Promise<ContinuityHistoryMessage[]>;
   identity?: (supabase: SupabaseLike, userId: string, agentId: string) => Promise<LucaIdentityDocs>;
-  pendingRevisions?: (supabase: SupabaseLike, userId: string, threadId: string) => Promise<PendingRevision[]>;
+  pendingRevisions?: (supabase: SupabaseLike, userId: string, threadId: string, agentId: string) => Promise<PendingRevision[]>;
   hypomnema?: (supabase: SupabaseLike, userId: string, agentId: string) => Promise<LoadHypomnemaResult>;
-  functionalMemories?: (supabase: SupabaseLike, userId: string, query: string, limit?: number) => Promise<FunctionalMemory[]>;
-  mnemos?: (supabase: SupabaseLike, userId: string, query: string, apiKey?: string | null) => Promise<ActivationResult[]>;
+  functionalMemories?: (supabase: SupabaseLike, userId: string, agentId: string, query: string, limit?: number) => Promise<FunctionalMemory[]>;
+  mnemos?: (supabase: SupabaseLike, userId: string, agentId: string, query: string, apiKey?: string | null) => Promise<ActivationResult[]>;
   skills?: (supabase: SupabaseLike, userId: string, agentId: string, message: string) => Promise<MatchedAgentSkill[]>;
-  emotionalState?: (supabase: SupabaseLike, userId: string) => Promise<EmotionalState | null>;
-  beliefs?: (supabase: SupabaseLike, userId: string) => Promise<ContinuityPacket["beliefs"]>;
+  emotionalState?: (supabase: SupabaseLike, userId: string, agentId: string) => Promise<EmotionalState | null>;
+  beliefs?: (supabase: SupabaseLike, userId: string, agentId: string) => Promise<ContinuityPacket["beliefs"]>;
 }
 
 function normalizeCurrentTurnText(value: string | null | undefined): string {
@@ -229,7 +229,7 @@ export async function loadContinuityPacket(
     enabled: include.pendingRevisions && Boolean(options.threadId),
     diagnostics,
     fallback: [] as PendingRevision[],
-    run: () => (loaders.pendingRevisions || loadPendingRevisions)(supabase, options.userId, options.threadId as string),
+    run: () => (loaders.pendingRevisions || loadPendingRevisions)(supabase, options.userId, options.threadId as string, agentId),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -247,7 +247,7 @@ export async function loadContinuityPacket(
     enabled: include.functionalMemory,
     diagnostics,
     fallback: [] as FunctionalMemory[],
-    run: () => (loaders.functionalMemories || loadFunctionalMemories)(supabase, options.userId, query, 8),
+    run: () => (loaders.functionalMemories || loadFunctionalMemories)(supabase, options.userId, agentId, query, 8),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -256,7 +256,7 @@ export async function loadContinuityPacket(
     enabled: include.mnemos && query.length > 0,
     diagnostics,
     fallback: [] as ActivationResult[],
-    run: () => (loaders.mnemos || loadMnemosAssociations)(supabase, options.userId, query, options.apiKey),
+    run: () => (loaders.mnemos || loadMnemosAssociations)(supabase, options.userId, agentId, query, options.apiKey),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -274,7 +274,7 @@ export async function loadContinuityPacket(
     enabled: include.emotionalState,
     diagnostics,
     fallback: null as EmotionalState | null,
-    run: () => (loaders.emotionalState || loadEmotionalState)(supabase as any, options.userId),
+    run: () => (loaders.emotionalState || loadEmotionalState)(supabase as any, options.userId, agentId),
     summarize: (state) => ({ count: state ? 1 : 0, rendered: state ? 1 : 0 }),
   });
 
@@ -283,7 +283,7 @@ export async function loadContinuityPacket(
     enabled: include.beliefs,
     diagnostics,
     fallback: [] as ContinuityPacket["beliefs"],
-    run: () => (loaders.beliefs || loadBeliefs)(supabase, options.userId),
+    run: () => (loaders.beliefs || loadBeliefs)(supabase, options.userId, agentId),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -440,17 +440,22 @@ async function loadThreadHistory(
 export async function loadFunctionalMemories(
   supabase: SupabaseLike,
   userId: string,
-  query: string,
+  agentIdOrQuery: string,
+  queryOrLimit?: string | number,
   limit = 8,
 ): Promise<FunctionalMemory[]> {
+  const agentId = typeof queryOrLimit === "string" ? agentIdOrQuery : "luca";
+  const query = typeof queryOrLimit === "string" ? queryOrLimit : agentIdOrQuery;
+  const effectiveLimit = typeof queryOrLimit === "number" ? queryOrLimit : limit;
   const byId = new Map<string, FunctionalMemory>();
   const genericCatchup = isGenericCatchupQuery(query);
 
   if (query.trim().length >= 3 && typeof supabase.rpc === "function") {
     const { data, error } = await supabase.rpc("match_memories", {
       query_text: query,
-      match_count: limit,
+      match_count: effectiveLimit,
       p_user_id: userId,
+      p_agent_id: agentId,
     });
     if (error) throw new Error(`match_memories failed: ${error.message || String(error)}`);
     for (const row of data || []) {
@@ -466,10 +471,11 @@ export async function loadFunctionalMemories(
     .from("memories")
     .select("id, content, memory_type, confidence, emotional_valence, emotional_intensity, estimated_date, tags, provenance, created_at, updated_at, pinned, is_watchlist, needs_confirmation, staleness_risk, summary, is_deleted")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .order("pinned", { ascending: false })
     .order("confidence", { ascending: false })
     .order("updated_at", { ascending: false })
-    .limit(limit * 6);
+    .limit(effectiveLimit * 6);
   if (durableError) throw new Error(`durable memories failed: ${durableError.message || String(durableError)}`);
 
   for (const row of durableRows || []) {
@@ -491,27 +497,30 @@ export async function loadFunctionalMemories(
 
   return [...byId.values()]
     .sort(sortFunctionalMemories)
-    .slice(0, limit);
+    .slice(0, effectiveLimit);
 }
 
 async function loadMnemosAssociations(
   supabase: SupabaseLike,
   userId: string,
+  agentId: string,
   query: string,
   apiKey?: string | null,
 ): Promise<ActivationResult[]> {
-  const mnemos = new MnemosEngine(supabase as any, userId);
+  const mnemos = new MnemosEngine(supabase as any, userId, agentId);
   return await mnemos.retrieve(query, { limit: 5, spread_activation: true, api_key: apiKey || undefined });
 }
 
 async function loadBeliefs(
   supabase: SupabaseLike,
   userId: string,
+  agentId: string,
 ): Promise<ContinuityPacket["beliefs"]> {
   const { data, error } = await supabase
     .from("beliefs")
     .select("content, confidence, confidence_tier, domain")
     .eq("user_id", userId)
+    .eq("agent_id", agentId)
     .eq("active", true)
     .order("confidence", { ascending: false })
     .limit(8);

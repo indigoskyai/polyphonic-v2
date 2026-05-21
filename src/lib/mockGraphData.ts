@@ -46,7 +46,8 @@ function makeRng(seed: number) {
 export function generateMockGraph(
   userId: string,
   count = 140,
-  seed = 7
+  seed = 7,
+  agentId = 'luca',
 ): { engrams: Engram[]; connections: Connection[] } {
   const rng = makeRng(seed);
   const now = Date.now();
@@ -61,6 +62,7 @@ export function generateMockGraph(
     engrams.push({
       id: `mock-${i.toString(36).padStart(4, '0')}`,
       user_id: userId,
+      agent_id: agentId,
       content: `${phrase}${rng() > 0.6 ? ' — and the corollary surprises me each time.' : '.'}`,
       engram_type: type,
       strength: 0.35 + rng() * 0.6,
@@ -93,6 +95,7 @@ export function generateMockGraph(
         connections.push({
           id: `mock-c-${cidx++}`,
           user_id: userId,
+          agent_id: agentId,
           source_id: members[i].id,
           target_id: members[j].id,
           connection_type: CONN_TYPES[Math.floor(rng() * CONN_TYPES.length)],
@@ -111,6 +114,7 @@ export function generateMockGraph(
     connections.push({
       id: `mock-b-${cidx++}`,
       user_id: userId,
+      agent_id: agentId,
       source_id: a.id,
       target_id: z.id,
       connection_type: CONN_TYPES[Math.floor(rng() * CONN_TYPES.length)],

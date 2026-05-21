@@ -33,7 +33,7 @@ export interface Message {
   tokens_used: number | null;
   bookmarked: boolean;
   created_at: string;
-  kind?: 'permission_request' | 'agent_error' | 'text' | 'scheduled_task' | 'scheduled_task_result' | 'subagent_report' | null;
+  kind?: 'permission_request' | 'agent_forge_proposal' | 'agent_error' | 'text' | 'scheduled_task' | 'scheduled_task_result' | 'subagent_report' | null;
   metadata?: Record<string, unknown> | null;
   attachments?: MessageAttachment[] | null;
 }

@@ -29,6 +29,7 @@ const KNOWN_TOOLS = [
   "workspace_file",
   "create_artifact",
   "dispatch_subagent",
+  "forge_agent",
   "update_soul",
   "update_self_model",
 ];

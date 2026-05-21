@@ -230,6 +230,7 @@ serve(async (req) => {
       agent_mode: agentMode,
       agent_runtime: agentRuntime,
       use_agent_runtime: useAgentRuntime,
+      source_message_id: sourceMessageId,
       client_context: clientContext,
     } = body;
 
@@ -394,11 +395,11 @@ serve(async (req) => {
       historyLimit: backend.historyLimit,
       includeIdentity: true,
       includePendingRevisions: agentIsSystemLuca && backend.allowMemoryWrites,
-      includeFunctionalMemory: agentIsSystemLuca && backend.billingTier !== "guest",
-      includeMnemos: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeFunctionalMemory: backend.billingTier !== "guest",
+      includeMnemos: backend.billingTier !== "guest",
       includeSkills: agentIsSystemLuca && backend.billingTier !== "guest",
-      includeEmotionalState: agentIsSystemLuca && backend.billingTier !== "guest",
-      includeBeliefs: agentIsSystemLuca && backend.billingTier !== "guest",
+      includeEmotionalState: backend.billingTier !== "guest",
+      includeBeliefs: backend.billingTier !== "guest",
     });
     logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
@@ -485,7 +486,7 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks for an image, SVG, or live information, just do it — never claim you lack the ability."
+      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, and never claim you silently created an agent before approval."
       : "";
     // Build base messages array
     const baseMessages: any[] = [
@@ -525,10 +526,34 @@ serve(async (req) => {
     }
 
     const toolMessages = shouldRunLegacyToolPlanner
-      ? await runToolPlanner(thread_id, userId, baseMessages.slice(1))
+      ? await runToolPlanner(
+          thread_id,
+          userId,
+          baseMessages.slice(1),
+          typeof sourceMessageId === "string" ? sourceMessageId : null,
+        )
       : [];
     if (toolMessages.length > 0) {
       baseMessages.push(...toolMessages);
+    }
+
+    const forgeProposal = findForgeProposalResult(toolMessages);
+    if (forgeProposal) {
+      const donePayload = {
+        ok: true,
+        model: "forge_agent",
+        message_id: forgeProposal.proposal_message_id,
+        billing_tier: backend.billingTier,
+        key_source: backend.keySource,
+        forge_status: forgeProposal.forge_status || "pending",
+        forge_action: forgeProposal.forge_action,
+      };
+      if (idempotencyKey) {
+        recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+          .catch((e) => console.warn("idempotency record failed:", e));
+      }
+      await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", thread_id);
+      return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload });
     }
 
     // Custom / non-Luca agents always use single-model with their configured model.
@@ -1191,10 +1216,18 @@ serve(async (req) => {
 });
 
 function sseReplayResponse(corsHeaders: Record<string, string>, cached: Record<string, unknown>): Response {
+  return sseDoneResponse(corsHeaders, { duplicate: true, ...cached }, { replay: true });
+}
+
+function sseDoneResponse(
+  corsHeaders: Record<string, string>,
+  payload: Record<string, unknown>,
+  options: { replay?: boolean } = {},
+): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", duplicate: true, ...cached })}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", ...payload })}\n\n`));
       controller.close();
     },
   });
@@ -1205,7 +1238,7 @@ function sseReplayResponse(corsHeaders: Record<string, string>, cached: Record<s
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
-      "X-Idempotent-Replay": "true",
+      ...(options.replay ? { "X-Idempotent-Replay": "true" } : {}),
     },
   });
 }
@@ -1247,7 +1280,32 @@ function collectObservers(opts: {
   return [...observers.entries()].map(([agentId, contribution]) => ({ agentId, contribution }));
 }
 
-async function runToolPlanner(threadId: string, userId: string, messages: any[]): Promise<any[]> {
+function findForgeProposalResult(toolMessages: any[]): null | {
+  proposal_message_id?: string;
+  forge_status?: string;
+  forge_action?: string;
+} {
+  if (!Array.isArray(toolMessages)) return null;
+  for (const message of toolMessages) {
+    if (message?.role !== "tool" || typeof message.content !== "string") continue;
+    try {
+      const parsed = JSON.parse(message.content);
+      if (parsed?.ok === true && typeof parsed.proposal_message_id === "string") {
+        return parsed;
+      }
+    } catch {
+      // ignore non-JSON tool payloads
+    }
+  }
+  return null;
+}
+
+async function runToolPlanner(
+  threadId: string,
+  userId: string,
+  messages: any[],
+  sourceMessageId: string | null,
+): Promise<any[]> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 130_000);
@@ -1259,7 +1317,7 @@ async function runToolPlanner(threadId: string, userId: string, messages: any[])
         "Authorization": `Bearer ${serviceKey}`,
         "apikey": serviceKey,
       },
-      body: JSON.stringify({ thread_id: threadId, user_id: userId, messages }),
+      body: JSON.stringify({ thread_id: threadId, user_id: userId, source_message_id: sourceMessageId, messages }),
       signal: controller.signal,
     });
     clearTimeout(timeout);

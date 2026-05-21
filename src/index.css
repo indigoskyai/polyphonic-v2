@@ -5477,6 +5477,149 @@ html {
   background: rgba(244, 243, 240, 0.05);
 }
 
+/* Inline Forge proposal card */
+.forge-card {
+  background: linear-gradient(180deg, rgba(244, 243, 240, 0.045), rgba(244, 243, 240, 0.025));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin: 20px 0;
+  box-shadow: var(--shadow-inset-highlight);
+  animation: perm-inline-in 300ms ease-out;
+}
+.forge-card[data-status="approved"] { border-color: rgba(140, 168, 156, 0.32); }
+.forge-card[data-status="canceled"] { opacity: 0.72; }
+.forge-card[data-status="failed"] { border-color: rgba(248, 113, 113, 0.28); }
+.forge-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.forge-card-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  background: rgba(244, 243, 240, 0.055);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.forge-card-title-wrap { min-width: 0; flex: 1; }
+.forge-card-kicker,
+.forge-card-label,
+.forge-card-status,
+.forge-card-disclosure,
+.forge-card-doc-title {
+  font-family: var(--font-mono);
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+}
+.forge-card-kicker {
+  font-size: 9px;
+  color: var(--text-ghost);
+  margin-bottom: 3px;
+}
+.forge-card-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: 0;
+}
+.forge-card-status {
+  font-size: 9px;
+  color: var(--text-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.forge-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.forge-card-label {
+  font-size: 9px;
+  color: var(--text-ghost);
+  margin-bottom: 5px;
+}
+.forge-card-value {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-body);
+  overflow-wrap: anywhere;
+}
+.forge-card-summary {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-body);
+  margin: 0 0 12px;
+}
+.forge-card-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 10px;
+  padding: 0;
+  cursor: pointer;
+}
+.forge-card-disclosure:hover { color: var(--text-primary); }
+.forge-card-docs {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.forge-card-doc {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.10);
+  padding: 12px;
+}
+.forge-card-doc-title {
+  font-size: 9px;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+.forge-card-doc pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-body);
+  max-height: 220px;
+  overflow: auto;
+}
+.forge-card-error {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--danger);
+}
+.forge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .forge-card-grid { grid-template-columns: 1fr; }
+  .forge-card-header { align-items: flex-start; }
+  .forge-card-status { margin-top: 2px; }
+}
+
 /* Destructive modal */
 .perm-modal-backdrop {
   position: fixed;

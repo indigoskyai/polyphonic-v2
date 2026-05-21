@@ -47,7 +47,7 @@ serve(async (req) => {
   // Verify engram belongs to caller and load current values
   const { data: engram, error: loadErr } = await supabase
     .from("engrams")
-    .select("id, user_id, content, stability, digest_id, reviewed_at")
+    .select("id, user_id, agent_id, content, stability, digest_id, reviewed_at")
     .eq("id", engram_id)
     .maybeSingle();
   if (loadErr || !engram) return json({ error: "engram not found" }, 404, cors);
@@ -119,6 +119,7 @@ serve(async (req) => {
   // Activity log breadcrumb
   await supabase.from("entity_activity_log").insert({
     user_id: auth.userId,
+    agent_id: engram.agent_id || "luca",
     activity_type: "mnemos_digest_review",
     title: `engram ${action}`,
     summary: (updated.content ?? "").slice(0, 160),
