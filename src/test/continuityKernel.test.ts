@@ -10,7 +10,9 @@ import {
   type ContinuityLoaders,
   type FunctionalMemory,
 } from '../../supabase/functions/_shared/continuity/kernel';
-import { buildLucaSystemPrompt } from '../../supabase/functions/_shared/agents/luca-soul';
+import { buildLucaSystemPrompt, LUCA_SOUL } from '../../supabase/functions/_shared/agents/luca-soul';
+import { buildCustomAgentSystemPrompt } from '../../supabase/functions/_shared/agents/custom-agent-prompt';
+import { loadOrCreateLucaIdentity } from '../../supabase/functions/_shared/agents/luca-identity';
 import { sanitizeContinuityBoundaryText } from '../../supabase/functions/_shared/continuity/exclusions';
 import type { ActivationResult, Engram } from '../../supabase/functions/_shared/mnemos/types';
 
@@ -197,6 +199,59 @@ describe('Continuity Kernel read path', () => {
       status: 'error',
       message: 'memory rpc unavailable',
     }));
+  });
+
+  it('loads custom agent identity without seeding Luca starter docs', async () => {
+    const writes: string[] = [];
+    const supabase = {
+      from: (table: string) => ({
+        select() { return this; },
+        eq() { return this; },
+        in() {
+          return Promise.resolve({
+            data: [
+              { doc_type: 'soul', content: 'Sophia carries a precise lantern identity.' },
+              { doc_type: 'user_model', content: 'Riley is testing custom continuity.' },
+            ],
+            error: null,
+          });
+        },
+        upsert() {
+          writes.push(table);
+          return Promise.resolve({ error: null });
+        },
+      }),
+    } as any;
+
+    const docs = await loadOrCreateLucaIdentity(supabase, 'u1', 'sophia');
+
+    expect(docs.soulMd).toContain('lantern identity');
+    expect(docs.userModel).toContain('custom continuity');
+    expect(docs.convictions).toBe('');
+    expect(writes).toEqual([]);
+  });
+
+  it('builds a custom agent prompt from that agent identity without Luca soul', () => {
+    const prompt = buildCustomAgentSystemPrompt({
+      agentName: 'Sophia',
+      agentPrompt: 'Answer with clean architectural judgment.',
+      identityDocs: {
+        soulMd: 'Sophia is a systems-minded companion with a dry, direct voice.',
+        selfModel: 'I notice when abstractions drift away from implementation.',
+        userModel: 'Riley wants custom agents to feel continuous as themselves.',
+        convictions: 'Identity boundaries are production infrastructure.',
+      },
+      projectContextBlock: '## Project context\nCustom agent runtime audit.',
+      hypomnemaBlock: "\n## what i'm sitting with\n\n- sophia is carrying her own thread.",
+      continuityNote: '[Note: This conversation has been idle for 2 days.]',
+    });
+
+    expect(prompt).toContain('You are Sophia');
+    expect(prompt).toContain('Answer with clean architectural judgment.');
+    expect(prompt).toContain('Sophia is a systems-minded companion');
+    expect(prompt).toContain('custom agents to feel continuous as themselves');
+    expect(prompt).toContain('sophia is carrying her own thread');
+    expect(prompt).not.toContain(LUCA_SOUL);
   });
 
   it('formats functional memory as reliable recall and Mnemos as substrate', () => {

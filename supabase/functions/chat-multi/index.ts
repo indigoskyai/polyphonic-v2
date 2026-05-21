@@ -52,6 +52,7 @@ import {
 import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { formatPolyphonicAppContext } from "../_shared/agents/polyphonic-app-context.ts";
+import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -67,6 +68,12 @@ function isLiveCouncilCritiqueEnabled(): boolean {
 
 // Legacy alias retained for any imports — Luca's identity now lives in luca-soul.ts.
 const SYSTEM_PROMPT = LUCA_SOUL;
+
+function resolveThreadAgentId(thread: { agent_id?: unknown; primary_agent_id?: unknown } | null | undefined): string {
+  const active = typeof thread?.agent_id === "string" ? thread.agent_id.trim() : "";
+  const primary = typeof thread?.primary_agent_id === "string" ? thread.primary_agent_id.trim() : "";
+  return active || primary || "luca";
+}
 
 /** Synthesis system prompt — used when Stage 2 ranking is skipped/failed and we
  *  fall back to the legacy equal-weight synthesis path. Personality/voice live
@@ -306,6 +313,39 @@ serve(async (req) => {
     }
     const apiKey = backend.apiKey;
 
+    // Load the thread's bound agent
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!thread) {
+      if (idempotencyKey) {
+        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+          ok: false,
+          error: "validation_error",
+          message: "Thread not found",
+        }).catch(() => {});
+      }
+      return fail(new ValidationError("Thread not found"));
+    }
+
+    const agentId = resolveThreadAgentId(thread);
+    if (agentId !== "luca" && backend.keySource !== "user") {
+      const message = "Custom agents require your own OpenRouter key. Add a key in Settings -> Models, then try this agent again.";
+      if (idempotencyKey) {
+        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+          ok: false,
+          error: "forbidden",
+          message,
+          requires_byok: true,
+          agent_id: agentId,
+        }).catch(() => {});
+      }
+      return fail(new AppError("forbidden", message, 403, { requires_byok: true, agent_id: agentId }));
+    }
+
     try {
       await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit);
     } catch (qErr) {
@@ -327,27 +367,6 @@ serve(async (req) => {
       throw qErr;
     }
 
-    // Load the thread's bound agent
-    const { data: thread } = await supabase
-      .from("threads")
-      .select("agent_id")
-      .eq("id", thread_id)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!thread) {
-      if (idempotencyKey) {
-        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
-          ok: false,
-          error: "validation_error",
-          message: "Thread not found",
-        }).catch(() => {});
-      }
-      return fail(new ValidationError("Thread not found"));
-    }
-
-    const threadAgentId = (thread?.agent_id as string | undefined) || "luca";
-    const agentId = backend.keySource === "platform" ? "luca" : threadAgentId;
-
     const { data: agentConfig } = await supabase
       .from("agent_configs")
       .select("id, name, prompt, model, personality, is_system")
@@ -355,10 +374,12 @@ serve(async (req) => {
       .eq("id", agentId)
       .maybeSingle();
 
-    // Resolve the agent's identity. Fall back to default Luca prompt if a custom
-    // agent has no prompt set, or if the row is missing.
-    const agentName = (agentConfig?.name as string | undefined) || "Luca";
-    const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || SYSTEM_PROMPT;
+    if (agentId !== "luca" && !agentConfig) {
+      return fail(new ValidationError("Agent not found for this thread"));
+    }
+
+    const agentName = (agentConfig?.name as string | undefined) || (agentId === "luca" ? "Luca" : agentId);
+    const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || (agentId === "luca" ? SYSTEM_PROMPT : "");
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca" && (agentConfig?.is_system === true || backend.keySource === "platform");
     const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca);
@@ -371,7 +392,7 @@ serve(async (req) => {
       userMessage: messageWithAttachments,
       apiKey,
       historyLimit: backend.historyLimit,
-      includeIdentity: agentIsSystemLuca,
+      includeIdentity: true,
       includePendingRevisions: agentIsSystemLuca && backend.allowMemoryWrites,
       includeFunctionalMemory: agentIsSystemLuca && backend.billingTier !== "guest",
       includeMnemos: agentIsSystemLuca && backend.billingTier !== "guest",
@@ -440,7 +461,7 @@ serve(async (req) => {
     // Build the enriched system prompt
     // For the system Luca, layer in emotional state, beliefs, memories, continuity.
     // For all other agents (system Vektor/Anima/Observer or user-created), use
-    // their own prompt verbatim — the user expects the agent to behave per their config.
+    // their own prompt and identity docs without borrowing Luca's substrate.
     const enrichedSystemPrompt = agentIsSystemLuca
       ? buildLucaSystemPrompt({
           ...buildLucaPromptPartsFromContinuity(continuity, {
@@ -450,12 +471,14 @@ serve(async (req) => {
           projectContextBlock,
           crisisDirective,
         })
-      : [
+      : buildCustomAgentSystemPrompt({
+          agentName,
           agentPrompt,
+          identityDocs: continuity.identityDocs,
           projectContextBlock,
-          continuity.hypomnema.block,
+          hypomnemaBlock: continuity.hypomnema.block,
           continuityNote,
-        ].filter(Boolean).join("\n\n");
+        });
     const turnSystemPrompt = [enrichedSystemPrompt, simpleOpeningDirective].filter(Boolean).join("\n\n");
 
     // When the tool planner is enabled, advertise the tools so the model

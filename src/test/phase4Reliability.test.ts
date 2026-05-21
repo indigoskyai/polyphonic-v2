@@ -105,6 +105,7 @@ describe('Phase 4 reliability guardrails', () => {
 
   it('does not persist placeholder empty assistant responses from chat-multi', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
+    const legacySource = readRepoFile('supabase/functions/chat/index.ts');
 
     expect(source).toContain('provider stream ended with no content; retrying non-streaming once');
     expect(source).toContain('error: "empty_response"');
@@ -115,6 +116,40 @@ describe('Phase 4 reliability guardrails', () => {
     expect(source).toContain('maxTokens: simpleOpeningTurn ? 1024 : undefined');
     expect(source).not.toContain('content: fullContent || "(empty)"');
     expect(source).not.toContain('synthesizedContent || "(empty)"');
+    expect(legacySource).toContain('error: "empty_response"');
+    expect(legacySource).not.toContain('content: fullContent || "(empty response)"');
+  });
+
+  it('keeps custom agents scoped to their own identity and BYOK runtime', () => {
+    const source = readRepoFile('supabase/functions/chat-multi/index.ts');
+    const legacySource = readRepoFile('supabase/functions/chat/index.ts');
+    const identitySource = readRepoFile('supabase/functions/_shared/agents/luca-identity.ts');
+    const customPrompt = readRepoFile('supabase/functions/_shared/agents/custom-agent-prompt.ts');
+
+    expect(source).toContain('buildCustomAgentSystemPrompt');
+    expect(source).toContain('.select("agent_id, primary_agent_id")');
+    expect(source).toContain('const agentId = resolveThreadAgentId(thread)');
+    expect(source).toContain('backend.keySource !== "user"');
+    expect(source).toContain('Custom agents require your own OpenRouter key');
+    expect(source).not.toContain('backend.keySource === "platform" ? "luca" : threadAgentId');
+    expect(source).toContain('includeIdentity: true');
+    expect(source).toContain('includeFunctionalMemory: agentIsSystemLuca && backend.billingTier !== "guest"');
+    expect(source).toContain('identityDocs: continuity.identityDocs');
+    expect(source).toContain('agent: agentId');
+
+    expect(legacySource).toContain('.select("id, agent_id, primary_agent_id")');
+    expect(legacySource).toContain('const agentId = resolveThreadAgentId(thread)');
+    expect(legacySource).toContain('agentId,');
+    expect(legacySource).toContain('includeFunctionalMemory: agentIsLuca && backend.billingTier !== "guest"');
+    expect(legacySource).toContain('buildCustomAgentSystemPrompt');
+    expect(legacySource).toContain('agent: agentId');
+
+    expect(identitySource).toContain('export async function loadAgentIdentity');
+    expect(identitySource).toContain('if (agentId !== "luca")');
+    expect(identitySource).toContain('return loadAgentIdentity(supabase, userId, agentId)');
+
+    expect(customPrompt).toContain('Speak from this agent');
+    expect(customPrompt).not.toContain('LUCA_SOUL');
   });
 
   it('keeps launch-sensitive database helpers and profile uploads hardened', () => {

@@ -40,11 +40,35 @@ function starterFor(docType: LucaIdentityDocType): string {
   return "";
 }
 
+export async function loadAgentIdentity(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId = "luca",
+): Promise<LucaIdentityDocs> {
+  const { data: existing, error: selectError } = await supabase
+    .from("agent_identity")
+    .select("doc_type, content")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("doc_type", DOC_TYPES);
+
+  if (selectError) {
+    console.warn("[luca-identity] select failed:", selectError);
+    return EMPTY_DOCS;
+  }
+
+  return mapRows(existing);
+}
+
 export async function loadOrCreateLucaIdentity(
   supabase: SupabaseLike,
   userId: string,
   agentId = "luca",
 ): Promise<LucaIdentityDocs> {
+  if (agentId !== "luca") {
+    return loadAgentIdentity(supabase, userId, agentId);
+  }
+
   const { data: existing, error: selectError } = await supabase
     .from("agent_identity")
     .select("doc_type, content")

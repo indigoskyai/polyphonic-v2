@@ -21,6 +21,13 @@ import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { resolveChatBackend } from "../_shared/model-backend.ts";
+import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
+
+function resolveThreadAgentId(thread: { agent_id?: unknown; primary_agent_id?: unknown } | null | undefined): string {
+  const active = typeof thread?.agent_id === "string" ? thread.agent_id.trim() : "";
+  const primary = typeof thread?.primary_agent_id === "string" ? thread.primary_agent_id.trim() : "";
+  return active || primary || "luca";
+}
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -104,6 +111,28 @@ serve(async (req) => {
       return fail(new AppError("upstream_unavailable", "Free chat is temporarily unavailable. Please try again shortly.", 503));
     }
     const shouldRunLegacyToolPlanner = requestedLegacyToolPlanner && backend.allowTools;
+    const apiKey = backend.apiKey;
+    const model = backend.model;
+
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("id, agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!thread) {
+      return fail(new ValidationError("Thread not found"));
+    }
+
+    const agentId = resolveThreadAgentId(thread);
+    if (agentId !== "luca" && backend.keySource !== "user") {
+      return fail(new AppError(
+        "forbidden",
+        "Custom agents require your own OpenRouter key. Add a key in Settings -> Models, then try this agent again.",
+        403,
+        { requires_byok: true, agent_id: agentId },
+      ));
+    }
 
     try {
       await checkAndIncrement(userId, backend.quotaScope, backend.quotaLimit);
@@ -117,33 +146,35 @@ serve(async (req) => {
       }
       throw qErr;
     }
-    const apiKey = backend.apiKey;
-    const model = backend.model;
 
-    const { data: thread } = await supabase
-      .from("threads")
-      .select("id")
-      .eq("id", thread_id)
+    const { data: agentConfig } = await supabase
+      .from("agent_configs")
+      .select("id, name, prompt, is_system")
       .eq("user_id", userId)
+      .eq("id", agentId)
       .maybeSingle();
-    if (!thread) {
-      return fail(new ValidationError("Thread not found"));
+    if (agentId !== "luca" && !agentConfig) {
+      return fail(new ValidationError("Agent not found for this thread"));
     }
+
+    const agentName = (agentConfig?.name as string | undefined) || (agentId === "luca" ? "Luca" : agentId);
+    const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || "";
+    const agentIsLuca = agentId === "luca";
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
-      agentId: "luca",
+      agentId,
       threadId: thread_id,
       userMessage: messageWithAttachments,
       apiKey,
       historyLimit: backend.historyLimit,
       includeIdentity: true,
-      includePendingRevisions: backend.allowMemoryWrites,
-      includeFunctionalMemory: backend.billingTier !== "guest",
-      includeMnemos: backend.billingTier !== "guest",
-      includeSkills: backend.billingTier !== "guest",
-      includeEmotionalState: backend.billingTier !== "guest",
-      includeBeliefs: backend.billingTier !== "guest",
+      includePendingRevisions: agentIsLuca && backend.allowMemoryWrites,
+      includeFunctionalMemory: agentIsLuca && backend.billingTier !== "guest",
+      includeMnemos: agentIsLuca && backend.billingTier !== "guest",
+      includeSkills: agentIsLuca && backend.billingTier !== "guest",
+      includeEmotionalState: agentIsLuca && backend.billingTier !== "guest",
+      includeBeliefs: agentIsLuca && backend.billingTier !== "guest",
     });
     logContinuityDiagnostics(continuity, "chat.continuity");
     const history = continuity.history;
@@ -178,13 +209,23 @@ serve(async (req) => {
       }).catch((err) => console.warn("[chat] recordCrisisEvent failed:", err));
     }
 
-    const systemPrompt = buildLucaSystemPrompt({
-      ...buildLucaPromptPartsFromContinuity(continuity, {
-        crisisDirective,
-      }),
-      projectContextBlock,
-      crisisDirective,
-    });
+    const systemPrompt = agentIsLuca
+      ? buildLucaSystemPrompt({
+          ...buildLucaPromptPartsFromContinuity(continuity, {
+            crisisDirective,
+          }),
+          projectContextBlock,
+          crisisDirective,
+        })
+      : buildCustomAgentSystemPrompt({
+          agentName,
+          agentPrompt,
+          identityDocs: continuity.identityDocs,
+          projectContextBlock,
+          hypomnemaBlock: continuity.hypomnema.block,
+          continuityNote: continuity.continuityNote,
+          crisisDirective,
+        });
 
     // Build messages array for OpenRouter
     const openRouterMessages: any[] = [
@@ -305,14 +346,27 @@ serve(async (req) => {
             }
           }
 
+          if (!fullContent.trim()) {
+            const emptyMessage = `${agentName}'s response came back empty. Please retry.`;
+            if (idempotencyKey) {
+              recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+                ok: false,
+                error: "empty_response",
+                message: emptyMessage,
+              }).catch((e) => console.warn("idempotency record failed:", e));
+            }
+            send({ type: "error", text: emptyMessage, code: "empty_response", request_id: requestId });
+            return;
+          }
+
           // Save assistant message to DB
           const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
             thread_id,
             user_id: userId,
             role: "assistant",
-            content: fullContent || "(empty response)",
+            content: fullContent,
             model: usedModel,
-            agent: "luca",
+            agent: agentId,
             thinking_content: fullThinking || null,
             tokens_used: tokensUsed,
           }).select("id").single();
@@ -342,14 +396,14 @@ serve(async (req) => {
               supabase,
               userId,
               threadId: thread_id,
-              agentId: "luca",
+              agentId,
               userMessage: messageWithAttachments,
               agentResponse: fullContent,
               sourceMessageId: insertedMessage?.id ?? null,
               apiKey,
               authHeader,
               pendingRevisions: continuity.pendingRevisions,
-              recentTurns: openRouterMessages,
+              recentTurns: history || [],
             });
           }
 
