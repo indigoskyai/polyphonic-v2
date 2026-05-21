@@ -550,7 +550,6 @@ export type Database = {
       beliefs: {
         Row: {
           active: boolean | null
-          agent_id: string
           confidence: number
           confidence_tier: string | null
           content: string
@@ -572,7 +571,6 @@ export type Database = {
         }
         Insert: {
           active?: boolean | null
-          agent_id?: string
           confidence?: number
           confidence_tier?: string | null
           content: string
@@ -594,7 +592,6 @@ export type Database = {
         }
         Update: {
           active?: boolean | null
-          agent_id?: string
           confidence?: number
           confidence_tier?: string | null
           content?: string
@@ -776,7 +773,6 @@ export type Database = {
       }
       cognitive_state: {
         Row: {
-          agent_id: string
           beliefs: Json
           emotions: Json
           id: string
@@ -785,7 +781,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           beliefs?: Json
           emotions?: Json
           id?: string
@@ -794,7 +789,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           beliefs?: Json
           emotions?: Json
           id?: string
@@ -806,7 +800,6 @@ export type Database = {
       }
       connections: {
         Row: {
-          agent_id: string
           connection_type: string
           created_at: string | null
           id: string
@@ -816,7 +809,6 @@ export type Database = {
           weight: number
         }
         Insert: {
-          agent_id?: string
           connection_type: string
           created_at?: string | null
           id?: string
@@ -826,7 +818,6 @@ export type Database = {
           weight?: number
         }
         Update: {
-          agent_id?: string
           connection_type?: string
           created_at?: string | null
           id?: string
@@ -954,7 +945,6 @@ export type Database = {
       }
       curiosity_questions: {
         Row: {
-          agent_id: string
           context: string | null
           created_at: string
           curiosity_score: number | null
@@ -965,7 +955,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -976,7 +965,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -990,7 +978,6 @@ export type Database = {
       }
       daily_logs: {
         Row: {
-          agent_id: string
           content: Json | null
           created_at: string
           id: string
@@ -999,7 +986,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           content?: Json | null
           created_at?: string
           id?: string
@@ -1008,7 +994,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           content?: Json | null
           created_at?: string
           id?: string
@@ -1107,7 +1092,6 @@ export type Database = {
       }
       emotional_state: {
         Row: {
-          agent_id: string
           clarity: number
           creative_flow: number
           curiosity: number
@@ -1119,7 +1103,6 @@ export type Database = {
           warmth: number
         }
         Insert: {
-          agent_id?: string
           clarity?: number
           creative_flow?: number
           curiosity?: number
@@ -1131,7 +1114,6 @@ export type Database = {
           warmth?: number
         }
         Update: {
-          agent_id?: string
           clarity?: number
           creative_flow?: number
           curiosity?: number
@@ -1146,7 +1128,6 @@ export type Database = {
       }
       engram_archive: {
         Row: {
-          agent_id?: string
           archived_at: string | null
           content: string
           engram_type: string
@@ -1188,7 +1169,6 @@ export type Database = {
         Row: {
           access_count: number | null
           accessibility: number
-          agent_id: string
           content: string
           created_at: string | null
           digest_id: string | null
@@ -1214,7 +1194,6 @@ export type Database = {
         Insert: {
           access_count?: number | null
           accessibility?: number
-          agent_id?: string
           content: string
           created_at?: string | null
           digest_id?: string | null
@@ -1240,7 +1219,6 @@ export type Database = {
         Update: {
           access_count?: number | null
           accessibility?: number
-          agent_id?: string
           content?: string
           created_at?: string | null
           digest_id?: string | null
@@ -1268,7 +1246,6 @@ export type Database = {
       entity_activity_log: {
         Row: {
           activity_type: string
-          agent_id: string
           content: Json | null
           created_at: string
           emotional_context: Json | null
@@ -1282,7 +1259,6 @@ export type Database = {
         }
         Insert: {
           activity_type: string
-          agent_id?: string
           content?: Json | null
           created_at?: string
           emotional_context?: Json | null
@@ -1296,7 +1272,6 @@ export type Database = {
         }
         Update: {
           activity_type?: string
-          agent_id?: string
           content?: Json | null
           created_at?: string
           emotional_context?: Json | null
@@ -1486,7 +1461,6 @@ export type Database = {
       }
       journal_entries: {
         Row: {
-          agent_id: string
           content: string
           created_at: string
           id: string
@@ -1495,7 +1469,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           content: string
           created_at?: string
           id?: string
@@ -1504,7 +1477,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           content?: string
           created_at?: string
           id?: string
@@ -1552,7 +1524,6 @@ export type Database = {
       }
       memories: {
         Row: {
-          agent_id: string
           confidence: number
           confidence_source: string | null
           content: string
@@ -1579,7 +1550,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           confidence?: number
           confidence_source?: string | null
           content: string
@@ -1606,7 +1576,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           confidence?: number
           confidence_source?: string | null
           content?: string
@@ -1636,7 +1605,6 @@ export type Database = {
       }
       memory_candidates: {
         Row: {
-          agent_id: string
           candidate_type: string
           confidence: number
           content: string
@@ -1650,7 +1618,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           candidate_type: string
           confidence: number
           content: string
@@ -1664,7 +1631,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           candidate_type?: string
           confidence?: number
           content?: string
@@ -1681,7 +1647,6 @@ export type Database = {
       }
       memory_events: {
         Row: {
-          agent_id: string
           content: string
           created_at: string
           id: string
@@ -1690,7 +1655,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           content: string
           created_at?: string
           id?: string
@@ -1699,7 +1663,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           content?: string
           created_at?: string
           id?: string
@@ -1810,7 +1773,6 @@ export type Database = {
       }
       mnemos_digests: {
         Row: {
-          agent_id: string
           created_at: string
           digest_date: string
           engram_count: number
@@ -1824,7 +1786,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           created_at?: string
           digest_date: string
           engram_count?: number
@@ -1838,7 +1799,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           created_at?: string
           digest_date?: string
           engram_count?: number
@@ -1918,7 +1878,6 @@ export type Database = {
       }
       observer_logs: {
         Row: {
-          agent_id: string
           created_at: string
           id: string
           model: string | null
@@ -1927,7 +1886,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -1936,7 +1894,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -1948,7 +1905,6 @@ export type Database = {
       }
       observer_notes: {
         Row: {
-          agent_id: string
           content: string
           created_at: string
           id: string
@@ -1960,7 +1916,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           content: string
           created_at?: string
           id?: string
@@ -1972,7 +1927,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           content?: string
           created_at?: string
           id?: string
@@ -2753,7 +2707,6 @@ export type Database = {
       }
       thought_initiations: {
         Row: {
-          agent_id: string
           created_at: string
           id: string
           message: string
@@ -2762,7 +2715,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           created_at?: string
           id?: string
           message: string
@@ -2771,7 +2723,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           created_at?: string
           id?: string
           message?: string
@@ -2783,7 +2734,6 @@ export type Database = {
       }
       thought_stream: {
         Row: {
-          agent_id: string
           content: string
           created_at: string
           id: string
@@ -2794,7 +2744,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           content: string
           created_at?: string
           id?: string
@@ -2805,7 +2754,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           content?: string
           created_at?: string
           id?: string
@@ -3137,11 +3085,10 @@ export type Database = {
       is_handle_owner: { Args: { p_handle: string }; Returns: boolean }
       mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
-        Args: { match_count?: number; p_agent_id?: string; p_user_id?: string; query_text: string }
+        Args: { match_count?: number; p_user_id?: string; query_text: string }
         Returns: {
           access_count: number
           accessibility: number
-          agent_id: string
           content: string
           created_at: string
           emotional_arousal: number
@@ -3164,12 +3111,10 @@ export type Database = {
         Args: {
           match_count?: number
           min_strength?: number
-          p_agent_id?: string
           p_user_id?: string
           query_embedding: string
         }
         Returns: {
-          agent_id: string
           content: string
           engram_type: string
           id: string
@@ -3197,9 +3142,8 @@ export type Database = {
         }[]
       }
       match_memories: {
-        Args: { match_count?: number; p_agent_id?: string; p_user_id?: string; query_text: string }
+        Args: { match_count?: number; p_user_id?: string; query_text: string }
         Returns: {
-          agent_id: string
           confidence: number
           content: string
           created_at: string
