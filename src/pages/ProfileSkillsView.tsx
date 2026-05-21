@@ -388,7 +388,7 @@ function SkillCard({ skill, onChanged }: { skill: AgentSkill; onChanged: () => v
                   tone="danger"
                 />
                 <ActionButton
-                  onClick={() => { if (window.confirm(`Reject ${skill.name}? ${activeAgentName} will avoid recreating it.`)) runAction('reject'); }}
+                  onClick={() => { if (window.confirm(`Reject ${skill.name}? The agent will avoid recreating it.`)) runAction('reject'); }}
                   disabled={busy}
                   icon={<Ban size={13} />}
                   label="Reject"
