@@ -9,6 +9,11 @@ let corsHeaders: Record<string, string> = {
 };
 
 const VALID_ENVS = new Set(["prod", "staging", "dev"]);
+const VALID_AVATAR_COLORS = new Set(["cream", "ochre", "blue", "magenta", "sage", "violet"]);
+const RESERVED_AGENT_IDS = new Set(["luca", "observer", "anima", "vektor"]);
+const MAX_NAME_CHARS = 40;
+const MAX_ROLE_CHARS = 64;
+const MAX_PROMPT_CHARS = 32_000;
 
 // Allowed env transitions. Promotions require going through staging.
 // dev <-> staging <-> prod. Direct dev<->prod is rejected.
@@ -20,9 +25,13 @@ const ALLOWED_TRANSITIONS: Record<string, Set<string>> = {
 
 interface ConfigPatch {
   id: string;
+  name?: string;
+  role?: string;
+  avatar_color?: string;
   env?: string;
   prompt?: string | null;
   model?: string | null;
+  personality?: unknown;
   tools?: unknown;
   subagents?: unknown;
   voices?: unknown;
@@ -77,10 +86,48 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Field 'id' (agent id) is required" }, 400);
     }
     const agentId = body.id.trim();
+    const creatingReservedAgent = RESERVED_AGENT_IDS.has(agentId);
+
+    if (body.name !== undefined && typeof body.name !== "string") {
+      return jsonResponse({ error: "Field 'name' must be a string" }, 400);
+    }
+    if (body.role !== undefined && typeof body.role !== "string") {
+      return jsonResponse({ error: "Field 'role' must be a string" }, 400);
+    }
+    if (body.avatar_color !== undefined && typeof body.avatar_color !== "string") {
+      return jsonResponse({ error: "Field 'avatar_color' must be a string" }, 400);
+    }
+    if (body.env !== undefined && typeof body.env !== "string") {
+      return jsonResponse({ error: "Field 'env' must be a string" }, 400);
+    }
+    if (body.prompt !== undefined && body.prompt !== null && typeof body.prompt !== "string") {
+      return jsonResponse({ error: "Field 'prompt' must be a string or null" }, 400);
+    }
+    if (body.model !== undefined && body.model !== null && typeof body.model !== "string") {
+      return jsonResponse({ error: "Field 'model' must be a string or null" }, 400);
+    }
 
     if (body.env !== undefined && !VALID_ENVS.has(body.env)) {
       return jsonResponse(
         { error: `Invalid env '${body.env}'. Must be one of: prod, staging, dev` },
+        400,
+      );
+    }
+    if (body.avatar_color !== undefined && !VALID_AVATAR_COLORS.has(body.avatar_color)) {
+      return jsonResponse({ error: `Invalid avatar_color '${body.avatar_color}'.` }, 400);
+    }
+    if (body.name !== undefined && body.name.trim().length === 0) {
+      return jsonResponse({ error: "Name cannot be empty" }, 400);
+    }
+    if (body.name !== undefined && body.name.trim().length > MAX_NAME_CHARS) {
+      return jsonResponse({ error: `Name must be ${MAX_NAME_CHARS} characters or fewer` }, 400);
+    }
+    if (body.role !== undefined && body.role.trim().length > MAX_ROLE_CHARS) {
+      return jsonResponse({ error: `Role must be ${MAX_ROLE_CHARS} characters or fewer` }, 400);
+    }
+    if (typeof body.prompt === "string" && body.prompt.length > MAX_PROMPT_CHARS) {
+      return jsonResponse(
+        { error: `Prompt too long (${body.prompt.length} chars). Limit is ${MAX_PROMPT_CHARS}.` },
         400,
       );
     }
@@ -91,7 +138,7 @@ Deno.serve(async (req) => {
 
     const { data: existing, error: fetchErr } = await admin
       .from("agent_configs")
-      .select("env, prompt, model, tools, subagents, voices")
+      .select("name, role, avatar_color, is_system, locked, created_by, pending, env, prompt, model, personality, tools, subagents, voices")
       .eq("user_id", userId)
       .eq("id", agentId)
       .maybeSingle();
@@ -99,6 +146,18 @@ Deno.serve(async (req) => {
     if (fetchErr) {
       console.error("[agent-config-save] fetch error:", fetchErr);
       return jsonResponse({ error: "Failed to load existing config" }, 500);
+    }
+    if (!existing && creatingReservedAgent) {
+      return jsonResponse({ error: "Resident agent ids are reserved" }, 403);
+    }
+    if (existing?.locked || existing?.is_system) {
+      return jsonResponse(
+        { error: "Resident and system agents are platform-controlled and cannot be edited here." },
+        403,
+      );
+    }
+    if (!existing && (body.name === undefined || body.role === undefined)) {
+      return jsonResponse({ error: "Name and role are required when creating an agent" }, 400);
     }
 
     // Validate env transition if env is changing
@@ -118,9 +177,20 @@ Deno.serve(async (req) => {
     const merged = {
       user_id: userId,
       id: agentId,
+      name: body.name !== undefined ? body.name.trim() : existing?.name ?? agentId,
+      role: body.role !== undefined ? body.role.trim() || "custom" : existing?.role ?? "custom",
+      avatar_color:
+        body.avatar_color !== undefined ? body.avatar_color : existing?.avatar_color ?? "cream",
+      is_system: false,
+      locked: false,
+      created_by: "user",
+      pending: false,
       env: body.env ?? existing?.env ?? "prod",
       prompt: body.prompt !== undefined ? body.prompt : existing?.prompt ?? null,
       model: body.model !== undefined ? body.model : existing?.model ?? null,
+      personality:
+        body.personality !== undefined ? body.personality : existing?.personality ??
+          { inner_life: true, thought_verbosity: 1, voice_description: "" },
       tools: body.tools !== undefined ? body.tools : existing?.tools ?? [],
       subagents:
         body.subagents !== undefined ? body.subagents : existing?.subagents ?? [],

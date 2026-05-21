@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmDialog } from '@/components/settings/FormControls';
 import { Section } from '@/components/settings/Section';
+import CreateAgentModal from '@/components/settings/CreateAgentModal';
+import { Pill } from '@/components/ui/luca';
 import {
   SettingsPage,
   AgentDot,
@@ -21,6 +24,7 @@ export default function AgentsList() {
   const deleteAgent = useAgentSettingsStore((s) => s.deleteAgent);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const time = useClock();
 
@@ -79,11 +83,32 @@ export default function AgentsList() {
           <span>·</span>
           <span className="v">Resident & custom agents</span>
         </div>
-        <h1 className="set-head-title">Agents</h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            marginBottom: 12,
+          }}
+        >
+          <h1 className="set-head-title" style={{ marginBottom: 0 }}>
+            Agents
+          </h1>
+          <Pill
+            variant="primary"
+            size="sm"
+            icon={<Plus size={13} strokeWidth={1.8} />}
+            onClick={() => setCreateOpen(true)}
+          >
+            New agent
+          </Pill>
+        </div>
         <p className="set-head-sub">
           The three resident agents — Luca, Anima, Vektor — and any custom
           agents you've created. Click any row to configure model, prompt,
-          tools, and personality.
+          tools, and personality. Custom-agent chat currently requires your
+          own model key.
         </p>
       </div>
 
@@ -196,15 +221,19 @@ export default function AgentsList() {
               fontSize: 12,
               color: 'var(--text-tertiary)',
               fontFamily: 'var(--font-sans)',
-              fontStyle: 'italic',
+              lineHeight: 1.5,
             }}
           >
-            Custom agent creation is paused. Existing agents remain fully editable.
+            New custom agents can be created and edited here. Chatting with them
+            uses BYOK routing until their memory and journal layers are fully
+            agent-scoped.
           </div>
         </Section>
       </div>
 
 
+
+      <CreateAgentModal open={createOpen} onClose={() => setCreateOpen(false)} />
 
       {target && (
         <ConfirmDialog

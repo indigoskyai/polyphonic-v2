@@ -168,6 +168,14 @@ function normalizeAgentModel(model: string | null | undefined): string {
   }
 }
 
+function readFunctionError(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const message = (data as { error?: unknown }).error;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
+}
+
 // Sort: Luca first, then Observer, then everyone else alphabetically.
 function sortAgents(a: AgentConfig, b: AgentConfig): number {
   const rank = (id: string) => (id === 'luca' ? 0 : id === 'observer' ? 1 : 2);
@@ -230,15 +238,14 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
     }),
 
   save: async (id, userId) => {
+    void userId;
     const resolved = get().getResolved(id);
     if (!resolved) return { ok: false, error: 'Agent not found' };
     if (resolved.locked) return { ok: false, error: 'This agent is platform-controlled and cannot be edited.' };
 
-    // Direct upsert via the table — RLS scopes to the auth'd user. We persist
-    // every editable field including the new name/role/personality columns.
-    const { error } = await supabase
-      .from('agent_configs')
-      .update({
+    const { data, error } = await supabase.functions.invoke('agent-config-save', {
+      body: {
+        id,
         name: resolved.name,
         role: resolved.role,
         avatar_color: resolved.avatar_color,
@@ -249,14 +256,12 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         tools: resolved.tools,
         subagents: resolved.subagents,
         voices: resolved.voices,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('id', id);
+      },
+    });
 
-    if (error) {
+    if (error || (data && typeof data === 'object' && 'error' in data)) {
       console.error('[agentSettingsStore] save failed', error);
-      return { ok: false, error: error.message };
+      return { ok: false, error: error?.message ?? readFunctionError(data, 'Save failed') };
     }
 
     set((s) => ({
@@ -267,14 +272,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   },
 
   createAgent: async (userId, input) => {
-    // Custom agent creation is currently disabled. Existing agents remain
-    // fully editable and chat works as normal — only new inserts are blocked.
-    // To re-enable: remove this guard.
-    const CREATION_DISABLED = true;
-    if (CREATION_DISABLED) {
-      return { ok: false, error: 'Agent creation is currently disabled.' };
-    }
-
+    void userId;
     const baseId = slugify(input.name) || 'agent';
     // Try base id, then base-2, base-3 if collisions exist locally
     const existing = new Set(get().agents.map((a) => a.id));
@@ -289,16 +287,12 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       ...(input.personality ?? {}),
     };
 
-    const { data, error } = await supabase
-      .from('agent_configs')
-      .insert({
-        user_id: userId,
+    const { data, error } = await supabase.functions.invoke('agent-config-save', {
+      body: {
         id,
         name: input.name,
         role: input.role,
         avatar_color: input.avatar_color,
-        is_system: false,
-        created_by: 'user' as CreatedBy,
         env: 'prod',
         model: input.model,
         prompt: input.prompt,
@@ -306,16 +300,18 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         tools: SEED_TOOLS,
         subagents: [],
         voices: [],
-      })
-      .select()
-      .single();
+      },
+    });
 
-    if (error || !data) {
+    const config = data && typeof data === 'object' && 'config' in data
+      ? (data as { config?: Record<string, unknown> }).config
+      : null;
+    if (error || !config) {
       console.error('[agentSettingsStore] createAgent failed', error);
-      return { ok: false, error: error?.message ?? 'Insert failed' };
+      return { ok: false, error: error?.message ?? readFunctionError(data, 'Insert failed') };
     }
 
-    const newAgent = rowToConfig(data as Record<string, unknown>, [], []);
+    const newAgent = rowToConfig(config, [], []);
     set((s) => ({
       agents: [...s.agents, newAgent].sort(sortAgents),
     }));
