@@ -69,8 +69,8 @@ function formatUpdated(value?: string) {
 function IdentityDocument({ docType, doc, agentName }: { docType: IdentityDocType; doc?: IdentityDoc; agentName: string }) {
   const meta = DOC_META[docType];
   const content = doc?.content?.trim();
-  const title = meta.title.replaceAll('Luca', agentName);
-  const empty = meta.empty.replaceAll('Luca', agentName);
+  const title = meta.title.split('Luca').join(agentName);
+  const empty = meta.empty.split('Luca').join(agentName);
 
   return (
     <section

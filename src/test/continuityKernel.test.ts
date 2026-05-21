@@ -25,6 +25,7 @@ function engram(content: string, engram_type: Engram['engram_type'] = 'semantic'
     engram: {
       id: 'e1',
       user_id: 'u1',
+      agent_id: 'luca',
       content,
       engram_type,
       strength: 0.8,

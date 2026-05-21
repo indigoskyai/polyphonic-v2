@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       activity_events: {
         Row: {
+          agent_id: string
           created_at: string
           event_type: string
           id: string
@@ -23,6 +24,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string
           created_at?: string
           event_type: string
           id?: string
@@ -30,6 +32,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string
           created_at?: string
           event_type?: string
           id?: string
@@ -1086,18 +1089,21 @@ export type Database = {
       }
       emotional_history: {
         Row: {
+          agent_id: string
           id: string
           state: Json
           timestamp: string
           user_id: string
         }
         Insert: {
+          agent_id?: string
           id?: string
           state?: Json
           timestamp?: string
           user_id: string
         }
         Update: {
+          agent_id?: string
           id?: string
           state?: Json
           timestamp?: string
@@ -1146,7 +1152,7 @@ export type Database = {
       }
       engram_archive: {
         Row: {
-          agent_id?: string
+          agent_id: string
           archived_at: string | null
           content: string
           engram_type: string
@@ -1159,6 +1165,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string
           archived_at?: string | null
           content: string
           engram_type: string
@@ -1171,6 +1178,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string
           archived_at?: string | null
           content?: string
           engram_type?: string
@@ -1855,6 +1863,7 @@ export type Database = {
       }
       mnemos_emotional_state: {
         Row: {
+          agent_id: string
           arousal: number | null
           certainty: number | null
           dominance: number | null
@@ -1866,6 +1875,7 @@ export type Database = {
           valence: number | null
         }
         Insert: {
+          agent_id?: string
           arousal?: number | null
           certainty?: number | null
           dominance?: number | null
@@ -1877,6 +1887,7 @@ export type Database = {
           valence?: number | null
         }
         Update: {
+          agent_id?: string
           arousal?: number | null
           certainty?: number | null
           dominance?: number | null
@@ -2186,6 +2197,7 @@ export type Database = {
       }
       pending_revisions: {
         Row: {
+          agent_id: string
           created_at: string
           id: string
           rationale: string | null
@@ -2199,6 +2211,7 @@ export type Database = {
           what_was_said: string
         }
         Insert: {
+          agent_id?: string
           created_at?: string
           id?: string
           rationale?: string | null
@@ -2212,6 +2225,7 @@ export type Database = {
           what_was_said: string
         }
         Update: {
+          agent_id?: string
           created_at?: string
           id?: string
           rationale?: string | null
@@ -3137,7 +3151,12 @@ export type Database = {
       is_handle_owner: { Args: { p_handle: string }; Returns: boolean }
       mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
-        Args: { match_count?: number; p_agent_id?: string; p_user_id?: string; query_text: string }
+        Args: {
+          match_count?: number
+          p_agent_id?: string
+          p_user_id?: string
+          query_text: string
+        }
         Returns: {
           access_count: number
           accessibility: number
@@ -3169,13 +3188,24 @@ export type Database = {
           query_embedding: string
         }
         Returns: {
+          access_count: number
+          accessibility: number
           agent_id: string
           content: string
+          created_at: string
+          emotional_arousal: number
+          emotional_valence: number
           engram_type: string
           id: string
+          last_accessed_at: string
           similarity: number
+          source_context: Json
           stability: number
+          state: string
           strength: number
+          surprise_score: number
+          tags: string[]
+          updated_at: string
           user_id: string
         }[]
       }
@@ -3197,9 +3227,13 @@ export type Database = {
         }[]
       }
       match_memories: {
-        Args: { match_count?: number; p_agent_id?: string; p_user_id?: string; query_text: string }
+        Args: {
+          match_count?: number
+          p_agent_id?: string
+          p_user_id?: string
+          query_text: string
+        }
         Returns: {
-          agent_id: string
           confidence: number
           content: string
           created_at: string
