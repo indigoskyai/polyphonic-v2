@@ -372,7 +372,7 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const { messages, custom_instructions, thread_id, source_message_id, user_id: bodyUserId } = await req.json();
+    const { messages, custom_instructions, thread_id, source_message_id, user_id: bodyUserId, force_forge_only } = await req.json();
     // When invoked with the service role (internal call from chat-multi), the
     // caller MUST pass user_id in the body so we can resolve their API key.
     if (!userId && typeof bodyUserId === "string" && bodyUserId.length > 0) {
@@ -401,7 +401,7 @@ serve(async (req) => {
     }
 
     const mcpTools = userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
-    const forceForgeOnly = looksLikeAgentForgeRequest(latestUserContent(messages));
+    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
     const toolSchemas = forceForgeOnly
       ? TOOL_SCHEMAS.filter((schema) => toolName(schema) === "forge_agent")
       : [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
@@ -450,11 +450,12 @@ serve(async (req) => {
       ...messages.slice(-6), // last 6 messages for context
     ];
 
-    // Planning call with 15-second timeout
+    // Planning call. Forge needs enough time and output budget for full
+    // Open Clause blueprints; ordinary tool routing stays fast.
     const planningController = new AbortController();
     const planningTimeout = setTimeout(
       () => planningController.abort(),
-      15_000
+      forceForgeOnly ? 75_000 : 15_000
     );
 
     let planningData: any;
@@ -474,7 +475,7 @@ serve(async (req) => {
             messages: planningMessages,
             tools: toolSchemas,
             temperature: 0.2,
-            max_tokens: 700,
+            max_tokens: forceForgeOnly ? 12_000 : 700,
           }),
           signal: planningController.signal,
         }
@@ -554,7 +555,11 @@ serve(async (req) => {
 
         const controller = new AbortController();
         // Image gen on gpt-image-2 high quality can take 60-100s.
-        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image") ? 110_000 : 20_000;
+        const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image")
+          ? 110_000
+          : fnName === "forge_agent"
+          ? 60_000
+          : 20_000;
         const timeout = setTimeout(() => controller.abort(), toolTimeoutMs);
 
         try {

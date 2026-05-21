@@ -10,7 +10,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
   it('keeps the SDK path Luca-only, feature-gated, and before the legacy tool planner', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
 
-    const gateIndex = source.indexOf('if (agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
+    const gateIndex = source.indexOf('if (!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
     const legacyPlannerIndex = source.indexOf('const toolMessages = shouldRunLegacyToolPlanner');
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');

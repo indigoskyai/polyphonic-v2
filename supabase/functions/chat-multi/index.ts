@@ -186,6 +186,19 @@ function buildSimpleOpeningReasoningParams(): Record<string, unknown> {
   };
 }
 
+function looksLikeAgentForgeRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const asksToMake =
+    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit)\b/.test(normalized) ||
+    /\bnew\b/.test(normalized);
+  const mentionsAgent =
+    /\bcustom\s+agent\b/.test(normalized) ||
+    /\bagent\b/.test(normalized) ||
+    /\bopen\s+clause\b/.test(normalized) ||
+    /\bopenclaw\b/.test(normalized);
+  return asksToMake && mentionsAgent;
+}
+
 // Council (LLM-Council pattern, single judge variant) — see plan
 // /Users/rileycoyote/.claude/plans/ethereal-orbiting-sparkle.md
 const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4.5";
@@ -382,8 +395,9 @@ serve(async (req) => {
     const agentName = (agentConfig?.name as string | undefined) || (agentId === "luca" ? "Luca" : agentId);
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || (agentId === "luca" ? SYSTEM_PROMPT : "");
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
-    const agentIsSystemLuca = agentId === "luca" && (agentConfig?.is_system === true || backend.keySource === "platform");
-    const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca);
+    const agentIsSystemLuca = agentId === "luca";
+    const forceForgeRequest = agentIsSystemLuca && looksLikeAgentForgeRequest(messageWithAttachments);
+    const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
 
 
     const continuity = await loadContinuityPacket(supabase, {
@@ -486,7 +500,7 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, and never claim you silently created an agent before approval."
+      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
       : "";
     // Build base messages array
     const baseMessages: any[] = [
@@ -499,7 +513,7 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-    if (agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
+    if (!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
@@ -531,6 +545,7 @@ serve(async (req) => {
           userId,
           baseMessages.slice(1),
           typeof sourceMessageId === "string" ? sourceMessageId : null,
+          forceForgeRequest,
         )
       : [];
     if (toolMessages.length > 0) {
@@ -554,6 +569,33 @@ serve(async (req) => {
       }
       await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", thread_id);
       return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload });
+    }
+
+    if (forceForgeRequest) {
+      const message = "I could not open the Forge proposal flow from this turn. Please try again in a moment; I should create a proposal card, not write a forge_agent text block.";
+      const { data: inserted } = await supabase.from("messages").insert({
+        thread_id,
+        user_id: userId,
+        role: "assistant",
+        content: message,
+        model: "forge_agent",
+        agent: agentId,
+        kind: "agent_error",
+        metadata: { agent: agentId, code: "forge_proposal_failed", message },
+      }).select("id").single();
+      const donePayload = {
+        ok: false,
+        model: "forge_agent",
+        message_id: inserted?.id ?? null,
+        billing_tier: backend.billingTier,
+        key_source: backend.keySource,
+        error: "forge_proposal_failed",
+      };
+      if (idempotencyKey) {
+        recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+          .catch((e) => console.warn("idempotency record failed:", e));
+      }
+      return sseDoneResponse(corsHeaders, donePayload);
     }
 
     // Custom / non-Luca agents always use single-model with their configured model.
@@ -1305,10 +1347,11 @@ async function runToolPlanner(
   userId: string,
   messages: any[],
   sourceMessageId: string | null,
+  forceForgeOnly = false,
 ): Promise<any[]> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 130_000);
+    const timeout = setTimeout(() => controller.abort(), forceForgeOnly ? 180_000 : 130_000);
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/anima-tool-execute`, {
       method: "POST",
@@ -1317,7 +1360,13 @@ async function runToolPlanner(
         "Authorization": `Bearer ${serviceKey}`,
         "apikey": serviceKey,
       },
-      body: JSON.stringify({ thread_id: threadId, user_id: userId, source_message_id: sourceMessageId, messages }),
+      body: JSON.stringify({
+        thread_id: threadId,
+        user_id: userId,
+        source_message_id: sourceMessageId,
+        force_forge_only: forceForgeOnly,
+        messages,
+      }),
       signal: controller.signal,
     });
     clearTimeout(timeout);

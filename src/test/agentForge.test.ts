@@ -44,12 +44,18 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('edgeFn = "agent-forge"');
     expect(planner).toContain('draft the full Open Clause shape');
     expect(planner).toContain('forceForgeOnly');
+    expect(planner).toContain('max_tokens: forceForgeOnly ? 12_000 : 700');
+    expect(planner).toContain('force_forge_only === true');
     expect(planner).toContain('Never use create_artifact to create, define, or test a custom agent');
 
     expect(sdk).toContain('name: "forge_agent"');
     expect(sdk).toContain('invokeEdgeJson(options, "agent-forge"');
     expect(sdk).toContain('Never changes agent data directly');
 
+    expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
+    expect(chatMulti).toContain('!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
+    expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
+    expect(chatMulti).toContain('forge_proposal_failed');
     expect(chatMulti).toContain('forge_agent (draft complete custom-agent blueprints as inline approval cards)');
     expect(chatMulti).toContain('findForgeProposalResult');
     expect(chatMulti).toContain('return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload })');
