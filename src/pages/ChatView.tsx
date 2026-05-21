@@ -2495,16 +2495,28 @@ export default function ChatView() {
             if (forgeProposal) {
               return (
                 <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
-                  <AgentForgeCard
-                    proposal={forgeProposal}
-                    busy={!!forgeBusyById[msg.id]}
-                    error={forgeErrorById[msg.id]}
-                    onCommit={() => { void commitForgeProposal(msg); }}
-                    onCancel={() => { void cancelForgeProposal(msg); }}
-                    onRevise={() => reviseForgeProposal(msg)}
-                    onSwitch={(agentId) => { void switchToForgedAgent(agentId); }}
-                    onOpenSettings={(agentId) => navigate(`/settings/agents/${agentId}`)}
-                  />
+                  <div className="msg-sidehead">
+                    {showTimestamps && (
+                      <div className="msg-time">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </div>
+                    )}
+                    <div className="msg-author">
+                      {getAgentDisplayName(msg.agent, agentNameById)}
+                    </div>
+                  </div>
+                  <div className="msg-body">
+                    <AgentForgeCard
+                      proposal={forgeProposal}
+                      busy={!!forgeBusyById[msg.id]}
+                      error={forgeErrorById[msg.id]}
+                      onCommit={() => { void commitForgeProposal(msg); }}
+                      onCancel={() => { void cancelForgeProposal(msg); }}
+                      onRevise={() => reviseForgeProposal(msg)}
+                      onSwitch={(agentId) => { void switchToForgedAgent(agentId); }}
+                      onOpenSettings={(agentId) => navigate(`/settings/agents/${agentId}`)}
+                    />
+                  </div>
                 </div>
               );
             }
@@ -2515,16 +2527,28 @@ export default function ChatView() {
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
                 <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
-                  <PermissionInline
-                    agent={agent}
-                    title={md.title || 'Permission needed'}
-                    body={md.body || msg.content}
-                    details={md.details}
-                    status={(md.permission_status as 'pending' | 'approved' | 'denied' | undefined) || 'pending'}
-                    error={typeof md.permission_error === 'string' ? md.permission_error : undefined}
-                    onApprove={(remember) => { void resolvePermissionMessage(msg, 'approved', remember); }}
-                    onDeny={() => { void resolvePermissionMessage(msg, 'denied'); }}
-                  />
+                  <div className="msg-sidehead">
+                    {showTimestamps && (
+                      <div className="msg-time">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </div>
+                    )}
+                    <div className="msg-author">
+                      {getAgentDisplayName(agent, agentNameById)}
+                    </div>
+                  </div>
+                  <div className="msg-body">
+                    <PermissionInline
+                      agent={agent}
+                      title={md.title || 'Permission needed'}
+                      body={md.body || msg.content}
+                      details={md.details}
+                      status={(md.permission_status as 'pending' | 'approved' | 'denied' | undefined) || 'pending'}
+                      error={typeof md.permission_error === 'string' ? md.permission_error : undefined}
+                      onApprove={(remember) => { void resolvePermissionMessage(msg, 'approved', remember); }}
+                      onDeny={() => { void resolvePermissionMessage(msg, 'denied'); }}
+                    />
+                  </div>
                 </div>
               );
             }
@@ -2535,38 +2559,50 @@ export default function ChatView() {
               const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
               return (
                 <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
-                  <AgentErroredCard
-                    agent={agent}
-                    message={md.message || msg.content}
-                    detail={md.detail}
-                    occurredAt={msg.created_at}
-                    onRetry={() => {
-                      const retryText = typeof md.retry_text === 'string' ? md.retry_text : null;
-                      const retryAttachments = Array.isArray(md.retry_attachments)
-                        ? md.retry_attachments as PersistedAttachment[]
-                        : undefined;
-                      if (retryText || (retryAttachments && retryAttachments.length > 0)) {
-                        void sendMessage({
-                          text: retryText ?? '',
-                          attachments: retryAttachments,
-                        });
-                        return;
-                      }
-                      // Re-send the most recent user message before this error
-                      const idx = messages.findIndex((m) => m.id === msg.id);
-                      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
-                      if (prevUser) {
-                        void sendMessage({
-                          text: prevUser.content,
-                          attachments: (prevUser.attachments || []) as PersistedAttachment[],
-                        });
-                      }
-                    }}
-                    onViewLogs={() => {
-                      const rid = (msg.metadata as any)?.request_id;
-                      if (rid) navigator.clipboard?.writeText(rid).catch(() => {});
-                    }}
-                  />
+                  <div className="msg-sidehead">
+                    {showTimestamps && (
+                      <div className="msg-time">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </div>
+                    )}
+                    <div className="msg-author">
+                      {getAgentDisplayName(agent, agentNameById)}
+                    </div>
+                  </div>
+                  <div className="msg-body">
+                    <AgentErroredCard
+                      agent={agent}
+                      message={md.message || msg.content}
+                      detail={md.detail}
+                      occurredAt={msg.created_at}
+                      onRetry={() => {
+                        const retryText = typeof md.retry_text === 'string' ? md.retry_text : null;
+                        const retryAttachments = Array.isArray(md.retry_attachments)
+                          ? md.retry_attachments as PersistedAttachment[]
+                          : undefined;
+                        if (retryText || (retryAttachments && retryAttachments.length > 0)) {
+                          void sendMessage({
+                            text: retryText ?? '',
+                            attachments: retryAttachments,
+                          });
+                          return;
+                        }
+                        // Re-send the most recent user message before this error
+                        const idx = messages.findIndex((m) => m.id === msg.id);
+                        const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+                        if (prevUser) {
+                          void sendMessage({
+                            text: prevUser.content,
+                            attachments: (prevUser.attachments || []) as PersistedAttachment[],
+                          });
+                        }
+                      }}
+                      onViewLogs={() => {
+                        const rid = (msg.metadata as any)?.request_id;
+                        if (rid) navigator.clipboard?.writeText(rid).catch(() => {});
+                      }}
+                    />
+                  </div>
                 </div>
               );
             }

@@ -72,6 +72,7 @@ describe('Agent Forge runtime', () => {
     expect(chatView).toContain("supabase.functions.invoke('agent-forge'");
     expect(chatView).toContain('await loadAgentSettings(user.id)');
     expect(chatView).toContain('onSwitch={(agentId) => { void switchToForgedAgent(agentId); }}');
+    expect(chatView).toContain('<div className="msg-body">\n                    <AgentForgeCard');
     expect(forgeBranchIndex).toBeGreaterThan(-1);
     expect(permissionBranchIndex).toBeGreaterThan(-1);
     expect(forgeBranchIndex).toBeLessThan(permissionBranchIndex);

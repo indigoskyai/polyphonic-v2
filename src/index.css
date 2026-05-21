@@ -5479,6 +5479,9 @@ html {
 
 /* Inline Forge proposal card */
 .forge-card {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: linear-gradient(180deg, rgba(244, 243, 240, 0.045), rgba(244, 243, 240, 0.025));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
