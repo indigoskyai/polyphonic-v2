@@ -228,11 +228,11 @@ function RevisionCard({
             {revision.status === 'surfaced' && revision.surfaced_at && ` · surfaced ${formatTime(revision.surfaced_at)}`}
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={labelStyle}>What {activeAgentName} said</div>
+            <div style={labelStyle}>What they said</div>
             <p style={quoteStyle}>{revision.what_was_said}</p>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={labelStyle}>What {activeAgentName} would say now</div>
+            <div style={labelStyle}>What they would say now</div>
             <p style={{ ...quoteStyle, color: 'var(--text-primary)' }}>{revision.what_to_say_now}</p>
           </div>
           {revision.rationale && (
