@@ -90,6 +90,31 @@ Deno.serve(async (req) => {
       .gte("created_at", startTime)
       .lte("created_at", endTime);
 
+    // Wipe inferred cognition for a true clean slate. Derived data
+    // (engrams, beliefs, profile, hypomnema, thoughts, emotions, etc.)
+    // is not tagged with import_id, so without this the profile keeps
+    // reflecting the deleted history. Threads, settings, identity docs,
+    // API keys, projects, and journal entries are intentionally preserved.
+    const COGNITION_TABLES = [
+      "memories", "memory_candidates", "memory_events",
+      "engrams", "engram_archive", "connections", "beliefs", "hypomnema_entry",
+      "psychological_profile", "cognitive_state", "emotional_state", "emotional_history",
+      "mnemos_emotional_state", "mnemos_digests", "profile_daily_pulse",
+      "thought_stream", "thought_initiations", "activity_events", "entity_activity_log",
+      "observer_notes", "observer_logs", "daily_logs",
+      "curiosity_questions", "pending_revisions",
+    ] as const;
+    const cognitionDeleted: Record<string, number> = {};
+    for (const table of COGNITION_TABLES) {
+      try {
+        const { count, error } = await supabase
+          .from(table)
+          .delete({ count: "exact" })
+          .eq("user_id", user.id);
+        if (!error) cognitionDeleted[table] = count ?? 0;
+      } catch { /* table may not exist in this env */ }
+    }
+
     // Hard-delete the import row
     await supabase.from("chat_imports").delete().eq("id", import_id);
 
@@ -100,9 +125,11 @@ Deno.serve(async (req) => {
         questions_deleted: questionsDeleted || 0,
         candidates_deleted: candidatesDeleted || 0,
         revisions_deleted: revisionsDeleted || 0,
+        cognition_deleted: cognitionDeleted,
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
+
   } catch (e) {
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
