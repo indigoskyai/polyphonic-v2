@@ -173,12 +173,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Merge: explicit fields in body override; everything else keeps existing
+    // Merge: explicit fields in body override; everything else keeps existing.
+    // Name/role are defensively never-null/never-blank: body (trimmed) → existing (trimmed) → fallback.
+    const existingName = typeof existing?.name === "string" ? existing.name.trim() : "";
+    const existingRole = typeof existing?.role === "string" ? existing.role.trim() : "";
+    const bodyNameTrimmed = body.name !== undefined ? body.name.trim() : "";
+    const bodyRoleTrimmed = body.role !== undefined ? body.role.trim() : "";
+    const resolvedName =
+      bodyNameTrimmed.length > 0
+        ? bodyNameTrimmed
+        : existingName.length > 0
+          ? existingName
+          : agentId;
+    const resolvedRole =
+      body.role !== undefined
+        ? (bodyRoleTrimmed.length > 0 ? bodyRoleTrimmed : "custom")
+        : existingRole.length > 0
+          ? existingRole
+          : "custom";
+
     const merged = {
       user_id: userId,
       id: agentId,
-      name: body.name !== undefined ? body.name.trim() : existing?.name ?? agentId,
-      role: body.role !== undefined ? body.role.trim() || "custom" : existing?.role ?? "custom",
+      name: resolvedName,
+      role: resolvedRole,
       avatar_color:
         body.avatar_color !== undefined ? body.avatar_color : existing?.avatar_color ?? "cream",
       is_system: false,
