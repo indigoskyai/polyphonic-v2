@@ -36,6 +36,7 @@ import UndoToast from "./components/subagents/UndoToast";
 import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
+import LucaGuideOverlay from "./components/guide/LucaGuideOverlay";
 import { useIsMobile } from "./hooks/use-mobile";
 
 const queryClient = new QueryClient();
@@ -78,6 +79,7 @@ const AccountSettings = lazy(() => import("./pages/settings/AccountSettings"));
 const LocalRuntimeSettings = lazy(() => import("./pages/settings/LocalRuntimeSettings"));
 const PublicProfileSettings = lazy(() => import("./pages/settings/PublicProfileSettings"));
 const CronHealthSettings = lazy(() => import("./pages/settings/CronHealthSettings"));
+const HelpGuide = lazy(() => import("./pages/settings/HelpGuide"));
 const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
 const AccessGatePage = lazy(() => import("./pages/AccessGatePage"));
 import AuthGate from "./components/auth/AuthGate";
@@ -245,6 +247,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <SubAgentOverlay />
       <UndoToast />
       <PermissionModal />
+      <LucaGuideOverlay />
     </div>
   );
 }
@@ -370,6 +373,7 @@ const App = () => (
                 <Route path="/settings/local-runtime" element={<ProtectedRoute><AppShell><LocalRuntimeSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/portability" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/account" element={<ProtectedRoute skipTokenGate><AppShell><AccountSettings /></AppShell></ProtectedRoute>} />
+                <Route path="/settings/help" element={<ProtectedRoute skipTokenGate><AppShell><HelpGuide /></AppShell></ProtectedRoute>} />
                 <Route path="/settings/cron-health" element={<ProtectedRoute><AppShell><CronHealthSettings /></AppShell></ProtectedRoute>} />
                 <Route path="/onboarding" element={<ProtectedRoute skipTokenGate><Onboarding /></ProtectedRoute>} />
                 <Route path="/access" element={<ProtectedRoute skipTokenGate><AccessGatePage /></ProtectedRoute>} />

@@ -36,6 +36,7 @@ describe('navigation performance wiring', () => {
       '/import',
       '/projects',
       '/profile',
+      '/settings/help',
       '/settings/agents',
     ]);
     expect(navigationAuditRoutes.settings).toEqual([
@@ -48,6 +49,7 @@ describe('navigation performance wiring', () => {
       '/settings/local-runtime',
       '/settings/portability',
       '/settings/account',
+      '/settings/help',
     ]);
   });
 

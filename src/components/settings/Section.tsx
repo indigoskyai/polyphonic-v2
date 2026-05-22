@@ -20,6 +20,7 @@ interface SectionProps {
   title: string; // "Email and plan"
   desc?: React.ReactNode;
   pill?: React.ReactNode;
+  guideId?: string;
   destructive?: boolean;
   children: React.ReactNode;
 }
@@ -30,11 +31,12 @@ export function Section({
   title,
   desc,
   pill,
+  guideId,
   destructive,
   children,
 }: SectionProps) {
   return (
-    <div className="set-section">
+    <div className="set-section" data-guide-id={guideId}>
       <div className={`set-section-eye${destructive ? ' destructive' : ''}`}>
         <span className="num">{number}</span>
         <span>{name}</span>

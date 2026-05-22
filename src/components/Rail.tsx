@@ -9,6 +9,7 @@ import {
   User,
   Activity,
   Cog,
+  HelpCircle,
   PanelLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -66,8 +67,9 @@ export default function Rail() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggleSidebar]);
 
+  const helpActive = location.pathname.startsWith('/settings/help');
   const settingsActive =
-    location.pathname.startsWith('/settings') ||
+    (location.pathname.startsWith('/settings') && !helpActive) ||
     location.pathname.startsWith('/profile/skills') ||
     location.pathname.startsWith('/profile/schedule');
 
@@ -152,6 +154,7 @@ export default function Rail() {
         icon={<MessageSquare size={15} strokeWidth={1.55} />}
         label="Chat"
         path="/chat"
+        guideId="rail-chat"
         active={activeView === 'chat'}
         onClick={() => goTo('/chat')}
       />
@@ -159,6 +162,7 @@ export default function Rail() {
         icon={<Brain size={15} strokeWidth={1.55} />}
         label="Memory"
         path="/memory"
+        guideId="rail-memory"
         active={activeView === 'memory'}
         onClick={() => goTo('/memory')}
       />
@@ -166,6 +170,7 @@ export default function Rail() {
         icon={<Bot size={15} strokeWidth={1.55} />}
         label="Mind"
         path="/mind"
+        guideId="rail-mind"
         active={activeView === 'mind'}
         onClick={() => goTo('/mind')}
       />
@@ -173,6 +178,7 @@ export default function Rail() {
         icon={<NotebookPen size={15} strokeWidth={1.55} />}
         label="Journal"
         path="/journal"
+        guideId="rail-journal"
         active={activeView === 'journal'}
         onClick={() => goTo('/journal')}
       />
@@ -180,6 +186,7 @@ export default function Rail() {
         icon={<Layers size={15} strokeWidth={1.55} />}
         label="Projects"
         path="/projects"
+        guideId="rail-projects"
         active={activeView === 'projects'}
         onClick={() => goTo('/projects')}
       />
@@ -187,6 +194,7 @@ export default function Rail() {
         icon={<User size={15} strokeWidth={1.55} />}
         label="Profile"
         path="/profile"
+        guideId="rail-profile"
         active={activeView === 'profile'}
         onClick={() => goTo('/profile')}
       />
@@ -216,6 +224,7 @@ export default function Rail() {
         className="rail-bell shrink-0"
         data-active={activeDrawer === 'notifications' ? 'true' : undefined}
         data-label="Activity"
+        data-guide-id="rail-activity"
         onClick={() => openDrawer('notifications')}
         aria-label={`Activity${pendingCount > 0 ? ` — ${pendingCount} pending` : ''}`}
       >
@@ -223,11 +232,21 @@ export default function Rail() {
         {pendingCount > 0 && <span className="rail-bell__dot" aria-hidden="true" />}
       </button>
 
+      <NavIcon
+        icon={<HelpCircle size={15} strokeWidth={1.55} />}
+        label="Help"
+        path="/settings/help"
+        guideId="rail-help"
+        active={helpActive}
+        onClick={() => goTo('/settings/help')}
+      />
+
       {/* Settings — auto-opens the sidebar like the other nav icons */}
       <NavIcon
         icon={<Cog size={15} strokeWidth={1.55} />}
         label="Settings"
         path="/settings/agents"
+        guideId="rail-settings"
         active={settingsActive}
         onClick={() => goTo('/settings/agents')}
       />
@@ -239,11 +258,12 @@ interface NavIconProps {
   icon: React.ReactNode;
   label: string;
   path: string;
+  guideId?: string;
   active: boolean;
   onClick: () => void;
 }
 
-function NavIcon({ icon, label, path, active, onClick }: NavIconProps) {
+function NavIcon({ icon, label, path, guideId, active, onClick }: NavIconProps) {
   const prime = () => prefetchRoute(path);
 
   return (
@@ -252,6 +272,7 @@ function NavIcon({ icon, label, path, active, onClick }: NavIconProps) {
       className="rail-nav-icon w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
       data-active={active ? 'true' : undefined}
       data-label={label}
+      data-guide-id={guideId}
       style={{
         color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
         background: active ? 'var(--overlay-active)' : undefined,

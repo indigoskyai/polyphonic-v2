@@ -20,6 +20,7 @@ const routeLoaders: Record<string, RouteLoader> = {
   '/settings/local-runtime': () => import('@/pages/settings/LocalRuntimeSettings'),
   '/settings/portability': () => import('@/pages/ImportView'),
   '/settings/account': () => import('@/pages/settings/AccountSettings'),
+  '/settings/help': () => import('@/pages/settings/HelpGuide'),
 };
 
 const coreSettingsPaths = [
@@ -32,6 +33,7 @@ const coreSettingsPaths = [
   '/settings/local-runtime',
   '/settings/portability',
   '/settings/account',
+  '/settings/help',
 ];
 
 function normalizedPath(path: string): string | null {
@@ -79,6 +81,6 @@ export function prefetchCoreSettingsRoutes() {
 }
 
 export const navigationAuditRoutes = {
-  rail: ['/chat', '/memory', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/agents'],
+  rail: ['/chat', '/memory', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
   settings: coreSettingsPaths,
 };

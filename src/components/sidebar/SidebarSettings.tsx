@@ -24,6 +24,7 @@ const SYSTEM_GROUP: Entry[] = [
   { key: 'local-runtime', label: 'Local runtime', path: '/settings/local-runtime' },
   { key: 'portability', label: 'Import & export', path: '/settings/portability' },
   { key: 'account', label: 'Account & preferences', path: '/settings/account' },
+  { key: 'help', label: 'Guide & help', path: '/settings/help' },
 ];
 
 const OPERATIONS_GROUP: Entry[] = [

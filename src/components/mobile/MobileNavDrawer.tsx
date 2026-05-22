@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleUserRound,
   FolderKanban,
+  HelpCircle,
   Import,
   MessageCircle,
   Plus,
@@ -36,6 +37,7 @@ const MAIN_ROUTES = [
   { label: 'Group', path: '/group', icon: UsersRound },
   { label: 'Checkpoints', path: '/checkpoints', icon: CheckCircle2 },
   { label: 'Settings', path: '/settings/agents', icon: Settings },
+  { label: 'Guide', path: '/settings/help', icon: HelpCircle },
 ];
 
 const QUICK_ROUTES = MAIN_ROUTES.filter((route) =>

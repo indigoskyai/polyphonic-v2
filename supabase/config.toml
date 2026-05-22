@@ -114,6 +114,9 @@ verify_jwt = false
 [functions.agent-forge]
 verify_jwt = false
 
+[functions.luca-app-guide]
+verify_jwt = false
+
 [functions.agent-identity-save]
 verify_jwt = false
 

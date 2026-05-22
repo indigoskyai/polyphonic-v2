@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   SelectInput,
@@ -32,7 +33,6 @@ const MODEL_OPTIONS = [
   { label: 'DeepSeek V4 Pro', value: 'deepseek/deepseek-v4-pro' },
   { label: 'DeepSeek V4 Flash', value: 'deepseek/deepseek-v4-flash' },
   { label: 'DeepSeek V3.2', value: 'deepseek/deepseek-v3.2' },
-  { label: 'Kimi K2.6', value: 'moonshotai/kimi-k2.6' },
   { label: 'Kimi K2.5', value: 'moonshotai/kimi-k2.5' },
   { label: 'Llama 4 Maverick', value: 'meta-llama/llama-4-maverick' },
   { label: 'Qwen3 Max', value: 'qwen/qwen3-max' },
@@ -103,7 +103,7 @@ export default function GeneralSettings() {
         <h1 className="set-head-title">General</h1>
         <p className="set-head-sub">
           Default model selection, synthesis style, and how responses are
-          streamed back to you.
+          streamed back to you. New here? The guide explains the full app map.
         </p>
       </div>
 
@@ -184,6 +184,17 @@ export default function GeneralSettings() {
               />
             </div>
           </div>
+        </Section>
+
+        <Section
+          number="04"
+          name="Guide"
+          title="Need orientation?"
+          desc="A practical map of Polyphonic, including API keys, agents, memory, Journal, Mind, Observer, import, and troubleshooting."
+        >
+          <Link className="set-btn" to="/settings/help">
+            Open guide
+          </Link>
         </Section>
       </div>
     </SettingsPage>

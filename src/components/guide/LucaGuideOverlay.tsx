@@ -1,0 +1,278 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ChevronRight, LocateFixed, MessageCircle, Navigation, Send, X } from 'lucide-react';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
+import { useDrawerStore, type DrawerKey } from '@/stores/drawerStore';
+import { useLucaGuideStore } from '@/stores/lucaGuideStore';
+import { useThreadStore } from '@/stores/threadStore';
+import {
+  GUIDE_DRAWER_TARGETS,
+  GUIDE_NAV_TARGETS,
+  routeInfo,
+  targetsForPath,
+  type LucaGuideAction,
+  type LucaGuideContext,
+} from '@/lib/lucaGuide';
+
+function cssEscape(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
+  return value.replace(/["\\]/g, '\\$&');
+}
+
+function findGuideTarget(targetId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-guide-id="${cssEscape(targetId)}"]`);
+}
+
+function actionIcon(type: LucaGuideAction['type']) {
+  if (type === 'navigate') return <Navigation size={13} strokeWidth={1.7} />;
+  if (type === 'open_drawer') return <ChevronRight size={13} strokeWidth={1.7} />;
+  return <LocateFixed size={13} strokeWidth={1.7} />;
+}
+
+export default function LucaGuideOverlay() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openDrawer = useDrawerStore((s) => s.open);
+  const activeDrawer = useDrawerStore((s) => s.active);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
+  const open = useLucaGuideStore((s) => s.open);
+  const messages = useLucaGuideStore((s) => s.messages);
+  const sending = useLucaGuideStore((s) => s.sending);
+  const activeTargetId = useLucaGuideStore((s) => s.activeTargetId);
+  const toggleOpen = useLucaGuideStore((s) => s.toggleOpen);
+  const setOpen = useLucaGuideStore((s) => s.setOpen);
+  const send = useLucaGuideStore((s) => s.send);
+  const clear = useLucaGuideStore((s) => s.clear);
+  const highlight = useLucaGuideStore((s) => s.highlight);
+  const clearHighlight = useLucaGuideStore((s) => s.clearHighlight);
+  const [input, setInput] = useState('');
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const activeAgentName = useMemo(() => {
+    return availableAgents.find((agent) => agent.id === activeAgentId)?.name || 'Luca';
+  }, [activeAgentId, availableAgents]);
+
+  const context: LucaGuideContext = useMemo(() => {
+    const info = routeInfo(location.pathname);
+    return {
+      path: location.pathname,
+      search: location.search,
+      pageTitle: info.pageTitle,
+      routeFamily: info.routeFamily,
+      summary: info.summary,
+      activeAgentId,
+      activeAgentName,
+      currentThreadId,
+      availableTargets: targetsForPath(location.pathname),
+    };
+  }, [activeAgentId, activeAgentName, currentThreadId, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.setTimeout(() => inputRef.current?.focus(), 80);
+  }, [open]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages.length, sending, open]);
+
+  useEffect(() => {
+    document.querySelectorAll('.luca-guide-target-active').forEach((node) => {
+      node.classList.remove('luca-guide-target-active');
+    });
+    if (!activeTargetId) return;
+
+    const target = findGuideTarget(activeTargetId);
+    if (!target) return;
+    target.classList.add('luca-guide-target-active');
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+
+    const timeout = window.setTimeout(() => {
+      target.classList.remove('luca-guide-target-active');
+      clearHighlight();
+    }, 4200);
+    return () => {
+      window.clearTimeout(timeout);
+      target.classList.remove('luca-guide-target-active');
+    };
+  }, [activeTargetId, clearHighlight, location.pathname]);
+
+  const submit = async (text = input) => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setInput('');
+    await send(trimmed, context);
+  };
+
+  const runAction = (action: LucaGuideAction) => {
+    if (action.type === 'navigate') {
+      navigate(action.target);
+      return;
+    }
+    if (action.type === 'open_drawer') {
+      openDrawer(action.target as Exclude<DrawerKey, null>);
+      return;
+    }
+    const target = findGuideTarget(action.target);
+    if (target && action.type === 'scroll_to') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }
+    highlight(action.target);
+  };
+
+  const quickPrompts = [
+    `What should I know about ${context.pageTitle}?`,
+    'Show me where setup starts.',
+    'How do agents and memory fit together?',
+  ];
+
+  return (
+    <>
+      <button
+        type="button"
+        className="luca-guide-launcher"
+        data-guide-id="luca-guide-launcher"
+        data-open={open ? 'true' : undefined}
+        onClick={toggleOpen}
+        aria-label={open ? 'Close Luca guide' : 'Open Luca guide'}
+      >
+        <span className="luca-guide-mark" aria-hidden="true">L</span>
+        <span>Luca</span>
+      </button>
+
+      {open && (
+        <section className="luca-guide-panel" aria-label="Luca guide">
+          <div className="luca-guide-head">
+            <div className="luca-guide-head-main">
+              <span className="luca-guide-mark large" aria-hidden="true">L</span>
+              <div>
+                <div className="luca-guide-kicker">Luca · app guide</div>
+                <div className="luca-guide-title">{context.pageTitle}</div>
+              </div>
+            </div>
+            <div className="luca-guide-head-actions">
+              <button type="button" onClick={clear} aria-label="Clear Luca guide chat">clear</button>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close Luca guide">
+                <X size={15} strokeWidth={1.7} />
+              </button>
+            </div>
+          </div>
+
+          <div className="luca-guide-context">
+            <MessageCircle size={14} strokeWidth={1.65} aria-hidden="true" />
+            <span>{context.summary}</span>
+          </div>
+
+          <div className="luca-guide-messages" ref={scrollRef}>
+            {messages.map((message) => (
+              <div key={message.id} className={`luca-guide-message ${message.role}`}>
+                <div className="luca-guide-message-label">{message.role === 'user' ? 'you' : 'luca'}</div>
+                <div className="luca-guide-message-body">{message.content}</div>
+                {!!message.actions?.length && (
+                  <div className="luca-guide-actions">
+                    {message.actions.map((action, index) => (
+                      <button
+                        key={`${action.type}-${action.target}-${index}`}
+                        type="button"
+                        onClick={() => runAction(action)}
+                      >
+                        {actionIcon(action.type)}
+                        <span>{action.label || action.target}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {sending && (
+              <div className="luca-guide-message assistant pending">
+                <div className="luca-guide-message-label">luca</div>
+                <div className="luca-guide-message-body">checking this page...</div>
+              </div>
+            )}
+          </div>
+
+          <div className="luca-guide-shortcuts" data-open={shortcutsOpen ? 'true' : undefined}>
+            <button
+              type="button"
+              className="luca-guide-shortcuts-trigger"
+              onClick={() => setShortcutsOpen((value) => !value)}
+              aria-expanded={shortcutsOpen}
+            >
+              <ChevronRight size={13} strokeWidth={1.7} aria-hidden="true" />
+              <span>Suggestions</span>
+              <small>3 prompts · 6 places</small>
+            </button>
+
+            {shortcutsOpen && (
+              <div className="luca-guide-shortcuts-panel">
+                <div className="luca-guide-quick" aria-label="Suggested Luca guide questions">
+                  {quickPrompts.map((prompt) => (
+                    <button key={prompt} type="button" onClick={() => void submit(prompt)} disabled={sending}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="luca-guide-targets" aria-label="Available guide actions">
+                  <span>Can open</span>
+                  {[...GUIDE_NAV_TARGETS.slice(0, 5), ...GUIDE_DRAWER_TARGETS.slice(0, 1)].map((target) => (
+                    <button
+                      key={target.id}
+                      type="button"
+                      onClick={() => {
+                        if (target.id.startsWith('/')) navigate(target.id);
+                        else openDrawer(target.id as Exclude<DrawerKey, null>);
+                      }}
+                      data-active={
+                        target.id.startsWith('/')
+                          ? location.pathname.startsWith(target.id)
+                            ? 'true'
+                            : undefined
+                          : activeDrawer === target.id
+                          ? 'true'
+                          : undefined
+                      }
+                    >
+                      {target.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form
+            className="luca-guide-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+              placeholder="Ask Luca about this screen..."
+              rows={2}
+              disabled={sending}
+            />
+            <button type="submit" disabled={!input.trim() || sending} aria-label="Send to Luca guide">
+              <Send size={15} strokeWidth={1.7} />
+            </button>
+          </form>
+        </section>
+      )}
+    </>
+  );
+}

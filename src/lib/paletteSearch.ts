@@ -49,6 +49,7 @@ const SETTINGS_STATIC: { id: string; title: string; subtitle: string; path: stri
   { id: 'settings-import', title: 'Import', subtitle: 'Import conversation data', path: '/import' },
   { id: 'settings-projects', title: 'Projects', subtitle: 'Thread workspaces and instructions', path: '/projects' },
   { id: 'settings-profile', title: 'Profile', subtitle: 'Your account', path: '/profile' },
+  { id: 'settings-help', title: 'Guide', subtitle: 'How Polyphonic works', path: '/settings/help' },
 ];
 
 export function buildResults(
