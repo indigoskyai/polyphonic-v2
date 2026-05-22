@@ -154,6 +154,23 @@ describe('Phase 4 reliability guardrails', () => {
     expect(customPrompt).not.toContain('LUCA_SOUL');
   });
 
+  it('keeps agent threads isolated instead of silently mutating them or blending prior voices', () => {
+    const chatView = readRepoFile('src/pages/ChatView.tsx');
+    const kernel = readRepoFile('supabase/functions/_shared/continuity/kernel.ts');
+
+    expect(chatView).not.toContain("if (currentThreadId) updateThreadAgent(currentThreadId, 'luca')");
+    expect(chatView).toContain("if (!currentThreadId && activeAgentId !== 'luca')");
+    expect(chatView).toContain('const handleAgentChange = useCallback');
+    expect(chatView).toContain('if (messages.length === 0)');
+    expect(chatView).toContain('const nextThreadId = await createThread(user.id, id)');
+    expect(chatView).toContain('navigate(`/chat/${nextThreadId}`)');
+
+    expect(kernel).toContain('.select("id, role, content, agent, created_at")');
+    expect(kernel).toContain('normalizeThreadHistoryForAgent');
+    expect(kernel).toContain('Context from another agent (${messageAgent}), not your own prior reply');
+    expect(kernel).toContain('const messageAgent = msg.agent || "luca"');
+  });
+
   it('keeps launch-sensitive database helpers and profile uploads hardened', () => {
     const source = readRepoFile('supabase/migrations/20260505235900_harden_launch_auth_and_profile_storage.sql');
 

@@ -241,10 +241,16 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
 }
 
-function LucaOnlyPill() {
+function LucaOnlyPill({
+  label = 'luca',
+  title = 'Talking to Luca',
+}: {
+  label?: string;
+  title?: string;
+}) {
   return (
-    <button type="button" className="agent-pill targeted luca-only-pill" title="Talking to Luca" aria-label="Talking to Luca">
-      luca
+    <button type="button" className="agent-pill targeted luca-only-pill" title={title} aria-label={title}>
+      {label}
     </button>
   );
 }
@@ -712,11 +718,10 @@ export default function ChatView() {
     if (ensembleArmed) setEnsembleArmed(false);
     if (ensembleLocked) setEnsembleLocked(false);
     if (agentModeArmed) setAgentModeArmed(false);
-    if (activeAgentId !== 'luca') {
+    if (!currentThreadId && activeAgentId !== 'luca') {
       setPendingAgentId('luca');
-      if (currentThreadId) updateThreadAgent(currentThreadId, 'luca');
     }
-  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId, updateThreadAgent]);
+  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
 
   useEffect(() => {
     if (!user) {
@@ -774,6 +779,40 @@ export default function ChatView() {
     [agents]
   );
   const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
+  const readonlyAgentPillLabel = activeAgentId === 'luca' ? 'luca' : currentAgentLabel.toLowerCase();
+  const readonlyAgentPillTitle = activeAgentId === 'luca'
+    ? 'Talking to Luca'
+    : `${currentAgentLabel} is selected. Custom agents require your own OpenRouter key to reply.`;
+  const handleAgentChange = useCallback(async (id: string) => {
+    if (!id || id === activeAgentId) return;
+    setPendingAgentId(id);
+    setAgentModeArmed(false);
+    setEnsembleArmed(false);
+    setEnsembleLocked(false);
+
+    if (!currentThreadId) return;
+
+    if (messages.length === 0) {
+      await updateThreadAgent(currentThreadId, id);
+      return;
+    }
+
+    if (!user) return;
+    try {
+      const nextThreadId = await createThread(user.id, id);
+      navigate(`/chat/${nextThreadId}`);
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Could not switch agents');
+    }
+  }, [
+    activeAgentId,
+    currentThreadId,
+    messages.length,
+    user,
+    updateThreadAgent,
+    createThread,
+    navigate,
+  ]);
   useEffect(() => {
     if (messages.length > 0 && firstTurnHandoff) {
       setFirstTurnHandoff(null);
@@ -2320,12 +2359,11 @@ export default function ChatView() {
                   {byokEnabled ? (
                     <AgentPicker
                       activeAgentId={activeAgentId}
-                      onChange={(id) => {
-                        setPendingAgentId(id);
-                        if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                      }}
+                      onChange={(id) => { void handleAgentChange(id); }}
                     />
-                  ) : <LucaOnlyPill />}
+                  ) : (
+                    <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
+                  )}
                   {renderGuestStatusChip()}
                   <ObserverEyeChip
                     threadId={currentThreadId}
@@ -2424,7 +2462,9 @@ export default function ChatView() {
         </span>
         <div style={{ flex: 1 }} />
         <span className="chat-header-meta">
-          {byokEnabled ? 'luca · opus-4.7' : 'luca · kimi-k2.6'}
+          {activeAgentId === 'luca'
+            ? (byokEnabled ? 'luca · opus-4.7' : 'luca · kimi-k2.6')
+            : `${currentAgentLabel.toLowerCase()} · custom agent`}
         </span>
         <ThreadInfoButton />
       </div>
@@ -2843,12 +2883,11 @@ export default function ChatView() {
               {byokEnabled ? (
                 <AgentPicker
                   activeAgentId={activeAgentId}
-                  onChange={(id) => {
-                    setPendingAgentId(id);
-                    if (currentThreadId) updateThreadAgent(currentThreadId, id);
-                  }}
+                  onChange={(id) => { void handleAgentChange(id); }}
                 />
-              ) : <LucaOnlyPill />}
+              ) : (
+                <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
+              )}
               {renderGuestStatusChip()}
               <ObserverEyeChip
                 threadId={currentThreadId}

@@ -63,6 +63,7 @@ export interface ContinuityHistoryMessage {
   id?: string | null;
   role: string;
   content: string;
+  agent?: string | null;
   created_at?: string | null;
 }
 
@@ -429,12 +430,31 @@ async function loadThreadHistory(
   if (!opts.threadId) return [];
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, agent, created_at")
     .eq("thread_id", opts.threadId)
     .order("created_at", { ascending: true })
     .limit(opts.historyLimit || 50);
   if (error) throw new Error(error.message || "history query failed");
-  return removeCurrentUserMessageFromHistory((data || []) as ContinuityHistoryMessage[], opts.userMessage);
+  return normalizeThreadHistoryForAgent(
+    removeCurrentUserMessageFromHistory((data || []) as ContinuityHistoryMessage[], opts.userMessage),
+    opts.agentId || "luca",
+  );
+}
+
+function normalizeThreadHistoryForAgent(
+  history: ContinuityHistoryMessage[],
+  activeAgentId: string,
+): ContinuityHistoryMessage[] {
+  return history.map((msg) => {
+    if (msg.role !== "assistant") return msg;
+    const messageAgent = msg.agent || "luca";
+    if (messageAgent === activeAgentId) return msg;
+    return {
+      ...msg,
+      role: "user",
+      content: `Context from another agent (${messageAgent}), not your own prior reply:\n${msg.content}`,
+    };
+  });
 }
 
 export async function loadFunctionalMemories(
