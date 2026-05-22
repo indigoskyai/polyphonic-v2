@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -10,9 +11,11 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { conversation_id, trigger_type = "periodic" } = body;
-    const requestedAgentId = typeof body.agent_id === "string" && body.agent_id.trim()
-      ? body.agent_id.trim()
-      : "luca";
+    const requestedAgentId = normalizeAgentId(body.agent_id);
+
+    if (!isSubstrateAgentId(requestedAgentId)) {
+      return nonSubstrateResponse(requestedAgentId, "journal-write", getCorsHeaders(req));
+    }
 
     // Validate trigger_type
     const validTriggerTypes = ["periodic", "post_conversation"];

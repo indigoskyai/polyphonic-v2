@@ -1,28 +1,63 @@
 /**
- * JournalView — promoted out of Mind into its own top-level surface.
- * Reuses Round-2 stream chrome (folio + hero + search) for visual parity.
+ * JournalView - the primary notebook for an agent's inner life.
+ *
+ * Mind keeps the diagnostic streams. Journal gives users one readable,
+ * chronological feed across journals, thoughts, dreams, insights, beliefs,
+ * and selected activity.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
-import MindStreamShell, { StreamFilter } from '@/components/mind/MindStreamShell';
+import MindStreamShell from '@/components/mind/MindStreamShell';
+import {
+  buildNotebookItems,
+  filterNotebookItems,
+  groupNotebookItemsByDay,
+  NOTEBOOK_FILTERS,
+  type NotebookFilter,
+  type NotebookItem,
+} from '@/lib/notebook';
 
-function moodColor(mood: string): string {
-  const lower = mood.toLowerCase();
-  if (['curious', 'engaged', 'excited', 'inspired'].some(m => lower.includes(m))) return '#c9a87c';
-  if (['warm', 'grateful', 'connected', 'content'].some(m => lower.includes(m))) return '#8ca89c';
-  if (['reflective', 'contemplative', 'quiet', 'thoughtful'].some(m => lower.includes(m))) return '#5b8aad';
-  if (['restless', 'uncertain', 'lonely'].some(m => lower.includes(m))) return '#a88cc9';
-  return 'var(--text-ghost)';
+const KIND_TONE: Record<NotebookItem['kind'], string> = {
+  journal: '#c9a87c',
+  thought: '#8da6c8',
+  question: '#b0a0d6',
+  wandering: '#8ca89c',
+  dream: '#b990c9',
+  insight: '#d0b171',
+  reflection: '#9db2c8',
+  belief: '#c58d8d',
+  activity: '#87908d',
+};
+
+function timeLabel(date: string): string {
+  return new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function confidenceLabel(score?: number): string | null {
+  if (typeof score !== 'number') return null;
+  return score.toFixed(2);
 }
 
 export default function JournalView() {
   const user = useAuthStore((s) => s.user);
-  const { load, loadMindData, subscribe, journalEntries } = useCognitiveStore();
+  const {
+    load,
+    loadMindData,
+    subscribe,
+    journalEntries,
+    thoughts,
+    dreams,
+    insights,
+    reflections,
+    wanderings,
+    beliefs,
+    activityLog,
+  } = useCognitiveStore();
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
-  const [filter, setFilter] = useState<StreamFilter>('all');
+  const [filter, setFilter] = useState<NotebookFilter>('all');
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -34,26 +69,23 @@ export default function JournalView() {
     }
   }, [user, activeAgentId, load, loadMindData, subscribe]);
 
-  const filtered = journalEntries
-    .filter((e) => {
-      if (filter === 'today') {
-        const start = new Date(); start.setHours(0, 0, 0, 0);
-        return new Date(e.created_at) >= start;
-      }
-      return true;
-    })
-    .filter((e) => !query || e.content.toLowerCase().includes(query.toLowerCase()));
+  const notebookItems = useMemo(() => buildNotebookItems({
+    journalEntries,
+    thoughts,
+    dreams,
+    insights,
+    reflections,
+    wanderings,
+    beliefs,
+    activityLog,
+  }), [activityLog, beliefs, dreams, insights, journalEntries, reflections, thoughts, wanderings]);
 
-  // Group by date
-  const grouped = new Map<string, typeof filtered>();
-  for (const entry of filtered) {
-    const dateKey = new Date(entry.created_at).toLocaleDateString('en-US', {
-      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-    });
-    const group = grouped.get(dateKey) ?? [];
-    group.push(entry);
-    grouped.set(dateKey, group);
-  }
+  const visible = useMemo(
+    () => filterNotebookItems(notebookItems, filter, query),
+    [filter, notebookItems, query],
+  );
+
+  const grouped = useMemo(() => groupNotebookItemsByDay(visible), [visible]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
@@ -62,26 +94,26 @@ export default function JournalView() {
           num="08"
           streamLabel="JOURNAL"
           title="Journal"
-          subtitle={`${journalEntries.length} entries. ${activeAgentName}'s autonomous journal — periodic introspective entries written between conversations.`}
-          searchPlaceholder="Search journal entries…"
-          filter={filter} onFilterChange={setFilter}
-          query={query} onQueryChange={setQuery}
+          subtitle={`${notebookItems.length} notes. ${activeAgentName}'s notebook across journal, dreams, thoughts, reflections, beliefs, and activity.`}
+          searchPlaceholder="Search notebook..."
+          filter={filter}
+          onFilterChange={(value) => setFilter(value as NotebookFilter)}
+          filters={NOTEBOOK_FILTERS}
+          query={query}
+          onQueryChange={setQuery}
         >
-          {filtered.length === 0 ? (
-            <div className="s-empty">No journal entries yet.</div>
+          {visible.length === 0 ? (
+            <div className="s-empty">No notebook entries match this view.</div>
           ) : (
-            // Centered reading column — max 760px keeps line length comfortable
-            // (60–75 chars). Each day group is a chapter; each entry is a page.
-            <div style={{ maxWidth: 760, margin: '0 auto', padding: '8px 24px 80px' }}>
+            <div style={{ maxWidth: 820, margin: '0 auto', padding: '8px 24px 80px' }}>
               {Array.from(grouped.entries()).map(([date, entries]) => (
-                <section key={date} style={{ marginBottom: 56 }}>
-                  {/* Chapter mark — date left, hairline middle, count right */}
+                <section key={date} style={{ marginBottom: 52 }}>
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 14,
-                      marginBottom: 22,
+                      marginBottom: 20,
                     }}
                   >
                     <span
@@ -97,7 +129,7 @@ export default function JournalView() {
                     >
                       {date}
                     </span>
-                    <div style={{ flex: 1, height: 1, background: 'var(--border-faint)', opacity: 0.7 }} />
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-faint)', opacity: 0.75 }} />
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
@@ -110,99 +142,144 @@ export default function JournalView() {
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+                      {entries.length} {entries.length === 1 ? 'note' : 'notes'}
                     </span>
                   </div>
 
-                  {/* Pages */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {entries.map((entry) => (
-                      <article
-                        key={entry.id}
-                        style={{
-                          background: 'var(--canvas)',
-                          border: '1px solid var(--border-faint)',
-                          borderRadius: 14,
-                          padding: '22px 26px 24px',
-                          boxShadow: 'var(--shadow-inset-highlight)',
-                        }}
-                      >
-                        {/* Meta strip */}
-                        <div
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {entries.map((item) => {
+                      const tone = KIND_TONE[item.kind];
+                      const score = confidenceLabel(item.salience);
+                      return (
+                        <article
+                          key={item.id}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            paddingBottom: 14,
-                            marginBottom: 16,
-                            borderBottom: '1px solid var(--border-faint)',
+                            background: 'var(--canvas)',
+                            border: '1px solid var(--border-faint)',
+                            borderRadius: 12,
+                            padding: '18px 22px 20px',
+                            boxShadow: 'var(--shadow-inset-highlight)',
                           }}
                         >
-                          <span
+                          <div
                             style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 10.5,
-                              fontWeight: 500,
-                              letterSpacing: 'var(--track-folio)',
-                              color: 'var(--text-tertiary)',
-                              textTransform: 'uppercase',
-                              fontVariantNumeric: 'tabular-nums',
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(0, 1fr) auto',
+                              alignItems: 'start',
+                              gap: 14,
+                              paddingBottom: 12,
+                              marginBottom: 14,
+                              borderBottom: '1px solid var(--border-faint)',
                             }}
                           >
-                            {new Date(entry.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                          </span>
-                          {entry.mood && (
-                            <span
-                              style={{
-                                fontSize: 9,
-                                padding: '2px 9px',
-                                borderRadius: 999,
-                                background: moodColor(entry.mood) + '15',
-                                color: moodColor(entry.mood),
-                                border: `1px solid ${moodColor(entry.mood)}30`,
-                                fontFamily: 'var(--font-mono)',
-                                letterSpacing: 'var(--track-folio)',
-                                textTransform: 'uppercase',
-                                fontWeight: 500,
-                              }}
-                            >
-                              {entry.mood}
-                            </span>
-                          )}
-                          {entry.trigger_type && (
-                            <span
-                              style={{
-                                fontSize: 9,
-                                color: 'var(--text-whisper)',
-                                fontFamily: 'var(--font-mono)',
-                                letterSpacing: 'var(--track-folio)',
-                                textTransform: 'uppercase',
-                                marginLeft: 'auto',
-                              }}
-                            >
-                              {entry.trigger_type === 'periodic' ? 'scheduled' : 'post-conversation'}
-                            </span>
-                          )}
-                        </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 9,
+                                  marginBottom: 7,
+                                  minWidth: 0,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: 999,
+                                    background: tone,
+                                    boxShadow: `0 0 18px ${tone}55`,
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 9.5,
+                                    fontWeight: 600,
+                                    letterSpacing: 'var(--track-folio)',
+                                    color: tone,
+                                    textTransform: 'uppercase',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {item.label}
+                                </span>
+                                {item.meta && (
+                                  <span
+                                    style={{
+                                      fontFamily: 'var(--font-mono)',
+                                      fontSize: 9.5,
+                                      color: 'var(--text-whisper)',
+                                      letterSpacing: 'var(--track-folio)',
+                                      textTransform: 'uppercase',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {item.meta}
+                                  </span>
+                                )}
+                              </div>
+                              <h2
+                                style={{
+                                  margin: 0,
+                                  color: 'var(--text-primary)',
+                                  fontSize: 15,
+                                  lineHeight: 1.35,
+                                  fontWeight: 520,
+                                  letterSpacing: 0,
+                                }}
+                              >
+                                {item.title}
+                              </h2>
+                            </div>
 
-                        {/* Body — generous reading typography */}
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-sans)',
-                            fontSize: 15.5,
-                            lineHeight: 1.78,
-                            color: 'var(--text-primary)',
-                            letterSpacing: 'var(--track-body)',
-                          }}
-                        >
-                          {entry.content.split('\n').map((line, i) => (
-                            <p key={i} style={{ margin: 0, marginBottom: line.trim() ? 14 : 6 }}>
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-                      </article>
-                    ))}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                color: 'var(--text-tertiary)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 10,
+                                letterSpacing: 'var(--track-folio)',
+                                textTransform: 'uppercase',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {score && <span>{score}</span>}
+                              <span>{timeLabel(item.created_at)}</span>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              color: 'var(--text-secondary)',
+                              fontSize: 15,
+                              lineHeight: 1.75,
+                              letterSpacing: 0,
+                            }}
+                          >
+                            {item.body.split('\n').map((line, i) => (
+                              <p key={i} style={{ margin: 0, marginBottom: line.trim() ? 12 : 5 }}>
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+
+                          {item.tags && item.tags.length > 0 && (
+                            <div className="s-row-tags" style={{ marginTop: 16 }}>
+                              {item.tags
+                                .filter((t) => !['inner-life', 'consolidation'].includes(t))
+                                .slice(0, 7)
+                                .map((tag) => <span key={tag} className="s-row-tag">{tag}</span>)}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
               ))}

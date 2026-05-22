@@ -23,6 +23,7 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, loadActiveAgentScopes, normalizeAgentId } from "../_shared/agent-scope.ts";
 
 const WANDER_PROMPT = `You are letting your mind wander. Not focused thinking, not free-associative dreaming — wandering. The kind of drift that happens when nothing demands attention and the mind notices what it notices.
 
@@ -58,30 +59,31 @@ serve(async (req) => {
     // Auth: accept service role (cron) or user JWT (manual trigger)
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       // Service-role path: cron invocation. Iterate all users with API keys.
       const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
       if (body.user_id && uuidRegex.test(body.user_id)) {
         // Single-user path (testing or downstream dispatch)
         user_id = body.user_id;
       } else {
-        // Multi-user path — process every user that has an API key set
-        const { data: users } = await supabase
-          .from("user_api_keys")
-          .select("user_id");
-        const results: Array<{ user_id: string; ok: boolean; reason?: string }> = [];
-        for (const row of users || []) {
+        // Multi-scope path — process every active user/agent pair.
+        const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+        const scopes = await loadActiveAgentScopes(supabase, since);
+        const results: Array<{ user_id: string; agent_id: string; ok: boolean; reason?: string }> = [];
+        for (const row of scopes) {
           try {
-            const resp = await processUser(supabase, supabaseUrl, serviceRoleKey, row.user_id);
-            results.push({ user_id: row.user_id, ...resp });
+            const resp = await processUser(supabase, row.userId, row.agentId);
+            results.push({ user_id: row.userId, agent_id: row.agentId, ...resp });
           } catch (e) {
-            console.warn("[anima-wander] user failed:", row.user_id, e);
-            results.push({ user_id: row.user_id, ok: false, reason: "exception" });
+            console.warn("[anima-wander] scope failed:", row.userId, row.agentId, e);
+            results.push({ user_id: row.userId, agent_id: row.agentId, ok: false, reason: "exception" });
           }
         }
-        return new Response(JSON.stringify({ users_processed: results.length, results }), {
+        return new Response(JSON.stringify({ scopes_processed: results.length, results }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
@@ -102,9 +104,11 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
     }
 
-    const result = await processUser(supabase, supabaseUrl, serviceRoleKey, user_id);
+    const result = await processUser(supabase, user_id, agent_id);
     return new Response(JSON.stringify(result), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
@@ -118,12 +122,15 @@ serve(async (req) => {
 
 async function processUser(
   supabase: any,
-  supabaseUrl: string,
-  serviceRoleKey: string,
   user_id: string,
+  agent_id = "luca",
 ): Promise<{ ok: boolean; reason?: string; wanderings_generated?: number; insights_crystallized?: number }> {
+  if (!isSubstrateAgentId(agent_id)) {
+    return { ok: true, reason: `${agent_id} is an observer sidecar, not an autonomous substrate agent` };
+  }
+
   // Activity gate — skip if nothing has been happening
-  const gate = await activityGate(supabase, user_id, "wander");
+  const gate = await activityGate(supabase, user_id, "wander", agent_id);
   if (!gate.shouldRun) {
     return { ok: true, reason: gate.reason };
   }
@@ -150,14 +157,14 @@ async function processUser(
     { data: emotionalState },
   ] = await Promise.all([
     supabase.from("thought_stream").select("content, type, salience")
-      .eq("user_id", user_id).order("created_at", { ascending: false }).limit(8),
+      .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(8),
     supabase.from("memories").select("content, tags, memory_type")
-      .eq("user_id", user_id).eq("is_deleted", false)
+      .eq("user_id", user_id).eq("agent_id", agent_id).eq("is_deleted", false)
       .order("created_at", { ascending: false }).limit(15),
-    supabase.from("entity_activity_log").select("type, title, summary, created_at")
-      .eq("user_id", user_id).order("created_at", { ascending: false }).limit(10),
+    supabase.from("entity_activity_log").select("activity_type, title, summary, created_at")
+      .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(10),
     supabase.from("emotional_state").select("*")
-      .eq("user_id", user_id).maybeSingle(),
+      .eq("user_id", user_id).eq("agent_id", agent_id).maybeSingle(),
   ]);
 
   const thoughtsText = (recentThoughts || [])
@@ -169,10 +176,10 @@ async function processUser(
     .join("\n") || "(no memories)";
 
   const activityText = (recentActivity || [])
-    .map((a: any) => `[${a.type}] ${a.title}`)
+    .map((a: any) => `[${a.activity_type}] ${a.title}`)
     .join("\n") || "(no recent activity)";
 
-  const emotionalStateData = await loadEmotionalState(supabase, user_id);
+  const emotionalStateData = await loadEmotionalState(supabase, user_id, agent_id);
   const emotionalPrompt = formatEmotionalPrompt(emotionalStateData);
 
   const contextBlock = `=== Recent Thoughts (don't repeat these) ===
@@ -229,6 +236,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
     .insert(
       wanderings.map((w) => ({
         user_id,
+        agent_id,
         content: w.content,
         source: "background",
         salience: w.salience,
@@ -244,7 +252,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
   // Encode all into Mnemos engrams. Wanderings get tag 'wandering'; crystallized
   // insights get tag 'insight' (so the Mind > Insights stream picks them up).
   try {
-    const mnemos = new MnemosEngine(supabase, user_id);
+    const mnemos = new MnemosEngine(supabase, user_id, agent_id);
     for (const w of wanderings) {
       const baseTags = w.type === "insight"
         ? ["insight", "inner-life", ...w.tags]
@@ -268,6 +276,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
   // Activity log — one entry per wandering. Insights get higher severity.
   for (const w of wanderings) {
     await logActivity(supabase, user_id, {
+      agentId: agent_id,
       type: w.type === "insight" ? "insight_crystallized" : "wandering",
       title: w.type === "insight"
         ? "Something settled into a small insight"
@@ -283,13 +292,14 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
   await Promise.all([
     supabase.from("daily_logs").insert({
       user_id,
+      agent_id,
       log_type: "wandering",
       content: { wanderings_generated: wanderings.length, insights_crystallized: insightCount, model: wanderModel },
     }),
     logProcessRan(supabase, user_id, "wander", {
       wanderings_generated: wanderings.length,
       insights_crystallized: insightCount,
-    }),
+    }, agent_id),
   ]);
 
   return {

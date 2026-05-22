@@ -8,6 +8,7 @@
 
 export interface InitiateOptions {
   user_id: string;
+  agent_id?: string;
   activity_id?: string;
   severity: "info" | "notable" | "important";
   title?: string;

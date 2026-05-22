@@ -18,12 +18,17 @@ interface Emotions {
   social: number;
 }
 
-interface Belief {
+export interface Belief {
+  id?: string;
   text: string;
   strength: number;
+  domain?: string | null;
+  confidence_tier?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
-interface Thought {
+export interface Thought {
   id: string;
   agent_id?: string;
   type: string;
@@ -34,7 +39,7 @@ interface Thought {
   created_at: string;
 }
 
-interface MemoryEvent {
+export interface MemoryEvent {
   id: string;
   agent_id?: string;
   type: string;
@@ -43,7 +48,7 @@ interface MemoryEvent {
   created_at: string;
 }
 
-interface ActivityEntry {
+export interface ActivityEntry {
   id: string;
   agent_id?: string;
   activity_type: string;
@@ -74,7 +79,7 @@ interface MemoryStats {
   beliefs_count: number;
 }
 
-interface JournalEntry {
+export interface JournalEntry {
   id: string;
   agent_id?: string;
   content: string;
@@ -83,7 +88,7 @@ interface JournalEntry {
   created_at: string;
 }
 
-interface MindEngram {
+export interface MindEngram {
   id: string;
   agent_id?: string;
   content: string;
@@ -173,7 +178,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       supabase.from('cognitive_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
       supabase.from('thought_stream').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(50),
       supabase.from('memory_events').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(20),
-      supabase.from('entity_activity_log').select('id, agent_id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(40),
+      supabase.from('entity_activity_log').select('id, agent_id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(80),
       supabase.from('emotional_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
     ]);
     const cogRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: null };
@@ -247,17 +252,17 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     // Load beliefs from the beliefs table (the Overview Belief card was reading a stale JSONB column).
     const beliefsTablePromise = supabase
       .from('beliefs')
-      .select('id, content, confidence, domain, active')
+      .select('id, content, confidence, confidence_tier, domain, active, created_at, updated_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .eq('active', true)
       .order('confidence', { ascending: false })
-      .limit(20);
+      .limit(80);
 
     // Memory stats
     const statsPromises = [
@@ -283,11 +288,24 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     const reflectionsRes = pick<MindEngram>(2);
     const wanderingsRes = pick<Thought>(3);
     const journalRes = pick<JournalEntry>(4);
-    const beliefsTableRes = pick<{ content: string; confidence: number }>(5);
+    const beliefsTableRes = pick<{
+      id?: string;
+      content: string;
+      confidence: number;
+      confidence_tier?: string | null;
+      domain?: string | null;
+      created_at?: string | null;
+      updated_at?: string | null;
+    }>(5);
 
     const beliefsFromTable: Belief[] = (beliefsTableRes.data ?? []).map((b) => ({
+      id: b.id,
       text: b.content,
       strength: b.confidence,
+      confidence_tier: b.confidence_tier ?? null,
+      domain: b.domain ?? null,
+      created_at: b.created_at ?? null,
+      updated_at: b.updated_at ?? null,
     }));
 
     set({
@@ -358,7 +376,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${userId}` }, (payload) => {
         const entry = payload.new as ActivityEntry;
         if (!rowMatchesAgent(entry, agentId)) return;
-        set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 40) }));
+        set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 80) }));
       })
       .subscribe();
 

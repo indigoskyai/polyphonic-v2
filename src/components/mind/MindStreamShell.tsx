@@ -7,9 +7,19 @@
  *
  * MOCK: session number + sync time in folio (templated until wired).
  */
-import { useState, ReactNode } from 'react';
+import { ReactNode } from 'react';
 
-export type StreamFilter = 'all' | 'today' | 'salient';
+export type StreamFilter = string;
+export interface StreamFilterOption {
+  id: StreamFilter;
+  label: string;
+}
+
+const DEFAULT_FILTERS: StreamFilterOption[] = [
+  { id: 'all', label: 'all' },
+  { id: 'today', label: 'today' },
+  { id: 'salient', label: 'salient' },
+];
 
 interface Props {
   num: string;            // "01" .. "07"
@@ -19,6 +29,7 @@ interface Props {
   searchPlaceholder: string;
   filter: StreamFilter;
   onFilterChange: (f: StreamFilter) => void;
+  filters?: StreamFilterOption[];
   query: string;
   onQueryChange: (v: string) => void;
   children: ReactNode;
@@ -30,7 +41,7 @@ function fmtClock(d = new Date()): string {
 
 export default function MindStreamShell({
   num, streamLabel, title, subtitle,
-  searchPlaceholder, filter, onFilterChange, query, onQueryChange, children,
+  searchPlaceholder, filter, onFilterChange, filters = DEFAULT_FILTERS, query, onQueryChange, children,
 }: Props) {
   return (
     <div className="s-stream">
@@ -56,16 +67,16 @@ export default function MindStreamShell({
             />
           </label>
           <div className="s-segment" role="tablist">
-            {(['all', 'today', 'salient'] as StreamFilter[]).map((f) => (
+            {filters.map((f) => (
               <button
-                key={f}
+                key={f.id}
                 type="button"
-                className={`s-segment-btn${filter === f ? ' active' : ''}`}
-                onClick={() => onFilterChange(f)}
+                className={`s-segment-btn${filter === f.id ? ' active' : ''}`}
+                onClick={() => onFilterChange(f.id)}
                 role="tab"
-                aria-selected={filter === f}
+                aria-selected={filter === f.id}
               >
-                {f}
+                {f.label}
               </button>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { allowsProactiveAutonomy, isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 // Threshold for accumulated salience before the entity reaches out
 const INITIATION_THRESHOLD = 2.5;
@@ -18,12 +19,14 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let bodyData: any = {};
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       bodyData = await req.json();
       user_id = bodyData.user_id;
+      agent_id = normalizeAgentId(bodyData.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -46,6 +49,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      bodyData = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(bodyData.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-initiate", getCorsHeaders(req));
     }
 
     const action = bodyData.action || "check"; // "check" | "dismiss" | "list"
@@ -56,7 +65,8 @@ serve(async (req) => {
         .from("thought_initiations")
         .update({ status: "dismissed" })
         .eq("id", bodyData.initiation_id)
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id);
 
       return new Response(JSON.stringify({ dismissed: true }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -69,11 +79,23 @@ serve(async (req) => {
         .from("thought_initiations")
         .select("*")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(5);
 
       return new Response(JSON.stringify({ initiations: initiations || [] }), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const proactiveAllowed = await allowsProactiveAutonomy(supabase, user_id, agent_id);
+    if (!proactiveAllowed) {
+      return new Response(JSON.stringify({
+        should_initiate: false,
+        reason: "proactive_autonomy_disabled",
+        agent_id,
+      }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -84,6 +106,7 @@ serve(async (req) => {
       .from("thought_initiations")
       .select("id")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("status", "pending")
       .limit(1);
 
@@ -106,6 +129,7 @@ serve(async (req) => {
         .from("curiosity_questions")
         .select("question, curiosity_score")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("status", "pending")
         .order("curiosity_score", { ascending: false })
         .limit(5),
@@ -113,6 +137,7 @@ serve(async (req) => {
         .from("journal_entries")
         .select("content, mood, created_at")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .gte("created_at", since24h)
         .order("created_at", { ascending: false })
         .limit(3),
@@ -122,6 +147,7 @@ serve(async (req) => {
         .from("emotional_state")
         .select("*")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .maybeSingle(),
     ]);
 
@@ -217,6 +243,7 @@ Write ONLY the message. Nothing else.`;
       .from("thought_initiations")
       .insert({
         user_id,
+        agent_id,
         message,
         status: "pending",
         trigger_reason: triggerReason,
@@ -226,6 +253,7 @@ Write ONLY the message. Nothing else.`;
 
     const proactive = await dispatchProactiveEngagement(supabase, supabaseUrl, serviceRoleKey, {
       userId: user_id,
+      agentId: agent_id,
       source: "anima_initiate",
       severity: "notable",
       title: "Reached out to you",

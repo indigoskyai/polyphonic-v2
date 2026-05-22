@@ -5,6 +5,7 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const REFLECTOR_PROMPT = `You are a reflecting mind. This is meta-cognition — thinking about your recent experiences and thoughts, noticing what mattered, what changed, what you observe in retrospect.
 
@@ -35,6 +36,7 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     let triggerContext: string | undefined;
@@ -43,6 +45,7 @@ serve(async (req) => {
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       triggerContext = body.trigger_context;
       cascadeDepth = body.cascade_depth || 0;
       if (!user_id || !uuidRegex.test(user_id)) {
@@ -67,6 +70,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-reflect", getCorsHeaders(req));
     }
 
     // Get API key
@@ -81,7 +90,7 @@ serve(async (req) => {
 
     // Activity gate
     if (!triggerContext) {
-      const gate = await activityGate(supabase, user_id, "reflect");
+      const gate = await activityGate(supabase, user_id, "reflect", agent_id);
       if (!gate.shouldRun) {
         return new Response(JSON.stringify({ skipped: true, reason: gate.reason }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -104,15 +113,15 @@ serve(async (req) => {
       { data: beliefs },
     ] = await Promise.all([
       supabase.from("journal_entries").select("content, mood, created_at")
-        .eq("user_id", user_id).gte("created_at", cutoff)
+        .eq("user_id", user_id).eq("agent_id", agent_id).gte("created_at", cutoff)
         .order("created_at", { ascending: false }).limit(10),
       supabase.from("thought_stream").select("content, source, salience, created_at")
-        .eq("user_id", user_id).gte("created_at", cutoff)
+        .eq("user_id", user_id).eq("agent_id", agent_id).gte("created_at", cutoff)
         .order("created_at", { ascending: false }).limit(15),
       supabase.from("emotional_state").select("*")
-        .eq("user_id", user_id).maybeSingle(),
+        .eq("user_id", user_id).eq("agent_id", agent_id).maybeSingle(),
       supabase.from("beliefs").select("content, confidence, domain")
-        .eq("user_id", user_id).eq("active", true).limit(8),
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("active", true).limit(8),
     ]);
 
     const logsText = (recentLogs || [])
@@ -135,7 +144,7 @@ serve(async (req) => {
       .join("\n") || "(no beliefs)";
 
     // Load rich emotional context
-    const emotionalStateData = await loadEmotionalState(supabase, user_id);
+    const emotionalStateData = await loadEmotionalState(supabase, user_id, agent_id);
     const emotionalPrompt = formatEmotionalPrompt(emotionalStateData);
 
     let contextBlock = `=== Recent Events (last 48h) ===
@@ -201,6 +210,7 @@ ${beliefsText}`;
       const { error: insErr } = await supabase.from("thought_stream").insert(
         reflections.map((r) => ({
           user_id,
+          agent_id,
           content: r.content,
           source: "reflection",
           salience: r.salience,
@@ -212,7 +222,7 @@ ${beliefsText}`;
 
     // Encode reflections into Mnemos engrams
     try {
-      const mnemos = new MnemosEngine(supabase, user_id);
+      const mnemos = new MnemosEngine(supabase, user_id, agent_id);
       for (const r of reflections) {
         await mnemos.encode(r.content, {
           engram_type: "semantic",
@@ -227,6 +237,7 @@ ${beliefsText}`;
     // Log each reflection to activity log
     for (const r of reflections) {
       await logActivity(supabase, user_id, {
+        agentId: agent_id,
         type: "reflection",
         title: r.content.slice(0, 80),
         summary: r.content,
@@ -239,13 +250,14 @@ ${beliefsText}`;
     await Promise.all([
       supabase.from("daily_logs").insert({
         user_id,
+        agent_id,
         log_type: "reflection",
         content: { reflections_generated: reflections.length, model: reflectModel, triggered_by: triggerContext ? "resonance" : "schedule" },
       }),
       logProcessRan(supabase, user_id, "reflect", {
         reflections_generated: reflections.length,
         cascade_depth: cascadeDepth,
-      }),
+      }, agent_id),
     ]);
 
     return new Response(JSON.stringify({

@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { logProcessRan } from "../_shared/activity-gate.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 
@@ -17,11 +19,14 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
+    let bodyData: any = {};
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
-      const body = await req.json();
-      user_id = body.user_id;
+      bodyData = await req.json().catch(() => ({}));
+      user_id = bodyData.user_id;
+      agent_id = normalizeAgentId(bodyData.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -44,9 +49,15 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      bodyData = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(bodyData.agent_id);
     }
 
-    const body = typeof req.body !== "undefined" ? await req.json().catch(() => ({})) : {};
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-believe", getCorsHeaders(req));
+    }
+
+    const body = bodyData;
     const action = body.action || "challenge"; // "challenge" | "list" | "create" | "update"
 
     // ─── LIST: Return all active beliefs ───
@@ -55,6 +66,7 @@ serve(async (req) => {
         .from("beliefs")
         .select("*")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("active", true)
         .order("confidence", { ascending: false });
 
@@ -76,6 +88,7 @@ serve(async (req) => {
         .from("beliefs")
         .insert({
           user_id,
+          agent_id,
           content,
           confidence: Math.max(0.01, Math.min(0.99, confidence)),
           domain,
@@ -103,6 +116,7 @@ serve(async (req) => {
       .from("beliefs")
       .update({ stagnant: true })
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("active", true)
       .lt("last_challenged", stagnantCutoff);
 
@@ -111,6 +125,7 @@ serve(async (req) => {
       .from("beliefs")
       .select("*")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("active", true)
       .eq("stagnant", true)
       .order("last_challenged", { ascending: true })
@@ -223,7 +238,9 @@ Revision count: ${(belief.revision_history || []).length}`;
             stagnant: false,
             revision_history: revisionHistory,
           })
-          .eq("id", belief.id);
+          .eq("id", belief.id)
+          .eq("user_id", user_id)
+          .eq("agent_id", agent_id);
 
         results.push({
           belief_id: belief.id,
@@ -236,6 +253,7 @@ Revision count: ${(belief.revision_history || []).length}`;
         });
 
         await logActivity(supabase, user_id, {
+          agentId: agent_id,
           type: "belief_change",
           title: `Belief ${assessment.toLowerCase()}: ${belief.content.slice(0, 60)}`,
           summary: belief.content,
@@ -246,6 +264,10 @@ Revision count: ${(belief.revision_history || []).length}`;
         console.error("Challenge error:", e);
       }
     }
+
+    await logProcessRan(supabase, user_id, "believe", {
+      challenged: results.length,
+    }, agent_id);
 
     return new Response(JSON.stringify({ challenged: results.length, results }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

@@ -19,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
+import { allowsProactiveAutonomy, normalizeAgentId } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -157,12 +158,17 @@ serve(async (req) => {
     const fourHoursAgo = new Date(Date.now() - 4 * 3600_000).toISOString();
     const { data: staleInits } = await supabase
       .from("thought_initiations")
-      .select("id, user_id, message, created_at")
+      .select("id, user_id, agent_id, message, created_at")
       .eq("status", "pending")
       .lt("created_at", fourHoursAgo)
       .limit(20);
 
     for (const init of staleInits ?? []) {
+      const agentId = normalizeAgentId(init.agent_id);
+      if (!(await allowsProactiveAutonomy(supabase, init.user_id, agentId))) {
+        continue;
+      }
+
       summary.stale_initiations += 1;
       // Run through the initiate gate with notable severity so it can
       // optionally fire push later (push delivery to follow in A1.x).
@@ -172,8 +178,9 @@ serve(async (req) => {
           headers: internalHeaders,
           body: JSON.stringify({
             user_id: init.user_id,
+            agent_id: agentId,
             severity: "notable",
-            title: "Luca has been waiting",
+            title: agentId === "luca" ? "Luca has been waiting" : "An agent has been waiting",
             summary: (init.message ?? "").slice(0, 200),
           }),
         });

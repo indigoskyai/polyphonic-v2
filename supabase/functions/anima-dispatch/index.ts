@@ -2,12 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
+import { loadActiveAgentScopes } from "../_shared/agent-scope.ts";
 
 /**
  * anima-dispatch — fan-out wrapper for per-user autonomous functions.
  *
  * Cron jobs call this with { function: "anima-think" }; it finds active users
- * (any message in last 7d) and POSTs { user_id } to the target function for each.
+ * (any active thread in last 7d) and POSTs { user_id, agent_id } to the target function for each scope.
  *
  * Auth: service_role only.
  */
@@ -23,6 +24,7 @@ const ALLOWED = new Set([
   "anima-reflect",
   "anima-believe",
   "anima-consolidate",
+  "anima-wander",
 ]);
 
 serve(async (req) => {
@@ -52,24 +54,19 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Active users = anyone who messaged in the last 7 days
+    // Active scopes = each user/agent pair with a thread touched in the last 7 days.
     const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-    const { data: rows } = await supabase
-      .from("messages")
-      .select("user_id")
-      .gte("created_at", since);
+    const scopes = await loadActiveAgentScopes(supabase, since);
 
-    const userIds = [...new Set((rows ?? []).map((r: { user_id: string }) => r.user_id))];
-
-    if (userIds.length === 0) {
+    if (scopes.length === 0) {
       await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
-      return new Response(JSON.stringify({ skipped: true, reason: "no active users", target: targetFn }), {
+      return new Response(JSON.stringify({ skipped: true, reason: "no active scopes", target: targetFn }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Fan out — fire-and-track. Don't await sequentially; run in parallel with cap.
-    const results: { user_id: string; status: number; ok: boolean; error?: string }[] = [];
+    const results: { user_id: string; agent_id: string; status: number; ok: boolean; error?: string }[] = [];
     const headers = {
       Authorization: `Bearer ${serviceRoleKey}`,
       "Content-Type": "application/json",
@@ -79,34 +76,33 @@ serve(async (req) => {
     const CONCURRENCY = 5;
     let cursor = 0;
     async function worker() {
-      while (cursor < userIds.length) {
-        const i = cursor++;
-        const uid = userIds[i];
+      while (cursor < scopes.length) {
+        const scope = scopes[cursor++];
         try {
           const resp = await fetch(`${supabaseUrl}/functions/v1/${targetFn}`, {
             method: "POST",
             headers,
-            body: JSON.stringify({ user_id: uid }),
+            body: JSON.stringify({ user_id: scope.userId, agent_id: scope.agentId }),
           });
-          results.push({ user_id: uid, status: resp.status, ok: resp.ok });
+          results.push({ user_id: scope.userId, agent_id: scope.agentId, status: resp.status, ok: resp.ok });
           if (!resp.ok) {
             const txt = await resp.text();
-            console.error(`[dispatch] ${targetFn} → ${uid} failed ${resp.status}: ${txt.slice(0, 200)}`);
+            console.error(`[dispatch] ${targetFn} → ${scope.userId}/${scope.agentId} failed ${resp.status}: ${txt.slice(0, 200)}`);
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : "unknown";
-          results.push({ user_id: uid, status: 0, ok: false, error: msg });
-          console.error(`[dispatch] ${targetFn} → ${uid} threw:`, msg);
+          results.push({ user_id: scope.userId, agent_id: scope.agentId, status: 0, ok: false, error: msg });
+          console.error(`[dispatch] ${targetFn} → ${scope.userId}/${scope.agentId} threw:`, msg);
         }
       }
     }
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, userIds.length) }, () => worker()));
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, scopes.length) }, () => worker()));
 
     const ok = results.filter((r) => r.ok).length;
     await recordCronSuccess(`anima-dispatch:${targetFn}`, Date.now() - __jobStart);
     return new Response(JSON.stringify({
       target: targetFn,
-      users_dispatched: userIds.length,
+      scopes_dispatched: scopes.length,
       ok,
       failed: results.length - ok,
       results: results.slice(0, 50),

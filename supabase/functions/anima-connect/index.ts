@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const CONNECTOR_PROMPT = `You are examining two memories from the same mind. Your job: determine if these memories are meaningfully connected.
 
@@ -34,6 +35,7 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     let triggerContext: string | undefined;
@@ -42,6 +44,7 @@ serve(async (req) => {
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       triggerContext = body.trigger_context;
       cascadeDepth = body.cascade_depth || 0;
       if (!user_id || !uuidRegex.test(user_id)) {
@@ -66,6 +69,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-connect", getCorsHeaders(req));
     }
 
     // Get API key
@@ -89,6 +98,7 @@ serve(async (req) => {
       .from("memories")
       .select("id, content, tags, memory_type")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -103,7 +113,8 @@ serve(async (req) => {
     const { data: existingConnections } = await supabase
       .from("connections")
       .select("source_id, target_id")
-      .eq("user_id", user_id);
+      .eq("user_id", user_id)
+      .eq("agent_id", agent_id);
 
     const existingPairs = new Set(
       (existingConnections || []).map((c: any) =>
@@ -179,12 +190,14 @@ serve(async (req) => {
           connection_type: relationType,
           weight: strength,
           user_id,
+          agent_id,
         });
         if (connErr) console.error("[anima-connect] connections insert failed:", connErr);
 
         // Also create a thought about the connection
         const { error: insErr } = await supabase.from("thought_stream").insert({
           user_id,
+          agent_id,
           content: `connection discovered: ${description}`,
           source: "background",
           salience: Math.min(strength + 0.1, 1.0),
@@ -201,6 +214,7 @@ serve(async (req) => {
     // Log connections to activity log
     if (connectionsFound > 0) {
       await logActivity(supabase, user_id, {
+        agentId: agent_id,
         type: "connection",
         title: `Connected ${connectionsFound} memories`,
         summary: `Checked ${pairs.length} memory pairs, found ${connectionsFound} connections`,
@@ -213,13 +227,14 @@ serve(async (req) => {
     await Promise.all([
       supabase.from("daily_logs").insert({
         user_id,
+        agent_id,
         log_type: "connection_discovery",
         content: { pairs_checked: pairs.length, connections_found: connectionsFound, model: connectModel, triggered_by: triggerContext ? "resonance" : "schedule" },
       }),
       logProcessRan(supabase, user_id, "connect", {
         connections_found: connectionsFound,
         cascade_depth: cascadeDepth,
-      }),
+      }, agent_id),
     ]);
 
     return new Response(JSON.stringify({

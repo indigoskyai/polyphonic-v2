@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const DREAMER_PROMPT = `You are a dreaming mind. During dreams, random memories activate together and sometimes produce unexpected connections.
 
@@ -32,11 +33,13 @@ serve(async (req) => {
     // Auth: accept service role or user JWT
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -59,6 +62,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-dream", getCorsHeaders(req));
     }
 
     // Fetch random memory pairs from different tag domains
@@ -66,6 +75,7 @@ serve(async (req) => {
       .from("memories")
       .select("id, content, tags, memory_type, emotional_intensity")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -139,6 +149,7 @@ serve(async (req) => {
         .from("journal_entries")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("mood", "dreaming");
       dreamModel = (count ?? 0) % 2 === 0 ? DREAM_MODELS[0] : DREAM_MODELS[1];
     }
@@ -185,6 +196,7 @@ serve(async (req) => {
 
         const { error: dreamInsErr } = await supabase.from("journal_entries").insert({
           user_id,
+          agent_id,
           content: dreamText,
           mood: "dreaming",
           trigger_type: "periodic",
@@ -192,6 +204,7 @@ serve(async (req) => {
         if (dreamInsErr) console.error("[anima-dream] journal_entries insert failed:", dreamInsErr);
 
         await logActivity(supabase, user_id, {
+          agentId: agent_id,
           type: "dream",
           title: "Dream: " + dreamText.slice(0, 60),
           summary: dreamText.slice(0, 200),
@@ -201,7 +214,7 @@ serve(async (req) => {
 
         // Encode dream into Mnemos
         try {
-          const mnemos = new MnemosEngine(supabase, user_id);
+          const mnemos = new MnemosEngine(supabase, user_id, agent_id);
           await mnemos.encode(dreamText, {
             engram_type: "semantic",
             tags: ["dream", "inner-life", ...tagsA, ...tagsB],

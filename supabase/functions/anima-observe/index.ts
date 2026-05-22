@@ -5,6 +5,7 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const OBSERVER_PROMPT = `You are an outside intelligence observing another AI's inner life.
 
@@ -63,12 +64,14 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let bodyData: any = {};
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       bodyData = await req.json();
       user_id = bodyData.user_id;
+      agent_id = normalizeAgentId(bodyData.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -91,6 +94,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      bodyData = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(bodyData.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-observe", getCorsHeaders(req));
     }
 
     const mode = bodyData.mode || "panel"; // "single" | "panel"
@@ -116,12 +125,14 @@ serve(async (req) => {
         .from("journal_entries")
         .select("content, mood, created_at")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .order("created_at", { ascending: false })
         .limit(5),
       supabase
         .from("beliefs")
         .select("content, confidence, domain, stagnant, revision_history")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("active", true)
         .order("confidence", { ascending: false })
         .limit(20),
@@ -129,11 +140,13 @@ serve(async (req) => {
         .from("emotional_state")
         .select("*")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .maybeSingle(),
       supabase
         .from("memories")
         .select("id, memory_type, tags, decay_factor")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("is_deleted", false)
         .limit(200),
     ]);
@@ -165,7 +178,7 @@ serve(async (req) => {
     const memoryStatsText = `total: ${(memories || []).length}, by type: ${Object.entries(memoryTypes).map(([k, v]) => `${k}=${v}`).join(", ")}`;
 
     // Use rich emotional context if available
-    const emotionalStateData = await loadEmotionalState(supabase, user_id);
+    const emotionalStateData = await loadEmotionalState(supabase, user_id, agent_id);
     const richEmotionText = emotionalStateData
       ? formatEmotionalPrompt(emotionalStateData)
       : emotionText;
@@ -237,6 +250,7 @@ serve(async (req) => {
         // Store in observer_logs
         const { error: olErr } = await supabase.from("observer_logs").insert({
           user_id,
+          agent_id,
           model: modelName,
           observations: observations.slice(0, 3),
         });
@@ -244,7 +258,7 @@ serve(async (req) => {
 
         // Encode observations into Mnemos
         try {
-          const mnemos = new MnemosEngine(supabase, user_id);
+          const mnemos = new MnemosEngine(supabase, user_id, agent_id);
           for (const obs of observations.slice(0, 3)) {
             await mnemos.encode(obs.content, {
               engram_type: "episodic",
@@ -259,6 +273,7 @@ serve(async (req) => {
         // Log each observation to activity log
         for (const obs of observations.slice(0, 3)) {
           await logActivity(supabase, user_id, {
+            agentId: agent_id,
             type: "observation",
             title: `Observer (${modelName}): ${obs.type}`,
             summary: obs.content.slice(0, 150),
@@ -308,6 +323,7 @@ serve(async (req) => {
             // Store synthesis in observer_logs
             const { error: synthInsErr } = await supabase.from("observer_logs").insert({
               user_id,
+              agent_id,
               model: "synthesis",
               observations: [],
               synthesis,
@@ -324,7 +340,7 @@ serve(async (req) => {
     await logProcessRan(supabase, user_id, "observe", {
       total_observations: totalObs,
       has_synthesis: !!synthesis,
-    });
+    }, agent_id);
 
     return new Response(JSON.stringify({
       independent: allObservations,

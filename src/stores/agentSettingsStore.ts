@@ -195,9 +195,9 @@ function readFunctionError(data: unknown, fallback: string): string {
   return fallback;
 }
 
-// Sort: Luca first, then Observer, then everyone else alphabetically.
+// Sort: Luca first, then user-created agents alphabetically.
 function sortAgents(a: AgentConfig, b: AgentConfig): number {
-  const rank = (id: string) => (id === 'luca' ? 0 : id === 'observer' ? 1 : 2);
+  const rank = (id: string) => (id === 'luca' ? 0 : 1);
   const ra = rank(a.id);
   const rb = rank(b.id);
   if (ra !== rb) return ra - rb;
@@ -221,11 +221,13 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
     const mcp = mcpRes.status === 'fulfilled' ? (mcpRes.value.data ?? []) : [];
     const secrets = secretsRes.status === 'fulfilled' ? (secretsRes.value.data ?? []) : [];
 
-    const agents = (configs as Array<Record<string, unknown>>).map((row) =>
-      rowToConfig(row, mcp as Array<Record<string, unknown>>, secrets as Array<Record<string, unknown>>),
-    );
+    const agents = (configs as Array<Record<string, unknown>>)
+      .filter((row) => row.id !== 'observer' && row.id !== 'guardian')
+      .map((row) =>
+        rowToConfig(row, mcp as Array<Record<string, unknown>>, secrets as Array<Record<string, unknown>>),
+      );
 
-    // Sort: Luca → Observer → user-created agents (alphabetical)
+    // Sort: Luca → user-created agents (alphabetical). Observer is an alcove sidecar, not an agent setting.
     agents.sort(sortAgents);
 
     set({ agents, loading: false });

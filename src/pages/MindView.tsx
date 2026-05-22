@@ -22,8 +22,6 @@ import { useViewTabStore } from '@/stores/viewTabStore';
 import MindOverview from '@/components/mind/MindOverview';
 import MindStreamShell, { StreamFilter, applyStreamFilter } from '@/components/mind/MindStreamShell';
 
-const MOCK_DOMAINS = ['Working style', 'Aesthetic', 'Communication', 'Process', 'Trust', 'Taste'];
-
 function timeAgoLong(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
@@ -104,13 +102,17 @@ function BeliefsTab() {
   const [filter, setFilter] = useState<StreamFilter>('all');
   const [query, setQuery] = useState('');
 
-  // Beliefs lack created_at in the in-memory shape — synthesize for filter.
-  const enriched = beliefs.map((b, i) => ({
-    ...b,
-    created_at: new Date(Date.now() - i * 86400000).toISOString(),
-  }));
-  const filtered = enriched
-    .filter((b) => filter !== 'salient' || b.strength >= 0.6)
+  const filtered = beliefs
+    .filter((b) => {
+      if (filter === 'today') {
+        const date = b.updated_at || b.created_at;
+        if (!date) return false;
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        return new Date(date) >= start;
+      }
+      if (filter === 'salient') return b.strength >= 0.6;
+      return true;
+    })
     .filter((b) => !query || b.text.toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -127,23 +129,27 @@ function BeliefsTab() {
         <div className="s-empty">No beliefs formed yet.</div>
       ) : (
         <div className="s-belief-list">
-          {filtered.map((b, i) => (
-            <div key={i} className="s-belief">
-              <div className="s-belief-head">
-                <span className="s-belief-domain">{MOCK_DOMAINS[i % MOCK_DOMAINS.length]}{/* MOCK */}</span>
-                <span className="s-belief-conf">{b.strength.toFixed(2)}</span>
-              </div>
-              <p className="s-belief-content">{b.text}</p>
-              <div className="s-belief-foot">
-                <div className="s-belief-bar">
-                  <div className="s-belief-bar-fill" style={{ width: `${Math.round(b.strength * 100)}%` }} />
+          {filtered.map((b) => {
+            const timestamp = b.updated_at || b.created_at;
+            const detail = b.domain || b.confidence_tier || 'belief';
+            return (
+              <div key={b.id || b.text} className="s-belief">
+                <div className="s-belief-head">
+                  <span className="s-belief-domain">{detail}</span>
+                  <span className="s-belief-conf">{b.strength.toFixed(2)}</span>
                 </div>
-                <span className={`s-belief-revised${i === 1 ? ' fresh' : ''}`}>
-                  {i === 1 ? 'revised · today' : `stable · ${[8, 0, 3, 6, 4, 2][i % 6]} weeks`}{/* MOCK */}
-                </span>
+                <p className="s-belief-content">{b.text}</p>
+                <div className="s-belief-foot">
+                  <div className="s-belief-bar">
+                    <div className="s-belief-bar-fill" style={{ width: `${Math.round(b.strength * 100)}%` }} />
+                  </div>
+                  <span className={`s-belief-revised${timestamp && timeAgoLong(timestamp) === 'now' ? ' fresh' : ''}`}>
+                    {timestamp ? `updated · ${timeAgoLong(timestamp)}` : 'current'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </MindStreamShell>
@@ -220,6 +226,7 @@ export default function MindView() {
   const user = useAuthStore((s) => s.user);
   const { load, loadMindData, subscribe, thoughts, dreams, insights, reflections, wanderings } = useCognitiveStore();
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
 
   useEffect(() => {
     if (user) {
@@ -262,7 +269,7 @@ export default function MindView() {
           {activeTab === 'Insights' && (
             <StreamTab items={insights} cfg={{
               num: '04', label: 'INSIGHTS STREAM', title: 'Insights', kindLabel: 'insight',
-              subtitle: (n) => `${n} insights. Patterns Luca crystallized across conversations.`,
+              subtitle: (n) => `${n} insights. Patterns ${activeAgentName} crystallized across conversations.`,
               searchPlaceholder: 'Search insights…',
               empty: 'No insights crystallized yet.',
             }} />

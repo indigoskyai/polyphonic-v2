@@ -10,6 +10,7 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isSubstrateAgentId, normalizeAgentId } from "./agent-scope.ts";
 
 export interface GateResult {
   shouldRun: boolean;
@@ -125,7 +126,17 @@ export async function evaluate(
   supabase: SupabaseClient,
   userId: string,
   processName: string,
+  agentId = "luca",
 ): Promise<GateResult> {
+  const scopedAgentId = normalizeAgentId(agentId);
+  if (!isSubstrateAgentId(scopedAgentId)) {
+    return {
+      shouldRun: false,
+      reason: `${scopedAgentId} is an observer sidecar, not an autonomous substrate agent`,
+      urgency: 0,
+    };
+  }
+
   const config = PROCESS_CONFIGS[processName];
 
   // If no config for this process, always run (ungated processes)
@@ -141,21 +152,22 @@ export async function evaluate(
     // Parallel data fetch — all the signals we need
     const [
       { data: lastRunLog },
-      { data: recentMessages },
-      { data: recentJournals },
-      { data: recentThoughts },
-      { data: thoughts24h },
-      { data: stagnantBeliefs },
-      { data: highSalQuestions },
+      { count: recentMessagesCount },
+      { count: recentJournalsCount },
+      { count: recentThoughtsCount },
+      { count: thoughts24hCount },
+      { count: stagnantBeliefsCount },
+      { count: highSalQuestionsCount },
       { data: emotionalState },
       { data: lastEmotionalHistory },
-      { data: newMemories },
+      { count: newMemoriesCount },
     ] = await Promise.all([
       // Last time this process ran
       supabase
         .from("activity_events")
         .select("created_at")
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .eq("event_type", "process_ran")
         .eq("metadata->>process", processName)
         .order("created_at", { ascending: false })
@@ -163,33 +175,38 @@ export async function evaluate(
         .maybeSingle(),
       // Recent messages
       supabase
-        .from("messages")
+        .from("threads")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .gte("created_at", since2h),
+        .or(`agent_id.eq.${scopedAgentId},primary_agent_id.eq.${scopedAgentId}`)
+        .gte("updated_at", since2h),
       // Recent journals
       supabase
         .from("journal_entries")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .gte("created_at", since2h),
       // Recent thoughts (since last run, or last 2h)
       supabase
         .from("thought_stream")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .gte("created_at", since2h),
       // Thoughts in last 24h (for velocity)
       supabase
         .from("thought_stream")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .gte("created_at", since24h),
       // Stagnant beliefs
       supabase
         .from("beliefs")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .eq("active", true)
         .eq("stagnant", true),
       // High-salience unanswered questions
@@ -197,6 +214,7 @@ export async function evaluate(
         .from("curiosity_questions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .eq("status", "pending")
         .gte("curiosity_score", 0.7),
       // Current emotional state
@@ -204,12 +222,14 @@ export async function evaluate(
         .from("emotional_state")
         .select("curiosity, restlessness, warmth, clarity, creative_flow, isolation")
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .maybeSingle(),
       // Previous emotional history (for delta)
       supabase
         .from("emotional_history")
         .select("state")
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .order("timestamp", { ascending: false })
         .limit(2),
       // New memories since 2h ago
@@ -217,6 +237,7 @@ export async function evaluate(
         .from("memories")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("agent_id", scopedAgentId)
         .eq("is_deleted", false)
         .gte("created_at", since2h),
     ]);
@@ -251,27 +272,28 @@ export async function evaluate(
     // Find most recent message time
     // We need the actual timestamp for msSinceLastMessage
     const { data: lastMsg } = await supabase
-      .from("messages")
-      .select("created_at")
+      .from("threads")
+      .select("updated_at")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false })
+      .or(`agent_id.eq.${scopedAgentId},primary_agent_id.eq.${scopedAgentId}`)
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const msSinceLastMessage = lastMsg?.created_at
-      ? now - new Date(lastMsg.created_at).getTime()
+    const msSinceLastMessage = lastMsg?.updated_at
+      ? now - new Date(lastMsg.updated_at).getTime()
       : Infinity;
 
     // Build signal context
     const ctx: SignalContext = {
-      recentMessageCount: (recentMessages as any)?.length ?? 0,
-      recentJournalCount: (recentJournals as any)?.length ?? 0,
-      recentThoughtCount: (recentThoughts as any)?.length ?? 0,
-      avgThoughtRate24h: ((thoughts24h as any)?.length ?? 0) / 24,
+      recentMessageCount: recentMessagesCount ?? 0,
+      recentJournalCount: recentJournalsCount ?? 0,
+      recentThoughtCount: recentThoughtsCount ?? 0,
+      avgThoughtRate24h: (thoughts24hCount ?? 0) / 24,
       emotionalShift,
-      stagnantBeliefCount: (stagnantBeliefs as any)?.length ?? 0,
-      highSalienceQuestionCount: (highSalQuestions as any)?.length ?? 0,
-      newMemoriesSinceLastRun: (newMemories as any)?.length ?? 0,
+      stagnantBeliefCount: stagnantBeliefsCount ?? 0,
+      highSalienceQuestionCount: highSalQuestionsCount ?? 0,
+      newMemoriesSinceLastRun: newMemoriesCount ?? 0,
       msSinceLastMessage,
       msSinceLastRun,
     };
@@ -316,10 +338,15 @@ export async function logProcessRan(
   userId: string,
   processName: string,
   metadata: Record<string, unknown> = {},
+  agentId = "luca",
 ): Promise<void> {
   try {
+    const scopedAgentId = normalizeAgentId(agentId);
+    if (!isSubstrateAgentId(scopedAgentId)) return;
+
     const { error } = await supabase.from("activity_events").insert({
       user_id: userId,
+      agent_id: scopedAgentId,
       event_type: "process_ran",
       metadata: { process: processName, ...metadata },
     });
@@ -337,10 +364,15 @@ export async function logActivityEvent(
   userId: string,
   eventType: string,
   metadata: Record<string, unknown> = {},
+  agentId = "luca",
 ): Promise<void> {
   try {
+    const scopedAgentId = normalizeAgentId(agentId);
+    if (!isSubstrateAgentId(scopedAgentId)) return;
+
     const { error } = await supabase.from("activity_events").insert({
       user_id: userId,
+      agent_id: scopedAgentId,
       event_type: eventType,
       metadata,
     });

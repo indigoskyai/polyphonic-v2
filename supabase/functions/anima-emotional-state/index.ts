@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const DIMENSIONS = ["curiosity", "restlessness", "warmth", "clarity", "creative_flow", "isolation"] as const;
 
@@ -27,7 +28,7 @@ serve(async (req) => {
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
-      agent_id = typeof body.agent_id === "string" ? body.agent_id : "luca";
+      agent_id = normalizeAgentId(body.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -50,6 +51,10 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-emotional-state", getCorsHeaders(req));
     }
 
     const since48h = new Date(Date.now() - 48 * 3600000).toISOString();

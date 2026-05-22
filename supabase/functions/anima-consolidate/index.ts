@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { logProcessRan } from "../_shared/activity-gate.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const CONSOLIDATION_PROMPT = `You are performing nightly memory consolidation. Review the day's experiences — journals, thoughts, conversations — and determine which deserve to become lasting memories.
 
@@ -40,11 +42,13 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -67,6 +71,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-consolidate", getCorsHeaders(req));
     }
 
     // Get API key
@@ -94,14 +104,14 @@ serve(async (req) => {
       { data: emotionalHistory },
     ] = await Promise.all([
       supabase.from("journal_entries").select("content, mood, created_at")
-        .eq("user_id", user_id).gte("created_at", cutoff)
+        .eq("user_id", user_id).eq("agent_id", agent_id).gte("created_at", cutoff)
         .order("created_at", { ascending: true }),
       supabase.from("thought_stream").select("content, source, salience, created_at")
-        .eq("user_id", user_id).gte("created_at", cutoff)
+        .eq("user_id", user_id).eq("agent_id", agent_id).gte("created_at", cutoff)
         .gt("salience", 0.4)
         .order("created_at", { ascending: true }),
       supabase.from("emotional_history").select("state, timestamp")
-        .eq("user_id", user_id).gte("timestamp", cutoff)
+        .eq("user_id", user_id).eq("agent_id", agent_id).gte("timestamp", cutoff)
         .order("timestamp", { ascending: true }).limit(10),
     ]);
 
@@ -185,6 +195,7 @@ serve(async (req) => {
 
       newCandidates.push({
         user_id,
+        agent_id,
         content,
         memory_type: memoryType,
         confidence: salience,
@@ -209,6 +220,7 @@ serve(async (req) => {
       const { error: thoughtErr } = await supabase.from("thought_stream").insert(
         newCandidates.map((m) => ({
           user_id,
+          agent_id,
           content: `surfaced memory candidate: ${m.content.slice(0, 150)}`,
           source: "consolidation",
           salience: m.confidence,
@@ -221,6 +233,7 @@ serve(async (req) => {
     // Log each surfaced candidate to activity log
     for (const m of newCandidates) {
       await logActivity(supabase, user_id, {
+        agentId: agent_id,
         type: "consolidation",
         title: "Memory candidate surfaced",
         summary: m.content.slice(0, 150),
@@ -232,6 +245,7 @@ serve(async (req) => {
     // Log
     const { error: dlErr } = await supabase.from("daily_logs").insert({
       user_id,
+      agent_id,
       log_type: "nightly_consolidation",
       content: {
         candidates_surfaced: newCandidates.length,
@@ -241,6 +255,12 @@ serve(async (req) => {
       },
     });
     if (dlErr) console.error("[anima-consolidate] daily_logs insert failed:", dlErr);
+
+    await logProcessRan(supabase, user_id, "consolidate", {
+      candidates_surfaced: newCandidates.length,
+      journals_reviewed: (journals || []).length,
+      thoughts_reviewed: (thoughts || []).length,
+    }, agent_id);
 
     return new Response(JSON.stringify({
       candidates_surfaced: newCandidates.length,

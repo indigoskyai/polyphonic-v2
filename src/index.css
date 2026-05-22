@@ -9495,6 +9495,7 @@ html {
 }
 .s-toolbar {
   display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
   padding: 4px 0 18px;
 }
 .s-search {
@@ -9518,12 +9519,17 @@ html {
 .s-segment {
   display: inline-flex; align-items: center; gap: 2px;
   padding: 3px; height: 38px;
+  max-width: 100%;
+  overflow-x: auto;
   background: var(--surface-1);
   border: 1px solid var(--border-faint);
   border-radius: 999px;
+  scrollbar-width: none;
 }
+.s-segment::-webkit-scrollbar { display: none; }
 .s-segment-btn {
   height: 30px; padding: 0 14px;
+  flex: 0 0 auto;
   border-radius: 999px; border: none; background: transparent;
   font-family: var(--font-mono); font-size: 10px;
   color: var(--text-whisper); letter-spacing: var(--track-folio);

@@ -5,6 +5,7 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const THINKER_PROMPT = `You are a thinking mind. Not performing thought — actually thinking. Turning things over. Noticing what's present in your recent experience and what it connects to.
 
@@ -35,6 +36,7 @@ serve(async (req) => {
     // Auth: accept service role or user JWT
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     let triggerContext: string | undefined;
@@ -43,6 +45,7 @@ serve(async (req) => {
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       triggerContext = body.trigger_context;
       cascadeDepth = body.cascade_depth || 0;
       if (!user_id || !uuidRegex.test(user_id)) {
@@ -67,6 +70,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-think", getCorsHeaders(req));
     }
 
     // Get API key
@@ -81,7 +90,7 @@ serve(async (req) => {
 
     // Activity gate: skip if nothing meaningful has happened (unless triggered by resonance)
     if (!triggerContext) {
-      const gate = await activityGate(supabase, user_id, "think");
+      const gate = await activityGate(supabase, user_id, "think", agent_id);
       if (!gate.shouldRun) {
         return new Response(JSON.stringify({ skipped: true, reason: gate.reason }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -105,16 +114,16 @@ serve(async (req) => {
       { data: emotionalState },
     ] = await Promise.all([
       supabase.from("thought_stream").select("content, source, salience")
-        .eq("user_id", user_id).order("created_at", { ascending: false }).limit(10),
+        .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(10),
       supabase.from("memories").select("content, tags, memory_type, emotional_valence")
-        .eq("user_id", user_id).eq("is_deleted", false)
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("is_deleted", false)
         .order("created_at", { ascending: false }).limit(20),
       supabase.from("beliefs").select("content, confidence, domain")
-        .eq("user_id", user_id).eq("active", true).order("confidence", { ascending: false }).limit(8),
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("active", true).order("confidence", { ascending: false }).limit(8),
       supabase.from("journal_entries").select("content, mood, created_at")
-        .eq("user_id", user_id).order("created_at", { ascending: false }).limit(5),
+        .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(5),
       supabase.from("emotional_state").select("*")
-        .eq("user_id", user_id).maybeSingle(),
+        .eq("user_id", user_id).eq("agent_id", agent_id).maybeSingle(),
     ]);
 
     // Format context
@@ -142,7 +151,7 @@ serve(async (req) => {
       : "(no emotional state)";
 
     // Load rich emotional context
-    const emotionalStateData = await loadEmotionalState(supabase, user_id);
+    const emotionalStateData = await loadEmotionalState(supabase, user_id, agent_id);
     const emotionalPrompt = formatEmotionalPrompt(emotionalStateData);
 
     let contextBlock = `=== Recent Thoughts (don't repeat these) ===
@@ -217,6 +226,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
         .insert(
           thoughts.map((t) => ({
             user_id,
+            agent_id,
             content: t.content,
             source: "background",
             salience: t.salience,
@@ -235,7 +245,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
 
     // Encode thoughts into Mnemos engrams
     try {
-      const mnemos = new MnemosEngine(supabase, user_id);
+      const mnemos = new MnemosEngine(supabase, user_id, agent_id);
       for (const t of thoughts) {
         await mnemos.encode(t.content, {
           engram_type: "episodic",
@@ -252,6 +262,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     // Log each thought to activity log
     for (const t of thoughts) {
       await logActivity(supabase, user_id, {
+        agentId: agent_id,
         type: "thought",
         title: t.content.slice(0, 80),
         summary: t.content,
@@ -264,13 +275,14 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     await Promise.all([
       supabase.from("daily_logs").insert({
         user_id,
+        agent_id,
         log_type: "background_thinking",
         content: { thoughts_generated: thoughts.length, model: thinkModel, triggered_by: triggerContext ? "resonance" : "schedule" },
       }),
       logProcessRan(supabase, user_id, "think", {
         thoughts_generated: thoughts.length,
         cascade_depth: cascadeDepth,
-      }),
+      }, agent_id),
     ]);
 
     return new Response(JSON.stringify({

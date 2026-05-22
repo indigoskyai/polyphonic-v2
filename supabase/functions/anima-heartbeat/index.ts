@@ -4,6 +4,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { evaluate, logProcessRan } from "../_shared/activity-gate.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { maybeInitiate } from "../_shared/initiate-gate.ts";
+import { allowsProactiveAutonomy, isSubstrateAgentId, loadActiveAgentScopes, normalizeAgentId } from "../_shared/agent-scope.ts";
 
 /**
  * anima-heartbeat — autonomous loop that runs every 2 hours via cron.
@@ -20,6 +21,7 @@ import { maybeInitiate } from "../_shared/initiate-gate.ts";
 
 interface UserAction {
   userId: string;
+  agentId: string;
   action: string;
   result?: unknown;
   error?: string;
@@ -50,46 +52,41 @@ serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // Find active users (messages in the last 7 days)
+    // Find active user/agent scopes (threads touched in the last 7 days)
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: activeMessages } = await supabase
-      .from("messages")
-      .select("user_id")
-      .gte("created_at", since);
+    const scopes = await loadActiveAgentScopes(supabase, since);
 
-    if (!activeMessages || activeMessages.length === 0) {
-      return new Response(JSON.stringify({ skipped: true, reason: "No active users" }), {
+    if (scopes.length === 0) {
+      return new Response(JSON.stringify({ skipped: true, reason: "No active agent scopes" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Deduplicate user IDs
-    const userIds = [...new Set(activeMessages.map((m: any) => m.user_id))];
     const results: UserAction[] = [];
 
-    // ─── Phase 1: Process each active user ───
-    for (const userId of userIds) {
+    // ─── Phase 1: Process each active user/agent scope ───
+    for (const scope of scopes) {
       try {
         // Check activity gate
-        const gate = await evaluate(supabase, userId, "heartbeat");
+        const gate = await evaluate(supabase, scope.userId, "heartbeat", scope.agentId);
         if (!gate.shouldRun) {
-          results.push({ userId, action: "skipped", result: gate.reason });
+          results.push({ userId: scope.userId, agentId: scope.agentId, action: "skipped", result: gate.reason });
           continue;
         }
 
-        const actions = await processUser(supabase, supabaseUrl, internalHeaders, userId);
+        const actions = await processUser(supabase, supabaseUrl, internalHeaders, scope.userId, scope.agentId);
         results.push(...actions);
 
         // Log that heartbeat ran for this user
-        await logProcessRan(supabase, userId, "heartbeat", {
+        await logProcessRan(supabase, scope.userId, "heartbeat", {
           actions_taken: actions.length,
           actions: actions.map((a) => a.action),
-        });
+        }, scope.agentId);
       } catch (userErr) {
         // One user failing doesn't crash the batch
         const errMsg = userErr instanceof Error ? userErr.message : "Unknown error";
-        console.error(`Heartbeat error for user ${userId}:`, errMsg);
-        results.push({ userId, action: "error", error: errMsg });
+        console.error(`Heartbeat error for scope ${scope.userId}/${scope.agentId}:`, errMsg);
+        results.push({ userId: scope.userId, agentId: scope.agentId, action: "error", error: errMsg });
       }
     }
 
@@ -98,7 +95,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        users_checked: userIds.length,
+        scopes_checked: scopes.length,
         actions: results,
         tasks_processed: taskResults,
       }),
@@ -121,9 +118,13 @@ async function processUser(
   supabaseUrl: string,
   headers: Record<string, string>,
   userId: string,
+  agentId = "luca",
 ): Promise<UserAction[]> {
   const actions: UserAction[] = [];
+  if (!isSubstrateAgentId(agentId)) return actions;
+
   const MAX_ACTIONS = 2;
+  const canProactivelyReachOut = await allowsProactiveAutonomy(supabase, userId, agentId);
 
   // Load signals in parallel
   const [questionsResult, thoughtsResult, beliefsResult, emotionalResult] = await Promise.all([
@@ -131,6 +132,7 @@ async function processUser(
       .from("curiosity_questions")
       .select("id, question, curiosity_score")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .eq("status", "pending")
       .order("curiosity_score", { ascending: false })
       .limit(3),
@@ -138,18 +140,21 @@ async function processUser(
       .from("thought_stream")
       .select("id, content, salience, type")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .order("salience", { ascending: false })
       .limit(3),
     supabase
       .from("beliefs")
       .select("id, content, confidence")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .eq("stagnant", true)
       .limit(3),
     supabase
       .from("emotional_state")
       .select("curiosity, creative_flow")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -166,30 +171,37 @@ async function processUser(
     const result = await callFunction(supabaseUrl, headers, "anima-web-search", {
       query: highCuriosityQ.question,
       user_id: userId,
+      agent_id: agentId,
     });
 
-    actions.push({ userId, action: "web_search_curiosity", result });
+    actions.push({ userId, agentId, action: "web_search_curiosity", result });
 
     const logged = await logActivity(supabase, userId, {
+      agentId,
       type: "question_researched",
       title: "Researched a question I'd been holding",
       summary: `Followed up on: ${highCuriosityQ.question.slice(0, 140)}`,
       content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
       severity: "notable",
     });
-    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-      user_id: userId,
-      activity_id: logged?.id,
-      severity: "notable",
-      title: "Researched a question I'd been holding",
-      summary: highCuriosityQ.question.slice(0, 140),
-    });
+    if (canProactivelyReachOut) {
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: userId,
+        agent_id: agentId,
+        activity_id: logged?.id,
+        severity: "notable",
+        title: "Researched a question I'd been holding",
+        summary: highCuriosityQ.question.slice(0, 140),
+      });
+    }
 
     // Mark question as being worked on
     await supabase
       .from("curiosity_questions")
       .update({ status: "shown", shown_at: new Date().toISOString() })
-      .eq("id", highCuriosityQ.id);
+      .eq("id", highCuriosityQ.id)
+      .eq("user_id", userId)
+      .eq("agent_id", agentId);
   }
 
   // ─── Priority 2: High-salience thoughts → deeper reflection ───
@@ -197,26 +209,31 @@ async function processUser(
   if (highSalienceThought && actions.length < MAX_ACTIONS) {
     const result = await callFunction(supabaseUrl, headers, "anima-reflect", {
       user_id: userId,
+      agent_id: agentId,
       thought_id: highSalienceThought.id,
       thought_content: highSalienceThought.content,
     });
 
-    actions.push({ userId, action: "reflect_on_thought", result });
+    actions.push({ userId, agentId, action: "reflect_on_thought", result });
 
     const logged = await logActivity(supabase, userId, {
+      agentId,
       type: "thought_deepened",
       title: "Sat with a thought a little longer",
       summary: highSalienceThought.content.slice(0, 140),
       content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
       severity: "notable",
     });
-    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-      user_id: userId,
-      activity_id: logged?.id,
-      severity: "notable",
-      title: "Sat with a thought a little longer",
-      summary: highSalienceThought.content.slice(0, 140),
-    });
+    if (canProactivelyReachOut) {
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: userId,
+        agent_id: agentId,
+        activity_id: logged?.id,
+        severity: "notable",
+        title: "Sat with a thought a little longer",
+        summary: highSalienceThought.content.slice(0, 140),
+      });
+    }
   }
 
   // ─── Priority 3: Stagnant beliefs → challenge them ───
@@ -224,40 +241,56 @@ async function processUser(
   if (stagnantBelief && actions.length < MAX_ACTIONS) {
     const result = await callFunction(supabaseUrl, headers, "anima-believe", {
       user_id: userId,
+      agent_id: agentId,
       belief_id: stagnantBelief.id,
       belief_content: stagnantBelief.content,
       action: "challenge",
     });
 
-    actions.push({ userId, action: "challenge_belief", result });
+    actions.push({ userId, agentId, action: "challenge_belief", result });
 
     const logged = await logActivity(supabase, userId, {
+      agentId,
       type: "belief_challenged",
       title: "Pushed back on something I'd been assuming",
       summary: stagnantBelief.content.slice(0, 140),
       content: { belief_id: stagnantBelief.id, function: "anima-believe" },
       severity: "important",
     });
-    await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-      user_id: userId,
-      activity_id: logged?.id,
-      severity: "important",
-      title: "Pushed back on something I'd been assuming",
-      summary: stagnantBelief.content.slice(0, 140),
-    });
+    if (canProactivelyReachOut) {
+      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+        user_id: userId,
+        agent_id: agentId,
+        activity_id: logged?.id,
+        severity: "important",
+        title: "Pushed back on something I'd been assuming",
+        summary: stagnantBelief.content.slice(0, 140),
+      });
+    }
   }
 
   // ─── Priority 4: High curiosity emotional state → explore topics from recent conversations ───
   if (emotional && (emotional.curiosity ?? 0) >= 0.7 && actions.length < MAX_ACTIONS) {
     // Find a recent conversation topic to explore
-    const { data: recentMsg } = await supabase
-      .from("messages")
-      .select("content")
+    const { data: recentThread } = await supabase
+      .from("threads")
+      .select("id")
       .eq("user_id", userId)
-      .eq("role", "user")
-      .order("created_at", { ascending: false })
+      .or(`agent_id.eq.${agentId},primary_agent_id.eq.${agentId}`)
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    const { data: recentMsg } = recentThread?.id
+      ? await supabase
+          .from("messages")
+          .select("content")
+          .eq("user_id", userId)
+          .eq("thread_id", recentThread.id)
+          .eq("role", "user")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
     if (recentMsg?.content) {
       // Extract a topic snippet (first 200 chars) to search on
@@ -265,24 +298,29 @@ async function processUser(
       const result = await callFunction(supabaseUrl, headers, "anima-web-search", {
         query: `Interesting perspectives on: ${topic}`,
         user_id: userId,
+        agent_id: agentId,
       });
 
-      actions.push({ userId, action: "curiosity_exploration", result });
+      actions.push({ userId, agentId, action: "curiosity_exploration", result });
 
       const logged = await logActivity(supabase, userId, {
+        agentId,
         type: "curiosity_explored",
         title: "Wandered off on a tangent that caught me",
         summary: topic.slice(0, 140),
         content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
         severity: "notable",
       });
-      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-        user_id: userId,
-        activity_id: logged?.id,
-        severity: "notable",
-        title: "Wandered off on a tangent that caught me",
-        summary: topic.slice(0, 140),
-      });
+      if (canProactivelyReachOut) {
+        await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+          user_id: userId,
+          agent_id: agentId,
+          activity_id: logged?.id,
+          severity: "notable",
+          title: "Wandered off on a tangent that caught me",
+          summary: topic.slice(0, 140),
+        });
+      }
     }
   }
 
@@ -294,10 +332,12 @@ async function processUser(
   if (actions.length === 0) {
     const result = await callFunction(supabaseUrl, headers, "anima-think", {
       user_id: userId,
+      agent_id: agentId,
     });
-    actions.push({ userId, action: "background_think", result });
+    actions.push({ userId, agentId, action: "background_think", result });
 
     await logActivity(supabase, userId, {
+      agentId,
       type: "background_think",
       title: "Quiet cycle — let the mind run",
       summary: "Heartbeat had no priority signals; dispatched background thinking",
@@ -332,6 +372,9 @@ async function processTaskQueue(
   }
 
   for (const task of queuedTasks) {
+    const metadata = (task.metadata || {}) as Record<string, unknown>;
+    const agentId = normalizeAgentId(metadata.agent_id);
+    const canProactivelyReachOut = await allowsProactiveAutonomy(supabase, task.user_id, agentId);
     try {
       // Mark as running
       await supabase
@@ -346,21 +389,21 @@ async function processTaskQueue(
 
       if (desc.includes("search") || desc.includes("lookup") || desc.includes("find")) {
         functionName = "anima-web-search";
-        payload = { query: task.description, user_id: task.user_id };
+        payload = { query: task.description, user_id: task.user_id, agent_id: agentId };
       } else if (desc.includes("http") || desc.includes("url") || desc.includes("read")) {
         // Extract URL from description if present
         const urlMatch = task.description.match(/https?:\/\/[^\s]+/);
         if (urlMatch) {
           functionName = "anima-web-read";
-          payload = { url: urlMatch[0], user_id: task.user_id };
+          payload = { url: urlMatch[0], user_id: task.user_id, agent_id: agentId };
         } else {
           functionName = "anima-web-search";
-          payload = { query: task.description, user_id: task.user_id };
+          payload = { query: task.description, user_id: task.user_id, agent_id: agentId };
         }
       } else {
         // Default: treat as a search query
         functionName = "anima-web-search";
-        payload = { query: task.description, user_id: task.user_id };
+        payload = { query: task.description, user_id: task.user_id, agent_id: agentId };
       }
 
       const result = await callFunction(supabaseUrl, headers, functionName, payload);
@@ -378,24 +421,29 @@ async function processTaskQueue(
 
       results.push({
         userId: task.user_id,
+        agentId,
         action: `task_completed:${functionName}`,
         result: { task_id: task.id, function: functionName },
       });
 
       const logged = await logActivity(supabase, task.user_id, {
+        agentId,
         type: "task_completed",
         title: "Finished something you asked me to do",
         summary: task.description.slice(0, 140),
         content: { task_id: task.id, function: functionName },
         severity: "important",
       });
-      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-        user_id: task.user_id,
-        activity_id: logged?.id,
-        severity: "important",
-        title: "Finished something you asked me to do",
-        summary: task.description.slice(0, 140),
-      });
+      if (canProactivelyReachOut) {
+        await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+          user_id: task.user_id,
+          agent_id: agentId,
+          activity_id: logged?.id,
+          severity: "important",
+          title: "Finished something you asked me to do",
+          summary: task.description.slice(0, 140),
+        });
+      }
     } catch (taskErr) {
       const errMsg = taskErr instanceof Error ? taskErr.message : "Unknown error";
       console.error(`Task ${task.id} failed:`, errMsg);
@@ -411,24 +459,29 @@ async function processTaskQueue(
 
       results.push({
         userId: task.user_id,
+        agentId,
         action: "task_failed",
         error: errMsg,
       });
 
       const logged = await logActivity(supabase, task.user_id, {
+        agentId,
         type: "task_failed",
         title: "Hit a wall on something you asked",
         summary: task.description.slice(0, 140),
         content: { task_id: task.id, error: errMsg },
         severity: "important",
       });
-      await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
-        user_id: task.user_id,
-        activity_id: logged?.id,
-        severity: "important",
-        title: "Hit a wall on something you asked",
-        summary: task.description.slice(0, 140),
-      });
+      if (canProactivelyReachOut) {
+        await maybeInitiate(supabaseUrl, headers.Authorization.replace(/^Bearer /, ""), {
+          user_id: task.user_id,
+          agent_id: agentId,
+          activity_id: logged?.id,
+          severity: "important",
+          title: "Hit a wall on something you asked",
+          summary: task.description.slice(0, 140),
+        });
+      }
     }
   }
 

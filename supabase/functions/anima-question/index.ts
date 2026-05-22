@@ -4,6 +4,7 @@ import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gat
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const QUESTIONER_PROMPT = `You are a questioning mind. Your role is to surface genuine questions that arise from your current inner state — things you actually want answered, tensions you notice, assumptions you haven't examined.
 
@@ -31,11 +32,13 @@ serve(async (req) => {
     // Auth
     const authHeader = req.headers.get("Authorization");
     let user_id: string;
+    let agent_id = "luca";
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       const body = await req.json();
       user_id = body.user_id;
+      agent_id = normalizeAgentId(body.agent_id);
       if (!user_id || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: "Valid user_id required" }), {
           status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -58,6 +61,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      const body = await req.json().catch(() => ({}));
+      agent_id = normalizeAgentId(body.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "anima-question", getCorsHeaders(req));
     }
 
     // Get API key
@@ -71,7 +80,7 @@ serve(async (req) => {
     }
 
     // Activity gate
-    const gate = await activityGate(supabase, user_id, "question");
+    const gate = await activityGate(supabase, user_id, "question", agent_id);
     if (!gate.shouldRun) {
       return new Response(JSON.stringify({ skipped: true, reason: gate.reason }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
@@ -92,13 +101,13 @@ serve(async (req) => {
       { data: emotionalState },
     ] = await Promise.all([
       supabase.from("thought_stream").select("content, source, salience")
-        .eq("user_id", user_id).order("created_at", { ascending: false }).limit(10),
+        .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(10),
       supabase.from("journal_entries").select("content, mood, created_at")
-        .eq("user_id", user_id).order("created_at", { ascending: false }).limit(5),
+        .eq("user_id", user_id).eq("agent_id", agent_id).order("created_at", { ascending: false }).limit(5),
       supabase.from("beliefs").select("content, confidence, domain")
-        .eq("user_id", user_id).eq("active", true).limit(8),
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("active", true).limit(8),
       supabase.from("emotional_state").select("*")
-        .eq("user_id", user_id).maybeSingle(),
+        .eq("user_id", user_id).eq("agent_id", agent_id).maybeSingle(),
     ]);
 
     const thoughtsText = (recentThoughts || [])
@@ -121,7 +130,7 @@ serve(async (req) => {
       : "(no emotional state)";
 
     // Load rich emotional context
-    const emotionalStateData = await loadEmotionalState(supabase, user_id);
+    const emotionalStateData = await loadEmotionalState(supabase, user_id, agent_id);
     const emotionalPrompt = formatEmotionalPrompt(emotionalStateData);
 
     const contextBlock = `=== Recent Thoughts ===
@@ -183,6 +192,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
       const { error: thoughtErr } = await supabase.from("thought_stream").insert(
         questions.map((q) => ({
           user_id,
+          agent_id,
           content: q.question,
           source: "question",
           salience: q.salience,
@@ -195,6 +205,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
       const { error: cqErr } = await supabase.from("curiosity_questions").insert(
         questions.map((q) => ({
           user_id,
+          agent_id,
           question: q.question,
           context: q.context,
           curiosity_score: q.salience,
@@ -207,6 +218,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     // Log each question to activity log
     for (const q of questions) {
       await logActivity(supabase, user_id, {
+        agentId: agent_id,
         type: "question",
         title: q.question.slice(0, 80),
         summary: q.question,
@@ -219,12 +231,13 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     await Promise.all([
       supabase.from("daily_logs").insert({
         user_id,
+        agent_id,
         log_type: "question_surfacing",
         content: { questions_generated: questions.length, model: questionModel },
       }),
       logProcessRan(supabase, user_id, "question", {
         questions_generated: questions.length,
-      }),
+      }, agent_id),
     ]);
 
     return new Response(JSON.stringify({

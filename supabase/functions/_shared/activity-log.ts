@@ -10,6 +10,7 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isSubstrateAgentId, normalizeAgentId } from "./agent-scope.ts";
 
 export type ActivitySeverity = "info" | "notable" | "important";
 
@@ -33,13 +34,16 @@ export async function logActivity(
   entry: ActivityEntry,
 ): Promise<{ id: string } | null> {
   try {
+    const agentId = normalizeAgentId(entry.agentId);
+    if (!isSubstrateAgentId(agentId)) return null;
+
     const severity: ActivitySeverity = entry.severity ?? "info";
     const surface = entry.surfaceToUser ?? severity !== "info";
     const { data, error } = await supabase
       .from("entity_activity_log")
       .insert({
         user_id: userId,
-        agent_id: entry.agentId || "luca",
+        agent_id: agentId,
         activity_type: entry.type,
         title: entry.title ?? null,
         summary: entry.summary ?? null,

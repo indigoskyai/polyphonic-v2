@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
+import { isSubstrateAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -33,9 +34,9 @@ serve(async (req) => {
 
     // Deduplicate user/agent scopes
     const scopes = [...new Map(activeConvos.map((c: any) => {
-      const agentId = c.agent_id || c.primary_agent_id || "luca";
+      const agentId = resolveScopeAgentId(c);
       return [`${c.user_id}:${agentId}`, { userId: c.user_id, agentId }];
-    })).values()];
+    })).values()].filter((scope: any) => isSubstrateAgentId(scope.agentId));
 
     // For each user, check they don't already have a recent periodic entry (last 3 hours)
     const recentCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
