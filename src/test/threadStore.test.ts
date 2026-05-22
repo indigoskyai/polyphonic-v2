@@ -27,7 +27,13 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { dedupeThreadsById, mergeRealtimeMessage, useThreadStore } from '@/stores/threadStore';
+import {
+  dedupeMessagesForDisplay,
+  dedupeThreadsById,
+  mergeRealtimeMessage,
+  type Message,
+  useThreadStore,
+} from '@/stores/threadStore';
 
 const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState>['threads'][number]> = {}) => ({
   id: 'thread-1',
@@ -92,6 +98,47 @@ describe('threadStore.createThread project scoping', () => {
       agent_id: 'luca',
       project_id: 'project-1',
     });
+  });
+});
+
+describe('threadStore message display helpers', () => {
+  it('collapses persisted duplicate assistant rows from delayed replay paths', () => {
+    const first: Message = {
+      id: 'assistant-1',
+      thread_id: 't1',
+      user_id: 'u1',
+      role: 'assistant',
+      content: 'Hello. The records are open.',
+      model: null,
+      agent: 'lyra',
+      thinking_content: null,
+      tokens_used: null,
+      bookmarked: false,
+      created_at: '2026-05-22T20:56:00.000Z',
+      kind: 'text',
+    };
+    const duplicate: Message = {
+      ...first,
+      id: 'assistant-2',
+      created_at: '2026-05-22T20:58:00.000Z',
+    };
+    const userRepeat: Message = {
+      ...first,
+      id: 'user-1',
+      role: 'user',
+      agent: null,
+      content: 'hello again',
+      created_at: '2026-05-22T20:59:00.000Z',
+    };
+    const intentionalUserRepeat: Message = {
+      ...userRepeat,
+      id: 'user-2',
+      created_at: '2026-05-22T20:59:05.000Z',
+    };
+
+    const deduped = dedupeMessagesForDisplay([first, duplicate, userRepeat, intentionalUserRepeat]);
+
+    expect(deduped.map((m) => m.id)).toEqual(['assistant-1', 'user-1', 'user-2']);
   });
 });
 

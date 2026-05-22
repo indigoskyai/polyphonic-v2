@@ -79,6 +79,11 @@ const STREAM_STUB_DEDUPE_WINDOW_MS = 240_000;
 const isLocalStreamStub = (message: Pick<Message, 'metadata'>) =>
   message.metadata?.local_stream_stub === true;
 
+const messageTime = (message: Pick<Message, 'created_at'>) => {
+  const parsed = new Date(message.created_at).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const dedupeThreadsById = (threads: Thread[]): Thread[] => {
   const seen = new Set<string>();
   return threads.filter((thread) => {
@@ -86,6 +91,32 @@ export const dedupeThreadsById = (threads: Thread[]): Thread[] => {
     seen.add(thread.id);
     return true;
   });
+};
+
+export const dedupeMessagesForDisplay = (messages: Message[]): Message[] => {
+  const seenIds = new Set<string>();
+  const out: Message[] = [];
+
+  for (const row of messages) {
+    if (!row?.id || seenIds.has(row.id)) continue;
+    seenIds.add(row.id);
+
+    const rowTime = messageTime(row);
+    const duplicateIndex = out.findIndex((existing) => {
+      if (existing.role !== row.role) return false;
+      if ((existing.agent ?? null) !== (row.agent ?? null)) return false;
+      if ((existing.kind ?? null) !== (row.kind ?? null)) return false;
+      if (normContent(existing.content) !== normContent(row.content)) return false;
+
+      const age = Math.abs(rowTime - messageTime(existing));
+      return row.role === 'assistant' && age <= CONTENT_DEDUPE_WINDOW_MS;
+    });
+
+    if (duplicateIndex >= 0) continue;
+    out.push(row);
+  }
+
+  return out;
 };
 
 export const mergeRealtimeMessage = (existing: Message[], row: Message): Message[] => {
@@ -151,7 +182,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       .eq('thread_id', threadId)
       .or('agent.is.null,and(agent.neq.guardian,agent.neq.observer)')
       .order('created_at', { ascending: true });
-    if (data) set({ messages: data as Message[] });
+    if (data) set({ messages: dedupeMessagesForDisplay(data as Message[]) });
   },
 
   // Realtime subscribe for inserts on the current thread. Catches messages

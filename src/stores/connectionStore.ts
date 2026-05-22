@@ -19,6 +19,8 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface ConnectionState {
   connected: boolean;
+  /** Delayed visibility avoids flashing the warning for transient reconnects. */
+  visible: boolean;
   /** Last channel status that triggered a disconnect, surfaced in the banner. */
   reason: string | null;
   setConnected: (v: boolean) => void;
@@ -29,6 +31,14 @@ interface ConnectionState {
 let currentChannel: RealtimeChannel | null = null;
 let closed = false;
 let subscribers = 0;
+let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearVisibilityTimer() {
+  if (visibilityTimer) {
+    clearTimeout(visibilityTimer);
+    visibilityTimer = null;
+  }
+}
 
 function tearDown() {
   if (currentChannel) {
@@ -41,6 +51,19 @@ function tearDown() {
   }
 }
 
+function markConnected(set: (partial: Partial<ConnectionState>) => void) {
+  clearVisibilityTimer();
+  set({ connected: true, visible: false, reason: null });
+}
+
+function markDisconnected(set: (partial: Partial<ConnectionState>) => void, reason: string) {
+  clearVisibilityTimer();
+  set({ connected: false, visible: false, reason });
+  visibilityTimer = setTimeout(() => {
+    if (!closed) set({ connected: false, visible: true, reason });
+  }, 3500);
+}
+
 function openChannel(set: (partial: Partial<ConnectionState>) => void) {
   tearDown();
   const channel = supabase
@@ -48,16 +71,16 @@ function openChannel(set: (partial: Partial<ConnectionState>) => void) {
     .subscribe((status) => {
       if (closed) return;
       if (status === 'SUBSCRIBED') {
-        set({ connected: true, reason: null });
+        markConnected(set);
       } else if (status === 'CHANNEL_ERROR') {
         console.warn('[connectionStore] realtime channel status', status);
-        set({ connected: false, reason: 'Channel error — check your connection or the server.' });
+        markDisconnected(set, 'Channel error. Retrying realtime updates.');
       } else if (status === 'TIMED_OUT') {
         console.warn('[connectionStore] realtime channel status', status);
-        set({ connected: false, reason: 'Connection timed out — server did not respond.' });
+        markDisconnected(set, 'Server did not respond before the realtime timeout.');
       } else if (status === 'CLOSED') {
         console.warn('[connectionStore] realtime channel status', status);
-        set({ connected: false, reason: 'Connection closed.' });
+        markDisconnected(set, 'Realtime channel closed. Trying to reconnect.');
       }
     });
   currentChannel = channel;
@@ -65,9 +88,16 @@ function openChannel(set: (partial: Partial<ConnectionState>) => void) {
 
 export const useConnectionStore = create<ConnectionState>((set) => ({
   connected: true,
+  visible: false,
   reason: null,
 
-  setConnected: (v) => set({ connected: v }),
+  setConnected: (v) => {
+    if (v) {
+      markConnected(set);
+    } else {
+      markDisconnected(set, 'Realtime connection interrupted.');
+    }
+  },
 
   subscribe: () => {
     subscribers += 1;
@@ -79,6 +109,7 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       subscribers = Math.max(0, subscribers - 1);
       if (subscribers === 0) {
         closed = true;
+        clearVisibilityTimer();
         tearDown();
       }
     };
@@ -98,10 +129,15 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       // 3. Re-subscribe. The subscribe callback will flip `connected` to
       //    true once we get `SUBSCRIBED`, or update `reason` on failure.
       closed = false;
+      set({ connected: false, visible: true, reason: 'Trying a fresh realtime connection.' });
       openChannel(set);
     } catch (err) {
       console.warn('[connectionStore] retry failed', err);
-      set({ reason: err instanceof Error ? err.message : 'Retry failed — see browser console.' });
+      set({
+        connected: false,
+        visible: true,
+        reason: err instanceof Error ? err.message : 'Retry failed. See browser console.',
+      });
     }
   },
 }));

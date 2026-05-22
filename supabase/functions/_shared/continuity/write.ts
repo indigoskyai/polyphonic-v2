@@ -202,6 +202,38 @@ export async function encodeMnemosExchange(
   );
 }
 
+function normalizeTurnContent(content: string | undefined | null): string {
+  return (content || "").trim().replace(/\s+/g, " ");
+}
+
+export function stripCurrentTurnFromRecentTurns(
+  turns: Array<{ role: string; content: string }> = [],
+  userMessage: string,
+  agentResponse: string,
+): Array<{ role: string; content: string }> {
+  const filtered = turns.filter((t) => t && (t.role === "user" || t.role === "assistant"));
+  const next = filtered.slice();
+  const userNorm = normalizeTurnContent(userMessage);
+  const responseNorm = normalizeTurnContent(agentResponse);
+
+  const trimTrailing = (role: "user" | "assistant", contentNorm: string) => {
+    if (!contentNorm || next.length === 0) return;
+    const tail = next[next.length - 1];
+    if (tail.role === role && normalizeTurnContent(tail.content) === contentNorm) {
+      next.pop();
+    }
+  };
+
+  // Some callers pass history that already includes the live turn. Remove only
+  // trailing exact matches so a legitimate earlier "yes" or repeated answer
+  // remains available as context.
+  trimTrailing("assistant", responseNorm);
+  trimTrailing("user", userNorm);
+  trimTrailing("assistant", responseNorm);
+
+  return next.slice(-6);
+}
+
 export function buildHypomnemaGatePayload(opts: ContinuityWriteOptions): Record<string, unknown> {
   const agentId = opts.agentId || "luca";
   const chainTargets: Array<Record<string, unknown>> = [
@@ -232,9 +264,11 @@ export function buildHypomnemaGatePayload(opts: ContinuityWriteOptions): Record<
     user_id: opts.userId,
     user_message: opts.userMessage,
     agent_response: opts.agentResponse,
-    recent_turns: (opts.recentTurns || [])
-      .filter((t) => t && (t.role === "user" || t.role === "assistant"))
-      .slice(-6),
+    recent_turns: stripCurrentTurnFromRecentTurns(
+      opts.recentTurns || [],
+      opts.userMessage,
+      opts.agentResponse,
+    ),
     chain_write: chainTargets,
   };
 }

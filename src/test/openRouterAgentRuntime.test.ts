@@ -84,4 +84,16 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(runtime).toContain('formatToolResultTrace');
     expect(runtime).toContain('thinking_content: persistedThinking');
   });
+
+  it('guards assistant persistence against delayed duplicate replay', () => {
+    const chatMulti = readRepoFile('supabase/functions/chat-multi/index.ts');
+    const legacyChat = readRepoFile('supabase/functions/chat/index.ts');
+    const runtime = readRepoFile('supabase/functions/_shared/agent-runtime/openrouter-agent.ts');
+
+    for (const source of [chatMulti, legacyChat, runtime]) {
+      expect(source).toContain('ASSISTANT_DUPLICATE_WINDOW_MS = 240_000');
+      expect(source).toContain('findRecentDuplicateAssistantMessage');
+      expect(source).toContain('skipped duplicate assistant insert');
+    }
+  });
 });

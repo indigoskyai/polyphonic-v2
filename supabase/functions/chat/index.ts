@@ -29,6 +29,44 @@ function resolveThreadAgentId(thread: { agent_id?: unknown; primary_agent_id?: u
   return active || primary || "luca";
 }
 
+const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
+
+function normalizeAssistantContentForDuplicate(content: string): string {
+  return (content || "").trim().replace(/\s+/g, " ");
+}
+
+async function findRecentDuplicateAssistantMessage(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  threadId: string,
+  agentId: string,
+  content: string,
+): Promise<string | null> {
+  const normalized = normalizeAssistantContentForDuplicate(content);
+  if (!normalized) return null;
+
+  const since = new Date(Date.now() - ASSISTANT_DUPLICATE_WINDOW_MS).toISOString();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, content, created_at")
+    .eq("thread_id", threadId)
+    .eq("role", "assistant")
+    .eq("agent", agentId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    console.warn("[chat] duplicate assistant lookup failed:", error);
+    return null;
+  }
+
+  const duplicate = (data || []).find((row: { id?: string; content?: string | null }) =>
+    row.id && normalizeAssistantContentForDuplicate(row.content || "") === normalized
+  );
+  return duplicate?.id ?? null;
+}
+
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
@@ -359,19 +397,28 @@ serve(async (req) => {
             return;
           }
 
-          // Save assistant message to DB
-          const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
-            thread_id,
-            user_id: userId,
-            role: "assistant",
-            content: fullContent,
-            model: usedModel,
-            agent: agentId,
-            thinking_content: fullThinking || null,
-            tokens_used: tokensUsed,
-          }).select("id").single();
-          if (insertError) {
-            throw new Error(`Failed to save assistant message: ${insertError.message}`);
+          // Save assistant message to DB, unless a retry/replay already saved
+          // the exact same assistant turn in the duplicate window.
+          let insertedMessage: { id: string | null } | null = null;
+          const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, thread_id, agentId, fullContent);
+          if (duplicateMessageId) {
+            console.warn("[chat] skipped duplicate assistant insert", { thread_id, agentId, duplicateMessageId });
+            insertedMessage = { id: duplicateMessageId };
+          } else {
+            const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+              thread_id,
+              user_id: userId,
+              role: "assistant",
+              content: fullContent,
+              model: usedModel,
+              agent: agentId,
+              thinking_content: fullThinking || null,
+              tokens_used: tokensUsed,
+            }).select("id").single();
+            if (insertError) {
+              throw new Error(`Failed to save assistant message: ${insertError.message}`);
+            }
+            insertedMessage = inserted;
           }
 
           // Update thread timestamp

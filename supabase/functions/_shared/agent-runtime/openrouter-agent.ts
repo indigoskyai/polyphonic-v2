@@ -50,6 +50,7 @@ interface RuntimeToolResult {
 
 const DEFAULT_MAX_AGENT_STEPS = 5;
 const DEFAULT_MAX_AGENT_COST_USD = 0.35;
+const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
 const FORGE_MODELS = [
   "anthropic/claude-opus-4-7",
   "anthropic/claude-sonnet-4.6",
@@ -68,6 +69,41 @@ const FORGE_MODELS = [
   "moonshotai/kimi-k2.5",
 ] as const;
 const FORGE_AVATAR_COLORS = ["cream", "ochre", "blue", "magenta", "sage", "violet"] as const;
+
+function normalizeAssistantContentForDuplicate(content: string): string {
+  return (content || "").trim().replace(/\s+/g, " ");
+}
+
+async function findRecentDuplicateAssistantMessage(
+  supabase: SupabaseLike,
+  threadId: string,
+  agentId: string,
+  content: string,
+): Promise<string | null> {
+  const normalized = normalizeAssistantContentForDuplicate(content);
+  if (!normalized) return null;
+
+  const since = new Date(Date.now() - ASSISTANT_DUPLICATE_WINDOW_MS).toISOString();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, content, created_at")
+    .eq("thread_id", threadId)
+    .eq("role", "assistant")
+    .eq("agent", agentId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    console.warn("[openrouter-agent-runtime] duplicate assistant lookup failed:", error);
+    return null;
+  }
+
+  const duplicate = (data || []).find((row: { id?: string; content?: string | null }) =>
+    row.id && normalizeAssistantContentForDuplicate(row.content || "") === normalized
+  );
+  return duplicate?.id ?? null;
+}
 
 export function isOpenRouterAgentRuntimeEnabled(userId?: string | null): boolean {
   const enabled = (Deno.env.get("OPENROUTER_AGENT_SDK_ENABLED") || "").toLowerCase() === "true";
@@ -281,22 +317,39 @@ async function runOpenRouterAgentSdkTurn(
   const agentTraceBlock = agentTrace.length > 0 ? `— Agent activity —\n${agentTrace.join("\n")}` : "";
   const persistedThinking = [agentTraceBlock, fullThinking].filter(Boolean).join("\n\n") || null;
 
-  const { data: insertedMessage, error: insertError } = await options.supabase.from("messages").insert({
-    thread_id: options.threadId,
-    user_id: options.userId,
-    role: "assistant",
-    content: finalContent,
-    model: usedModel,
-    agent: options.agentId,
-    thinking_content: persistedThinking,
-    tokens_used: tokensUsed,
-    metadata: {
-      runtime: "openrouter_agent_sdk",
-      tool_call_count: toolCalls.size,
-    },
-  }).select("id").single();
-  if (insertError) {
-    throw new Error(`Failed to save assistant message: ${insertError.message}`);
+  let insertedMessage: { id: string | null } | null = null;
+  const duplicateMessageId = await findRecentDuplicateAssistantMessage(
+    options.supabase,
+    options.threadId,
+    options.agentId,
+    finalContent,
+  );
+  if (duplicateMessageId) {
+    console.warn("[openrouter-agent-runtime] skipped duplicate assistant insert", {
+      threadId: options.threadId,
+      agentId: options.agentId,
+      duplicateMessageId,
+    });
+    insertedMessage = { id: duplicateMessageId };
+  } else {
+    const { data: inserted, error: insertError } = await options.supabase.from("messages").insert({
+      thread_id: options.threadId,
+      user_id: options.userId,
+      role: "assistant",
+      content: finalContent,
+      model: usedModel,
+      agent: options.agentId,
+      thinking_content: persistedThinking,
+      tokens_used: tokensUsed,
+      metadata: {
+        runtime: "openrouter_agent_sdk",
+        tool_call_count: toolCalls.size,
+      },
+    }).select("id").single();
+    if (insertError) {
+      throw new Error(`Failed to save assistant message: ${insertError.message}`);
+    }
+    insertedMessage = inserted;
   }
 
   await options.supabase

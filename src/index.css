@@ -834,6 +834,7 @@ html {
 
 .app-main {
   max-width: 100%;
+  position: relative;
 }
 
 .route-transition-stage {
@@ -5814,21 +5815,29 @@ html {
 
 /* Connection banner */
 .conn-banner {
-  padding: 10px 32px;
-  background: rgba(248, 113, 113, 0.04);
-  border-bottom: 1px solid rgba(248, 113, 113, 0.12);
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 90;
+  width: min(420px, calc(100% - 32px));
+  padding: 9px 10px;
+  background: rgba(18, 18, 20, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   font-size: 12px;
-  color: rgba(248, 113, 113, 0.8);
+  color: rgba(235, 235, 229, 0.8);
   font-family: var(--font-mono);
 }
 .conn-banner-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--red-accent);
+  background: rgba(224, 181, 119, 0.95);
   animation: conn-pulse 1.5s ease-in-out infinite;
   flex: 0 0 auto;
 }
@@ -5845,18 +5854,19 @@ html {
 }
 .conn-banner-headline {
   font-size: 12px;
+  color: rgba(247, 247, 242, 0.9);
 }
 .conn-banner-reason {
   font-size: 11px;
-  color: rgba(248, 113, 113, 0.55);
+  color: rgba(235, 235, 229, 0.52);
   letter-spacing: 0.01em;
 }
 .conn-banner-action {
   margin-left: auto;
   font-size: 11px;
-  color: rgba(248, 113, 113, 0.6);
+  color: rgba(235, 235, 229, 0.62);
   text-decoration: underline;
-  text-decoration-color: rgba(248, 113, 113, 0.2);
+  text-decoration-color: rgba(235, 235, 229, 0.18);
   text-underline-offset: 3px;
   background: none;
   border: none;
@@ -5864,8 +5874,8 @@ html {
   transition: color var(--dur-fast) var(--ease-out);
 }
 .conn-banner-action:hover {
-  color: var(--red-accent);
-  text-decoration-color: rgba(248, 113, 113, 0.5);
+  color: rgba(247, 247, 242, 0.92);
+  text-decoration-color: rgba(235, 235, 229, 0.42);
 }
 .conn-disabled-region {
   opacity: 0.5;

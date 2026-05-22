@@ -1886,6 +1886,44 @@ interface AggregateEntry {
   rankings_count: number;
 }
 
+const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
+
+function normalizeAssistantContentForDuplicate(content: string): string {
+  return (content || "").trim().replace(/\s+/g, " ");
+}
+
+async function findRecentDuplicateAssistantMessage(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  threadId: string,
+  agentId: string,
+  content: string,
+): Promise<string | null> {
+  const normalized = normalizeAssistantContentForDuplicate(content);
+  if (!normalized) return null;
+
+  const since = new Date(Date.now() - ASSISTANT_DUPLICATE_WINDOW_MS).toISOString();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, content, created_at")
+    .eq("thread_id", threadId)
+    .eq("role", "assistant")
+    .eq("agent", agentId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    console.warn("[chat-multi] duplicate assistant lookup failed:", error);
+    return null;
+  }
+
+  const duplicate = (data || []).find((row: { id?: string; content?: string | null }) =>
+    row.id && normalizeAssistantContentForDuplicate(row.content || "") === normalized
+  );
+  return duplicate?.id ?? null;
+}
+
 /** Compute average position for each model across all judges. Lower = better. */
 function aggregateRankings(
   rankings: Array<{ parsed_ranking: string[] }>,
@@ -2028,6 +2066,12 @@ async function saveAssistantMessage(
   if (citations.length > 0) {
     const base = (metadata && typeof metadata === "object") ? metadata : {};
     metadata = { ...base, citations, ...(searchQuery ? { search_query: searchQuery } : {}) };
+  }
+
+  const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, agentId, content);
+  if (duplicateMessageId) {
+    console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId, duplicateMessageId });
+    return duplicateMessageId;
   }
 
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
@@ -2290,15 +2334,23 @@ async function singleModelStream(
         const streamMetadata = streamCitations.length > 0
           ? { citations: streamCitations, ...(streamQuery ? { search_query: streamQuery } : {}) }
           : null;
-        const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
-          thread_id: threadId, user_id: userId, role: "assistant",
-          content: fullContent, model: usedModel, agent: agentId,
-          thinking_content: fullThinking || null, tokens_used: tokensUsed,
-          ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
-          ...(streamMetadata ? { metadata: streamMetadata } : {}),
-        }).select("id").single();
-        if (insertError) {
-          throw new Error(`Failed to save assistant message: ${insertError.message}`);
+        let insertedMessage: { id: string | null } | null = null;
+        const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, agentId, fullContent);
+        if (duplicateMessageId) {
+          console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId, duplicateMessageId });
+          insertedMessage = { id: duplicateMessageId };
+        } else {
+          const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+            thread_id: threadId, user_id: userId, role: "assistant",
+            content: fullContent, model: usedModel, agent: agentId,
+            thinking_content: fullThinking || null, tokens_used: tokensUsed,
+            ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
+            ...(streamMetadata ? { metadata: streamMetadata } : {}),
+          }).select("id").single();
+          if (insertError) {
+            throw new Error(`Failed to save assistant message: ${insertError.message}`);
+          }
+          insertedMessage = inserted;
         }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});

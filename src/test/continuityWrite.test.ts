@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHypomnemaGatePayload,
   queueContinuityTurnWrites,
+  stripCurrentTurnFromRecentTurns,
   type ContinuityWriteDeps,
 } from '../../supabase/functions/_shared/continuity/write';
 
@@ -48,6 +49,27 @@ describe('Continuity Kernel write path', () => {
     ]);
   });
 
+  it('removes only the live turn from hypomnema recent turns', () => {
+    expect(stripCurrentTurnFromRecentTurns([
+      { role: 'user', content: 'yes' },
+      { role: 'assistant', content: 'previous reply' },
+      { role: 'user', content: 'hello again' },
+      { role: 'assistant', content: 'Hello. The records are open.' },
+    ], 'hello again', 'Hello. The records are open.')).toEqual([
+      { role: 'user', content: 'yes' },
+      { role: 'assistant', content: 'previous reply' },
+    ]);
+
+    expect(stripCurrentTurnFromRecentTurns([
+      { role: 'user', content: 'hello again' },
+      { role: 'assistant', content: 'older matching response' },
+      { role: 'user', content: 'hello again' },
+    ], 'hello again', 'different current answer')).toEqual([
+      { role: 'user', content: 'hello again' },
+      { role: 'assistant', content: 'older matching response' },
+    ]);
+  });
+
   it('queues all post-turn memory operations through the same reportable path', () => {
     const fetchCalls: Array<{ url: string; body: any; auth: string }> = [];
     const finalized: string[] = [];
@@ -71,7 +93,7 @@ describe('Continuity Kernel write path', () => {
       finalizePendingRevisions: async (_supabase, _apiKey, revisions) => {
         finalized.push(...revisions.map((r) => r.id));
       },
-      encodeMnemosExchange: async (_supabase, _userId, userMessage) => {
+      encodeMnemosExchange: async (_supabase, _userId, _agentId, userMessage) => {
         encoded.push(userMessage);
       },
       updateThreadAgentMetadata: async (_supabase, _threadId, primary, participants) => {
