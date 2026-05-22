@@ -199,6 +199,38 @@ function looksLikeAgentForgeRequest(text: string): boolean {
   return asksToMake && mentionsAgent;
 }
 
+function looksLikeForgeApprovalFollowup(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || normalized.length > 120) return false;
+  return /^(approved|approve|yes|yep|yeah|yup|okay|ok|looks good|go ahead|do it|build it|create it|make it|save it|ship it|confirmed|confirm|accepted|accept)$/.test(normalized);
+}
+
+function looksLikeRawForgeToolLeak(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes("forge_agent(") ||
+    /["']name["']\s*:\s*["']forge_agent["']/.test(normalized) ||
+    /\\["']name\\["']\s*:\s*\\["']forge_agent\\["']/.test(normalized) ||
+    normalized.includes("tool_calls") && normalized.includes("forge_agent")
+  );
+}
+
+type RecentForgeProposal = {
+  id: string;
+  status: string;
+  action: "create" | "update";
+  name: string;
+  createdAgentId: string | null;
+  targetAgentId: string | null;
+};
+
+const RAW_FORGE_TOOL_LEAK_MESSAGE =
+  "I tried to route this through Forge, but the internal tool call started to surface as chat text. Please try again; I should show a Forge proposal card, not a forge_agent text block.";
+
 // Council (LLM-Council pattern, single judge variant) — see plan
 // /Users/rileycoyote/.claude/plans/ethereal-orbiting-sparkle.md
 const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4.5";
@@ -399,6 +431,78 @@ serve(async (req) => {
     const forceForgeRequest = agentIsSystemLuca && looksLikeAgentForgeRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
 
+    if (agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
+      const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
+      if (recentForgeProposal) {
+        let ackMessage = "";
+        let ackOk = true;
+        let createdAgentId = recentForgeProposal.createdAgentId || recentForgeProposal.targetAgentId;
+        let forgeStatus = recentForgeProposal.status;
+        let errorDetail: string | null = null;
+
+        if (recentForgeProposal.status === "pending") {
+          const commit = await commitForgeProposalFromChat(userId, recentForgeProposal.id);
+          if (commit.ok) {
+            createdAgentId = commit.createdAgentId || createdAgentId;
+            forgeStatus = "approved";
+            ackMessage = recentForgeProposal.action === "update"
+              ? `Done — I saved the updates to ${recentForgeProposal.name}.`
+              : `Done — I created ${recentForgeProposal.name}. You can switch to them from the proposal card or the agent picker.`;
+          } else {
+            ackOk = false;
+            forgeStatus = "failed";
+            errorDetail = commit.error;
+            ackMessage = `I found the Forge proposal for ${recentForgeProposal.name}, but I could not save it from this approval message. ${commit.error || "Please use the proposal card button and try again."}`;
+          }
+        } else if (recentForgeProposal.status === "approved") {
+          ackMessage = recentForgeProposal.action === "update"
+            ? `${recentForgeProposal.name} is already updated.`
+            : `${recentForgeProposal.name} is already created. You can switch to them from the proposal card or the agent picker.`;
+        } else if (recentForgeProposal.status === "canceled") {
+          ackOk = false;
+          ackMessage = `That Forge proposal for ${recentForgeProposal.name} was canceled, so I did not create or update anything.`;
+        } else {
+          ackOk = false;
+          ackMessage = `That Forge proposal for ${recentForgeProposal.name} is marked ${recentForgeProposal.status}, so I did not create or update anything.`;
+        }
+
+        const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+          thread_id,
+          user_id: userId,
+          role: "assistant",
+          content: ackMessage,
+          model: "forge_agent",
+          agent: agentId,
+          metadata: {
+            agent: agentId,
+            forge_acknowledgement: true,
+            forge_proposal_message_id: recentForgeProposal.id,
+            forge_status: forgeStatus,
+            created_agent_id: createdAgentId,
+            ...(errorDetail ? { error: errorDetail } : {}),
+          },
+        }).select("id").single();
+        if (insertError) {
+          throw new Error(`Failed to save Forge acknowledgement: ${insertError.message}`);
+        }
+        const donePayload = {
+          ok: ackOk,
+          model: "forge_agent",
+          message_id: inserted?.id ?? null,
+          billing_tier: backend.billingTier,
+          key_source: backend.keySource,
+          forge_status: forgeStatus,
+          created_agent_id: createdAgentId,
+          ...(errorDetail ? { error: "forge_approval_failed" } : {}),
+        };
+        if (idempotencyKey) {
+          recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+            .catch((e) => console.warn("idempotency record failed:", e));
+        }
+        await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", thread_id);
+        return sseDoneResponse(corsHeaders, donePayload);
+      }
+    }
 
     const continuity = await loadContinuityPacket(supabase, {
       userId,
@@ -573,7 +677,9 @@ serve(async (req) => {
     }
 
     if (forceForgeRequest && toolPlannerResult.fallbackText) {
-      const message = toolPlannerResult.fallbackText;
+      const message = looksLikeRawForgeToolLeak(toolPlannerResult.fallbackText)
+        ? RAW_FORGE_TOOL_LEAK_MESSAGE
+        : toolPlannerResult.fallbackText;
       const { data: inserted } = await supabase.from("messages").insert({
         thread_id,
         user_id: userId,
@@ -661,6 +767,7 @@ serve(async (req) => {
           reasoningEffort: effectiveReasoningEffort,
           reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
           maxTokens: simpleOpeningTurn ? 1024 : undefined,
+          guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make)\b/i.test(messageWithAttachments),
         },
       );
     }
@@ -1315,6 +1422,100 @@ function sseDoneResponse(
   });
 }
 
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function parseRecentForgeProposal(row: any): RecentForgeProposal | null {
+  const metadata = objectRecord(row?.metadata);
+  if (metadata.forge_kind !== "agent_forge_proposal") return null;
+  const blueprint = objectRecord(metadata.blueprint);
+  const rawName = typeof blueprint.name === "string" ? blueprint.name.trim() : "";
+  const action = metadata.forge_action === "update" ? "update" : "create";
+  const status = typeof metadata.forge_status === "string" ? metadata.forge_status : "pending";
+  return {
+    id: String(row.id),
+    status,
+    action,
+    name: rawName || "that agent",
+    createdAgentId: typeof metadata.created_agent_id === "string" ? metadata.created_agent_id : null,
+    targetAgentId: typeof metadata.target_agent_id === "string" ? metadata.target_agent_id : null,
+  };
+}
+
+async function loadLatestForgeProposalForThread(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  threadId: string,
+): Promise<RecentForgeProposal | null> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, metadata, created_at")
+    .eq("thread_id", threadId)
+    .eq("user_id", userId)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(12);
+  if (error) {
+    console.warn("[chat-multi] recent Forge proposal lookup failed:", error);
+    return null;
+  }
+  for (const row of data || []) {
+    const proposal = parseRecentForgeProposal(row);
+    if (proposal) return proposal;
+  }
+  return null;
+}
+
+async function commitForgeProposalFromChat(
+  userId: string,
+  proposalMessageId: string,
+): Promise<{ ok: true; createdAgentId: string | null } | { ok: false; error: string }> {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!serviceKey || !supabaseUrl) return { ok: false, error: "Forge is not configured on this server." };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const response = await fetch(`${supabaseUrl}/functions/v1/agent-forge`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+        "apikey": serviceKey,
+      },
+      body: JSON.stringify({
+        action: "commit",
+        user_id: userId,
+        proposal_message_id: proposalMessageId,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    let parsed: any = null;
+    const raw = await response.text().catch(() => "");
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      // keep raw text for the user-safe error below
+    }
+
+    if (!response.ok || parsed?.ok === false) {
+      const detail = parsed?.error || parsed?.message || raw || `Forge returned HTTP ${response.status}`;
+      return { ok: false, error: String(detail).slice(0, 240) };
+    }
+    return {
+      ok: true,
+      createdAgentId: typeof parsed?.created_agent_id === "string" ? parsed.created_agent_id : null,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * Extract observer agents + their contributions from a council pass and from
  * any `consult_*` tool messages. Returns the full set of non-primary agents
@@ -1884,6 +2085,7 @@ async function singleModelStream(
     reasoningEffort?: ReasoningEffort;
     reasoningParams?: Record<string, unknown>;
     maxTokens?: number;
+    guardForgeToolLeaks?: boolean;
   } = {},
 ): Promise<Response> {
   const encoder = new TextEncoder();
@@ -1901,6 +2103,7 @@ async function singleModelStream(
 
       try {
         const backend = options.backend;
+        const guardForgeToolLeaks = options.guardForgeToolLeaks === true;
         const reasoningParams = options.reasoningParams ?? buildReasoningParams(model, options.reasoningEffort || "medium");
         const orResponse = await fetch(backend?.baseUrl || "https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -1968,6 +2171,15 @@ async function singleModelStream(
         let buffer = "";
         let usedModel = model;
         let tokensUsed: number | null = null;
+        let pendingContent = "";
+        let contentGuardActive = true;
+        let forgeLeakDetected = false;
+
+        const emitContent = (text: string) => {
+          if (!text) return;
+          fullContent += text;
+          send({ type: "content", text });
+        };
 
         const processProviderLine = (line: string) => {
           if (!line.startsWith("data: ")) return;
@@ -1983,8 +2195,27 @@ async function singleModelStream(
               send({ type: "thinking", text: t });
             }
             if (delta.content) {
-              fullContent += delta.content;
-              send({ type: "content", text: delta.content });
+              if (!guardForgeToolLeaks) {
+                emitContent(delta.content);
+              } else if (forgeLeakDetected) {
+                return;
+              } else if (contentGuardActive) {
+                pendingContent += delta.content;
+                if (looksLikeRawForgeToolLeak(pendingContent)) {
+                  forgeLeakDetected = true;
+                  contentGuardActive = false;
+                  pendingContent = "";
+                  emitContent(RAW_FORGE_TOOL_LEAK_MESSAGE);
+                  return;
+                }
+                if (pendingContent.length >= 700) {
+                  contentGuardActive = false;
+                  emitContent(pendingContent);
+                  pendingContent = "";
+                }
+              } else {
+                emitContent(delta.content);
+              }
             }
             if (chunk.model) usedModel = chunk.model;
             if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
@@ -2006,6 +2237,11 @@ async function singleModelStream(
         for (const line of tail.split("\n")) {
           processProviderLine(line);
         }
+        if (guardForgeToolLeaks && contentGuardActive && pendingContent && !forgeLeakDetected) {
+          contentGuardActive = false;
+          emitContent(pendingContent);
+          pendingContent = "";
+        }
 
         if (!fullContent.trim()) {
           console.warn("[chat-multi] provider stream ended with no content; retrying non-streaming once", {
@@ -2025,8 +2261,11 @@ async function singleModelStream(
               send({ type: "thinking", text: retry.thinking });
             }
             if (retry.content?.trim()) {
-              fullContent = retry.content;
-              send({ type: "content", text: retry.content });
+              const retryContent = looksLikeRawForgeToolLeak(retry.content)
+                ? RAW_FORGE_TOOL_LEAK_MESSAGE
+                : retry.content;
+              fullContent = retryContent;
+              send({ type: "content", text: retryContent });
             }
           } catch (retryErr) {
             console.error("[chat-multi] empty stream retry failed:", retryErr);

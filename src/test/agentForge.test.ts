@@ -85,4 +85,17 @@ describe('Agent Forge runtime', () => {
     expect(card).toContain('Switch to agent');
     expect(card).toContain('Review full blueprint');
   });
+
+  it('prevents Forge approval follow-ups from leaking raw tool-call JSON into chat', () => {
+    const chatMulti = readRepoFile('supabase/functions/chat-multi/index.ts');
+
+    expect(chatMulti).toContain('function looksLikeForgeApprovalFollowup');
+    expect(chatMulti).toContain('loadLatestForgeProposalForThread');
+    expect(chatMulti).toContain('commitForgeProposalFromChat');
+    expect(chatMulti).toContain('forge_acknowledgement');
+    expect(chatMulti).toContain('RAW_FORGE_TOOL_LEAK_MESSAGE');
+    expect(chatMulti).toContain('function looksLikeRawForgeToolLeak');
+    expect(chatMulti).toContain('pendingContent');
+    expect(chatMulti).toContain('Please try again; I should show a Forge proposal card, not a forge_agent text block.');
+  });
 });
