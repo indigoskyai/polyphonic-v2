@@ -11,7 +11,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
 
     const gateIndex = source.indexOf('if (!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
-    const legacyPlannerIndex = source.indexOf('const toolMessages = shouldRunLegacyToolPlanner');
+    const legacyPlannerIndex = source.indexOf('const toolPlannerResult = shouldRunLegacyToolPlanner');
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');
     expect(source).toContain('openRouterAgentSdkStream({');

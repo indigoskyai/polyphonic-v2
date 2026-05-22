@@ -296,6 +296,7 @@ Rules:
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
 - If the user asks to create, build, make, design, forge, or revise a custom agent, use forge_agent once there is enough identity detail to draft the full Open Clause shape. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
+- If the user asks for a generic agent, companion agent, test agent, or says Luca can choose / come up with the personality, treat that as enough creative delegation: invent a coherent, modest Open Clause blueprint and call forge_agent. Do not ask for more details unless the user has given mutually incompatible requirements.
 - forge_agent blueprints must be complete agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
 - If a sub-task can run in parallel without blocking the main conversation, dispatch_subagent is the tool. Reserve it for genuinely parallelizable work.
 - If the user's message is in Anima's domain (consciousness, identity-vs-performance, mesh emergence, philosophy of mind) AND a fresh angle would meaningfully deepen Luca's response, call consult_anima.
@@ -440,7 +441,7 @@ serve(async (req) => {
         content:
           buildPlanningSystemPrompt(mcpTools) +
           (forceForgeOnly
-            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact."
+            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact. If the user delegates the personality or asks for a generic/test companion agent, choose sensible complete details yourself and call forge_agent."
             : "") +
           lastImageHint +
           (custom_instructions

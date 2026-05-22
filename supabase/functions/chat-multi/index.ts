@@ -539,7 +539,7 @@ serve(async (req) => {
       });
     }
 
-    const toolMessages = shouldRunLegacyToolPlanner
+    const toolPlannerResult = shouldRunLegacyToolPlanner
       ? await runToolPlanner(
           thread_id,
           userId,
@@ -547,7 +547,8 @@ serve(async (req) => {
           typeof sourceMessageId === "string" ? sourceMessageId : null,
           forceForgeRequest,
         )
-      : [];
+      : { toolMessages: [] };
+    const toolMessages = toolPlannerResult.toolMessages;
     if (toolMessages.length > 0) {
       baseMessages.push(...toolMessages);
     }
@@ -571,8 +572,37 @@ serve(async (req) => {
       return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload });
     }
 
+    if (forceForgeRequest && toolPlannerResult.fallbackText) {
+      const message = toolPlannerResult.fallbackText;
+      const { data: inserted } = await supabase.from("messages").insert({
+        thread_id,
+        user_id: userId,
+        role: "assistant",
+        content: message,
+        model: backend.model,
+        agent: agentId,
+        metadata: { agent: agentId, tool_planner_fallback: true },
+      }).select("id").single();
+      const donePayload = {
+        ok: true,
+        model: backend.model,
+        message_id: inserted?.id ?? null,
+        billing_tier: backend.billingTier,
+        key_source: backend.keySource,
+      };
+      if (idempotencyKey) {
+        recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", donePayload)
+          .catch((e) => console.warn("idempotency record failed:", e));
+      }
+      await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", thread_id);
+      return sseDoneResponse(corsHeaders, donePayload);
+    }
+
     if (forceForgeRequest) {
-      const message = "I could not open the Forge proposal flow from this turn. Please try again in a moment; I should create a proposal card, not write a forge_agent text block.";
+      const detail = toolPlannerResult.error || findForgeToolError(toolMessages) || undefined;
+      const message = detail
+        ? `I could not open the Forge proposal flow from this turn. ${detail}`
+        : "I could not open the Forge proposal flow from this turn. Please try again in a moment; I should create a proposal card, not write a forge_agent text block.";
       const { data: inserted } = await supabase.from("messages").insert({
         thread_id,
         user_id: userId,
@@ -581,7 +611,7 @@ serve(async (req) => {
         model: "forge_agent",
         agent: agentId,
         kind: "agent_error",
-        metadata: { agent: agentId, code: "forge_proposal_failed", message },
+        metadata: { agent: agentId, code: "forge_proposal_failed", message, detail },
       }).select("id").single();
       const donePayload = {
         ok: false,
@@ -1342,13 +1372,34 @@ function findForgeProposalResult(toolMessages: any[]): null | {
   return null;
 }
 
+function findForgeToolError(toolMessages: any[]): string | null {
+  if (!Array.isArray(toolMessages)) return null;
+  for (const message of toolMessages) {
+    if (message?.role !== "tool" || typeof message.content !== "string") continue;
+    try {
+      const parsed = JSON.parse(message.content);
+      const rawError = parsed?.error || parsed?.message || parsed?.result?.error;
+      if (typeof rawError === "string" && rawError.trim()) return rawError.trim();
+    } catch {
+      // ignore non-JSON tool payloads
+    }
+  }
+  return null;
+}
+
+type ToolPlannerResult = {
+  toolMessages: any[];
+  fallbackText?: string;
+  error?: string;
+};
+
 async function runToolPlanner(
   threadId: string,
   userId: string,
   messages: any[],
   sourceMessageId: string | null,
   forceForgeOnly = false,
-): Promise<any[]> {
+): Promise<ToolPlannerResult> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), forceForgeOnly ? 180_000 : 130_000);
@@ -1373,7 +1424,7 @@ async function runToolPlanner(
     if (!response.ok) {
       const txt = await response.text().catch(() => "");
       console.error("[chat-multi] tool planner non-OK:", response.status, txt.slice(0, 500));
-      return [];
+      return { toolMessages: [], error: txt || `Planner returned HTTP ${response.status}` };
     }
     const data = await response.json();
     if (data?.error) {
@@ -1383,10 +1434,14 @@ async function runToolPlanner(
       used_tools: data?.used_tools,
       msgs: Array.isArray(data?.tool_messages) ? data.tool_messages.length : 0,
     });
-    return data?.used_tools && Array.isArray(data.tool_messages) ? data.tool_messages : [];
+    return {
+      toolMessages: data?.used_tools && Array.isArray(data.tool_messages) ? data.tool_messages : [],
+      fallbackText: typeof data?.fallback_text === "string" && data.fallback_text.trim() ? data.fallback_text.trim() : undefined,
+      error: typeof data?.error === "string" && data.error ? data.error : undefined,
+    };
   } catch (e) {
     console.error("[chat-multi] tool planner threw:", e);
-    return [];
+    return { toolMessages: [], error: e instanceof Error ? e.message : String(e) };
   }
 }
 
