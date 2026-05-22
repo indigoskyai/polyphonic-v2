@@ -92,6 +92,25 @@ function mergeConfig(base: AgentConfig, draft: Partial<AgentConfig>): AgentConfi
   };
 }
 
+const resolvedConfigCache = new Map<string, {
+  base: AgentConfig;
+  draft: Partial<AgentConfig> | undefined;
+  value: AgentConfig;
+}>();
+
+function getCachedResolvedConfig(
+  id: string,
+  base: AgentConfig,
+  draft: Partial<AgentConfig> | undefined,
+): AgentConfig {
+  if (!draft || Object.keys(draft).length === 0) return base;
+  const cached = resolvedConfigCache.get(id);
+  if (cached?.base === base && cached.draft === draft) return cached.value;
+  const value = mergeConfig(base, draft);
+  resolvedConfigCache.set(id, { base, draft, value });
+  return value;
+}
+
 function rowToConfig(
   row: Record<string, unknown>,
   mcp: Array<Record<string, unknown>>,
@@ -216,8 +235,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
     const base = get().agents.find((a) => a.id === id);
     if (!base) return null;
     const draft = get().draftById[id];
-    if (!draft) return base;
-    return mergeConfig(base, draft);
+    return getCachedResolvedConfig(id, base, draft);
   },
 
   setDraft: (id, patch) =>

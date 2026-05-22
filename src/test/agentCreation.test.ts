@@ -118,6 +118,37 @@ describe('custom agent creation flow', () => {
     expect(useAgentSettingsStore.getState().draftById).toEqual({});
   });
 
+  it('keeps resolved draft objects stable between store updates', () => {
+    const agent = {
+      ...savedAgentRow,
+      tools: [],
+      mcp: [],
+      subagents: [],
+      voices: [],
+      secrets: [],
+      status: 'on',
+      uptimeMs: 0,
+    } as AgentConfig;
+    useAgentSettingsStore.setState({
+      agents: [agent],
+      loading: false,
+      draftById: { sophia: { name: 'Sophia Prime' } },
+    });
+
+    const first = useAgentSettingsStore.getState().getResolved('sophia');
+    const second = useAgentSettingsStore.getState().getResolved('sophia');
+
+    expect(first).toBe(second);
+    expect(first?.name).toBe('Sophia Prime');
+
+    useAgentSettingsStore.getState().setDraft('sophia', { name: 'Sophia Second' });
+
+    const third = useAgentSettingsStore.getState().getResolved('sophia');
+    expect(third).not.toBe(first);
+    expect(third).toBe(useAgentSettingsStore.getState().getResolved('sophia'));
+    expect(third?.name).toBe('Sophia Second');
+  });
+
   it('keeps the Agents page wired to the creation modal', () => {
     const source = readRepoFile('src/pages/settings/AgentsList.tsx');
 
