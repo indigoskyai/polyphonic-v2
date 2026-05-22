@@ -65,9 +65,9 @@ export default function SidebarRow({
         className="flex-1 truncate"
         style={{
           fontFamily: 'var(--font-sans)',
-          fontSize: 15,
-          fontWeight: active ? 600 : 500,
-          letterSpacing: '-0.012em',
+          fontSize: 14,
+          fontWeight: active ? 'var(--weight-medium)' : 'var(--weight-book)',
+          letterSpacing: 'var(--track-body)',
           color: active ? 'var(--ink)' : 'var(--text-primary)',
           transition: 'color 180ms var(--ease-out)',
         }}
@@ -79,7 +79,7 @@ export default function SidebarRow({
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             letterSpacing: 'var(--track-folio)',
             color: active ? 'var(--text-soft)' : 'var(--text-tertiary)',
             marginLeft: 8,

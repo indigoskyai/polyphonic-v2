@@ -30,9 +30,9 @@ export default function SidebarHeader({ folio: _folio, title, eyebrow }: Props) 
         style={{
           fontFamily: 'var(--font-grotesque)',
           fontSize: 20,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-light)',
           color: 'var(--ink)',
-          letterSpacing: 'var(--track-tight)',
+          letterSpacing: 'var(--track-display)',
           lineHeight: 1.0,
         }}
       >
@@ -47,7 +47,7 @@ export default function SidebarHeader({ folio: _folio, title, eyebrow }: Props) 
             gap: 6,
             fontFamily: 'var(--font-mono)',
             fontSize: 9,
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             letterSpacing: 'var(--track-meta)',
             color: 'var(--text-ghost)',
             textTransform: 'uppercase',

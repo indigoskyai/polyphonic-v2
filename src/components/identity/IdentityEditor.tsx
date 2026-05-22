@@ -156,7 +156,14 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
 
   if (loading) {
     return (
-      <div style={{ color: 'var(--text-ghost)', fontSize: 13, padding: '12px 0' }}>
+      <div
+        style={{
+          color: 'var(--text-ghost)',
+          fontSize: 'var(--settings-body-size)',
+          fontWeight: 'var(--weight-book)',
+          padding: '12px 0',
+        }}
+      >
         Loading identity documents…
       </div>
     );
@@ -195,8 +202,8 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    fontWeight: 500,
+                    fontSize: 'var(--settings-mono-size)',
+                    fontWeight: 'var(--weight-medium)',
                     color: 'var(--text-soft)',
                     letterSpacing: 'var(--track-folio)',
                     textTransform: 'uppercase',
@@ -208,8 +215,9 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
                 <div
                   style={{
                     color: 'var(--text-secondary)',
-                    fontSize: 12.5,
-                    lineHeight: 1.5,
+                    fontSize: 'var(--settings-caption-size)',
+                    fontWeight: 'var(--weight-book)',
+                    lineHeight: 1.55,
                   }}
                 >
                   {meta.description}
@@ -219,8 +227,9 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
+                    fontSize: 9.5,
                     color: 'var(--text-ghost)',
+                    letterSpacing: 'var(--track-mono)',
                     whiteSpace: 'nowrap',
                   }}
                 >
@@ -247,8 +256,8 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12.5,
-                lineHeight: 1.6,
-                letterSpacing: '0.005em',
+                lineHeight: 1.7,
+                letterSpacing: 'var(--track-body)',
                 resize: 'vertical',
                 outline: 'none',
               }}
@@ -264,9 +273,10 @@ export default function IdentityEditor({ agentId, userId, readOnly = false }: Pr
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10.5,
+                  fontSize: 9.5,
                   color: 'var(--text-tertiary)',
                   letterSpacing: 'var(--track-meta)',
+                  textTransform: 'uppercase',
                 }}
               >
                 {value.length.toLocaleString()} chars

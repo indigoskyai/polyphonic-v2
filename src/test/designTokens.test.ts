@@ -76,3 +76,42 @@ describe('design token contrast', () => {
     }
   });
 });
+
+describe('typography system', () => {
+  it('keeps the app on the shared Mnemos/foundation type ladder', () => {
+    expect(token('font-grotesque')).toContain('Inter Tight');
+    expect(token('font-sans')).toContain('Inter');
+    expect(token('font-mono')).toContain('JetBrains Mono');
+
+    expect(token('weight-thin')).toBe('280');
+    expect(token('weight-light')).toBe('320');
+    expect(token('weight-book')).toBe('370');
+    expect(token('weight-medium')).toBe('450');
+    expect(token('type-base')).toBe('14px');
+    expect(token('type-3xl')).toBe('35px');
+  });
+
+  it('uses non-negative tracking for prose and display roles while preserving mono metadata spacing', () => {
+    for (const textToken of [
+      'track-display-tight',
+      'track-tight',
+      'track-display',
+      'track-body-tight',
+      'track-body',
+      'track-ui',
+    ]) {
+      expect(token(textToken)).not.toContain('-');
+    }
+
+    expect(token('track-meta')).toBe('0.12em');
+    expect(token('track-folio')).toBe('0.16em');
+  });
+
+  it('keeps settings pages on shared typography roles instead of one-off heavy headings', () => {
+    expect(css).toContain('font-size: var(--settings-display-size)');
+    expect(css).toContain('font-weight: var(--weight-light)');
+    expect(css).toContain('font-size: var(--settings-section-size)');
+    expect(css).toContain('font-size: var(--settings-body-size)');
+    expect(css).toContain('font-size: var(--settings-mono-size)');
+  });
+});

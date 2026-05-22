@@ -99,9 +99,9 @@ export default function ThreadRow({ thread, active, onClick }: Props) {
             className="flex-1 truncate"
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 15,
-              fontWeight: active ? 600 : 500,
-              letterSpacing: '-0.012em',
+              fontSize: 14,
+              fontWeight: active ? 'var(--weight-medium)' : 'var(--weight-book)',
+              letterSpacing: 'var(--track-body)',
               color: active ? 'var(--text-primary)' : 'var(--text-body)',
             }}
           >

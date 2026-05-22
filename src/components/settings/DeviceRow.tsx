@@ -86,8 +86,8 @@ export function DeviceRow({
         <div
           style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 13.5,
-            fontWeight: 500,
+            fontSize: 'var(--settings-body-size)',
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--ink)',
             letterSpacing: 'var(--track-body-tight)',
             display: 'flex',
@@ -105,7 +105,7 @@ export function DeviceRow({
                 padding: '2px 7px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 8.5,
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 color: 'var(--text-secondary)',
                 letterSpacing: 'var(--track-folio)',
                 textTransform: 'uppercase',
@@ -136,7 +136,7 @@ export function DeviceRow({
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: statusColor,
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',

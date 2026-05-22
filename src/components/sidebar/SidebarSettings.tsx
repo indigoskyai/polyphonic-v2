@@ -36,8 +36,8 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
       style={{
         padding: '14px 16px 6px',
         fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        fontWeight: 500,
+        fontSize: 'var(--settings-mono-size)',
+        fontWeight: 'var(--weight-medium)',
         letterSpacing: 'var(--track-folio)',
         color: 'var(--text-soft)',
         textTransform: 'uppercase',

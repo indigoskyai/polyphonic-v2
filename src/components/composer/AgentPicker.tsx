@@ -8,14 +8,17 @@ import { useAuthStore } from '@/stores/authStore';
 interface AgentPickerProps {
   activeAgentId: string;
   onChange: (agentId: string) => void;
+  variant?: 'composer' | 'header';
 }
 
 /**
- * Composer agent picker. Renders the popover via a portal with fixed
+ * Agent picker. Renders the popover via a portal with fixed
  * positioning so it always sits on the top layer (never occluded by the
- * composer or surrounding chrome). Drops down BELOW the trigger.
+ * composer or surrounding chrome). It prefers dropping below the trigger,
+ * and flips upward only if a future placement gets too close to the viewport
+ * floor.
  */
-export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
+export function AgentPicker({ activeAgentId, onChange, variant = 'composer' }: AgentPickerProps) {
   const user = useAuthStore((s) => s.user);
   const allAgents = useAgentSettingsStore((s) => s.agents);
   const load = useAgentSettingsStore((s) => s.load);
@@ -38,7 +41,16 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
     if (!open) return;
     const reposition = () => {
       const r = wrapRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 6, left: r.left });
+      if (!r) return;
+      const menuWidth = 264;
+      const estimatedHeight = Math.min(Math.max(agents.length, 1) * 34 + 8, 320);
+      const below = r.bottom + 8;
+      const above = r.top - estimatedHeight - 8;
+      const top = below + estimatedHeight > window.innerHeight - 8
+        ? Math.max(8, above)
+        : below;
+      const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, r.left));
+      setPos({ top, left });
     };
     reposition();
     window.addEventListener('scroll', reposition, true);
@@ -47,7 +59,7 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
       window.removeEventListener('scroll', reposition, true);
       window.removeEventListener('resize', reposition);
     };
-  }, [open]);
+  }, [agents.length, open]);
 
   // Outside click + ESC
   useEffect(() => {
@@ -74,9 +86,10 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
   const activeColor = resolveAgentColor(active?.avatar_color);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+    <div ref={wrapRef} className={`agent-picker-wrap agent-picker-wrap--${variant}`}>
       <button
-        className="agent-pill targeted"
+        type="button"
+        className={`agent-pill targeted agent-picker-trigger agent-picker-trigger--${variant}${open ? ' open' : ''}`}
         onClick={() => setOpen((v) => !v)}
         style={{
           display: 'inline-flex',
@@ -87,10 +100,10 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
         title="Switch agent"
       >
         {activeAgentId === 'luca' ? (
-          // Luca's composer identity glyph — rich electric blue (Vercel-spec
+          // Luca's identity glyph — rich electric blue (Vercel-spec
           // #0070F3). Distinct from the sage agent-color tokens used in
           // identity dots elsewhere; this icon is the always-on "you're
-          // talking to your agent" mark in the composer surface.
+          // talking to your agent" mark.
           <Ghost
             size={14}
             strokeWidth={1.5}
@@ -117,7 +130,10 @@ export function AgentPicker({ activeAgentId, onChange }: AgentPickerProps) {
             position: 'fixed',
             top: pos.top,
             left: pos.left,
-            minWidth: 220,
+            width: 264,
+            maxWidth: 'calc(100vw - 16px)',
+            maxHeight: 'min(320px, calc(100vh - 72px))',
+            overflowY: 'auto',
             padding: 4,
             background: 'var(--bg-elevated, #15161a)',
             border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',

@@ -77,7 +77,7 @@ export function InlinePill({
         padding: '2px 8px',
         fontFamily: 'var(--font-mono)',
         fontSize: 9,
-        fontWeight: 500,
+        fontWeight: 'var(--weight-medium)',
         letterSpacing: 'var(--track-folio)',
         textTransform: 'uppercase',
         borderRadius: 999,

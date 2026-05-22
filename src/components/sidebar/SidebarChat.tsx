@@ -208,8 +208,8 @@ export default function SidebarChat() {
                     <span
                       style={{
                         fontFamily: 'var(--font-sans)',
-                        fontSize: 15,
-                        fontWeight: 500,
+                        fontSize: 14,
+                        fontWeight: 'var(--weight-medium)',
                         color: 'var(--text-primary)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -288,7 +288,7 @@ export default function SidebarChat() {
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
               fontSize: 10.5,
-              fontWeight: 500,
+              fontWeight: 'var(--weight-medium)',
               letterSpacing: 'var(--track-meta)',
               color: 'var(--text-ghost)',
               textTransform: 'uppercase',
@@ -322,9 +322,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       className="uppercase"
       style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 10.5,
-        fontWeight: 500,
-        letterSpacing: 'var(--track-meta)',
+        fontSize: 'var(--settings-mono-size)',
+        fontWeight: 'var(--weight-medium)',
+        letterSpacing: 'var(--track-folio)',
         color: 'var(--text-ghost)',
         padding: '14px 8px 6px',
       }}

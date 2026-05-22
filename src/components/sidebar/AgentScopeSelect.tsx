@@ -22,7 +22,8 @@ export default function AgentScopeSelect() {
       <div
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: 9,
+          fontSize: 'var(--settings-mono-size)',
+          fontWeight: 'var(--weight-medium)',
           letterSpacing: 'var(--track-folio)',
           color: 'var(--text-ghost)',
           textTransform: 'uppercase',
@@ -43,8 +44,8 @@ export default function AgentScopeSelect() {
           borderRadius: 8,
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-sans)',
-          fontSize: 13,
-          fontWeight: 500,
+          fontSize: 'var(--settings-body-size)',
+          fontWeight: 'var(--weight-medium)',
           letterSpacing: 'var(--track-body)',
           cursor: single ? 'default' : 'pointer',
           opacity: single ? 0.85 : 1,
@@ -104,8 +105,8 @@ export default function AgentScopeSelect() {
                 background: a.id === activeAgentId ? 'var(--overlay-active)' : 'transparent',
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-sans)',
-                fontSize: 13,
-                fontWeight: a.id === activeAgentId ? 500 : 400,
+                fontSize: 'var(--settings-body-size)',
+                fontWeight: a.id === activeAgentId ? 'var(--weight-medium)' : 'var(--weight-book)',
                 cursor: 'pointer',
               }}
             >

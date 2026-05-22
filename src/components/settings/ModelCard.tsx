@@ -80,7 +80,7 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
               color: 'var(--canvas)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               lineHeight: 1,
             }}
           >
@@ -100,8 +100,8 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
         <div
           style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 13.5,
-            fontWeight: 500,
+            fontSize: 'var(--settings-body-size)',
+            fontWeight: 'var(--weight-medium)',
             color: active ? 'var(--ink)' : 'var(--text-primary)',
             letterSpacing: 'var(--track-body-tight)',
           }}
@@ -113,7 +113,8 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             color: 'var(--text-tertiary)',
-            letterSpacing: 'var(--track-body-tight)',
+            letterSpacing: 'var(--track-mono)',
+            lineHeight: 1.45,
           }}
         >
           {id}
@@ -142,7 +143,7 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
                 padding: '2px 7px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 8.5,
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 letterSpacing: 'var(--track-folio)',
                 textTransform: 'uppercase',
                 border: `1px solid ${flagStyles.borderColor}`,
@@ -228,7 +229,7 @@ export function ModelListControls({
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--text-soft)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',

@@ -17,7 +17,15 @@ export default function AgentPersonality({ agentId }: Props) {
 
   if (!resolved) {
     return (
-      <div style={{ fontSize: 12, color: 'var(--text-ghost)' }}>Loading personality…</div>
+      <div
+        style={{
+          fontSize: 'var(--settings-caption-size)',
+          fontWeight: 'var(--weight-book)',
+          color: 'var(--text-ghost)',
+        }}
+      >
+        Loading personality…
+      </div>
     );
   }
 
@@ -47,13 +55,20 @@ export default function AgentPersonality({ agentId }: Props) {
             style={{
               fontSize: 13,
               color: 'var(--text-primary)',
-              fontWeight: 450,
+              fontWeight: 'var(--weight-medium)',
               marginBottom: 4,
             }}
           >
             Inner life
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+          <div
+            style={{
+              fontSize: 'var(--settings-caption-size)',
+              fontWeight: 'var(--weight-book)',
+              color: 'var(--text-tertiary)',
+              lineHeight: 1.55,
+            }}
+          >
             Allow this agent to track an emotional state and surface it.
           </div>
         </div>
@@ -72,13 +87,20 @@ export default function AgentPersonality({ agentId }: Props) {
             style={{
               fontSize: 13,
               color: 'var(--text-primary)',
-              fontWeight: 450,
+              fontWeight: 'var(--weight-medium)',
               marginBottom: 4,
             }}
           >
             Thought verbosity
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+          <div
+            style={{
+              fontSize: 'var(--settings-caption-size)',
+              fontWeight: 'var(--weight-book)',
+              color: 'var(--text-tertiary)',
+              lineHeight: 1.55,
+            }}
+          >
             How much internal reasoning to surface in responses.
           </div>
         </div>

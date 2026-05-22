@@ -1,5 +1,5 @@
 @import url('https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,350;0,370;0,400;0,420;0,450;0,550;1,400;1,450&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@280;300;320;400;450;520&family=Inter:ital,wght@0,350;0,370;0,400;0,420;0,450;0,550;1,400;1,450&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 @import './components/canvas-profile/canvas.css';
 
@@ -185,22 +185,45 @@
   --devbar-height:     0px;
 
   /* Typography stack */
-  --font-sans:      'Switzer', -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
-  --font-grotesque: var(--font-sans);
+  --font-sans:      'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Switzer', 'Segoe UI', sans-serif;
+  --font-grotesque: 'Inter Tight', 'SF Pro Display', var(--font-sans);
   --font-mono:      'JetBrains Mono', 'SF Mono', 'Geist Mono', 'Fira Code', ui-monospace, monospace;
   /* --font-serif removed: collapsed onto --font-sans for unified hierarchy */
   --font-serif:     var(--font-sans);
 
   /* Letter-spacing scale */
-  --track-display-tight: -0.025em;
-  --track-tight:        -0.02em;
-  --track-display:      -0.01em;
-  --track-body-tight:   -0.005em;
-  --track-body:          0.003em;
-  --track-ui:            0.01em;
-  --track-mono:          0.04em;
-  --track-meta:          0.06em;
-  --track-folio:         0.10em;
+  --track-display-tight: 0em;
+  --track-tight:         0em;
+  --track-display:       0em;
+  --track-body-tight:    0em;
+  --track-body:          0em;
+  --track-ui:            0em;
+  --track-mono:          0.08em;
+  --track-meta:          0.12em;
+  --track-folio:         0.16em;
+
+  /* Foundation typography ladder shared by app chrome and settings. */
+  --weight-thin:      280;
+  --weight-light:     320;
+  --weight-book:      370;
+  --weight-normal:    400;
+  --weight-medium:    450;
+  --weight-semibold:  520;
+
+  --type-xs:    10px;
+  --type-sm:    12px;
+  --type-base:  14px;
+  --type-md:    17px;
+  --type-lg:    20px;
+  --type-xl:    24px;
+  --type-2xl:   29px;
+  --type-3xl:   35px;
+
+  --settings-display-size: 34px;
+  --settings-section-size: 15.5px;
+  --settings-body-size:    13.5px;
+  --settings-caption-size: 12px;
+  --settings-mono-size:    9.5px;
 
   /* ─── Canonical type scale ─────────────────────────────────────────────
      Seven roles cover the chat experience. Each role pairs a size with the
@@ -214,37 +237,37 @@
 
   /* Display — page heading (only one per surface, sparingly used) */
   --type-display-size:        22px;
-  --type-display-weight:      450;
+  --type-display-weight:      var(--weight-light);
   --type-display-line:        1.25;
   --type-display-track:       var(--track-display);
 
   /* Emphasis — composer input, top-level prompts */
   --type-emphasis-size:       16px;
-  --type-emphasis-weight:     400;
+  --type-emphasis-weight:     var(--weight-normal);
   --type-emphasis-line:       1.55;
   --type-emphasis-track:      var(--track-body);
 
   /* Body — chat message body, drawer body. The default reading surface. */
   --type-body-size:           14.5px;
-  --type-body-weight:         400;
+  --type-body-weight:         var(--weight-book);
   --type-body-line:           1.65;
   --type-body-track:          var(--track-body);
 
   /* Body-compact — card/sub-section body. Slightly smaller for nested context. */
   --type-body-compact-size:   13px;
-  --type-body-compact-weight: 400;
+  --type-body-compact-weight: var(--weight-book);
   --type-body-compact-line:   1.6;
   --type-body-compact-track:  var(--track-body);
 
   /* Meta — captions, tertiary descriptions, secondary body */
   --type-meta-size:           12px;
-  --type-meta-weight:         420;
+  --type-meta-weight:         var(--weight-book);
   --type-meta-line:           1.5;
   --type-meta-track:          var(--track-body);
 
   /* Mono-eyebrow — section labels, "COUNCIL", "VOICES", category caps */
   --type-mono-eyebrow-size:   11px;
-  --type-mono-eyebrow-weight: 500;
+  --type-mono-eyebrow-weight: var(--weight-medium);
   --type-mono-eyebrow-line:   1.2;
   --type-mono-eyebrow-track:  var(--track-meta);
 
@@ -1117,8 +1140,8 @@ html {
   font-family: var(--font-sans);
   font-size: 17px;
   line-height: 1.18;
-  font-weight: 560;
-  letter-spacing: -0.01em;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-display);
   color: var(--text-primary);
 }
 .mobile-bar-title-sub {
@@ -1195,7 +1218,7 @@ html {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 17px;
-  font-weight: 560;
+  font-weight: var(--weight-medium);
   letter-spacing: 0;
 }
 .mobile-nav-brand svg {
@@ -1264,10 +1287,11 @@ html {
 .mobile-nav-section-label {
   padding: 14px 10px 6px;
   color: var(--text-soft);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 570;
-  letter-spacing: 0;
+  font-family: var(--font-mono);
+  font-size: var(--settings-mono-size);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
 }
 .mobile-nav-primary,
 .mobile-nav-row,
@@ -1574,9 +1598,9 @@ html {
 }
 .guardian-label {
   font-size: 10px;
-  font-weight: 550;
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--track-meta);
   background: linear-gradient(90deg, rgba(220,219,216,0.20) 0%, rgba(220,219,216,0.20) 35%, rgba(220,219,216,0.55) 50%, rgba(220,219,216,0.20) 65%, rgba(220,219,216,0.20) 100%);
   background-size: 200% 100%;
   -webkit-background-clip: text;
@@ -1708,6 +1732,33 @@ html {
   flex: 1 1 auto;
   min-width: 0;
 }
+.agent-picker-wrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.agent-picker-trigger {
+  align-items: center;
+  max-width: 190px;
+  white-space: nowrap;
+}
+.agent-picker-trigger--header {
+  min-height: 30px;
+  max-width: 220px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: 9px;
+  background: rgba(244, 243, 240, 0.025);
+  color: var(--text-body);
+  font-size: 12px;
+  letter-spacing: var(--track-body);
+}
+.agent-picker-trigger--header:hover,
+.agent-picker-trigger--header.open {
+  border-color: var(--border-subtle);
+  background: rgba(244, 243, 240, 0.045);
+  color: var(--text-primary);
+}
 .composer-actions {
   display: flex;
   align-items: center;
@@ -1749,6 +1800,14 @@ html {
 .luca-only-pill:hover {
   color: var(--text-body);
   background: rgba(244, 243, 240, 0.025);
+}
+.chat-header .luca-only-pill,
+.chat-agent-selector-corner .luca-only-pill {
+  min-height: 30px;
+  border: 1px solid var(--border-faint);
+  border-radius: 9px;
+  background: rgba(244, 243, 240, 0.025);
+  color: var(--text-body);
 }
 .pill-sep { width: 2px; height: 2px; border-radius: 50%; background: var(--text-whisper); opacity: 0.6; }
 
@@ -2318,8 +2377,40 @@ html {
   max-width: 100%;
 }
 
+.chat-agent-selector-corner {
+  position: absolute;
+  top: 12px;
+  left: 28px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.chat-agent-selector-mobile {
+  display: none;
+}
+
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.chat-header-thread-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-whisper);
+  opacity: 0.65;
+  flex: 0 0 auto;
+}
+
 .chat-header-title {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2544,12 +2635,26 @@ html {
 
 @media (max-width: 767px) {
   .chat-scroll-area {
-    padding: 16px 0 12px;
-    scroll-padding-bottom: 24px;
+    padding: 58px 0 12px;
+    scroll-padding: 58px 0 24px;
   }
 
   .chat-header {
     display: none !important;
+  }
+
+  .chat-agent-selector-corner,
+  .chat-agent-selector-mobile {
+    top: 12px;
+    left: 16px;
+  }
+
+  .chat-agent-selector-mobile {
+    position: absolute;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    min-width: 0;
   }
 
   .chat-header-title {
@@ -3577,7 +3682,7 @@ html {
   font-family: var(--font-sans);
   font-size: 12.5px;
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   display: block;
 }
 .timeline-text .checkpoint-desc {
@@ -3624,9 +3729,9 @@ html {
 
 .drawer-title-input {
   font-size: 24px;
-  font-weight: 450;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--track-display);
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border-focus);
@@ -3708,7 +3813,7 @@ html {
 .participant__name {
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 .participant__role {
@@ -6701,7 +6806,7 @@ html {
   grid-template-columns: 1fr 140px 110px 80px 24px;
   gap: 20px;
   align-items: center;
-  padding: 14px 18px;
+  padding: 15px 18px;
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -6727,20 +6832,26 @@ html {
   flex-shrink: 0;
 }
 .agent-identity-name {
-  font-size: 14px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: var(--settings-body-size);
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
+  letter-spacing: var(--track-body);
 }
 .agent-identity-role {
   display: block;
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--settings-caption-size);
   color: var(--text-soft);
   margin-top: 2px;
+  line-height: 1.4;
 }
 .agent-model {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-body);
+  letter-spacing: var(--track-mono);
+  line-height: 1.45;
 }
 .agent-status {
   display: flex;
@@ -6757,17 +6868,17 @@ html {
 .agent-status-dot--errored { background: var(--red-accent); }
 .agent-status-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-soft);
   text-transform: uppercase;
   letter-spacing: var(--track-meta);
 }
 .agent-uptime {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-ghost);
   text-align: right;
-  letter-spacing: var(--track-meta);
+  letter-spacing: var(--track-folio);
 }
 .agent-chev {
   color: var(--text-ghost);
@@ -6817,7 +6928,7 @@ html {
   padding: 22px 32px 0;
   font-family: var(--font-mono);
   font-size: 9.5px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-tertiary);
   letter-spacing: var(--track-folio);
   text-transform: uppercase;
@@ -6855,7 +6966,7 @@ html {
 }
 
 .set-head {
-  padding: 32px 36px 28px;
+  padding: 34px 36px 30px;
   max-width: 880px;
   margin: 0 auto;
   width: 100%;
@@ -6863,8 +6974,8 @@ html {
 
 .set-head-eye {
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--settings-mono-size);
+  font-weight: var(--weight-medium);
   color: var(--text-soft);
   letter-spacing: var(--track-folio);
   text-transform: uppercase;
@@ -6881,20 +6992,21 @@ html {
 
 .set-head-title {
   font-family: var(--font-grotesque);
-  font-size: 36px;
-  font-weight: 500;
+  font-size: var(--settings-display-size);
+  font-weight: var(--weight-light);
   color: var(--ink);
-  letter-spacing: var(--track-tight);
-  line-height: 1;
+  letter-spacing: var(--track-display);
+  line-height: 1.08;
   margin-bottom: 12px;
 }
 
 .set-head-sub {
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: var(--settings-body-size);
+  font-weight: var(--weight-book);
   color: var(--text-body);
   letter-spacing: var(--track-body);
-  line-height: 1.5;
+  line-height: 1.62;
   max-width: 560px;
 }
 
@@ -6906,7 +7018,7 @@ html {
 }
 
 .set-section {
-  padding: 28px 0;
+  padding: 30px 0;
   border-top: 1px solid var(--hairline);
 }
 
@@ -6917,12 +7029,12 @@ html {
 
 .set-section-eye {
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--settings-mono-size);
+  font-weight: var(--weight-medium);
   color: var(--text-soft);
   letter-spacing: var(--track-folio);
   text-transform: uppercase;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -6943,19 +7055,21 @@ html {
 
 .set-section-title {
   font-family: var(--font-grotesque);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: var(--settings-section-size);
+  font-weight: var(--weight-medium);
   color: var(--ink);
-  letter-spacing: var(--track-tight);
+  letter-spacing: var(--track-display);
+  line-height: 1.35;
   margin-bottom: 6px;
 }
 
 .set-section-desc {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--settings-caption-size);
+  font-weight: var(--weight-book);
   color: var(--text-body);
   letter-spacing: var(--track-body-tight);
-  line-height: 1.5;
+  line-height: 1.58;
   max-width: 540px;
   margin-bottom: 20px;
 }
@@ -6966,7 +7080,7 @@ html {
   padding: 2px 8px;
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--amber-soft, #d9a744);
   letter-spacing: var(--track-folio);
   text-transform: uppercase;
@@ -6981,7 +7095,7 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 14px 0;
+  padding: 15px 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -6996,8 +7110,8 @@ html {
 
 .set-row-label {
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 500;
+  font-size: var(--settings-body-size);
+  font-weight: var(--weight-medium);
   color: var(--ink);
   letter-spacing: var(--track-body-tight);
   margin-bottom: 4px;
@@ -7005,10 +7119,11 @@ html {
 
 .set-row-desc {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--settings-caption-size);
+  font-weight: var(--weight-book);
   color: var(--text-tertiary);
   letter-spacing: var(--track-body-tight);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .set-row-control {
@@ -7028,7 +7143,7 @@ html {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   letter-spacing: var(--track-body-tight);
   cursor: pointer;
   transition:
@@ -7083,7 +7198,7 @@ html {
   padding: 1px 6px;
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
   letter-spacing: var(--track-body-tight);
   background: var(--surface-2);
@@ -7107,7 +7222,7 @@ html {
 .save-footer-msg {
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-soft);
   letter-spacing: var(--track-folio);
   text-transform: uppercase;
@@ -7141,7 +7256,7 @@ html {
   }
 
   .set-head-title {
-    font-size: 32px;
+    font-size: 30px;
     line-height: 1.05;
   }
 
@@ -7316,7 +7431,7 @@ html {
 }
 .agent-detail-name {
   font-size: 20px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
   letter-spacing: var(--track-display);
   margin: 0;
@@ -7340,9 +7455,9 @@ html {
 .env-opt {
   padding: 4px 12px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 9.5px;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-meta);
   text-transform: uppercase;
   color: var(--text-tertiary);
   background: transparent;
@@ -7366,10 +7481,11 @@ html {
   max-width: 1100px;
 }
 .field-label {
-  font-size: 11px;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: var(--settings-mono-size);
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--track-meta);
   text-transform: uppercase;
   padding-top: 4px;
 }
@@ -7392,8 +7508,9 @@ html {
   padding: 16px 18px;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  line-height: 1.65;
+  line-height: 1.7;
   color: var(--text-primary);
+  letter-spacing: var(--track-body);
   min-height: 220px;
   resize: vertical;
   outline: none;
@@ -7405,9 +7522,10 @@ html {
   gap: 16px;
   margin-top: 8px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-ghost);
   letter-spacing: var(--track-meta);
+  text-transform: uppercase;
 }
 
 /* Tool grid */
@@ -7464,7 +7582,7 @@ html {
   font-family: var(--font-mono);
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--track-meta);
   color: var(--amber-accent);
 }
 
@@ -7495,17 +7613,20 @@ html {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-primary);
+  letter-spacing: var(--track-mono);
 }
 .mcp-url {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-soft);
+  letter-spacing: var(--track-mono);
 }
 .mcp-meta {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-ghost);
+  letter-spacing: var(--track-meta);
 }
 
 /* Sub-agent list */
@@ -7532,6 +7653,7 @@ html {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-primary);
+  letter-spacing: var(--track-mono);
 }
 .sa-name-dot {
   width: 5px;
@@ -7540,13 +7662,17 @@ html {
   background: var(--text-soft);
 }
 .sa-desc {
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--settings-caption-size);
+  font-weight: var(--weight-book);
   color: var(--text-soft);
+  line-height: 1.5;
 }
 .sa-model {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-ghost);
+  letter-spacing: var(--track-mono);
 }
 
 /* Voice card grid */
@@ -7575,16 +7701,17 @@ html {
   border-radius: 50%;
 }
 .vc-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--settings-body-size);
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 .vc-field { margin-bottom: 10px; }
 .vc-label {
-  font-size: 10px;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: var(--settings-mono-size);
+  font-weight: var(--weight-medium);
   color: var(--text-ghost);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--track-meta);
   text-transform: uppercase;
 }
 .vc-value {
@@ -7616,11 +7743,13 @@ html {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-primary);
+  letter-spacing: var(--track-mono);
 }
 .kc-value {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-soft);
+  letter-spacing: var(--track-mono);
 }
 .kc-status {
   display: flex;
@@ -7664,9 +7793,10 @@ html {
 }
 .fb-status {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 9.5px;
   color: var(--text-ghost);
   letter-spacing: var(--track-meta);
+  text-transform: uppercase;
 }
 .fb-status.fb-dirty { color: var(--amber-accent); }
 .fb-actions {
@@ -9692,7 +9822,7 @@ html {
 .s-bar-val {
   font-family: var(--font-mono); font-size: 10px;
   color: var(--text-soft); font-variant-numeric: tabular-nums;
-  letter-spacing: var(--track-tight); min-width: 28px; text-align: right;
+  letter-spacing: var(--track-mono); min-width: 28px; text-align: right;
 }
 
 /* Mnemos overview hero stat strip */
@@ -9714,8 +9844,8 @@ html {
   text-transform: uppercase;
 }
 .s-stat-value {
-  font-family: var(--font-sans); font-size: 26px; font-weight: 500;
-  color: var(--ink); letter-spacing: var(--track-tight);
+  font-family: var(--font-sans); font-size: 26px; font-weight: var(--weight-light);
+  color: var(--ink); letter-spacing: var(--track-display);
   line-height: 1; font-variant-numeric: tabular-nums;
 }
 .s-stat-delta {

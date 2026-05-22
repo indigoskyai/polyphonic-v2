@@ -4,7 +4,7 @@ export default function SectionLabel({ children }: { children: React.ReactNode }
     <div
       style={{
         fontSize: 9,
-        fontWeight: 500,
+        fontWeight: 'var(--weight-medium)',
         letterSpacing: 'var(--track-meta)',
         textTransform: 'uppercase',
         color: 'var(--text-ghost)',

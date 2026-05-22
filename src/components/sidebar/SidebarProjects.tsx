@@ -76,9 +76,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       className="uppercase"
       style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 9,
-        fontWeight: 500,
-        letterSpacing: 'var(--track-meta)',
+        fontSize: 'var(--settings-mono-size)',
+        fontWeight: 'var(--weight-medium)',
+        letterSpacing: 'var(--track-folio)',
         color: 'var(--text-ghost)',
         padding: '14px 8px 6px',
       }}
@@ -93,8 +93,9 @@ function SidebarNote({ children, tone }: { children: React.ReactNode; tone?: 'da
     <div
       style={{
         color: tone === 'danger' ? 'var(--danger)' : 'var(--text-ghost)',
-        fontSize: 12,
-        lineHeight: 1.5,
+        fontSize: 'var(--settings-caption-size)',
+        fontWeight: 'var(--weight-book)',
+        lineHeight: 1.55,
         padding: '8px 10px',
       }}
     >

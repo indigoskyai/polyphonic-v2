@@ -133,7 +133,8 @@ export default function AgentDetail() {
               border: 'none',
               color: 'var(--text-tertiary)',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 'var(--settings-mono-size)',
+              fontWeight: 'var(--weight-medium)',
               fontFamily: 'var(--font-mono)',
               letterSpacing: 'var(--track-folio)',
               textTransform: 'uppercase',
@@ -196,8 +197,8 @@ export default function AgentDetail() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  fontWeight: 500,
+                  fontSize: 'var(--settings-mono-size)',
+                  fontWeight: 'var(--weight-medium)',
                   color: 'var(--text-soft)',
                   letterSpacing: 'var(--track-folio)',
                   textTransform: 'uppercase',
@@ -210,7 +211,7 @@ export default function AgentDetail() {
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 12,
-                  letterSpacing: 'var(--track-body-tight)',
+                  letterSpacing: 'var(--track-mono)',
                 }}
               >
                 {agent.model}
@@ -218,8 +219,8 @@ export default function AgentDetail() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  fontWeight: 500,
+                  fontSize: 'var(--settings-mono-size)',
+                  fontWeight: 'var(--weight-medium)',
                   color: 'var(--text-soft)',
                   letterSpacing: 'var(--track-folio)',
                   textTransform: 'uppercase',
@@ -231,7 +232,8 @@ export default function AgentDetail() {
                 style={{
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-sans)',
-                  fontSize: 13,
+                  fontSize: 'var(--settings-body-size)',
+                  fontWeight: 'var(--weight-book)',
                   letterSpacing: 'var(--track-body-tight)',
                 }}
               >
@@ -240,8 +242,8 @@ export default function AgentDetail() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  fontWeight: 500,
+                  fontSize: 'var(--settings-mono-size)',
+                  fontWeight: 'var(--weight-medium)',
                   color: 'var(--text-soft)',
                   letterSpacing: 'var(--track-folio)',
                   textTransform: 'uppercase',
@@ -253,7 +255,8 @@ export default function AgentDetail() {
                 style={{
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-sans)',
-                  fontSize: 13,
+                  fontSize: 'var(--settings-body-size)',
+                  fontWeight: 'var(--weight-book)',
                   letterSpacing: 'var(--track-body-tight)',
                 }}
               >
@@ -301,7 +304,8 @@ export default function AgentDetail() {
             border: 'none',
             color: 'var(--text-tertiary)',
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 'var(--settings-mono-size)',
+            fontWeight: 'var(--weight-medium)',
             fontFamily: 'var(--font-mono)',
             letterSpacing: 'var(--track-folio)',
             textTransform: 'uppercase',
@@ -370,8 +374,8 @@ export default function AgentDetail() {
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              fontWeight: 500,
+              fontSize: 'var(--settings-mono-size)',
+              fontWeight: 'var(--weight-medium)',
               color: 'var(--text-soft)',
               letterSpacing: 'var(--track-folio)',
               textTransform: 'uppercase',

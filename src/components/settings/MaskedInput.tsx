@@ -71,7 +71,7 @@ export function MaskedInput({
           padding: '0 14px',
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--text-tertiary)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
@@ -155,7 +155,7 @@ export function KeyStored({
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: statusColor,
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',

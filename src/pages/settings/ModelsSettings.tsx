@@ -179,9 +179,10 @@ export default function ModelsSettings() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
-                  fontSize: 10,
+                  fontSize: 'var(--settings-mono-size)',
+                  fontWeight: 'var(--weight-medium)',
                   fontFamily: 'var(--font-mono)',
-                  letterSpacing: 'var(--track-meta)',
+                  letterSpacing: 'var(--track-folio)',
                   textTransform: 'uppercase',
                   color: 'var(--text-whisper)',
                 }}
@@ -228,7 +229,8 @@ export default function ModelsSettings() {
             <div
               style={{
                 marginTop: 10,
-                fontSize: 12,
+                fontSize: 'var(--settings-caption-size)',
+                fontWeight: 'var(--weight-book)',
                 color: 'var(--rose-accent, #c97c8a)',
                 fontFamily: 'var(--font-sans)',
                 letterSpacing: 'var(--track-body-tight)',
@@ -241,7 +243,8 @@ export default function ModelsSettings() {
             <div
               style={{
                 marginTop: 10,
-                fontSize: 12,
+                fontSize: 'var(--settings-caption-size)',
+                fontWeight: 'var(--weight-book)',
                 color: 'var(--text-tertiary)',
                 fontFamily: 'var(--font-sans)',
                 letterSpacing: 'var(--track-body-tight)',
@@ -361,8 +364,8 @@ function EnsembleSection() {
         <div style={{ marginTop: 24 }}>
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 500,
+              fontSize: 'var(--settings-mono-size)',
+              fontWeight: 'var(--weight-medium)',
               color: 'var(--text-soft)',
               letterSpacing: 'var(--track-folio)',
               textTransform: 'uppercase',
@@ -383,10 +386,11 @@ function EnsembleSection() {
           />
           <div
             style={{
-              fontSize: 12,
+              fontSize: 'var(--settings-caption-size)',
+              fontWeight: 'var(--weight-book)',
               color: 'var(--text-tertiary)',
               marginTop: 8,
-              lineHeight: 1.45,
+              lineHeight: 1.55,
               letterSpacing: 'var(--track-body-tight)',
               fontFamily: 'var(--font-sans)',
             }}
@@ -399,8 +403,8 @@ function EnsembleSection() {
         <div style={{ marginTop: 24 }}>
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 500,
+              fontSize: 'var(--settings-mono-size)',
+              fontWeight: 'var(--weight-medium)',
               color: 'var(--text-soft)',
               letterSpacing: 'var(--track-folio)',
               textTransform: 'uppercase',
@@ -426,10 +430,11 @@ function EnsembleSection() {
           </div>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 'var(--settings-caption-size)',
+              fontWeight: 'var(--weight-book)',
               color: 'var(--text-tertiary)',
               marginTop: 8,
-              lineHeight: 1.45,
+              lineHeight: 1.55,
               letterSpacing: 'var(--track-body-tight)',
               fontFamily: 'var(--font-sans)',
             }}

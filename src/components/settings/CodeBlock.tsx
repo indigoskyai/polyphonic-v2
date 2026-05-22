@@ -72,7 +72,7 @@ export function CodeBlock({ code, prompt = '$' }: CodeBlockProps) {
           borderLeft: '1px solid var(--hairline)',
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: copied ? 'var(--green-accent, #4ade80)' : 'var(--text-tertiary)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
@@ -147,7 +147,7 @@ export function PairCodeDisplay({
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--text-soft)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
@@ -233,7 +233,7 @@ function DigitGroup({ digits, active }: { digits: string[]; active: boolean }) {
             fontFamily: 'var(--font-mono)',
             fontSize: 28,
             color: active ? 'var(--ink)' : 'var(--text-faint)',
-            letterSpacing: '-0.02em',
+            letterSpacing: 'var(--track-display)',
             fontVariantNumeric: 'tabular-nums',
             fontWeight: 450,
           }}

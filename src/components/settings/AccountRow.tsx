@@ -27,8 +27,8 @@ export function AccountRow({ label, description, value }: AccountRowProps) {
         <div
           style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 13.5,
-            fontWeight: 500,
+            fontSize: 'var(--settings-body-size)',
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--ink)',
             letterSpacing: 'var(--track-body-tight)',
             marginBottom: 4,
@@ -40,7 +40,8 @@ export function AccountRow({ label, description, value }: AccountRowProps) {
           <div
             style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 12,
+              fontSize: 'var(--settings-caption-size)',
+              fontWeight: 'var(--weight-book)',
               color: 'var(--text-tertiary)',
               letterSpacing: 'var(--track-body-tight)',
               lineHeight: 1.45,
@@ -54,7 +55,7 @@ export function AccountRow({ label, description, value }: AccountRowProps) {
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 13,
+            fontSize: 12,
             color: 'var(--text-primary)',
             letterSpacing: 'var(--track-body-tight)',
           }}
@@ -83,7 +84,7 @@ export function AccountPlanPill({
         padding: '4px 12px',
         fontFamily: 'var(--font-mono)',
         fontSize: 9.5,
-        fontWeight: 500,
+        fontWeight: 'var(--weight-medium)',
         color,
         letterSpacing: 'var(--track-folio)',
         textTransform: 'uppercase',
@@ -134,7 +135,7 @@ export function ComingSoonBlock({
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--amber-soft, #d9a744)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
@@ -150,9 +151,9 @@ export function ComingSoonBlock({
         style={{
           fontFamily: 'var(--font-grotesque)',
           fontSize: 18,
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--ink)',
-          letterSpacing: 'var(--track-tight)',
+          letterSpacing: 'var(--track-display)',
         }}
       >
         {title}
@@ -160,7 +161,8 @@ export function ComingSoonBlock({
       <p
         style={{
           fontFamily: 'var(--font-sans)',
-          fontSize: 13.5,
+          fontSize: 'var(--settings-body-size)',
+          fontWeight: 'var(--weight-book)',
           color: 'var(--text-body)',
           letterSpacing: 'var(--track-body-tight)',
           lineHeight: 1.55,

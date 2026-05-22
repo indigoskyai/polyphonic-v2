@@ -7,8 +7,8 @@ import React from 'react';
    - No glow / no inset white strokes / no breathing animations
    - Pure white overlays at calibrated opacities
    - Surface-step active states for cards and segment controls
-   - Editorial typography with tight tracking on small text
-   - Switzer 500 weight for load-bearing labels, 400 for prose
+   - Editorial typography with restrained mono metadata
+   - Light display weights, medium labels, book-weight prose
 
    See polyphonic-settings-handoff/02-design-system-spec.md for full spec.
    ====================================================================== */
@@ -50,8 +50,8 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
     <div
       style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        fontWeight: 500,
+        fontSize: 'var(--settings-mono-size)',
+        fontWeight: 'var(--weight-medium)',
         textTransform: 'uppercase',
         letterSpacing: 'var(--track-folio)',
         color: 'var(--text-soft)',
@@ -229,8 +229,8 @@ export function RadioGroup({
               <span
                 style={{
                   fontFamily: 'var(--font-sans)',
-                  fontSize: 13.5,
-                  fontWeight: 500,
+                  fontSize: 'var(--settings-body-size)',
+                  fontWeight: 'var(--weight-medium)',
                   color: active ? 'var(--ink)' : 'var(--text-primary)',
                   letterSpacing: 'var(--track-body-tight)',
                 }}
@@ -241,10 +241,11 @@ export function RadioGroup({
                 <span
                   style={{
                     fontFamily: 'var(--font-sans)',
-                    fontSize: 12,
+                    fontSize: 'var(--settings-caption-size)',
+                    fontWeight: 'var(--weight-book)',
                     color: active ? 'var(--text-soft)' : 'var(--text-tertiary)',
                     letterSpacing: 'var(--track-body-tight)',
-                    lineHeight: 1.45,
+                    lineHeight: 1.55,
                   }}
                 >
                   {opt.hint}
@@ -288,7 +289,7 @@ export function TextInput({
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md, 10px)',
         padding: '0 14px',
-        fontSize: mono ? 12.5 : 13.5,
+        fontSize: mono ? 12.5 : 'var(--settings-body-size)',
         color: 'var(--text-primary)',
         fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
         letterSpacing: 'var(--track-body-tight)',
@@ -334,13 +335,13 @@ export function TextArea({
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md, 10px)',
         padding: '12px 14px',
-        fontSize: mono ? 12.5 : 13.5,
+        fontSize: mono ? 12.5 : 'var(--settings-body-size)',
         color: 'var(--text-primary)',
         fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
         letterSpacing: 'var(--track-body-tight)',
         outline: 'none',
         resize: 'vertical',
-        lineHeight: 1.55,
+        lineHeight: mono ? 1.7 : 1.6,
         transition: 'border-color 180ms var(--ease-out)',
       }}
       onFocus={(e) => {
@@ -378,7 +379,7 @@ export function SelectInput({
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md, 10px)',
         padding: '0 14px',
-        fontSize: 13.5,
+        fontSize: 'var(--settings-body-size)',
         color: 'var(--text-primary)',
         fontFamily: 'var(--font-sans)',
         letterSpacing: 'var(--track-body-tight)',
@@ -526,9 +527,9 @@ export function ConfirmDialog({
           style={{
             fontFamily: 'var(--font-grotesque)',
             fontSize: 18,
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--ink)',
-            letterSpacing: 'var(--track-tight)',
+            letterSpacing: 'var(--track-display)',
             marginBottom: 10,
           }}
         >
@@ -537,7 +538,8 @@ export function ConfirmDialog({
         <div
           style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 13,
+            fontSize: 'var(--settings-body-size)',
+            fontWeight: 'var(--weight-book)',
             color: 'var(--text-body)',
             letterSpacing: 'var(--track-body-tight)',
             lineHeight: 1.55,

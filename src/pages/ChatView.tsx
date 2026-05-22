@@ -813,6 +813,17 @@ export default function ChatView() {
     createThread,
     navigate,
   ]);
+  const renderHeaderAgentSelector = () => (
+    byokEnabled ? (
+      <AgentPicker
+        activeAgentId={activeAgentId}
+        onChange={(id) => { void handleAgentChange(id); }}
+        variant="header"
+      />
+    ) : (
+      <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
+    )
+  );
   useEffect(() => {
     if (messages.length > 0 && firstTurnHandoff) {
       setFirstTurnHandoff(null);
@@ -2248,6 +2259,9 @@ export default function ChatView() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        <div className="chat-agent-selector-corner">
+          {renderHeaderAgentSelector()}
+        </div>
         <div
           className="chat-empty-center flex-1 flex flex-col items-center"
           style={{
@@ -2356,14 +2370,6 @@ export default function ChatView() {
               <div className="input-footer">
                 <div className="agent-pills">
                   {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
-                  {byokEnabled ? (
-                    <AgentPicker
-                      activeAgentId={activeAgentId}
-                      onChange={(id) => { void handleAgentChange(id); }}
-                    />
-                  ) : (
-                    <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
-                  )}
                   {renderGuestStatusChip()}
                   <ObserverEyeChip
                     threadId={currentThreadId}
@@ -2456,17 +2462,22 @@ export default function ChatView() {
     >
       {/* Header — participant dot + title + subtle meta */}
       <div className="chat-header flex items-center flex-shrink-0">
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--luca-full)', opacity: 0.78 }} />
-        <span className="chat-header-title">
-          {threadTitle || 'New conversation'}
-        </span>
-        <div style={{ flex: 1 }} />
+        <div className="chat-header-left">
+          {renderHeaderAgentSelector()}
+          <span className="chat-header-thread-dot" aria-hidden="true" />
+          <span className="chat-header-title">
+            {threadTitle || 'New conversation'}
+          </span>
+        </div>
         <span className="chat-header-meta">
           {activeAgentId === 'luca'
             ? (byokEnabled ? 'luca · opus-4.7' : 'luca · kimi-k2.6')
             : `${currentAgentLabel.toLowerCase()} · custom agent`}
         </span>
         <ThreadInfoButton />
+      </div>
+      <div className="chat-agent-selector-mobile">
+        {renderHeaderAgentSelector()}
       </div>
 
       {/* Messages area */}
@@ -2880,14 +2891,6 @@ export default function ChatView() {
           <div className="input-footer">
             <div className="agent-pills">
               {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
-              {byokEnabled ? (
-                <AgentPicker
-                  activeAgentId={activeAgentId}
-                  onChange={(id) => { void handleAgentChange(id); }}
-                />
-              ) : (
-                <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
-              )}
               {renderGuestStatusChip()}
               <ObserverEyeChip
                 threadId={currentThreadId}

@@ -32,6 +32,16 @@ const MODELS = [
 
 const ROLE_HINTS = ['custom', 'analyst', 'researcher', 'writer', 'coach', 'planner'];
 
+const fieldLabelStyle = {
+  fontSize: 'var(--settings-mono-size)',
+  fontWeight: 'var(--weight-medium)',
+  color: 'var(--text-ghost)',
+  textTransform: 'uppercase',
+  letterSpacing: 'var(--track-folio)',
+  marginBottom: 6,
+  fontFamily: 'var(--font-mono)',
+} as const;
+
 export default function CreateAgentModal({ open, onClose }: Props) {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
@@ -98,7 +108,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
       <div className="flex flex-col gap-5">
         {/* Name */}
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+          <div style={fieldLabelStyle}>
             Name
           </div>
           <TextInput value={name} onChange={setName} placeholder="e.g. Atlas, Compass, Mira…" />
@@ -107,7 +117,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
         {/* Role + color */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+            <div style={fieldLabelStyle}>
               Role
             </div>
             <input
@@ -122,9 +132,10 @@ export default function CreateAgentModal({ open, onClose }: Props) {
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '0 12px',
-                fontSize: 13,
+                fontSize: 'var(--settings-body-size)',
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-sans)',
+                letterSpacing: 'var(--track-body)',
                 outline: 'none',
               }}
             />
@@ -135,7 +146,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
             </datalist>
           </div>
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+            <div style={fieldLabelStyle}>
               Color
             </div>
             <div className="flex gap-2 items-center" style={{ height: 40 }}>
@@ -164,7 +175,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
 
         {/* Model */}
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+          <div style={fieldLabelStyle}>
             Model
           </div>
           <select
@@ -177,9 +188,10 @@ export default function CreateAgentModal({ open, onClose }: Props) {
               border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)',
               padding: '0 12px',
-              fontSize: 13,
+              fontSize: 'var(--settings-body-size)',
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-sans)',
+              letterSpacing: 'var(--track-body)',
               cursor: 'pointer',
               outline: 'none',
             }}
@@ -194,7 +206,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
 
         {/* System prompt */}
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+          <div style={fieldLabelStyle}>
             System prompt
           </div>
           <TextArea
@@ -207,7 +219,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
 
         {/* Voice description (personality) */}
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: 'var(--track-meta)', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+          <div style={fieldLabelStyle}>
             Voice
           </div>
           <TextArea
