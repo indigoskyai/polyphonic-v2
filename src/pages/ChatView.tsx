@@ -569,7 +569,18 @@ export default function ChatView() {
   const currentThread = threads.find((t) => t.id === currentThreadId);
   // Pending agent id: used when there's no thread yet (empty state). Once a
   // thread exists, it always wins so the picker reflects the persisted value.
-  const [pendingAgentId, setPendingAgentId] = useState<string>('luca');
+  // Seed it synchronously from the persisted landing choice so a remount —
+  // e.g. "say hello" / "switch to agent" navigating to /chat — lands on the
+  // adopted agent immediately, without depending on effect ordering or the
+  // model-key probe resolving. Validated against the loaded agent list so a
+  // deleted agent falls back to luca. The very first login mount reads null
+  // here (settings not loaded yet) and is covered by the seed effect below.
+  const [pendingAgentId, setPendingAgentId] = useState<string>(() => {
+    const persisted = useSettingsStore.getState().landing_agent_id;
+    if (!persisted || persisted === 'luca') return 'luca';
+    const knownAgents = useAgentSettingsStore.getState().agents;
+    return knownAgents.some((a) => a.id === persisted) ? persisted : 'luca';
+  });
   const activeAgentId = currentThread?.agent_id || pendingAgentId;
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
