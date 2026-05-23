@@ -150,7 +150,7 @@ describe('Phase 4 reliability guardrails', () => {
     expect(identitySource).toContain('if (agentId !== "luca")');
     expect(identitySource).toContain('return loadAgentIdentity(supabase, userId, agentId)');
 
-    expect(customPrompt).toContain('Speak from this agent');
+    expect(customPrompt).toContain('You speak as yourself, in your own voice');
     expect(customPrompt).not.toContain('LUCA_SOUL');
   });
 

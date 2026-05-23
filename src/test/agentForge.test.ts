@@ -63,7 +63,7 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('forge_agent (draft complete custom-agent blueprints as inline approval cards)');
     expect(chatMulti).toContain('findForgeProposalResult');
     expect(chatMulti).toContain('return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload })');
-    expect(lucaSoul).toContain('when the user wants a custom agent');
+    expect(lucaSoul).toContain('Forge shows the user a proposal card');
   });
 
   it('renders Forge proposal messages before the generic permission card and refreshes agents on approval', () => {
