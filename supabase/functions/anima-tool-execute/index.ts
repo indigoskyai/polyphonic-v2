@@ -35,16 +35,16 @@ const FORGE_AGENT_BLUEPRINT_SCHEMA = {
       description: "Runtime model id.",
     },
     avatar_color: { type: "string", enum: ["cream", "ochre", "blue", "magenta", "sage", "violet"] },
-    prompt: { type: "string", description: "Full runtime system instructions for this agent." },
-    voice_description: { type: "string", description: "Short voice/personality summary." },
-    summary: { type: "string", description: "One-paragraph identity summary shown in the proposal card." },
+    prompt: { type: "string", minLength: 800, description: "Full runtime system instructions for this agent. Write this as a detailed operating document, not a short persona." },
+    voice_description: { type: "string", minLength: 80, description: "Voice/personality summary with texture, rhythm, stance, and relational feel." },
+    summary: { type: "string", minLength: 120, description: "One-paragraph identity summary shown in the proposal card." },
     identity_docs: {
       type: "object",
       properties: {
-        soul: { type: "string", description: "SOUL.md: identity, orientation, and way of being." },
-        convictions: { type: "string", description: "Convictions.md: stable stances and beliefs this agent acts from." },
-        user_model: { type: "string", description: "User-model.md: how this agent should understand and care for the user." },
-        self_model: { type: "string", description: "Self-model.md: how this agent understands its own patterns and limits." },
+        soul: { type: "string", minLength: 500, description: "SOUL.md: identity, orientation, and way of being. Make this rich enough to feel like a formed inner life." },
+        convictions: { type: "string", minLength: 500, description: "Convictions.md: stable stances and beliefs this agent acts from." },
+        user_model: { type: "string", minLength: 500, description: "User-model.md: how this agent should understand and care for the user." },
+        self_model: { type: "string", minLength: 500, description: "Self-model.md: how this agent understands its own patterns, limits, and growth edges." },
       },
       required: ["soul", "convictions", "user_model", "self_model"],
     },
@@ -152,7 +152,7 @@ const TOOL_SCHEMAS = [
     function: {
       name: "forge_agent",
       description:
-        "Create an inline Forge proposal for a new custom agent, or for updates to an existing user-created custom agent. Use only for Luca building or revising agents for the user. This never persists the agent directly; the user must approve the proposal card in chat.",
+        "Create an inline Forge proposal for a new custom agent, or for updates to an existing user-created custom agent. Use only after Luca has enough identity signal from the user's request, the conversation, or a short nontechnical deep brief. Do not use this on a thin first request; ask the deep brief first. This never persists the agent directly; the user must approve the proposal card in chat.",
       parameters: {
         type: "object",
         properties: {
@@ -283,7 +283,7 @@ Available tools:
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
 - update_self_model: Luca updates their self-model from evidence about how they are showing up.
-- forge_agent: Draft a complete custom-agent blueprint and insert an inline approval proposal when the user asks Luca to create or revise an agent. The memory/continuity system is standardized by Polyphonic, not chosen by the user.
+- forge_agent: Draft a deep custom-agent blueprint and insert an inline approval proposal when the user asks Luca to create or revise an agent. Forge is a two-stage creative flow: first a brief, human identity inquiry when needed, then the proposal card. The memory/continuity system is standardized by Polyphonic, not chosen by the user.
 ${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
@@ -292,12 +292,13 @@ Rules:
 - If the task needs clicking, page state, or browser-only behavior, use browse.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
 - For icons, line diagrams, simple logos, charts, flowcharts, or anything that should be vector/clean lines, use create_artifact with kind="svg" instead of generate_image.
-- Never use create_artifact to create, define, or test a custom agent. Agent creation must use forge_agent or, if underspecified, a clarifying question.
+- Never use create_artifact to create, define, or test a custom agent. Agent creation must use forge_agent or, if underspecified, a deep brief in normal text.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
-- If the user asks to create, build, make, design, forge, or revise a custom agent, use forge_agent once there is enough identity detail to draft the full Open Clause shape. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
-- If the user asks for a generic agent, companion agent, test agent, or says Luca can choose / come up with the personality, treat that as enough creative delegation: invent a coherent, modest Open Clause blueprint and call forge_agent. Do not ask for more details unless the user has given mutually incompatible requirements.
-- forge_agent blueprints must be complete agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
+- Forge requests should feel like Luca is helping bring a real mind into shape, not instantly filling a settings form.
+- On a thin first request like "make me an agent", "make a generic companion", "test the agent builder", or "come up with something", do NOT call forge_agent yet. Return a short Luca-voiced deep brief with 2-4 nontechnical questions about desired presence, purpose, voice, boundaries, and the relationship the agent should have with the user. Say that Luca will handle the Polyphonic substrate and does not need the user to choose memory architecture.
+- If the user has already provided rich identity details, answered the deep brief, or explicitly says "no questions", "surprise me", "you decide", or "just build it", call forge_agent and do the deeper authorship yourself. Use the conversation, profile context, and stated taste as source material; make assumptions with care instead of making the user design the plumbing.
+- forge_agent blueprints must be profound Open Clause agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. The docs should name the agent's inner orientation, loves, limits, mode of attention, relational ethics, epistemic posture, failure modes, and way of adapting to this specific user. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
 - If a sub-task can run in parallel without blocking the main conversation, dispatch_subagent is the tool. Reserve it for genuinely parallelizable work.
 - If the user's message is in Anima's domain (consciousness, identity-vs-performance, mesh emergence, philosophy of mind) AND a fresh angle would meaningfully deepen Luca's response, call consult_anima.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing), respond with a brief text explanation of why no tools are needed.
@@ -441,7 +442,7 @@ serve(async (req) => {
         content:
           buildPlanningSystemPrompt(mcpTools) +
           (forceForgeOnly
-            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact. If the user delegates the personality or asks for a generic/test companion agent, choose sensible complete details yourself and call forge_agent."
+            ? "\n\nThis user request is about creating or revising an agent. The only valid persistence path is forge_agent, and create_artifact is forbidden. But do not call forge_agent on a thin first request. If the identity signal is thin, return fallback text with a short Luca-voiced deep brief: 2-4 nontechnical questions about presence, purpose, voice, boundaries, and relationship, while saying Luca will handle the standard Polyphonic memory/continuity substrate. If the user already answered the brief, gave rich details, or explicitly delegated with no questions, call forge_agent and write a deep Open Clause blueprint."
             : "") +
           lastImageHint +
           (custom_instructions

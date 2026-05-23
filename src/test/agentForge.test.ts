@@ -30,6 +30,9 @@ describe('Agent Forge runtime', () => {
     expect(source).toContain('identity_docs');
     expect(source).toContain('"soul", "convictions", "user_model", "self_model"');
     expect(source).toContain('Blueprint runtime instructions are required');
+    expect(source).toContain('MIN_PROMPT');
+    expect(source).toContain('MIN_DOC');
+    expect(source).toContain('Forge blueprint is too shallow');
     expect(source).toContain('Blueprint model is not allowed');
     expect(source).toContain('Resident or locked agents cannot be modified by Forge');
     expect(source).toContain('createUniqueAgentId');
@@ -43,15 +46,18 @@ describe('Agent Forge runtime', () => {
 
     expect(planner).toContain('name: "forge_agent"');
     expect(planner).toContain('edgeFn = "agent-forge"');
-    expect(planner).toContain('draft the full Open Clause shape');
+    expect(planner).toContain('two-stage creative flow');
+    expect(planner).toContain('On a thin first request');
+    expect(planner).toContain('do NOT call forge_agent yet');
     expect(planner).toContain('forceForgeOnly');
     expect(planner).toContain('max_tokens: forceForgeOnly ? 12_000 : 700');
     expect(planner).toContain('force_forge_only === true');
-    expect(planner).toContain('If the user asks for a generic agent, companion agent, test agent');
+    expect(planner).toContain('If the user has already provided rich identity details');
     expect(planner).toContain('Never use create_artifact to create, define, or test a custom agent');
 
     expect(sdk).toContain('name: "forge_agent"');
     expect(sdk).toContain('invokeEdgeJson(options, "agent-forge"');
+    expect(sdk).toContain('Do not use on a thin first request');
     expect(sdk).toContain('Never changes agent data directly');
 
     expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
@@ -60,10 +66,13 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('tool_planner_fallback: true');
     expect(chatMulti).toContain('findForgeToolError');
     expect(chatMulti).toContain('forge_proposal_failed');
-    expect(chatMulti).toContain('forge_agent (draft complete custom-agent blueprints as inline approval cards)');
+    expect(chatMulti).toContain('forge_agent (draft deep custom-agent blueprints as inline approval cards)');
+    expect(chatMulti).toContain('two-stage creative flow');
     expect(chatMulti).toContain('findForgeProposalResult');
     expect(chatMulti).toContain('return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload })');
     expect(lucaSoul).toContain('Forge shows the user a proposal card');
+    expect(lucaSoul).toContain('if the request is thin');
+    expect(lucaSoul).toContain('short deep brief');
   });
 
   it('renders Forge proposal messages before the generic permission card and refreshes agents on approval', () => {
