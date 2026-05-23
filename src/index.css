@@ -5584,37 +5584,51 @@ html {
 }
 
 /* Inline Forge proposal card */
+/* ──────────────────────────────────────────────────────────────────────
+   Forge proposal card — Luca proposing a new agent.
+
+   Premium / editorial treatment: real surface-1 card on the floor, generous
+   22px padding, panel elevation (this is a *presented* proposal, it should
+   feel lifted off the thread), and a definition-list spec sheet instead of a
+   lopsided 3-up grid (Role/Model/Voice/Continuity now read as clean
+   hairline-separated rows that handle long voice descriptions gracefully).
+   Monochrome throughout; the one earned accent is a breathing sage dot on the
+   PENDING status — the same "awaiting you" vocabulary as the SidebarHeader
+   LIVE eyebrow. */
 .forge-card {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  background: linear-gradient(180deg, rgba(244, 243, 240, 0.045), rgba(244, 243, 240, 0.025));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 16px 18px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-faint);
+  border-radius: 14px;
+  padding: 22px;
   margin: 20px 0;
-  box-shadow: var(--shadow-inset-highlight);
+  box-shadow: var(--shadow-panel), var(--shadow-inset-highlight);
   animation: perm-inline-in 300ms ease-out;
 }
-.forge-card[data-status="approved"] { border-color: rgba(140, 168, 156, 0.32); }
-.forge-card[data-status="canceled"] { opacity: 0.72; }
-.forge-card[data-status="failed"] { border-color: rgba(248, 113, 113, 0.28); }
+.forge-card[data-status="approved"] { border-color: rgba(140, 168, 156, 0.30); }
+.forge-card[data-status="canceled"] { opacity: 0.66; }
+.forge-card[data-status="failed"] { border-color: rgba(225, 88, 115, 0.30); }
 .forge-card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 13px;
+  margin-bottom: 20px;
 }
 .forge-card-mark {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-primary);
-  background: rgba(244, 243, 240, 0.055);
-  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.10), transparent 48%),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
 .forge-card-title-wrap { min-width: 0; flex: 1; }
@@ -5630,69 +5644,95 @@ html {
 .forge-card-kicker {
   font-size: 9px;
   color: var(--text-ghost);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 .forge-card-title {
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--text-primary);
   margin: 0;
-  letter-spacing: 0;
+  letter-spacing: var(--track-tight);
 }
 .forge-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 9px;
   color: var(--text-soft);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
-  padding: 4px 8px;
+  padding: 5px 10px;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+/* Breathing sage dot — only on a pending proposal, signalling "awaiting you".
+   Earned active-attention accent (same livedot-breathe rhythm as LIVE eyebrow). */
+.forge-card[data-status="pending"] .forge-card-status::before,
+.forge-card[data-status="committing"] .forge-card-status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  box-shadow: 0 0 6px rgba(201, 168, 124, 0.5);
+  animation: livedot-breathe 3s ease-in-out infinite;
 }
 .forge-card-grid {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 18px;
+  border-top: 1px solid var(--border-faint);
+}
+.forge-card-grid > div {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 12px;
+  grid-template-columns: 104px 1fr;
+  gap: 18px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border-faint);
 }
 .forge-card-label {
   font-size: 9px;
   color: var(--text-ghost);
-  margin-bottom: 5px;
+  margin: 0;
+  padding-top: 1px;
 }
 .forge-card-value {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--text-body);
   overflow-wrap: anywhere;
 }
 .forge-card-summary {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-body);
-  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
 }
 .forge-card-disclosure {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   border: 0;
   background: transparent;
   color: var(--text-soft);
   font-size: 10px;
   padding: 0;
   cursor: pointer;
+  transition: color 160ms var(--ease-out);
 }
 .forge-card-disclosure:hover { color: var(--text-primary); }
 .forge-card-docs {
   display: grid;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .forge-card-doc {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-faint);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.10);
-  padding: 12px;
+  background: var(--floor);
+  padding: 14px;
 }
 .forge-card-doc-title {
   font-size: 9px;
@@ -5705,26 +5745,29 @@ html {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--text-body);
   max-height: 220px;
   overflow: auto;
 }
 .forge-card-error {
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 11px;
-  color: var(--danger);
+  color: var(--rose-accent, var(--danger));
 }
 .forge-card-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-faint);
   flex-wrap: wrap;
 }
 
 @media (max-width: 640px) {
-  .forge-card-grid { grid-template-columns: 1fr; }
+  .forge-card { padding: 18px; }
+  .forge-card-grid > div { grid-template-columns: 88px 1fr; gap: 14px; }
   .forge-card-header { align-items: flex-start; }
   .forge-card-status { margin-top: 2px; }
 }
@@ -7553,10 +7596,49 @@ html {
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-body-tight);
   backdrop-filter: blur(18px);
+  isolation: isolate;
   transition:
     transform 180ms var(--ease-out),
     border-color 180ms var(--ease-out),
     background 180ms var(--ease-out);
+}
+
+/* Border-glow shimmer — same 8-pool prime-interval vocabulary as the composer
+   (.input-shell::before). Monochrome warm-white pools (rgba(232,230,224,…))
+   masked to the 1px pill ring; the 3/5/7/11/13/17/19/23s rhythms never sync so
+   the glow travels continuously around the pill. This is Luca's presence echo —
+   the launcher carries the same living border as the composer centerpiece. */
+.luca-guide-launcher::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  opacity: 0.85;
+  transition: opacity 0.8s var(--ease-out);
+  pointer-events: none;
+  z-index: 4;
+  background:
+    radial-gradient(ellipse 45% 180% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation:
+    shimmer-c1 3s  ease-in-out infinite,
+    shimmer-c2 5s  ease-in-out infinite,
+    shimmer-c3 7s  ease-in-out infinite,
+    shimmer-c4 11s ease-in-out infinite,
+    shimmer-c5 13s ease-in-out infinite,
+    shimmer-c6 17s ease-in-out infinite,
+    shimmer-c7 19s ease-in-out infinite,
+    shimmer-c8 23s ease-in-out infinite;
 }
 
 .luca-guide-launcher:hover,
@@ -7566,6 +7648,14 @@ html {
   background: rgba(24, 24, 25, 0.94);
 }
 
+.luca-guide-launcher:hover::before,
+.luca-guide-launcher[data-open="true"]::before {
+  opacity: 1;
+}
+
+/* Monochrome identity mark — the sage tint is removed so the launcher and the
+   chat-window header L read as neutral. Warm-white serif L on a faint neutral
+   well; a 1px top-edge highlight keeps it sitting in the floor+cards light. */
 .luca-guide-mark {
   display: inline-flex;
   align-items: center;
@@ -7573,14 +7663,14 @@ html {
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  border: 1px solid rgba(201, 168, 124, 0.28);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 35% 25%, rgba(255, 230, 187, 0.24), transparent 42%),
-    rgba(201, 168, 124, 0.09);
-  color: var(--luca-color, #c9a87c);
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.12), transparent 46%),
+    rgba(255, 255, 255, 0.035);
+  color: var(--text-primary);
   font-family: var(--font-serif, var(--font-sans));
-  font-size: 12px;
+  font-size: 13px;
   font-weight: var(--weight-medium);
   line-height: 1;
   letter-spacing: 0;
@@ -7590,7 +7680,7 @@ html {
 .luca-guide-mark.large {
   width: 34px;
   height: 34px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .luca-guide-panel {
