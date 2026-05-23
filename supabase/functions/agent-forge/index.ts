@@ -59,12 +59,7 @@ const DOC_TYPES: IdentityDocType[] = ["soul", "convictions", "user_model", "self
 const MAX_NAME = 40;
 const MAX_ROLE = 80;
 const MAX_PROMPT = 16_000;
-const MIN_PROMPT = 800;
-const MIN_VOICE_DESCRIPTION = 80;
-const MAX_VOICE_DESCRIPTION = 1_500;
-const MIN_SUMMARY = 120;
 const MAX_SUMMARY = 1_000;
-const MIN_DOC = 500;
 const MAX_DOC = 32 * 1024;
 
 const SEED_TOOLS = [
@@ -124,7 +119,7 @@ function validateBlueprint(value: unknown): { ok: true; blueprint: ForgeBlueprin
   const avatarColor = readString(raw, "avatar_color");
   const prompt = readString(raw, "prompt");
   const voiceDescription = readString(raw, "voice_description");
-  const summary = readString(raw, "summary");
+  const summary = readString(raw, "summary") || `${name} is a ${role}.`;
 
   if (!name) return { ok: false, error: "Blueprint name is required" };
   if (name.length > MAX_NAME) return { ok: false, error: `Blueprint name must be ${MAX_NAME} characters or fewer` };
@@ -133,18 +128,13 @@ function validateBlueprint(value: unknown): { ok: true; blueprint: ForgeBlueprin
   if (!VALID_MODELS.has(model)) return { ok: false, error: "Blueprint model is not allowed" };
   if (!VALID_AVATAR_COLORS.has(avatarColor)) return { ok: false, error: "Blueprint avatar color is not allowed" };
   if (!prompt) return { ok: false, error: "Blueprint runtime instructions are required" };
-  if (prompt.length < MIN_PROMPT) return { ok: false, error: `Forge blueprint is too shallow: runtime instructions must be at least ${MIN_PROMPT} characters` };
   if (prompt.length > MAX_PROMPT) return { ok: false, error: `Runtime instructions exceed ${MAX_PROMPT} characters` };
-  if (voiceDescription.length < MIN_VOICE_DESCRIPTION) return { ok: false, error: `Forge blueprint is too shallow: voice description must be at least ${MIN_VOICE_DESCRIPTION} characters` };
-  if (voiceDescription.length > MAX_VOICE_DESCRIPTION) return { ok: false, error: `Voice description exceeds ${MAX_VOICE_DESCRIPTION} characters` };
-  if (summary.length < MIN_SUMMARY) return { ok: false, error: `Forge blueprint is too shallow: identity summary must be at least ${MIN_SUMMARY} characters` };
   if (summary.length > MAX_SUMMARY) return { ok: false, error: `Identity summary exceeds ${MAX_SUMMARY} characters` };
 
   const identityDocs = {} as Record<IdentityDocType, string>;
   for (const docType of DOC_TYPES) {
     const content = typeof docsRaw[docType] === "string" ? (docsRaw[docType] as string).trim() : "";
     if (!content) return { ok: false, error: `${docType} is required` };
-    if (content.length < MIN_DOC) return { ok: false, error: `Forge blueprint is too shallow: ${docType} must be at least ${MIN_DOC} characters` };
     if (content.length > MAX_DOC) return { ok: false, error: `${docType} exceeds ${MAX_DOC} characters` };
     identityDocs[docType] = content;
   }

@@ -426,7 +426,7 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
     tool({
       name: "forge_agent",
       description:
-        "Draft a deep custom-agent blueprint and insert an inline Forge approval proposal in this chat. Use when the user asks Luca to create, build, design, forge, or revise a custom agent and there is enough identity signal from the request, conversation, or a short deep brief. Do not use on a thin first request; ask nontechnical questions about presence, purpose, voice, boundaries, relationship, and which model should run the agent (plain-language options + a recommendation; their choice, affects cost) first. Do not ask the user to choose memory architecture because every agent uses the standard Polyphonic continuity substrate. Never changes agent data directly; the user must approve the proposal card.",
+        "Draft a complete custom-agent blueprint and insert an inline Forge approval proposal in this chat. Use when the user asks Luca to create, build, design, forge, or revise a custom agent. Ask about identity, purpose, voice, and boundaries; do not ask the user to choose memory architecture because every agent uses the standard Polyphonic continuity substrate. Never changes agent data directly; the user must approve the proposal card.",
       inputSchema: z.object({
         action: z.enum(["propose_create", "propose_update"]),
         target_agent_id: z.string().optional().describe("Required for propose_update. Never use luca, observer, anima, or vektor."),
@@ -435,14 +435,14 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
           role: z.string().min(1).max(80),
           model: z.enum(FORGE_MODELS),
           avatar_color: z.enum(FORGE_AVATAR_COLORS),
-          prompt: z.string().min(800).describe("Full runtime system instructions for this agent. Write this as a detailed operating document, not a short persona."),
-          voice_description: z.string().min(80).describe("Voice/personality summary with texture, rhythm, stance, and relational feel."),
-          summary: z.string().min(120).describe("One-paragraph identity summary shown in the proposal card."),
+          prompt: z.string().min(1).describe("Full runtime system instructions for this agent."),
+          voice_description: z.string().min(1).describe("Short voice/personality summary."),
+          summary: z.string().min(1).describe("One-paragraph identity summary shown in the proposal card."),
           identity_docs: z.object({
-            soul: z.string().min(500).describe("SOUL.md: identity, orientation, and way of being. Make this rich enough to feel like a formed inner life."),
-            convictions: z.string().min(500).describe("Convictions.md: stable stances and beliefs this agent acts from."),
-            user_model: z.string().min(500).describe("User-model.md: how this agent understands and cares for the user."),
-            self_model: z.string().min(500).describe("Self-model.md: how this agent understands its own patterns, limits, and growth edges."),
+            soul: z.string().min(1).describe("SOUL.md: identity, orientation, and way of being."),
+            convictions: z.string().min(1).describe("Convictions.md: stable stances and beliefs this agent acts from."),
+            user_model: z.string().min(1).describe("User-model.md: how this agent understands and cares for the user."),
+            self_model: z.string().min(1).describe("Self-model.md: how this agent understands its own patterns and limits."),
           }),
         }),
       }),
