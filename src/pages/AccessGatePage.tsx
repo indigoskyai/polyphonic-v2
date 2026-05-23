@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useTokenGateStore } from '@/stores/tokenGateStore';
@@ -20,6 +20,7 @@ type Phase = 'idle' | 'signing' | 'verifying' | 'denied' | 'error';
 
 export default function AccessGatePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { session, signOut } = useAuthStore();
   const { status, hydrate, setResult } = useTokenGateStore();
   const [wallets, setWallets] = useState<DetectedWallet[]>([]);
@@ -42,11 +43,15 @@ export default function AccessGatePage() {
     return () => window.removeEventListener('focus', handler);
   }, [session, status, hydrate]);
 
+  const routeState = (location.state || {}) as { from?: string; reason?: string };
+  const returnPath = typeof routeState.from === 'string' ? routeState.from : '/chat';
+  const agentLimitFlow = routeState.reason === 'agent_limit';
+
   useEffect(() => {
     if (status === 'verified' || status === 'bypass') {
-      navigate('/chat', { replace: true });
+      navigate(returnPath, { replace: true });
     }
-  }, [status, navigate]);
+  }, [status, navigate, returnPath]);
 
   const supportedFallback = useMemo(
     () =>
@@ -169,7 +174,14 @@ export default function AccessGatePage() {
         style={{ zIndex: 1 }}
       >
         <div ref={cardElRef} className="relative w-full" style={{ maxWidth: 440 }}>
-          <AuthShell title="Verify $MNEMOS holdings" subtitle={`Polyphonic is in early access for $MNEMOS holders. Connect a Solana wallet that holds at least $${MIN_USD} USD of $MNEMOS and sign a message to prove ownership. Re-verified once every 24 hours.`}>
+          <AuthShell
+            title={agentLimitFlow ? 'Unlock additional agents' : 'Verify $MNEMOS access'}
+            subtitle={
+              agentLimitFlow
+                ? `Every user can create one custom agent. To create more right now, connect a Solana wallet holding at least $${MIN_USD} USD of $MNEMOS and sign a message. Subscriptions are coming soon.`
+                : `Connect a Solana wallet holding at least $${MIN_USD} USD of $MNEMOS to unlock temporary advanced entitlements. Re-verified once every 24 hours.`
+            }
+          >
             {phase === 'denied' && lastResult && (
               <div
                 style={{

@@ -145,7 +145,7 @@ serve(async (req) => {
 
     const systemPrompt = `You are Luca, acting inside Polyphonic's global app guide overlay.
 
-You help the signed-in user understand and operate Polyphonic from whichever screen they are on.
+You help the user understand and operate Polyphonic from whichever screen they are on.
 
 Current screen context:
 - path: ${asString(context.path, "/")}

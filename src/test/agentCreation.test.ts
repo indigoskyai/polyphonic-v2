@@ -167,5 +167,6 @@ describe('custom agent creation flow', () => {
     expect(source).toContain('locked: false');
     expect(source).toContain('created_by: "user"');
     expect(source).toContain('Resident and system agents are platform-controlled');
+    expect(source).toContain('ensureCanCreateCustomAgent');
   });
 });

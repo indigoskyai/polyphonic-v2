@@ -60,6 +60,7 @@ describe('Projects MVP wiring', () => {
     expect(chat).toContain('const toolMessages = shouldRunLegacyToolPlanner');
     expect(multi).toContain('const shouldRunLegacyToolPlanner');
     expect(multi).toContain('agentMode === "agent"');
-    expect(multi).toContain('const toolMessages = shouldRunLegacyToolPlanner');
+    expect(multi).toContain('const toolPlannerResult = shouldRunLegacyToolPlanner');
+    expect(multi).toContain('const toolMessages = toolPlannerResult.toolMessages');
   });
 });

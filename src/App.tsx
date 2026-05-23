@@ -21,6 +21,7 @@ import ImportProgressBanner from "./components/ImportProgressBanner";
 import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { useAgentScopeStore } from "./stores/agentScopeStore";
+import { useTokenGateStore } from "./stores/tokenGateStore";
 import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
 import { isAnonymousUser } from "./lib/accessTier";
 import { readLandingChatTransitionFlag } from "./lib/guestChat";
@@ -82,7 +83,6 @@ const CronHealthSettings = lazy(() => import("./pages/settings/CronHealthSetting
 const HelpGuide = lazy(() => import("./pages/settings/HelpGuide"));
 const CanvasPanel = lazy(() => import("./components/canvas/CanvasPanel"));
 const AccessGatePage = lazy(() => import("./pages/AccessGatePage"));
-import AuthGate from "./components/auth/AuthGate";
 
 function AuthInit({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
@@ -150,12 +150,12 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ProtectedRoute({ children, skipTokenGate = false }: { children: React.ReactNode; skipTokenGate?: boolean }) {
+function ProtectedRoute({ children, skipTokenGate: _skipTokenGate = false }: { children: React.ReactNode; skipTokenGate?: boolean }) {
   const { user, loading } = useAuthStore();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
   if (!user) return <Navigate to="/" replace />;
-  if (skipTokenGate) return <>{children}</>;
-  return <AuthGate>{children}</AuthGate>;
+  void _skipTokenGate;
+  return <>{children}</>;
 }
 
 function RouteFallback() {
@@ -191,12 +191,20 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loadNotifications = useNotificationStore((s) => s.load);
   const subscribeNotifications = useNotificationStore((s) => s.subscribe);
   const loadAgentScopes = useAgentScopeStore((s) => s.load);
+  const tokenGateStatus = useTokenGateStore((s) => s.status);
+  const hydrateTokenGate = useTokenGateStore((s) => s.hydrate);
   const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) loadSettings(user.id);
     if (user) loadAgentScopes(user.id);
   }, [user, loadSettings, loadAgentScopes]);
+
+  useEffect(() => {
+    if (user && tokenGateStatus === 'unknown') {
+      void hydrateTokenGate();
+    }
+  }, [user, tokenGateStatus, hydrateTokenGate]);
 
   useEffect(() => {
     if (!user) return;

@@ -15,7 +15,8 @@ describe('Agent Forge runtime', () => {
     expect(source).toContain('action === "propose_create" || action === "propose_update"');
     expect(source).toContain('action === "cancel"');
     expect(source).toContain('action !== "commit"');
-    expect(source).toContain('Forge requires a saved signed-in account');
+    expect(source).not.toContain('Forge requires a saved signed-in account');
+    expect(source).toContain('ensureCanCreateCustomAgent');
     expect(source).toContain('RESERVED_AGENT_IDS');
     expect(source).toContain('agent_configs');
     expect(source).toContain('agent_identity');

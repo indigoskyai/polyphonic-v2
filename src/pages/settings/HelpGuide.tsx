@@ -33,7 +33,7 @@ const QUICK_START = [
   },
   {
     label: 'Create agents',
-    body: 'Ask Luca to draft an agent or open the manual editor for identity documents, model, voice, and instructions.',
+    body: 'Ask Luca to draft an agent or open the manual editor. Your first custom agent is included; additional agents currently use the temporary $MNEMOS unlock.',
     href: '/settings/agents',
   },
   {
@@ -60,7 +60,7 @@ const FEATURE_MAP = [
     icon: Bot,
     title: 'Agents',
     href: '/settings/agents',
-    desc: 'The place to review and edit agent identity, model, prompt, voice, tools, and identity documents. Luca can also create agents through Forge proposals.',
+    desc: 'The place to review and edit agent identity, model, prompt, voice, tools, and identity documents. Luca can also create agents through Forge proposals. One custom agent is included for every user.',
   },
   {
     icon: NotebookPen,
@@ -103,6 +103,10 @@ const TROUBLESHOOTING = [
   {
     problem: 'A custom agent says it needs an API key.',
     fix: 'Open Models and connect OpenRouter. Custom agents are BYOK, while Luca may still have a platform/free route.',
+  },
+  {
+    problem: 'Creating another custom agent asks for $MNEMOS.',
+    fix: 'Every user can create one custom agent. Additional agents currently use the temporary $MNEMOS unlock until subscriptions arrive.',
   },
   {
     problem: 'An agent seems to be using the wrong identity.',
@@ -315,7 +319,7 @@ export default function HelpGuide() {
             </div>
             <div>
               <BookOpenText size={17} strokeWidth={1.65} aria-hidden="true" />
-              <span>Custom agents get their own identity documents, prompt, model, Journal, Memory, and Mind records.</span>
+              <span>Custom agents get their own identity documents, prompt, model, Journal, Memory, and Mind records. The first one is included for every user.</span>
             </div>
             <div>
               <Eye size={17} strokeWidth={1.65} aria-hidden="true" />

@@ -79,7 +79,7 @@ export const useTokenGateStore = create<TokenGateState>((set) => ({
       }
     } catch (err) {
       // Belt-and-suspenders: any unexpected throw must still land in a
-      // terminal state so AuthGate stops showing "Verifying access…".
+      // terminal state so feature checks do not hang on "checking".
       // Denied is the safer default — the user can re-verify from /access.
       console.error('[tokenGate] hydrate failed:', err);
       set({ status: 'denied', error: err instanceof Error ? err.message : String(err) });

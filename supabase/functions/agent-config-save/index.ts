@@ -2,6 +2,7 @@
 // Accepts a partial agent config, validates env transitions, and upserts the row.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { ensureCanCreateCustomAgent } from "../_shared/custom-agent-entitlements.ts";
 
 let corsHeaders: Record<string, string> = {
   ...getCorsHeaders(),
@@ -73,6 +74,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
     const userId = userData.user.id;
+    const userEmail = userData.user.email || "";
 
     // Parse + validate body
     let body: ConfigPatch;
@@ -155,6 +157,12 @@ Deno.serve(async (req) => {
         { error: "Resident and system agents are platform-controlled and cannot be edited here." },
         403,
       );
+    }
+    if (!existing) {
+      const entitlement = await ensureCanCreateCustomAgent(admin, userId, userEmail);
+      if (!entitlement.ok) {
+        return jsonResponse(entitlement.body, entitlement.status);
+      }
     }
     if (!existing && (body.name === undefined || body.role === undefined)) {
       return jsonResponse({ error: "Name and role are required when creating an agent" }, 400);

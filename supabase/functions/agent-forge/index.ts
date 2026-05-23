@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { ensureCanCreateCustomAgent } from "../_shared/custom-agent-entitlements.ts";
 
 type ForgeAction = "propose_create" | "propose_update" | "commit" | "cancel";
 type ForgeCommitAction = "create" | "update";
@@ -153,23 +154,13 @@ function validateBlueprint(value: unknown): { ok: true; blueprint: ForgeBlueprin
   };
 }
 
-function isSavedUser(user: any): boolean {
-  if (!user) return false;
-  if (user.is_anonymous === true) return false;
-  if (user.app_metadata?.provider === "anonymous") return false;
-  if (Array.isArray(user.identities) && user.identities.some((identity: any) => identity?.provider === "anonymous")) {
-    return false;
-  }
-  return true;
-}
-
 async function resolveCaller(
   req: Request,
   body: ForgeBody,
   supabaseUrl: string,
   anonKey: string,
   serviceRoleKey: string,
-): Promise<{ userId: string; admin: any } | { error: Response }> {
+): Promise<{ userId: string; userEmail: string; admin: any } | { error: Response }> {
   const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader.startsWith("Bearer ")) {
     return { error: fail("Unauthorized", 401) };
@@ -183,8 +174,7 @@ async function resolveCaller(
     if (!userId) return { error: fail("Internal Forge calls require user_id", 400) };
     const { data, error } = await admin.auth.admin.getUserById(userId);
     if (error || !data?.user) return { error: fail("User not found", 404) };
-    if (!isSavedUser(data.user)) return { error: fail("Forge requires a saved signed-in account", 403) };
-    return { userId, admin };
+    return { userId, userEmail: data.user.email || "", admin };
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -192,8 +182,7 @@ async function resolveCaller(
   });
   const { data, error } = await userClient.auth.getUser();
   if (error || !data?.user) return { error: fail("Unauthorized", 401) };
-  if (!isSavedUser(data.user)) return { error: fail("Forge requires a saved signed-in account", 403) };
-  return { userId: data.user.id, admin };
+  return { userId: data.user.id, userEmail: data.user.email || "", admin };
 }
 
 async function ensureThreadOwned(admin: any, userId: string, threadId: string): Promise<Response | null> {
@@ -334,7 +323,7 @@ Deno.serve(async (req): Promise<Response> => {
 
   const caller = await resolveCaller(req, body, supabaseUrl, anonKey, serviceRoleKey);
   if ("error" in caller) return caller.error;
-  const { userId, admin } = caller;
+  const { userId, userEmail, admin } = caller;
 
   const action = body.action;
   if (!action) return fail("Field 'action' is required", 400);
@@ -354,6 +343,9 @@ Deno.serve(async (req): Promise<Response> => {
       if (forgeAction === "update") {
         const owned = await ensureEditableAgent(admin, userId, targetAgentId);
         if ("response" in owned) return owned.response;
+      } else {
+        const entitlement = await ensureCanCreateCustomAgent(admin, userId, userEmail);
+        if (!entitlement.ok) return fail(String(entitlement.body.error || "Additional agents require $MNEMOS access"), entitlement.status);
       }
 
       const inserted = await insertProposal(admin, userId, threadId, forgeAction, validation.blueprint, targetAgentId || null);
@@ -412,6 +404,8 @@ Deno.serve(async (req): Promise<Response> => {
       const owned = await ensureEditableAgent(admin, userId, agentId);
       if ("response" in owned) return owned.response;
     } else {
+      const entitlement = await ensureCanCreateCustomAgent(admin, userId, userEmail);
+      if (!entitlement.ok) return fail(String(entitlement.body.error || "Additional agents require $MNEMOS access"), entitlement.status);
       agentId = await createUniqueAgentId(admin, userId, blueprint.name);
     }
 

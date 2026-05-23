@@ -48,6 +48,10 @@ const ENSEMBLE_MODELS: ModelDef[] = [
   { id: 'qwen/qwen3-max', name: 'Qwen3 Max', flags: [] },
 ];
 
+const SYNTHESIS_MODEL_OPTIONS = Array.from(
+  new Map(ENSEMBLE_MODELS.map((model) => [model.id, { value: model.id, label: model.name }])).values(),
+);
+
 export default function ModelsSettings() {
   const [apiKey, setApiKey] = useState('');
   const [keyPreview, setKeyPreview] = useState<string | null>(null);
@@ -378,10 +382,7 @@ function EnsembleSection() {
           <SelectInput
             value={synthesis_model}
             onChange={(v) => updateSetting('synthesis_model', v)}
-            options={ENSEMBLE_MODELS.map((m) => ({
-              value: m.id,
-              label: m.name,
-            }))}
+            options={SYNTHESIS_MODEL_OPTIONS}
             width="100%"
           />
           <div

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
+import { useTokenGateStore } from '@/stores/tokenGateStore';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmDialog } from '@/components/settings/FormControls';
 import { Section } from '@/components/settings/Section';
@@ -22,6 +23,8 @@ export default function AgentsList() {
   const agents = useAgentSettingsStore((s) => s.agents);
   const load = useAgentSettingsStore((s) => s.load);
   const deleteAgent = useAgentSettingsStore((s) => s.deleteAgent);
+  const tokenGateStatus = useTokenGateStore((s) => s.status);
+  const hydrateTokenGate = useTokenGateStore((s) => s.hydrate);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -33,9 +36,28 @@ export default function AgentsList() {
     load(user.id);
   }, [user, load]);
 
+  useEffect(() => {
+    if (!user || tokenGateStatus !== 'unknown') return;
+    void hydrateTokenGate();
+  }, [user, tokenGateStatus, hydrateTokenGate]);
+
   const target = confirmDeleteId
     ? agents.find((a) => a.id === confirmDeleteId)
     : null;
+  const customAgentCount = agents.filter((a) => !a.locked && !a.is_system).length;
+  const hasAdditionalAgentAccess = tokenGateStatus === 'verified' || tokenGateStatus === 'bypass';
+  const checkingAdditionalAgentAccess =
+    customAgentCount >= 1 && (tokenGateStatus === 'unknown' || tokenGateStatus === 'checking');
+  const canCreateAgent = customAgentCount < 1 || hasAdditionalAgentAccess;
+  const newAgentLabel = customAgentCount >= 1 && !hasAdditionalAgentAccess ? 'Unlock more' : 'New agent';
+
+  const handleNewAgent = () => {
+    if (canCreateAgent) {
+      setCreateOpen(true);
+      return;
+    }
+    navigate('/access', { state: { from: '/settings/agents', reason: 'agent_limit' } });
+  };
 
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
@@ -99,16 +121,17 @@ export default function AgentsList() {
             variant="primary"
             size="sm"
             icon={<Plus size={13} strokeWidth={1.8} />}
-            onClick={() => setCreateOpen(true)}
+            onClick={handleNewAgent}
+            disabled={checkingAdditionalAgentAccess}
           >
-            New agent
+            {checkingAdditionalAgentAccess ? 'Checking…' : newAgentLabel}
           </Pill>
         </div>
         <p className="set-head-sub">
-          The three resident agents — Luca, Anima, Vektor — and any custom
-          agents you've created. Click any row to configure model, prompt,
-          tools, and personality. Custom-agent chat currently requires your
-          own model key.
+          The resident agent Luca and any custom agents you've created. Every
+          user can create one custom agent; additional agents currently require
+          $MNEMOS access until subscriptions arrive. Custom-agent chat still
+          requires your own model key.
         </p>
       </div>
 
@@ -224,10 +247,9 @@ export default function AgentsList() {
               lineHeight: 1.5,
             }}
           >
-            New custom agents can be created here or by asking Luca in chat.
-            Forge proposals appear inline for approval, and chatting with custom
-            agents uses BYOK routing until their memory and journal layers are
-            fully agent-scoped.
+            Your first custom agent is included. After that, verify $MNEMOS
+            access to create more; existing agents can still be edited here or
+            by asking Luca in chat.
           </div>
         </Section>
       </div>
