@@ -21,6 +21,11 @@ export interface Settings {
   default_voice_id: string;
   elevenlabs_agent_id: string | null;
   voice_autospeak: boolean;
+  // The agent whose signature shape + name becomes the default landing the
+  // user sees on login. null → Luca / the standard "polyphonic" landing.
+  // Set when the user adopts a forged agent ("say hello") or picks one in
+  // the agent switcher; cleared by selecting Luca again.
+  landing_agent_id: string | null;
 }
 
 interface SettingsState extends Settings {
@@ -55,6 +60,7 @@ export const defaultSettings: Settings = {
   default_voice_id: 'EXAVITQu4vr4xnSDxMaL',
   elevenlabs_agent_id: null,
   voice_autospeak: false,
+  landing_agent_id: null,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

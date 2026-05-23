@@ -574,6 +574,18 @@ export default function ChatView() {
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const persistedLandingAgentId = useSettingsStore((s) => s.landing_agent_id);
+
+  // Remember the user's chosen landing agent so its shape + name greets them
+  // on login. Writes their own user_settings row (existing RLS) and no-ops
+  // gracefully if the column isn't live yet (pre-migration deploy) — the
+  // in-memory store still updates for the session. Luca stores null = the
+  // standard "polyphonic" landing.
+  const persistLandingAgent = useCallback((agentId: string) => {
+    void updateSetting('landing_agent_id', agentId === 'luca' ? null : agentId);
+  }, [updateSetting]);
   // NOTE: ensemble is intentionally NOT read from settings here. The composer
   // toggle (⌘E / shift-click) is the sole source of truth so the visual state
   // always matches reality. The Settings page's `multi_model_enabled` row is
@@ -724,6 +736,30 @@ export default function ChatView() {
     }
   }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
 
+  // Seed the bare-/chat landing from the user's persisted choice: once they
+  // adopt an agent, its signature shape + name is the default landing on
+  // login. Runs once; only seeds the empty landing (never overrides an open
+  // thread or a /chat/:id route); validates the agent still exists so a
+  // deleted one quietly falls back to Luca.
+  const seededLandingRef = useRef(false);
+  useEffect(() => {
+    if (seededLandingRef.current) return;
+    if (!settingsLoaded) return;
+    if (!persistedLandingAgentId || persistedLandingAgentId === 'luca') {
+      seededLandingRef.current = true;
+      return;
+    }
+    if (threadId || currentThreadId) {
+      seededLandingRef.current = true;
+      return;
+    }
+    if (agents.length === 0) return; // wait until agents load so we can validate
+    if (agents.some((a) => a.id === persistedLandingAgentId)) {
+      setPendingAgentId(persistedLandingAgentId);
+    }
+    seededLandingRef.current = true;
+  }, [settingsLoaded, persistedLandingAgentId, threadId, currentThreadId, agents]);
+
   useEffect(() => {
     if (!user) {
       setModelKeyStatus('unknown');
@@ -795,6 +831,7 @@ export default function ChatView() {
   const handleAgentChange = useCallback(async (id: string) => {
     if (!id || id === activeAgentId) return;
     setPendingAgentId(id);
+    persistLandingAgent(id);
     setAgentModeArmed(false);
     setEnsembleArmed(false);
     setEnsembleLocked(false);
@@ -815,6 +852,7 @@ export default function ChatView() {
     }
   }, [
     activeAgentId,
+    persistLandingAgent,
     currentThreadId,
     messages.length,
     user,
@@ -1504,12 +1542,19 @@ export default function ChatView() {
   }, []);
 
   const switchToForgedAgent = useCallback((agentId: string) => {
-    // Land the new agent in its own fresh empty thread — the blank landing
-    // that shows the agent's signature shape + name (genesis "say hello"
-    // resolves here). First message will persist a thread under this agent.
+    // Land the new agent on its own fresh empty hero — the blank landing that
+    // shows the agent's signature shape + name (genesis "say hello" resolves
+    // here). The bare /chat landing only renders when there's no route thread
+    // AND no loaded messages, and activeAgentId falls back to pendingAgentId
+    // only once currentThread is gone — so clear the (Luca forge) thread
+    // context first, otherwise the stale thread keeps Luca's shape and its
+    // message list hides the hero. Also persist this as the user's default
+    // landing. The first message will create a thread under this agent.
     setPendingAgentId(agentId);
+    persistLandingAgent(agentId);
+    useThreadStore.setState({ currentThreadId: null, messages: [] });
     navigate('/chat');
-  }, [navigate]);
+  }, [navigate, persistLandingAgent]);
 
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
@@ -2301,24 +2346,34 @@ export default function ChatView() {
                   shape={heroShape}
                 />
               </div>
-              {/* Wordmark optically balanced between sphere and composer */}
-              <h1 style={{
+              {/* Wordmark optically balanced between sphere and composer.
+                  For an adopted agent: its name leads, "polyphonic" rests
+                  beneath as the quiet brand signature. */}
+              <div style={{
                 position: 'absolute',
                 left: '50%',
                 top: '82%',
                 transform: 'translate(-50%, -50%)',
-                fontSize: 24,
-                fontWeight: 280,
-                letterSpacing: '0.06em',
-                color: 'var(--text-tertiary)',
-                opacity: 0.78,
-                fontFamily: 'var(--font-sans)',
-                textTransform: 'lowercase',
-                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
                 whiteSpace: 'nowrap',
               }}>
-                {heroLabel}
-              </h1>
+                <h1 style={{
+                  fontSize: 24,
+                  fontWeight: 280,
+                  letterSpacing: '0.06em',
+                  color: 'var(--text-tertiary)',
+                  opacity: 0.78,
+                  fontFamily: 'var(--font-sans)',
+                  textTransform: 'lowercase',
+                  margin: 0,
+                }}>
+                  {heroLabel}
+                </h1>
+                {isCustomAgent && <div className="hero-brandmark hero-brandmark--mobile">polyphonic</div>}
+              </div>
             </div>
           ) : (
             <div className="chat-empty-hero" style={{ textAlign: 'center', animation: 'viewFadeIn 0.8s var(--ease-out) both', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
@@ -2327,17 +2382,20 @@ export default function ChatView() {
                 state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
                 shape={heroShape}
               />
-              <h1 style={{
-                fontSize: 38,
-                fontWeight: 280,
-                letterSpacing: '0.16em',
-                color: 'var(--text-tertiary)',
-                fontFamily: 'var(--font-sans)',
-                textTransform: 'lowercase',
-                margin: 0,
-              }}>
-                {heroLabel}
-              </h1>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                <h1 style={{
+                  fontSize: 38,
+                  fontWeight: 280,
+                  letterSpacing: '0.16em',
+                  color: 'var(--text-tertiary)',
+                  fontFamily: 'var(--font-sans)',
+                  textTransform: 'lowercase',
+                  margin: 0,
+                }}>
+                  {heroLabel}
+                </h1>
+                {isCustomAgent && <div className="hero-brandmark">polyphonic</div>}
+              </div>
             </div>
           )}
 

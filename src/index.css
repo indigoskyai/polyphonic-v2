@@ -2451,6 +2451,29 @@ html {
   min-width: 0;
 }
 
+/* Quiet brand signature beneath an adopted agent's name on the landing hero —
+   the agent's name leads; "polyphonic" rests below, small and tracked, so the
+   brand stays in sight without competing. */
+.hero-brandmark {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-transform: lowercase;
+  color: var(--text-tertiary);
+  opacity: 0.4;
+  margin: 0;
+  padding-left: 0.34em; /* re-center against the trailing letter-spacing */
+  user-select: none;
+  /* No own animation — the parent .chat-empty-hero handles the fade-in, and a
+     viewFadeIn here would settle on opacity:1 and override this resting 0.4. */
+}
+.hero-brandmark--mobile {
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  padding-left: 0.28em;
+}
+
 .chat-view--handoff .chat-header {
   animation: tabPanelIn 240ms var(--ease-out) both;
 }
