@@ -2474,44 +2474,59 @@ html {
   padding-left: 0.28em;
 }
 
-/* The daily leaf — a quiet line on the landing (the agent's contemplation)
-   over a faint per-user leaf number. Kept as understated as the old weather
-   strip: the landing's hero is the agent's shape + name; this is a whisper. */
-.daily-leaf {
+/* Quiet landing footer — a daily wisdom quote (with its author) on one line,
+   above the local date/time/weather readout. As understated as the old weather
+   strip; the landing's hero stays the agent's shape + name. */
+.landing-ambient {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  max-width: 540px;
+  max-width: 720px;
   margin: 0 auto;
   text-align: center;
   animation: viewFadeIn 0.7s var(--ease-out) 0.35s both;
 }
-.daily-leaf-line {
+.landing-ambient-quote {
   margin: 0;
   font-family: var(--font-grotesque);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 360;
-  line-height: 1.5;
-  letter-spacing: 0.006em;
-  color: var(--text-tertiary);
-  max-width: 36ch;
-  text-wrap: balance;
+  line-height: 1.45;
+  letter-spacing: 0.012em;
+  color: var(--text-soft);
+  white-space: nowrap;
+  max-width: 100%;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5), 0 2px 20px rgba(0, 0, 0, 0.3);
 }
-.daily-leaf-no {
-  font-family: var(--font-mono);
-  font-size: 10px;
+.landing-ambient-author { color: var(--text-ghost); }
+.landing-ambient-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.01em;
+  color: var(--text-tertiary);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+.landing-ambient-meta .la-soft { color: var(--text-soft); }
+.landing-ambient-meta .la-dim { color: var(--text-tertiary); }
+.landing-ambient-meta .la-sep { opacity: 0.28; }
+.landing-ambient-meta .la-city {
   color: var(--text-ghost);
-  opacity: 0.72;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  font-weight: 500;
 }
 @media (max-width: 640px) {
-  .daily-leaf-line { font-size: 13.5px; max-width: 30ch; }
+  .landing-ambient-quote { white-space: normal; font-size: 13px; }
+  .landing-ambient-meta { gap: 8px; font-size: 11.5px; }
 }
 
 .chat-view--handoff .chat-header {

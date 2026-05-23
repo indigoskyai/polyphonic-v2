@@ -27,7 +27,7 @@ import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
-import DailyLeaf from '@/components/chat/DailyLeaf';
+import LandingAmbient from '@/components/chat/LandingAmbient';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
@@ -2518,10 +2518,10 @@ export default function ChatView() {
             </div>
           </div>
 
-          {/* The daily leaf — a quiet line (the active agent's contemplation)
-              over a faint per-user leaf number. Deliberately understated. */}
+          {/* Quiet landing footer — a daily wisdom quote (with its author) on
+              one line, above the local date/time/weather readout. */}
           <div style={{ marginTop: isMobile ? 16 : 24, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
-            <DailyLeaf agentId={activeAgentId} startedAt={user?.created_at} />
+            <LandingAmbient agentId={activeAgentId} />
           </div>
         </div>
         <AttachmentDropOverlay visible={isDragging} />
