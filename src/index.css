@@ -7596,49 +7596,10 @@ html {
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-body-tight);
   backdrop-filter: blur(18px);
-  isolation: isolate;
   transition:
     transform 180ms var(--ease-out),
     border-color 180ms var(--ease-out),
     background 180ms var(--ease-out);
-}
-
-/* Border-glow shimmer — same 8-pool prime-interval vocabulary as the composer
-   (.input-shell::before). Monochrome warm-white pools (rgba(232,230,224,…))
-   masked to the 1px pill ring; the 3/5/7/11/13/17/19/23s rhythms never sync so
-   the glow travels continuously around the pill. This is Luca's presence echo —
-   the launcher carries the same living border as the composer centerpiece. */
-.luca-guide-launcher::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  opacity: 0.85;
-  transition: opacity 0.8s var(--ease-out);
-  pointer-events: none;
-  z-index: 4;
-  background:
-    radial-gradient(ellipse 45% 180% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation:
-    shimmer-c1 3s  ease-in-out infinite,
-    shimmer-c2 5s  ease-in-out infinite,
-    shimmer-c3 7s  ease-in-out infinite,
-    shimmer-c4 11s ease-in-out infinite,
-    shimmer-c5 13s ease-in-out infinite,
-    shimmer-c6 17s ease-in-out infinite,
-    shimmer-c7 19s ease-in-out infinite,
-    shimmer-c8 23s ease-in-out infinite;
 }
 
 .luca-guide-launcher:hover,
@@ -7648,15 +7609,16 @@ html {
   background: rgba(24, 24, 25, 0.94);
 }
 
-.luca-guide-launcher:hover::before,
-.luca-guide-launcher[data-open="true"]::before {
-  opacity: 1;
-}
-
 /* Monochrome identity mark — the sage tint is removed so the launcher and the
    chat-window header L read as neutral. Warm-white serif L on a faint neutral
-   well; a 1px top-edge highlight keeps it sitting in the floor+cards light. */
+   well; a 1px top-edge highlight keeps it sitting in the floor+cards light.
+   The border-glow shimmer (same 8-pool vocabulary as the composer) wraps the
+   L ring itself: 8 warm-white pools placed around the circle on the global
+   --pc1..8 prime rhythms, masked to the 1px ring, so Luca's presence breathes
+   around the mark. The chat-window header L (.large) inherits the ring. */
 .luca-guide-mark {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7675,6 +7637,37 @@ html {
   line-height: 1;
   letter-spacing: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.luca-guide-mark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(ellipse 78% 78% at 50% 0%,   rgba(232,230,224, var(--pc1)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 85% 15%,  rgba(232,230,224, var(--pc2)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 100% 50%, rgba(232,230,224, var(--pc3)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 85% 85%,  rgba(232,230,224, var(--pc4)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 50% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 15% 85%,  rgba(232,230,224, var(--pc6)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 0% 50%,   rgba(232,230,224, var(--pc7)) 0%, transparent 72%),
+    radial-gradient(ellipse 78% 78% at 15% 15%,  rgba(232,230,224, var(--pc8)) 0%, transparent 72%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation:
+    shimmer-c1 3s  ease-in-out infinite,
+    shimmer-c2 5s  ease-in-out infinite,
+    shimmer-c3 7s  ease-in-out infinite,
+    shimmer-c4 11s ease-in-out infinite,
+    shimmer-c5 13s ease-in-out infinite,
+    shimmer-c6 17s ease-in-out infinite,
+    shimmer-c7 19s ease-in-out infinite,
+    shimmer-c8 23s ease-in-out infinite;
 }
 
 .luca-guide-mark.large {
