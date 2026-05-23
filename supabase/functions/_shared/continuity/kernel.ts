@@ -435,9 +435,22 @@ async function loadThreadHistory(
     .order("created_at", { ascending: true })
     .limit(opts.historyLimit || 50);
   if (error) throw new Error(error.message || "history query failed");
+  const activeAgentId = opts.agentId || "luca";
+  // Sidecar alcove agents (Observer, Guardian) watch a conversation; they never
+  // participate in it. Their messages must NOT enter another agent's context —
+  // otherwise the primary agent "sees" the observer's notes about the turn,
+  // reacts to or mimics them, and the interleaving severs its own
+  // conversational anchor (it loses track of what it just said). The frontend
+  // already hides these from the thread; the model history must match. An agent
+  // running its own thread still sees its own messages.
+  const SIDECAR_AGENTS = new Set(["observer", "guardian"]);
+  const rows = ((data || []) as ContinuityHistoryMessage[]).filter((m) => {
+    const a = m.agent || "luca";
+    return !(SIDECAR_AGENTS.has(a) && a !== activeAgentId);
+  });
   return normalizeThreadHistoryForAgent(
-    removeCurrentUserMessageFromHistory((data || []) as ContinuityHistoryMessage[], opts.userMessage),
-    opts.agentId || "luca",
+    removeCurrentUserMessageFromHistory(rows, opts.userMessage),
+    activeAgentId,
   );
 }
 
