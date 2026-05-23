@@ -3023,6 +3023,7 @@ export type Database = {
           font_size: number
           id: string
           interface_density: string
+          landing_agent_id: string | null
           multi_model_enabled: boolean | null
           observer_models: string[] | null
           reasoning_effort: string | null
@@ -3049,6 +3050,7 @@ export type Database = {
           font_size?: number
           id?: string
           interface_density?: string
+          landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
           reasoning_effort?: string | null
@@ -3075,6 +3077,7 @@ export type Database = {
           font_size?: number
           id?: string
           interface_density?: string
+          landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
           reasoning_effort?: string | null
