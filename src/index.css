@@ -7575,6 +7575,10 @@ html {
   gap: 18px 24px;
 }
 
+/* Launcher — flat / technical / minimal (OpenAI · Vercel · Claude register).
+   No elevation, no gloss, no glassy blur, no glow: a solid surface pill with a
+   hairline border. Hover brightens border + text only (no lift). Depth cues are
+   deliberately absent — the app is moving away from 3D affordances. */
 .luca-guide-launcher {
   position: fixed;
   right: 24px;
@@ -7583,97 +7587,56 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 14px 0 8px;
+  height: 38px;
+  padding: 0 14px 0 7px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: rgba(18, 18, 19, 0.88);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-panel), var(--shadow-inset-highlight);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-body-tight);
-  backdrop-filter: blur(18px);
   transition:
-    transform 180ms var(--ease-out),
-    border-color 180ms var(--ease-out),
-    background 180ms var(--ease-out);
+    border-color 160ms var(--ease-out),
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out);
 }
 
 .luca-guide-launcher:hover,
 .luca-guide-launcher[data-open="true"] {
-  transform: translateY(-1px);
-  border-color: var(--border);
-  background: rgba(24, 24, 25, 0.94);
+  border-color: var(--border-strong);
+  background: #17171b;
+  color: var(--text-primary);
 }
 
-/* Monochrome identity mark — the sage tint is removed so the launcher and the
-   chat-window header L read as neutral. Warm-white serif L on a faint neutral
-   well; a 1px top-edge highlight keeps it sitting in the floor+cards light.
-   The border-glow shimmer (same 8-pool vocabulary as the composer) wraps the
-   L ring itself: 8 warm-white pools placed around the circle on the global
-   --pc1..8 prime rhythms, masked to the 1px ring, so Luca's presence breathes
-   around the mark. The chat-window header L (.large) inherits the ring. */
+/* Flat identity mark — hairline-bordered chip with a clean sans L. No gloss
+   gradient, no inset highlight, no glow ring, no elevation. The chat-window
+   header L (.large) inherits it. */
 .luca-guide-mark {
-  position: relative;
-  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.12), transparent 46%),
-    rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  font-family: var(--font-serif, var(--font-sans));
-  font-size: 13px;
-  font-weight: var(--weight-medium);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.luca-guide-mark::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  pointer-events: none;
-  z-index: 1;
-  background:
-    radial-gradient(ellipse 78% 78% at 50% 0%,   rgba(232,230,224, var(--pc1)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 85% 15%,  rgba(232,230,224, var(--pc2)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 100% 50%, rgba(232,230,224, var(--pc3)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 85% 85%,  rgba(232,230,224, var(--pc4)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 50% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 15% 85%,  rgba(232,230,224, var(--pc6)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 0% 50%,   rgba(232,230,224, var(--pc7)) 0%, transparent 72%),
-    radial-gradient(ellipse 78% 78% at 15% 15%,  rgba(232,230,224, var(--pc8)) 0%, transparent 72%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation:
-    shimmer-c1 3s  ease-in-out infinite,
-    shimmer-c2 5s  ease-in-out infinite,
-    shimmer-c3 7s  ease-in-out infinite,
-    shimmer-c4 11s ease-in-out infinite,
-    shimmer-c5 13s ease-in-out infinite,
-    shimmer-c6 17s ease-in-out infinite,
-    shimmer-c7 19s ease-in-out infinite,
-    shimmer-c8 23s ease-in-out infinite;
 }
 
 .luca-guide-mark.large {
-  width: 34px;
-  height: 34px;
-  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
 }
 
 .luca-guide-panel {
