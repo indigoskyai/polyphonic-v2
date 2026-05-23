@@ -16,6 +16,8 @@ describe('global Luca guide overlay', () => {
     expect(overlay).toContain('data-guide-id="luca-guide-launcher"');
     expect(overlay).toContain('luca-guide-mark');
     expect(overlay).toContain('luca-guide-shortcuts-trigger');
+    expect(overlay).toContain("pathname === '/chat' || pathname.startsWith('/chat/')");
+    expect(overlay).toContain('if (hiddenOnChatRoute) return null');
     expect(overlay).toContain('routeInfo(location.pathname)');
     expect(overlay).toContain('availableTargets: targetsForPath(location.pathname)');
   });

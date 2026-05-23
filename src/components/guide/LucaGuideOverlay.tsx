@@ -29,6 +29,10 @@ function actionIcon(type: LucaGuideAction['type']) {
   return <LocateFixed size={13} strokeWidth={1.7} />;
 }
 
+function isChatRoute(pathname: string): boolean {
+  return pathname === '/chat' || pathname.startsWith('/chat/');
+}
+
 export default function LucaGuideOverlay() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -51,6 +55,7 @@ export default function LucaGuideOverlay() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const hiddenOnChatRoute = isChatRoute(location.pathname);
 
   const activeAgentName = useMemo(() => {
     return availableAgents.find((agent) => agent.id === activeAgentId)?.name || 'Luca';
@@ -75,6 +80,12 @@ export default function LucaGuideOverlay() {
     if (!open) return;
     window.setTimeout(() => inputRef.current?.focus(), 80);
   }, [open]);
+
+  useEffect(() => {
+    if (!hiddenOnChatRoute) return;
+    if (open) setOpen(false);
+    if (activeTargetId) clearHighlight();
+  }, [activeTargetId, clearHighlight, hiddenOnChatRoute, open, setOpen]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -129,6 +140,8 @@ export default function LucaGuideOverlay() {
     'Show me where setup starts.',
     'How do agents and memory fit together?',
   ];
+
+  if (hiddenOnChatRoute) return null;
 
   return (
     <>
