@@ -150,6 +150,30 @@ function backendForPlatformKey(opts: {
   };
 }
 
+/**
+ * The model the user's primary Luca chat speaks with — so Luca's inner life
+ * (thoughts, reflections, wandering, dreams, journal) and its identity-authoring
+ * (the dialectic) think in the SAME voice the agent speaks in, instead of a
+ * cheaper off-family model. BYOK → the user's selected chat model; platform/free
+ * → the funded Luca model. These processes run on the platform key, so this
+ * mirrors the voice, not the billing.
+ */
+export async function resolvePrimaryModel(
+  supabase: any,
+  userId: string,
+): Promise<string> {
+  if (!userId) return FREE_LUCA_MODEL;
+  const userKey = await loadUserOpenRouterKey(supabase, userId);
+  if (!userKey) return FREE_LUCA_MODEL;
+  const { data } = await supabase
+    .from("user_settings")
+    .select("default_model")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const requested = typeof data?.default_model === "string" ? data.default_model.trim() : "";
+  return requested || FREE_LUCA_MODEL;
+}
+
 export async function resolveOpenRouterKeyForUser(
   supabase: any,
   userId: string,

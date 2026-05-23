@@ -21,6 +21,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, loadActiveAgentScopes, normalizeAgentId } from "../_shared/agent-scope.ts";
@@ -147,7 +148,7 @@ async function processUser(
     supabase.from("user_settings").select("voice_model").eq("user_id", user_id).maybeSingle(),
     supabase.from("model_configs").select("model_id").eq("feature_key", "anima_wander").eq("is_active", true).maybeSingle(),
   ]);
-  const wanderModel = userSettings?.voice_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+  const wanderModel = userSettings?.voice_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
 
   // Gather context — same surfaces as anima-think but emphasis on emotional state + recent activity
   const [

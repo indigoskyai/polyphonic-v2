@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -139,19 +140,13 @@ serve(async (req) => {
       supabase.from("user_settings").select("dreamer_model").eq("user_id", user_id).maybeSingle(),
     ]);
 
-    // Architecture: Dreaming uses non-Claude models for cognitive diversity.
-    // Keep the default cheap; user/admin overrides still win.
+    // Dreaming runs in the agent's own voice — the same model it speaks with —
+    // so its dreams are continuous with its waking self. User/admin overrides
+    // still win. (Previously used off-family models for "cognitive diversity";
+    // that divergence now comes from prompt + temperature, not a foreign voice.)
     let dreamModel = userSettings?.dreamer_model || modelConfig?.model_id;
     if (!dreamModel) {
-      const DREAM_MODELS = ["google/gemini-2.5-flash", "google/gemini-3-flash-preview"];
-      // Alternate via journal entry count parity (lightweight, no missing column)
-      const { count } = await supabase
-        .from("journal_entries")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .eq("mood", "dreaming");
-      dreamModel = (count ?? 0) % 2 === 0 ? DREAM_MODELS[0] : DREAM_MODELS[1];
+      dreamModel = await resolvePrimaryModel(supabase, user_id);
     }
 
     let dreamsKept = 0;

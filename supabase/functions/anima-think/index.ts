@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -103,7 +104,7 @@ serve(async (req) => {
       supabase.from("user_settings").select("voice_model").eq("user_id", user_id).maybeSingle(),
       supabase.from("model_configs").select("model_id").eq("feature_key", "anima_think").eq("is_active", true).maybeSingle(),
     ]);
-    const thinkModel = userSettings?.voice_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+    const thinkModel = userSettings?.voice_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
 
     // Gather context
     const [

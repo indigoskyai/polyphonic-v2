@@ -19,7 +19,7 @@ import {
   type DialecticRevision,
 } from "../_shared/mnemos/dialectic.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
-import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
+import { resolveOpenRouterKeyForUser, resolvePrimaryModel } from "../_shared/model-backend.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
 // nudge (notable activity surface). Revisions below this still persist and
@@ -27,8 +27,6 @@ import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 // covers the "user isn't here, this thought wants to be remembered" case.
 const URGENT_REVISION_CONFIDENCE = 0.8;
 const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000;
-
-const DIALECTIC_MODEL = "google/gemini-2.5-flash";
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -122,6 +120,11 @@ serve(async (req) => {
       convictions: identityDocs.convictions,
     });
 
+    // The dialectic writes Luca's identity (soul / self-model / user-model /
+    // convictions), so it authors in the agent's own voice — its primary model,
+    // not a cheaper off-family one.
+    const dialecticModel = await resolvePrimaryModel(supabase, user.id);
+
     const modelResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -131,7 +134,7 @@ serve(async (req) => {
         "X-Title": "Polyphonic Mnemos Dialectic",
       },
       body: JSON.stringify({
-        model: DIALECTIC_MODEL,
+        model: dialecticModel,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.25,
         max_tokens: 1800,
@@ -166,7 +169,7 @@ serve(async (req) => {
     await recordCronSuccess("mnemos-dialectic", Date.now() - __jobStart);
     return json({
       ok: true,
-      model: DIALECTIC_MODEL,
+      model: dialecticModel,
       patches: patchCounts,
       pending_revisions: revisionCount,
       urgent_surface: urgentSurfaced,

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
@@ -139,7 +140,7 @@ serve(async (req) => {
       .maybeSingle();
 
     // Priority: user preference > admin config > hardcoded default
-    const journalModel = (agentConfig.model as string | null) || userSettings?.journal_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+    const journalModel = (agentConfig.model as string | null) || userSettings?.journal_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
 
     const { data: identityDocs } = await supabase
       .from("agent_identity")

@@ -120,7 +120,7 @@ async function compressContent(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
+      model: "anthropic/claude-haiku-4.5",
       messages: [
         { role: "system", content: SOFTENING_SYSTEM_PROMPT },
         { role: "user", content: `Compress this memory to its essence:\n\n${content}` },

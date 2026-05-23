@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -85,7 +86,7 @@ serve(async (req) => {
       supabase.from("user_settings").select("memory_model").eq("user_id", user_id).maybeSingle(),
     ]);
 
-    const reflectionModel = memUserSettings?.memory_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+    const reflectionModel = memUserSettings?.memory_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
 
     // Get admin-configured prompt
     const { data: promptConfig } = await supabase
