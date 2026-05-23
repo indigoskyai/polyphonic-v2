@@ -38,6 +38,7 @@ import { useSubAgentStore } from '@/stores/subAgentStore';
 import { useAgentConsultRealtime } from '@/hooks/useAgentConsultRealtime';
 import AgentDialogueChip from '@/components/agents/AgentDialogueChip';
 import AgentForgeCard from '@/components/agents/AgentForgeCard';
+import { shapeForAgent, GENESIS_POOL } from '@/lib/genesisShapes';
 import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '@/stores/agentConsultStore';
 import { supabase } from '@/integrations/supabase/client';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
@@ -779,6 +780,14 @@ export default function ChatView() {
     [agents]
   );
   const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
+  // Empty-thread hero identity — a custom agent shows its own deterministic
+  // signature shape + name; Luca keeps the default sphere/echo/torus +
+  // "polyphonic" wordmark.
+  const isCustomAgent = !!activeAgentId && activeAgentId !== 'luca';
+  const heroShape = isCustomAgent
+    ? shapeForAgent(activeAgentId, GENESIS_POOL)
+    : (ensembleActive ? 10 : agentModeActive ? 4 : 0);
+  const heroLabel = isCustomAgent ? currentAgentLabel : 'polyphonic';
   const readonlyAgentPillLabel = activeAgentId === 'luca' ? 'luca' : currentAgentLabel.toLowerCase();
   const readonlyAgentPillTitle = activeAgentId === 'luca'
     ? 'Talking to Luca'
@@ -1494,13 +1503,13 @@ export default function ChatView() {
     );
   }, []);
 
-  const switchToForgedAgent = useCallback(async (agentId: string) => {
+  const switchToForgedAgent = useCallback((agentId: string) => {
+    // Land the new agent in its own fresh empty thread — the blank landing
+    // that shows the agent's signature shape + name (genesis "say hello"
+    // resolves here). First message will persist a thread under this agent.
     setPendingAgentId(agentId);
-    if (currentThreadId) {
-      await updateThreadAgent(currentThreadId, agentId);
-      await loadThreads();
-    }
-  }, [currentThreadId, loadThreads, updateThreadAgent]);
+    navigate('/chat');
+  }, [navigate]);
 
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
@@ -2289,7 +2298,7 @@ export default function ChatView() {
                 <ExpressiveField
                   size={mobileFieldSize}
                   state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
-                  shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
+                  shape={heroShape}
                 />
               </div>
               {/* Wordmark optically balanced between sphere and composer */}
@@ -2308,7 +2317,7 @@ export default function ChatView() {
                 margin: 0,
                 whiteSpace: 'nowrap',
               }}>
-                polyphonic
+                {heroLabel}
               </h1>
             </div>
           ) : (
@@ -2316,7 +2325,7 @@ export default function ChatView() {
               <ExpressiveField
                 size={440}
                 state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
-                shape={ensembleActive ? 10 : agentModeActive ? 4 : 0}
+                shape={heroShape}
               />
               <h1 style={{
                 fontSize: 38,
@@ -2327,7 +2336,7 @@ export default function ChatView() {
                 textTransform: 'lowercase',
                 margin: 0,
               }}>
-                polyphonic
+                {heroLabel}
               </h1>
             </div>
           )}

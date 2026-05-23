@@ -5596,6 +5596,8 @@ html {
    PENDING status — the same "awaiting you" vocabulary as the SidebarHeader
    LIVE eyebrow. */
 .forge-card {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -5604,12 +5606,58 @@ html {
   border-radius: 14px;
   padding: 22px;
   margin: 20px 0;
-  box-shadow: var(--shadow-panel), var(--shadow-inset-highlight);
   animation: perm-inline-in 300ms ease-out;
+}
+
+/* Consecration glow — while the proposal is pending (or committing), the card
+   carries the composer's living border-glow shimmer. A new agent is a sacred
+   object held in potential, awaiting your blessing; the breathing border says
+   so. 8 monochrome pools on the global --pc1..8 prime rhythms, masked to the
+   card's 1px ring. The glow settles (removed) once the agent is approved. */
+.forge-card[data-status="pending"]::before,
+.forge-card[data-status="committing"]::before,
+.forge-card[data-celebrating="true"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 45% 180% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 180% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 180% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation:
+    shimmer-c1 3s  ease-in-out infinite,
+    shimmer-c2 5s  ease-in-out infinite,
+    shimmer-c3 7s  ease-in-out infinite,
+    shimmer-c4 11s ease-in-out infinite,
+    shimmer-c5 13s ease-in-out infinite,
+    shimmer-c6 17s ease-in-out infinite,
+    shimmer-c7 19s ease-in-out infinite,
+    shimmer-c8 23s ease-in-out infinite;
 }
 .forge-card[data-status="approved"] { border-color: rgba(140, 168, 156, 0.30); }
 .forge-card[data-status="canceled"] { opacity: 0.66; }
 .forge-card[data-status="failed"] { border-color: rgba(225, 88, 115, 0.30); }
+
+/* Creation punctuation — no separate halo. The existing prime-staggered border
+   glow (the same 8-pool algorithm as the composer; the 3/5/7/11/… rhythms
+   never resolve to the same pattern) simply brightens and quickens to mark the
+   moment, then it's gone when the user moves on. */
+.forge-card[data-celebrating="true"]::before {
+  filter: brightness(1.7);
+  animation-duration: 1.9s, 2.7s, 3.7s, 4.7s, 6.1s, 7.3s, 8.9s, 11.3s;
+}
 .forge-card-header {
   display: flex;
   align-items: center;
@@ -5624,11 +5672,8 @@ html {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  background:
-    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.10), transparent 48%),
-    rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--border-strong);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 .forge-card-title-wrap { min-width: 0; flex: 1; }

@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Hammer, Settings, Shuffle, X } from 'lucide-react';
 import { Pill } from '@/components/ui/luca';
 import { FORGE_DOC_ORDER, type ForgeProposalMetadata } from '@/lib/agentForge';
+import { useGenesisStore } from '@/stores/genesisStore';
+import { shapeForAgent, GENESIS_POOL } from '@/lib/genesisShapes';
 
 interface Props {
   proposal: ForgeProposalMetadata;
@@ -41,8 +43,62 @@ export default function AgentForgeCard({
     [blueprint.identity_docs],
   );
 
+  // Creation ceremony — when the proposal flips to approved, the whole-screen
+  // particles swirl into the card's center and form the agent's shape; the
+  // card's spec fades out and "say hello" appears beneath the shape.
+  const celebrate = useGenesisStore((s) => s.celebrate);
+  const formed = useGenesisStore((s) => s.formed);
+  const dismissCeremony = useGenesisStore((s) => s.dismiss);
+  const [celebrating, setCelebrating] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+  const prevStatus = useRef(proposal.forge_status);
+
+  const ceremonyShape = useMemo(
+    () => shapeForAgent(approvedAgentId || blueprint.name, GENESIS_POOL),
+    [approvedAgentId, blueprint.name],
+  );
+
+  useEffect(() => {
+    const was = prevStatus.current;
+    prevStatus.current = proposal.forge_status;
+    if (was !== 'approved' && proposal.forge_status === 'approved') {
+      const r = cardRef.current?.getBoundingClientRect();
+      celebrate({
+        agentId: approvedAgentId || blueprint.name,
+        agentName: blueprint.name,
+        shapeIndex: ceremonyShape,
+        cardCx: r ? r.left + r.width / 2 : window.innerWidth / 2,
+        cardCy: r ? r.top + r.height / 2 : window.innerHeight / 2,
+        cardSize: r ? Math.min(r.width, r.height) : 320,
+      });
+      setCelebrating(true);
+    }
+  }, [proposal.forge_status, celebrate, approvedAgentId, blueprint.name, ceremonyShape]);
+
+  const showBorn = celebrating && formed;
+  const sayHello = () => {
+    dismissCeremony();
+    setCelebrating(false);
+    if (approvedAgentId && onSwitch) onSwitch(approvedAgentId);
+  };
+
   return (
-    <section className="forge-card" data-status={proposal.forge_status} aria-label={`${blueprint.name} Forge proposal`}>
+    <section
+      ref={cardRef}
+      className="forge-card"
+      data-status={proposal.forge_status}
+      data-celebrating={celebrating ? 'true' : undefined}
+      aria-label={`${blueprint.name} Forge proposal`}
+      style={celebrating ? { height: 360, overflow: 'hidden' } : undefined}
+    >
+      <div
+        style={{
+          opacity: celebrating ? 0 : 1,
+          transition: 'opacity 700ms var(--ease-out)',
+          pointerEvents: celebrating ? 'none' : undefined,
+          ...(celebrating ? { position: 'absolute' as const, inset: 0, padding: 22 } : null),
+        }}
+      >
       <header className="forge-card-header">
         <span className="forge-card-mark" aria-hidden="true">
           <Hammer size={14} />
@@ -129,6 +185,30 @@ export default function AgentForgeCard({
           </>
         ) : null}
       </footer>
+      </div>
+
+      {celebrating && (
+        <div
+          className="forge-born"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            paddingBottom: 26,
+            opacity: showBorn ? 1 : 0,
+            transition: 'opacity 700ms ease',
+            pointerEvents: showBorn ? 'auto' : 'none',
+            zIndex: 3,
+          }}
+        >
+          <button type="button" className="pill pill--primary pill--md" onClick={sayHello}>
+            <span className="pill__label">say hello</span>
+          </button>
+        </div>
+      )}
     </section>
   );
 }

@@ -325,9 +325,64 @@ function genMobius() {
   return arr
 }
 
+// ── Geometric solids (face-sampled) ─────────────────────────────────────────
+// Added for agent identity shapes (indices 12-14). Kept identical to
+// src/lib/genesisShapes.ts so an agent's birth shape matches its empty-thread
+// shape exactly. The auto-cycle stays `% 12`, so these are only reachable via
+// setShape() — the composer's default behavior is unchanged.
+function _normVerts(raw, scale) {
+  return raw.map(([x, y, z]) => {
+    const L = Math.hypot(x, y, z) || 1
+    return [(x / L) * scale, (y / L) * scale, (z / L) * scale]
+  })
+}
+function _sampleTriangles(verts, tris) {
+  const arr = new Float32Array(3 * N)
+  for (let i = 0; i < N; i++) {
+    const tri = tris[(Math.random() * tris.length) | 0]
+    let u = Math.random(), v = Math.random()
+    if (u + v > 1) { u = 1 - u; v = 1 - v }
+    const w = 1 - u - v
+    const a = verts[tri[0]], b = verts[tri[1]], c = verts[tri[2]]
+    arr[i*3]   = a[0]*w + b[0]*u + c[0]*v
+    arr[i*3+1] = a[1]*w + b[1]*u + c[1]*v
+    arr[i*3+2] = a[2]*w + b[2]*u + c[2]*v
+  }
+  return arr
+}
+function genTetrahedron() {
+  const verts = _normVerts([[1,1,1],[-1,-1,1],[-1,1,-1],[1,-1,-1]], 1.3)
+  return _sampleTriangles(verts, [[0,1,2],[0,1,3],[0,2,3],[1,2,3]])
+}
+function genIcosahedron() {
+  const p = (1 + Math.sqrt(5)) / 2
+  const verts = _normVerts([
+    [-1,p,0],[1,p,0],[-1,-p,0],[1,-p,0],
+    [0,-1,p],[0,1,p],[0,-1,-p],[0,1,-p],
+    [p,0,-1],[p,0,1],[-p,0,-1],[-p,0,1],
+  ], 1.12)
+  const tris = [
+    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+    [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+    [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+    [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
+  ]
+  return _sampleTriangles(verts, tris)
+}
+function genHexBipyramid() {
+  const R = 0.92, h = 1.18
+  const verts = []
+  for (let k = 0; k < 6; k++) { const a = k*Math.PI/3; verts.push([R*Math.cos(a),0,R*Math.sin(a)]) }
+  verts.push([0,h,0]); verts.push([0,-h,0])
+  const tris = []
+  for (let k = 0; k < 6; k++) { const nx=(k+1)%6; tris.push([6,k,nx]); tris.push([7,nx,k]) }
+  return _sampleTriangles(verts, tris)
+}
+
 const shapeGenerators = [
   genSphere, genCube, genOctahedron, genHexPrism, genTorus, genBlob,
-  genKlein, genDoubleHelix, genLorenz, genManifold, genEcho, genMobius
+  genKlein, genDoubleHelix, genLorenz, genManifold, genEcho, genMobius,
+  genTetrahedron, genIcosahedron, genHexBipyramid
 ]
 
 let HOMES = []

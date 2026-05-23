@@ -38,6 +38,7 @@ import { useSubagentRealtime } from "./hooks/useSubagentRealtime";
 import ConnectionBanner from "./components/states/ConnectionBanner";
 import PermissionModal from "./components/permissions/PermissionModal";
 import LucaGuideOverlay from "./components/guide/LucaGuideOverlay";
+import AgentCreationShimmer from "./components/agents/AgentCreationShimmer";
 import { useIsMobile } from "./hooks/use-mobile";
 
 const queryClient = new QueryClient();
@@ -256,6 +257,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <UndoToast />
       <PermissionModal />
       <LucaGuideOverlay />
+      <AgentCreationShimmer />
     </div>
   );
 }
