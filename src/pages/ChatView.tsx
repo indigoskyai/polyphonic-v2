@@ -727,6 +727,13 @@ export default function ChatView() {
   }, []);
 
   useEffect(() => {
+    // Access tier isn't known until the model-key probe resolves. While it's
+    // still 'checking' (notably right after a fresh mount — e.g. the remount
+    // when "say hello" navigates to /chat), a BYOK user reads as non-byok for a
+    // beat. Acting on that transient would yank a just-adopted custom agent off
+    // the empty landing back to luca, racing the landing seed below. Wait until
+    // the tier is actually settled before forcing the non-byok fallback.
+    if (modelKeyStatus === 'checking') return;
     if (byokEnabled) return;
     if (ensembleArmed) setEnsembleArmed(false);
     if (ensembleLocked) setEnsembleLocked(false);
@@ -734,7 +741,7 @@ export default function ChatView() {
     if (!currentThreadId && activeAgentId !== 'luca') {
       setPendingAgentId('luca');
     }
-  }, [byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
+  }, [modelKeyStatus, byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
 
   // Seed the bare-/chat landing from the user's persisted choice: once they
   // adopt an agent, its signature shape + name is the default landing on
