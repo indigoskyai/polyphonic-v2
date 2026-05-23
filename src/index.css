@@ -13,8 +13,8 @@
 
 :root {
   /* Surfaces v4 — temperature-locked, B = R × 1.20 ratio */
-  --floor:     #08080a;   /* outer chrome, rail, scene nav — slightly cooler+darker so card shadow reads */
-  --canvas:    #0f0e11;   /* main background, inset panels — micro-warm vs floor for perceptual depth */
+  --floor:     #08080a;   /* outer chrome, rail, scene nav — the black floor UNDER the panels (unchanged) */
+  --canvas:    #0e0e11;   /* left panel + main card surface — Mnemos surface (parity with mnemos.html --bg) */
   --surface-1: #121216;   /* cards, inputs, data rows */
   --surface-2: #16161a;   /* hover state on cards */
   --surface-3: #1a1a1f;   /* modals, popovers, segment selected */
