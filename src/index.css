@@ -2474,6 +2474,46 @@ html {
   padding-left: 0.28em;
 }
 
+/* The daily leaf — a quiet line on the landing (the agent's contemplation)
+   over a faint per-user leaf number. Kept as understated as the old weather
+   strip: the landing's hero is the agent's shape + name; this is a whisper. */
+.daily-leaf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+  text-align: center;
+  animation: viewFadeIn 0.7s var(--ease-out) 0.35s both;
+}
+.daily-leaf-line {
+  margin: 0;
+  font-family: var(--font-grotesque);
+  font-size: 14px;
+  font-weight: 360;
+  line-height: 1.5;
+  letter-spacing: 0.006em;
+  color: var(--text-tertiary);
+  max-width: 36ch;
+  text-wrap: balance;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5), 0 2px 20px rgba(0, 0, 0, 0.3);
+}
+.daily-leaf-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--text-ghost);
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+@media (max-width: 640px) {
+  .daily-leaf-line { font-size: 13.5px; max-width: 30ch; }
+}
+
 .chat-view--handoff .chat-header {
   animation: tabPanelIn 240ms var(--ease-out) both;
 }

@@ -27,7 +27,7 @@ import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
-import LocalAmbientChip from '@/components/chat/LocalAmbientChip';
+import DailyLeaf from '@/components/chat/DailyLeaf';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
@@ -1089,8 +1089,13 @@ export default function ChatView() {
   // Welcome back awareness + dynamic placeholder
   useEffect(() => {
     if (!user) return;
+    // Guard against the agent flipping mid-flight (e.g. landing seeds luca →
+    // the user's adopted agent): a superseded run must not win the last write
+    // and leave a stale "<other agent> wants to tell you something…".
+    let canceled = false;
     (async () => {
       const { supabase } = await import('@/integrations/supabase/client');
+      if (canceled) return;
 
       // Highest priority: explicit thought initiation queued for the user
       const { data: initiations } = await supabase
@@ -1100,6 +1105,7 @@ export default function ChatView() {
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(1);
+      if (canceled) return;
 
       if (initiations && initiations.length > 0) {
         setWelcomeBack({ type: 'initiation', content: initiations[0].message });
@@ -1124,6 +1130,7 @@ export default function ChatView() {
         .gt('created_at', seenIso)
         .order('created_at', { ascending: false })
         .limit(1);
+      if (canceled) return;
       if (surfaced && surfaced.length > 0) {
         const a = surfaced[0] as { title: string | null; summary: string | null; severity: string };
         setWelcomeBack({
@@ -1141,6 +1148,7 @@ export default function ChatView() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1);
+      if (canceled) return;
 
       const lastTime = lastMsg?.[0]?.created_at ? new Date(lastMsg[0].created_at).getTime() : 0;
       const gapHours = (Date.now() - lastTime) / 3_600_000;
@@ -1155,6 +1163,7 @@ export default function ChatView() {
           .gt('created_at', new Date(lastTime).toISOString())
           .order('created_at', { ascending: false })
           .limit(1);
+        if (canceled) return;
 
         if (recentJournal && recentJournal.length > 0) {
           const entry = recentJournal[0];
@@ -1177,6 +1186,7 @@ export default function ChatView() {
           .gt('created_at', new Date(lastTime).toISOString())
           .order('salience', { ascending: false })
           .limit(1);
+        if (canceled) return;
 
         if (recentThought && recentThought.length > 0) {
           setWelcomeBack({ type: 'thought', content: recentThought[0].content.slice(0, 150) });
@@ -1193,6 +1203,7 @@ export default function ChatView() {
         setDynamicPlaceholder(`Message ${currentAgentLabel}...`);
       }
     })();
+    return () => { canceled = true; };
   }, [user, activeAgentId, currentAgentLabel]);
 
   const handleTextareaInput = () => {
@@ -2324,7 +2335,7 @@ export default function ChatView() {
             // composer top). Desktop: keep tightened group layout.
             justifyContent: isMobile ? 'flex-end' : 'center',
             paddingTop: isMobile ? 0 : '5vh',
-            paddingBottom: isMobile ? '2vh' : '5vh',
+            paddingBottom: isMobile ? 34 : '5vh',
             gap: isMobile ? 0 : 22,
           }}
         >
@@ -2507,13 +2518,11 @@ export default function ChatView() {
             </div>
           </div>
 
-          {/* Local ambient chip — date, time, weather pulled from IP-geo
-              + Open-Meteo. Replaces the previous WelcomeBack whisper. */}
-          {!isMobile && (
-            <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
-              <LocalAmbientChip />
-            </div>
-          )}
+          {/* The daily leaf — a quiet line (the active agent's contemplation)
+              over a faint per-user leaf number. Deliberately understated. */}
+          <div style={{ marginTop: isMobile ? 16 : 24, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
+            <DailyLeaf agentId={activeAgentId} startedAt={user?.created_at} />
+          </div>
         </div>
         <AttachmentDropOverlay visible={isDragging} />
       </div>
