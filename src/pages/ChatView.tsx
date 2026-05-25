@@ -754,28 +754,23 @@ export default function ChatView() {
     }
   }, [modelKeyStatus, byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
 
-  // Seed the bare-/chat landing from the user's persisted choice: once they
-  // adopt an agent, its signature shape + name is the default landing on
-  // login. Runs once; only seeds the empty landing (never overrides an open
-  // thread or a /chat/:id route); validates the agent still exists so a
-  // deleted one quietly falls back to Luca.
-  const seededLandingRef = useRef(false);
+  // Keep the bare-/chat landing's hero agent in lockstep with the user's
+  // persisted landing choice. Reactive (not once) so switching agents from the
+  // mobile top bar — which persists landing_agent_id instead of navigating —
+  // morphs the field in place. Scoped to the empty landing only: never touches
+  // an open thread or a /chat/:id route. Validates the agent still exists so a
+  // deleted one quietly falls back to Luca. Every in-app switch that lands here
+  // also persists landing_agent_id, so this only ever confirms or corrects
+  // pendingAgentId — it can't fight the composer picker or the forge flow.
   useEffect(() => {
-    if (seededLandingRef.current) return;
+    if (threadId || currentThreadId) return; // empty landing only
     if (!settingsLoaded) return;
-    if (!persistedLandingAgentId || persistedLandingAgentId === 'luca') {
-      seededLandingRef.current = true;
-      return;
-    }
-    if (threadId || currentThreadId) {
-      seededLandingRef.current = true;
-      return;
-    }
-    if (agents.length === 0) return; // wait until agents load so we can validate
-    if (agents.some((a) => a.id === persistedLandingAgentId)) {
-      setPendingAgentId(persistedLandingAgentId);
-    }
-    seededLandingRef.current = true;
+    const wantsCustom = !!persistedLandingAgentId && persistedLandingAgentId !== 'luca';
+    if (wantsCustom && agents.length === 0) return; // wait until agents load to validate
+    const target = wantsCustom && agents.some((a) => a.id === persistedLandingAgentId)
+      ? persistedLandingAgentId
+      : 'luca';
+    setPendingAgentId((prev) => (prev === target ? prev : target));
   }, [settingsLoaded, persistedLandingAgentId, threadId, currentThreadId, agents]);
 
   useEffect(() => {

@@ -51,6 +51,7 @@ export default function MobileAppBar() {
   // landing agent) instead of the cross-surface agent scope, so the top bar
   // never says "Luca" while the hero shows the adopted landing agent.
   const landingAgentId = useSettingsStore((s) => s.landing_agent_id) || 'luca';
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   useEffect(() => {
     if (threads.length === 0) void loadThreads();
@@ -80,8 +81,12 @@ export default function MobileAppBar() {
     if (!user || !isChatSurface) return;
 
     if (!currentThreadId) {
-      const nextThreadId = await createThread(user.id, id);
-      navigate(`/chat/${nextThreadId}`);
+      // Bare /chat landing: switch the hero's agent IN PLACE by persisting the
+      // landing choice — ChatView's empty-landing field follows landing_agent_id
+      // and morphs to the new agent. Do NOT spawn a blank thread + navigate:
+      // that sets a route threadId, which flips the empty-state off and leaves a
+      // black screen with only the composer (no particle field).
+      void updateSetting('landing_agent_id', id === 'luca' ? null : id);
       return;
     }
 
@@ -100,6 +105,7 @@ export default function MobileAppBar() {
     navigate,
     runtimeAgentId,
     setActiveAgent,
+    updateSetting,
     updateThreadAgent,
     user,
   ]);
