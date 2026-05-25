@@ -11,7 +11,11 @@
 
 export function createExpressiveField() {
 
-const dpr = window.devicePixelRatio || 1
+// Cap at 2x: on DPR-3 phones the fixed particle count gets spread across ~9x
+// the pixels (each particle plots a single device pixel), so the field reads
+// sparse + dim vs a DPR-2 desktop. Capping renders it at desktop density/
+// brightness and is lighter on mobile GPUs.
+const dpr = Math.min(window.devicePixelRatio || 1, 2)
 let N = 30000
 
 let canvas, ctx, containerEl

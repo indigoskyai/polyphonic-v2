@@ -9,7 +9,6 @@ import {
   ChevronRight,
   CircleUserRound,
   FolderKanban,
-  HelpCircle,
   Import,
   MessageCircle,
   Plus,
@@ -36,8 +35,24 @@ const MAIN_ROUTES = [
   { label: 'Workspace', path: '/workspace', icon: FolderKanban },
   { label: 'Group', path: '/group', icon: UsersRound },
   { label: 'Checkpoints', path: '/checkpoints', icon: CheckCircle2 },
-  { label: 'Settings', path: '/settings/agents', icon: Settings },
-  { label: 'Guide', path: '/settings/help', icon: HelpCircle },
+];
+
+// All settings sub-pages (mirrors the desktop SidebarSettings nav), surfaced on
+// mobile as a collapsible group so every settings page is reachable. Before
+// this, only /settings/agents (the redirect target) could be opened on mobile.
+const SETTINGS_ROUTES = [
+  { label: 'Agents', path: '/settings/agents' },
+  { label: 'General', path: '/settings/general' },
+  { label: 'Models', path: '/settings/models' },
+  { label: 'Appearance', path: '/settings/appearance' },
+  { label: 'Self-model', path: '/settings/skills' },
+  { label: 'Routines', path: '/settings/routines' },
+  { label: 'Voice & security', path: '/settings/voice' },
+  { label: 'Local runtime', path: '/settings/local-runtime' },
+  { label: 'Import & export', path: '/settings/portability' },
+  { label: 'Account & preferences', path: '/settings/account' },
+  { label: 'Cron health', path: '/settings/cron-health' },
+  { label: 'Guide & help', path: '/settings/help' },
 ];
 
 const QUICK_ROUTES = MAIN_ROUTES.filter((route) =>
@@ -73,6 +88,25 @@ export default function MobileNavDrawer() {
   const closeContextDrawer = useDrawerStore((s) => s.close);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
   const [query, setQuery] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsNavRef = useRef<HTMLElement | null>(null);
+
+  // Auto-expand the Settings group when the drawer opens on a settings route,
+  // so the current section is in view.
+  useEffect(() => {
+    if (open && location.pathname.startsWith('/settings')) setSettingsOpen(true);
+  }, [open, location.pathname]);
+
+  // The Settings group sits at the bottom of the nav list, so scroll it into
+  // view when it expands — otherwise its items render below the fold.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const t = setTimeout(
+      () => settingsNavRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }),
+      60,
+    );
+    return () => clearTimeout(t);
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (open) void loadThreads();
@@ -230,6 +264,46 @@ export default function MobileNavDrawer() {
                 <ChevronRight className="mobile-nav-chevron" size={16} strokeWidth={1.7} />
               </button>
             ))}
+          </nav>
+
+          <nav ref={settingsNavRef} className="mobile-nav-section" aria-label="Settings">
+            <button
+              type="button"
+              className="mobile-nav-row"
+              data-active={location.pathname.startsWith('/settings') ? 'true' : undefined}
+              onClick={() => setSettingsOpen((v) => !v)}
+              aria-expanded={settingsOpen}
+            >
+              <Settings size={18} strokeWidth={1.75} />
+              <span>Settings</span>
+              <ChevronRight
+                className="mobile-nav-chevron"
+                size={16}
+                strokeWidth={1.7}
+                style={{
+                  transform: settingsOpen ? 'rotate(90deg)' : 'none',
+                  transition: 'transform 160ms var(--ease-out)',
+                }}
+              />
+            </button>
+            {settingsOpen &&
+              SETTINGS_ROUTES.map(({ label, path }) => {
+                const active =
+                  location.pathname === path || location.pathname.startsWith(`${path}/`);
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    className="mobile-nav-row"
+                    style={{ paddingLeft: 46 }}
+                    data-active={active ? 'true' : undefined}
+                    onClick={() => go(path)}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
           </nav>
         </div>
 

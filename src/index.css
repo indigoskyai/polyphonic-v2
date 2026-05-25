@@ -9306,7 +9306,8 @@ html {
   width: 1px;
   height: 1px;
   opacity: 0;
-  pointer-events: none;
+  /* No pointer-events:none — iOS Safari refuses to open the native file/photo
+     picker on a programmatic .click() when the input is pointer-events:none. */
 }
 
 .attach-btn {

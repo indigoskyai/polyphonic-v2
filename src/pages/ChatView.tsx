@@ -2463,7 +2463,7 @@ export default function ChatView() {
                   placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to start chatting…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
-              <div className="input-footer">
+              <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
                 <div className="agent-pills">
                   {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
                   {!isMobile && renderGuestStatusChip()}
@@ -2474,7 +2474,7 @@ export default function ChatView() {
                       onToggle={() => setAlcoveOpen((v) => !v)}
                     />
                   )}
-                  {!isMobile && !alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
+                  {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
                       <ModesDropdown
@@ -2991,7 +2991,7 @@ export default function ChatView() {
           </div>
 
           {/* Footer */}
-          <div className="input-footer">
+          <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
             <div className="agent-pills">
               {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
               {!isMobile && renderGuestStatusChip()}
@@ -3002,7 +3002,7 @@ export default function ChatView() {
                   onToggle={() => setAlcoveOpen((v) => !v)}
                 />
               )}
-              {!isMobile && !alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
+              {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
                   <ModesDropdown
