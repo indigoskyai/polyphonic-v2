@@ -5,17 +5,15 @@ import {
   Archive,
   Bot,
   Brain,
-  CheckCircle2,
   ChevronRight,
   CircleUserRound,
   FolderKanban,
-  Import,
   MessageCircle,
+  NotebookPen,
   Plus,
   Search,
   Settings,
   Sparkles,
-  UsersRound,
   X,
 } from 'lucide-react';
 import { useDialogFocus } from '@/hooks/useDialogFocus';
@@ -25,16 +23,17 @@ import { useMobileShellStore } from '@/stores/mobileShellStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { useThreadStore, type Thread } from '@/stores/threadStore';
 
-const MAIN_ROUTES = [
+// Primary surfaces — mirrors the desktop nav rail (Chat, Memory, Mind, Journal,
+// Projects, Profile). The old mobile list carried Group (a dev-only mock),
+// Workspace and Checkpoints — none of which are in the web nav — and was
+// missing Journal.
+const PRIMARY_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Mind', path: '/mind', icon: Brain },
-  { label: 'Profile', path: '/profile', icon: CircleUserRound },
-  { label: 'Import', path: '/import', icon: Import },
+  { label: 'Journal', path: '/journal', icon: NotebookPen },
   { label: 'Projects', path: '/projects', icon: FolderKanban },
-  { label: 'Workspace', path: '/workspace', icon: FolderKanban },
-  { label: 'Group', path: '/group', icon: UsersRound },
-  { label: 'Checkpoints', path: '/checkpoints', icon: CheckCircle2 },
+  { label: 'Profile', path: '/profile', icon: CircleUserRound },
 ];
 
 // All settings sub-pages (mirrors the desktop SidebarSettings nav), surfaced on
@@ -54,10 +53,6 @@ const SETTINGS_ROUTES = [
   { label: 'Cron health', path: '/settings/cron-health' },
   { label: 'Guide & help', path: '/settings/help' },
 ];
-
-const QUICK_ROUTES = MAIN_ROUTES.filter((route) =>
-  ['/memory', '/mind', '/projects', '/profile', '/import'].includes(route.path),
-);
 
 function isActiveRoute(pathname: string, path: string): boolean {
   if (path === '/chat') return pathname.startsWith('/chat');
@@ -89,7 +84,7 @@ export default function MobileNavDrawer() {
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
   const [query, setQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsNavRef = useRef<HTMLElement | null>(null);
+  const settingsNavRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-expand the Settings group when the drawer opens on a settings route,
   // so the current section is in view.
@@ -214,20 +209,62 @@ export default function MobileNavDrawer() {
             </button>
           </div>
 
-          <div className="mobile-nav-quick" aria-label="Core surfaces">
-            {QUICK_ROUTES.map(({ label, path, icon: Icon }) => (
+          <nav className="mobile-nav-section" aria-label="Navigate">
+            {PRIMARY_ROUTES.map(({ label, path, icon: Icon }) => (
               <button
                 key={path}
                 type="button"
-                className="mobile-nav-quick-btn"
+                className="mobile-nav-row"
                 data-active={isActiveRoute(location.pathname, path) ? 'true' : undefined}
                 onClick={() => go(path)}
+                aria-current={isActiveRoute(location.pathname, path) ? 'page' : undefined}
               >
-                <Icon size={16} strokeWidth={1.75} />
+                <Icon size={18} strokeWidth={1.75} />
                 <span>{label}</span>
+                <ChevronRight className="mobile-nav-chevron" size={16} strokeWidth={1.7} />
               </button>
             ))}
-          </div>
+
+            <div ref={settingsNavRef}>
+              <button
+                type="button"
+                className="mobile-nav-row"
+                data-active={location.pathname.startsWith('/settings') ? 'true' : undefined}
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-expanded={settingsOpen}
+              >
+                <Settings size={18} strokeWidth={1.75} />
+                <span>Settings</span>
+                <ChevronRight
+                  className="mobile-nav-chevron"
+                  size={16}
+                  strokeWidth={1.7}
+                  style={{
+                    transform: settingsOpen ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 160ms var(--ease-out)',
+                  }}
+                />
+              </button>
+              {settingsOpen &&
+                SETTINGS_ROUTES.map(({ label, path }) => {
+                  const active =
+                    location.pathname === path || location.pathname.startsWith(`${path}/`);
+                  return (
+                    <button
+                      key={path}
+                      type="button"
+                      className="mobile-nav-row"
+                      style={{ paddingLeft: 46 }}
+                      data-active={active ? 'true' : undefined}
+                      onClick={() => go(path)}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </nav>
 
           <div className="mobile-nav-section mobile-nav-threads">
             <div className="mobile-nav-section-label">Recent threads</div>
@@ -247,64 +284,6 @@ export default function MobileNavDrawer() {
               </button>
             ))}
           </div>
-
-          <nav className="mobile-nav-section" aria-label="App navigation">
-            <div className="mobile-nav-section-label">App</div>
-            {MAIN_ROUTES.map(({ label, path, icon: Icon }) => (
-              <button
-                key={path}
-                type="button"
-                className="mobile-nav-row"
-                data-active={isActiveRoute(location.pathname, path) ? 'true' : undefined}
-                onClick={() => go(path)}
-                aria-current={isActiveRoute(location.pathname, path) ? 'page' : undefined}
-              >
-                <Icon size={18} strokeWidth={1.75} />
-                <span>{label}</span>
-                <ChevronRight className="mobile-nav-chevron" size={16} strokeWidth={1.7} />
-              </button>
-            ))}
-          </nav>
-
-          <nav ref={settingsNavRef} className="mobile-nav-section" aria-label="Settings">
-            <button
-              type="button"
-              className="mobile-nav-row"
-              data-active={location.pathname.startsWith('/settings') ? 'true' : undefined}
-              onClick={() => setSettingsOpen((v) => !v)}
-              aria-expanded={settingsOpen}
-            >
-              <Settings size={18} strokeWidth={1.75} />
-              <span>Settings</span>
-              <ChevronRight
-                className="mobile-nav-chevron"
-                size={16}
-                strokeWidth={1.7}
-                style={{
-                  transform: settingsOpen ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 160ms var(--ease-out)',
-                }}
-              />
-            </button>
-            {settingsOpen &&
-              SETTINGS_ROUTES.map(({ label, path }) => {
-                const active =
-                  location.pathname === path || location.pathname.startsWith(`${path}/`);
-                return (
-                  <button
-                    key={path}
-                    type="button"
-                    className="mobile-nav-row"
-                    style={{ paddingLeft: 46 }}
-                    data-active={active ? 'true' : undefined}
-                    onClick={() => go(path)}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-          </nav>
         </div>
 
         <div className="mobile-nav-footer">
