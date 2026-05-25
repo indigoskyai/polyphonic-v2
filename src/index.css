@@ -1076,6 +1076,13 @@ html {
     padding: 0;
     gap: 0;
     background: #000 !important;
+    /* Use the *dynamic* viewport height, never Tailwind's h-screen (100vh).
+       100vh on iOS Safari is the LARGE viewport, so a bottom-anchored composer
+       would sit behind the address bar. 100dvh tracks the visible viewport, and
+       [data-mobile] outranks .h-screen on specificity so this can't lose to
+       stylesheet ordering. Pairs with interactive-widget=resizes-content
+       (keyboard) and env(safe-area-inset-bottom) (home indicator). */
+    height: 100dvh;
   }
 
   .app-main {
