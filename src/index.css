@@ -2394,19 +2394,22 @@ html {
     background: linear-gradient(to top, #000, transparent);
   }
 
-  /* Composer surface — flat, true black, lit from above. Restrained on device:
-     a faint top sheen + a barely-there lit lip + bottom edge in shadow + a
-     whisper of lift. Hairline border kept truly thin. No grey, no glow. */
+  /* Composer surface — flat, true black, lit from above but SUBLIMINAL.
+     The only light is a whisper on the top rim: flat fill (no perceptible
+     gradient), a hairline border, and NO halo — the bottom edge melts into the
+     floor. Tuned deliberately faint because OLED renders these values hotter
+     than a desktop capture. Like Claude/ChatGPT: you feel the lift, you don't
+     see it. Focus brings the rim up a hair — a wake, not a glow. */
   .input-shell {
     border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.042), rgba(255,255,255,0.011) 48%, rgba(255,255,255,0) 84%), #08080a;
-    border: 1px solid rgba(255, 255, 255, 0.035);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.5), 0 14px 30px rgba(0,0,0,0.46), 0 2px 6px rgba(0,0,0,0.36);
+    background: linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.019) 85%), #08080a;
+    border: 1px solid rgba(255, 255, 255, 0.014);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.038), 0 2px 9px rgba(0,0,0,0.2);
     transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1), border-color 0.45s cubic-bezier(0.22,1,0.36,1);
   }
   .input-shell.focused {
-    border-color: rgba(255, 255, 255, 0.058);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -1px 0 rgba(0,0,0,0.5), 0 16px 34px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.36);
+    border-color: rgba(255, 255, 255, 0.024);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 3px 12px rgba(0,0,0,0.24);
   }
   /* warm whisper caret + selection — the one signature touch */
   .input-shell .input-textarea { caret-color: rgb(255, 198, 152); }
