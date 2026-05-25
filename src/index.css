@@ -2258,12 +2258,22 @@ html {
     background: linear-gradient(to top, #000, transparent);
   }
 
+  /* Composer surface — flat, true black, lit from above: top sheen + 1px lit
+     lip + bottom edge in shadow + a whisper of lift. No grey, no glow. */
   .input-shell {
-    border-radius: 28px;
-    background: #101012;
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: none;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.072), rgba(255,255,255,0.018) 46%, rgba(255,255,255,0) 82%), #070709;
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.6), 0 14px 32px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
+    transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1), border-color 0.45s cubic-bezier(0.22,1,0.36,1);
   }
+  .input-shell.focused {
+    border-color: rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.19), inset 0 -1px 0 rgba(0,0,0,0.6), 0 16px 38px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4);
+  }
+  /* warm whisper caret + selection — the one signature touch */
+  .input-shell .input-textarea { caret-color: rgb(255, 198, 152); }
+  .input-shell .input-textarea::selection { background: rgba(255, 198, 152, 0.22); color: inherit; }
 
   /* Prevent iOS auto-zoom when focusing the composer (requires ≥16px) */
   .input-shell .input-textarea,

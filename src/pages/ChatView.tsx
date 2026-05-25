@@ -2371,7 +2371,7 @@ export default function ChatView() {
               <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%, -50%)' }}>
                 <ExpressiveField
                   size={mobileFieldSize}
-                  state={dictationListening ? 'listening' : isStreaming ? 'thinking' : 'idle'}
+                  state={(dictationListening || focused) ? 'listening' : isStreaming ? 'thinking' : 'idle'}
                   shape={heroShape}
                 />
               </div>
@@ -2453,6 +2453,10 @@ export default function ChatView() {
                 <textarea
                   ref={textareaRef}
                   className="input-textarea"
+                  enterKeyHint="send"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
+                  spellCheck={true}
                   aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
@@ -2979,6 +2983,10 @@ export default function ChatView() {
             <textarea
               ref={textareaRef}
               className="input-textarea"
+              enterKeyHint="send"
+              autoCapitalize="sentences"
+              autoCorrect="on"
+              spellCheck={true}
               aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
               value={input}
               onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
