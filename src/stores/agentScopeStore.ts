@@ -10,7 +10,7 @@ interface State {
   activeAgentId: string;
   availableAgents: AgentScope[];
   loading: boolean;
-  load: (userId: string) => Promise<void>;
+  load: (userId: string, preferredId?: string | null) => Promise<void>;
   setActiveAgent: (id: string) => void;
 }
 
@@ -18,7 +18,7 @@ export const useAgentScopeStore = create<State>((set, get) => ({
   activeAgentId: 'luca',
   availableAgents: [{ id: 'luca', name: 'Luca' }],
   loading: false,
-  load: async (userId) => {
+  load: async (userId, preferredId) => {
     set({ loading: true });
     const { data, error } = await supabase
       .from('agent_configs')
@@ -42,9 +42,19 @@ export const useAgentScopeStore = create<State>((set, get) => ({
     }
     if (!seen.has('luca')) agents.unshift({ id: 'luca', name: 'Luca' });
     agents.sort((a, b) => (a.id === 'luca' ? -1 : b.id === 'luca' ? 1 : a.name.localeCompare(b.name)));
-    const activeAgentId = agents.some((agent) => agent.id === get().activeAgentId)
-      ? get().activeAgentId
-      : 'luca';
+    const current = get().activeAgentId;
+    let activeAgentId = agents.some((agent) => agent.id === current) ? current : 'luca';
+    // Seed from the adopted landing agent so secondary surfaces (memory / mind /
+    // journal) default to the same agent the chat hero shows — only when the
+    // user hasn't already moved off the default Luca scope.
+    if (
+      activeAgentId === 'luca' &&
+      preferredId &&
+      preferredId !== 'luca' &&
+      agents.some((agent) => agent.id === preferredId)
+    ) {
+      activeAgentId = preferredId;
+    }
     set({ availableAgents: agents, activeAgentId, loading: false });
   },
   setActiveAgent: (id) => set({ activeAgentId: id }),

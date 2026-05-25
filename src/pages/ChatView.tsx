@@ -2433,7 +2433,7 @@ export default function ChatView() {
               wrapper instead of shrinking to its (now smaller) footer
               content after the modes consolidation. */}
           <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
+            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2466,13 +2466,15 @@ export default function ChatView() {
               <div className="input-footer">
                 <div className="agent-pills">
                   {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
-                  {renderGuestStatusChip()}
-                  <ObserverEyeChip
-                    threadId={currentThreadId}
-                    open={alcoveOpen}
-                    onToggle={() => setAlcoveOpen((v) => !v)}
-                  />
-                  {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
+                  {!isMobile && renderGuestStatusChip()}
+                  {!isMobile && (
+                    <ObserverEyeChip
+                      threadId={currentThreadId}
+                      open={alcoveOpen}
+                      onToggle={() => setAlcoveOpen((v) => !v)}
+                    />
+                  )}
+                  {!isMobile && !alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                     <>
                       <div className="pill-sep" />
                       <ModesDropdown
@@ -2486,26 +2488,30 @@ export default function ChatView() {
                   )}
                 </div>
                 <div className="composer-actions">
-                  <select
-                    aria-label="Thinking effort"
-                    value={thinkingEffort}
-                    onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
-                    className="effort-select"
-                  >
-                    <option value="low">Light</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">Deep</option>
-                  </select>
+                  {!isMobile && (
+                    <select
+                      aria-label="Thinking effort"
+                      value={thinkingEffort}
+                      onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                      className="effort-select"
+                    >
+                      <option value="low">Light</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">Deep</option>
+                    </select>
+                  )}
                   <DictationButton
                     isListening={dictationListening}
                     supported={dictationSupported}
                     disabled={modelKeyMissing || isStreaming || guardianStreaming}
                     onClick={toggleDictation}
                   />
-                  <VoiceModeButton
-                    disabled={modelKeyMissing || isStreaming || guardianStreaming}
-                    onStartLiveCall={() => setLiveCallOpen(true)}
-                  />
+                  {!isMobile && (
+                    <VoiceModeButton
+                      disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                      onStartLiveCall={() => setLiveCallOpen(true)}
+                    />
+                  )}
                   <button
                     type="button"
                     aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
@@ -2537,10 +2543,13 @@ export default function ChatView() {
           </div>
 
           {/* Quiet landing footer — a daily wisdom quote (with its author) on
-              one line, above the local date/time/weather readout. */}
-          <div style={{ marginTop: isMobile ? 16 : 24, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
-            <LandingAmbient agentId={activeAgentId} />
-          </div>
+              one line, above the local date/time/weather readout. Desktop only:
+              mobile keeps the landing chat-first, with nothing below the composer. */}
+          {!isMobile && (
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center', maxWidth: 720, width: '100%' }}>
+              <LandingAmbient agentId={activeAgentId} />
+            </div>
+          )}
         </div>
         <AttachmentDropOverlay visible={isDragging} />
       </div>
@@ -2947,7 +2956,7 @@ export default function ChatView() {
 
       {/* Input zone */}
       <div className="input-zone">
-        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
+        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
           <input
             ref={fileInputRef}
             type="file"
@@ -2985,13 +2994,15 @@ export default function ChatView() {
           <div className="input-footer">
             <div className="agent-pills">
               {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
-              {renderGuestStatusChip()}
-              <ObserverEyeChip
-                threadId={currentThreadId}
-                open={alcoveOpen}
-                onToggle={() => setAlcoveOpen((v) => !v)}
-              />
-              {!alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
+              {!isMobile && renderGuestStatusChip()}
+              {!isMobile && (
+                <ObserverEyeChip
+                  threadId={currentThreadId}
+                  open={alcoveOpen}
+                  onToggle={() => setAlcoveOpen((v) => !v)}
+                />
+              )}
+              {!isMobile && !alcoveOpen && byokEnabled && activeAgentId === 'luca' && (
                 <>
                   <div className="pill-sep" />
                   <ModesDropdown
@@ -3006,16 +3017,18 @@ export default function ChatView() {
             </div>
 
             <div className="composer-actions">
-              <select
-                aria-label="Thinking effort"
-                value={thinkingEffort}
-                onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
-                className="effort-select"
-              >
-                <option value="low">Light</option>
-                <option value="medium">Medium</option>
-                <option value="high">Deep</option>
-              </select>
+              {!isMobile && (
+                <select
+                  aria-label="Thinking effort"
+                  value={thinkingEffort}
+                  onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                  className="effort-select"
+                >
+                  <option value="low">Light</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">Deep</option>
+                </select>
+              )}
 
               <DictationButton
                 isListening={dictationListening}
@@ -3024,10 +3037,12 @@ export default function ChatView() {
                 onClick={toggleDictation}
               />
 
-              <VoiceModeButton
-                disabled={modelKeyMissing || isStreaming || guardianStreaming}
-                onStartLiveCall={() => setLiveCallOpen(true)}
-              />
+              {!isMobile && (
+                <VoiceModeButton
+                  disabled={modelKeyMissing || isStreaming || guardianStreaming}
+                  onStartLiveCall={() => setLiveCallOpen(true)}
+                />
+              )}
 
               <button
                 type="button"

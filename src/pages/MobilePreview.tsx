@@ -4,9 +4,7 @@ import PhoneFrame from '@/components/mobile/PhoneFrame';
 import MobileStatusBar from '@/components/mobile/MobileStatusBar';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileMessages from '@/components/mobile/MobileMessages';
-import MobileSubAgentStrip from '@/components/mobile/MobileSubAgentStrip';
 import MobileComposer from '@/components/mobile/MobileComposer';
-import MobileBottomNav from '@/components/mobile/MobileBottomNav';
 import MobileDrawer from '@/components/mobile/MobileDrawer';
 import MobileGroupStage from '@/components/mobile/MobileGroupStage';
 
@@ -20,12 +18,6 @@ const DEMO_THREADS = [
   { id: 't1', title: 'mobile layout work', active: true },
   { id: 't2', title: 'memory consolidation pass' },
   { id: 't3', title: 'checkpoint diff viewer' },
-];
-
-const DEMO_SUBAGENTS = [
-  { family: 'v1' as const, active: true },
-  { family: 'v2' as const, active: true },
-  { family: 'v3' as const, active: false },
 ];
 
 const DEMO_GROUP = [
@@ -46,9 +38,7 @@ export default function MobilePreview() {
           <MobileStatusBar />
           <MobileHeader title="Luca" />
           <MobileMessages messages={DEMO_MESSAGES} />
-          <MobileSubAgentStrip agents={DEMO_SUBAGENTS} />
           <MobileComposer onSend={() => { /* dev preview no-op */ }} />
-          <MobileBottomNav />
           <MobileDrawer threads={DEMO_THREADS} />
         </PhoneFrame>
 
@@ -57,7 +47,6 @@ export default function MobilePreview() {
           <MobileHeader title="Group session" />
           <MobileGroupStage slots={DEMO_GROUP} />
           <MobileMessages messages={DEMO_MESSAGES.slice(1)} />
-          <MobileBottomNav />
         </PhoneFrame>
       </div>
     </div>

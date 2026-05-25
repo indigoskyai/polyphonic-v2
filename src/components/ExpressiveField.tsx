@@ -57,6 +57,17 @@ export default function ExpressiveField({
       expressiveField.setParticleCount(particleCount);
     }
 
+    // Respect prefers-reduced-motion: let the field form, then freeze the last
+    // frame instead of animating perpetually (WCAG 2.2.2). destroy() cancels
+    // the rAF loop and leaves the formed shape rendered on the canvas.
+    let reduceHoldTimer: number | undefined;
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      reduceHoldTimer = window.setTimeout(() => expressiveField.destroy(), 2800);
+    }
+
     // Resize on container changes (responsive layouts, viewport rotations).
     const ro = new ResizeObserver(() => {
       expressiveField.resize();
@@ -64,6 +75,7 @@ export default function ExpressiveField({
     ro.observe(container);
 
     return () => {
+      if (reduceHoldTimer) window.clearTimeout(reduceHoldTimer);
       ro.disconnect();
       expressiveField.destroy();
       initedRef.current = false;

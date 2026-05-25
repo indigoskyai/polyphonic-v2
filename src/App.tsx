@@ -67,6 +67,7 @@ const CheckpointsView = lazy(() => import("./pages/CheckpointsView"));
 const WorkspaceView = lazy(() => import("./pages/WorkspaceView"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const MobilePreview = lazy(() => import("./pages/MobilePreview"));
+const MobileLivePreview = lazy(() => import("./pages/MobileLivePreview"));
 const StyleGallery = lazy(() => import("./pages/StyleGallery"));
 const ComposerGallery = lazy(() => import("./pages/ComposerGallery"));
 const PublicProfileView = lazy(() => import("./pages/PublicProfileView"));
@@ -197,8 +198,19 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (user) loadSettings(user.id);
-    if (user) loadAgentScopes(user.id);
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
+      // Load settings first so the adopted landing agent is known, then seed
+      // the cross-surface agent scope (Memory / Mind / Journal) from it — so
+      // those surfaces default to the same agent the chat hero shows instead
+      // of falling back to Luca. Deterministic: no render race.
+      await loadSettings(user.id);
+      if (cancelled) return;
+      const landing = useSettingsStore.getState().landing_agent_id;
+      await loadAgentScopes(user.id, landing);
+    })();
+    return () => { cancelled = true; };
   }, [user, loadSettings, loadAgentScopes]);
 
   useEffect(() => {
@@ -388,6 +400,7 @@ const App = () => (
                 <Route path="/onboarding" element={<ProtectedRoute skipTokenGate><Onboarding /></ProtectedRoute>} />
                 <Route path="/access" element={<ProtectedRoute skipTokenGate><AccessGatePage /></ProtectedRoute>} />
                 <Route path="/_mobile" element={<MobilePreview />} />
+                <Route path="/_mobile-live" element={<MobileLivePreview />} />
                 <Route path="/_mockups/styles" element={<StyleGallery />} />
                 <Route path="/_mockups/composer" element={<ComposerGallery />} />
                 <Route path="/dashboard" element={<Navigate to="/mind" replace />} />

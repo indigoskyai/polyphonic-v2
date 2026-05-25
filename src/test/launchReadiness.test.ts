@@ -104,7 +104,7 @@ describe('launch readiness static gates', () => {
     expect(index).toContain('<link rel="canonical" href="https://polyphonic.chat/" />');
     expect(index).toContain('<meta property="og:image" content="https://polyphonic.chat/favicon.png" />');
     expect(index).toContain('<meta name="twitter:image" content="https://polyphonic.chat/favicon.png" />');
-    expect(index).toContain('<meta name="theme-color" content="#08080a" />');
+    expect(index).toContain('<meta name="theme-color" content="#000000" />');
     expect(robots).toContain('User-agent: *');
     expect(robots).toContain('Allow: /');
     expect(robots).toContain('Sitemap: https://polyphonic.chat/sitemap.xml');

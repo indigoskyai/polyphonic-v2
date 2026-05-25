@@ -1,8 +1,12 @@
 import { Activity, Info, Menu } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AgentPicker } from '@/components/composer/AgentPicker';
 import { getMobileSurfaceMeta } from '@/lib/mobileShell';
+import { useAuthStore } from '@/stores/authStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useMobileShellStore } from '@/stores/mobileShellStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { useThreadStore } from '@/stores/threadStore';
@@ -15,13 +19,26 @@ function threadIdFromPath(pathname: string): string | null {
 
 export default function MobileAppBar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const routeThreadId = threadIdFromPath(location.pathname);
   const threads = useThreadStore((s) => s.threads);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const messages = useThreadStore((s) => s.messages);
   const loadThreads = useThreadStore((s) => s.loadThreads);
+  const createThread = useThreadStore((s) => s.createThread);
+  const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
   const openMobileNav = useMobileShellStore((s) => s.openDrawer);
   const openContextDrawer = useDrawerStore((s) => s.open);
   const closeContextDrawer = useDrawerStore((s) => s.close);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const setActiveAgent = useAgentScopeStore((s) => s.setActiveAgent);
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
+  // On the chat surface, mirror the hero's source of truth (the persisted
+  // landing agent) instead of the cross-surface agent scope, so the top bar
+  // never says "Luca" while the hero shows the adopted landing agent.
+  const landingAgentId = useSettingsStore((s) => s.landing_agent_id) || 'luca';
 
   useEffect(() => {
     if (threads.length === 0) void loadThreads();
@@ -31,8 +48,47 @@ export default function MobileAppBar() {
     () => threads.find((t) => t.id === routeThreadId)?.title ?? null,
     [routeThreadId, threads],
   );
+  const currentThread = useMemo(
+    () => threads.find((t) => t.id === (currentThreadId || routeThreadId)),
+    [currentThreadId, routeThreadId, threads],
+  );
 
   const meta = getMobileSurfaceMeta(location.pathname, threadTitle);
+  const isChatSurface = location.pathname.startsWith('/chat');
+  const runtimeAgentId = isChatSurface ? (currentThread?.agent_id || landingAgentId) : activeAgentId;
+  const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';
+  const title = isChatSurface ? activeAgentName : meta.title;
+  const subtitle = isChatSurface ? (threadTitle || 'new chat') : meta.subtitle;
+
+  const handleAgentChange = useCallback(async (id: string) => {
+    if (!id || id === runtimeAgentId) return;
+    setActiveAgent(id);
+
+    if (!user) return;
+
+    if (!currentThreadId) {
+      const nextThreadId = await createThread(user.id, id);
+      navigate(`/chat/${nextThreadId}`);
+      return;
+    }
+
+    if (messages.length === 0) {
+      await updateThreadAgent(currentThreadId, id);
+      return;
+    }
+
+    const nextThreadId = await createThread(user.id, id);
+    navigate(`/chat/${nextThreadId}`);
+  }, [
+    createThread,
+    currentThreadId,
+    messages.length,
+    navigate,
+    runtimeAgentId,
+    setActiveAgent,
+    updateThreadAgent,
+    user,
+  ]);
 
   const openMenu = () => {
     closeContextDrawer();
@@ -48,7 +104,7 @@ export default function MobileAppBar() {
   };
 
   return (
-    <header className="mobile-app-bar">
+    <header className="mobile-app-bar" data-surface={isChatSurface ? 'chat' : undefined}>
       <button
         type="button"
         className="mobile-bar-button"
@@ -59,8 +115,18 @@ export default function MobileAppBar() {
       </button>
 
       <div className="mobile-bar-title" aria-live="polite">
-        <div className="mobile-bar-title-main">{meta.title}</div>
-        <div className="mobile-bar-title-sub">{meta.subtitle}</div>
+        {isChatSurface && user ? (
+          <div className="mobile-bar-agent-picker">
+            <AgentPicker
+              activeAgentId={runtimeAgentId}
+              onChange={(id) => { void handleAgentChange(id); }}
+              variant="header"
+            />
+          </div>
+        ) : (
+          <div className="mobile-bar-title-main">{title}</div>
+        )}
+        <div className="mobile-bar-title-sub">{subtitle}</div>
       </div>
 
       <button

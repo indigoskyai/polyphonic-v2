@@ -51,7 +51,7 @@ export default function CognitiveStateRadar({ values }: Props) {
   ] as const;
 
   return (
-    <svg viewBox="0 0 440 440" className="m-state-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <svg viewBox="-30 0 500 440" className="m-state-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
       {[0.25, 0.5, 0.75, 1].map((s) => (
         <polygon key={s} points={ring(s)} className="md-grid" />
       ))}
