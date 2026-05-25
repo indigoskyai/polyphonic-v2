@@ -274,7 +274,7 @@ export default function JournalView() {
                               {item.tags
                                 .filter((t) => !['inner-life', 'consolidation'].includes(t))
                                 .slice(0, 7)
-                                .map((tag) => <span key={tag} className="s-row-tag">{tag}</span>)}
+                                .map((tag, index) => <span key={`${tag}:${index}`} className="s-row-tag">{tag}</span>)}
                             </div>
                           )}
                         </article>

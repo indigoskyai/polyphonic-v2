@@ -113,4 +113,22 @@ describe('notebook normalization', () => {
       'Thursday, May 21, 2026',
     ]);
   });
+
+  it('keeps notebook ids unique when source rows carry repeated placeholder ids', () => {
+    const items = buildNotebookItems({
+      journalEntries: [],
+      thoughts: [],
+      dreams: [],
+      insights: [
+        engram('insight', 'first crystallized pattern', ['insight'], '2026-05-22T10:00:00.000Z'),
+        engram('insight', 'second crystallized pattern', ['insight'], '2026-05-22T11:00:00.000Z'),
+      ],
+      reflections: [],
+      wanderings: [],
+      beliefs: [],
+      activityLog: [],
+    });
+
+    expect(new Set(items.map((item) => item.id)).size).toBe(items.length);
+  });
 });

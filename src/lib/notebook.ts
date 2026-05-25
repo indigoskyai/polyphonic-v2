@@ -87,6 +87,25 @@ function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function compactIdPart(value: unknown): string {
+  return normalizeText(String(value ?? ''))
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72);
+}
+
+function notebookId(
+  prefix: NotebookKind,
+  rawId: unknown,
+  createdAt: string | null | undefined,
+  body: string,
+  index: number,
+): string {
+  const id = compactIdPart(rawId);
+  const fallback = compactIdPart(`${createdAt ?? 'undated'}-${body.slice(0, 96)}-${index}`);
+  return id ? `${prefix}:${id}:${fallback}` : `${prefix}:${fallback || index}`;
+}
+
 function withinMinutes(a: string, b: string, minutes: number): boolean {
   const delta = Math.abs(new Date(a).getTime() - new Date(b).getTime());
   return delta <= minutes * 60_000;
@@ -137,10 +156,10 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
   const items: NotebookItem[] = [];
   const wanderingIds = new Set(input.wanderings.map((t) => t.id));
 
-  for (const entry of input.journalEntries) {
+  for (const [index, entry] of input.journalEntries.entries()) {
     const isDream = (entry.mood || '').toLowerCase().includes('dream');
     addDeduped(items, {
-      id: `journal:${entry.id}`,
+      id: notebookId(isDream ? 'dream' : 'journal', entry.id, entry.created_at, entry.content, index),
       kind: isDream ? 'dream' : 'journal',
       label: isDream ? 'dream' : 'journal',
       title: entry.mood || (isDream ? 'Dream' : 'Journal entry'),
@@ -151,11 +170,11 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const thought of input.thoughts) {
+  for (const [index, thought] of input.thoughts.entries()) {
     if (wanderingIds.has(thought.id)) continue;
     const kind = thoughtKind(thought);
     addDeduped(items, {
-      id: `thought:${thought.id}`,
+      id: notebookId(kind, thought.id, thought.created_at, thought.content, index),
       kind,
       label: kind === 'question' ? 'question' : kind === 'reflection' ? 'reflection' : 'thought',
       title: kind === 'question' ? 'Question surfaced' : kind === 'reflection' ? 'Reflection' : 'Thought',
@@ -167,9 +186,9 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const thought of input.wanderings) {
+  for (const [index, thought] of input.wanderings.entries()) {
     addDeduped(items, {
-      id: `wandering:${thought.id}`,
+      id: notebookId('wandering', thought.id, thought.created_at, thought.content, index),
       kind: 'wandering',
       label: 'wandering',
       title: 'Wandering thought',
@@ -181,9 +200,9 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const dream of input.dreams) {
+  for (const [index, dream] of input.dreams.entries()) {
     addDeduped(items, {
-      id: `dream:${dream.id}`,
+      id: notebookId('dream', dream.id, dream.created_at, dream.content, index),
       kind: 'dream',
       label: 'dream',
       title: 'Dream consolidation',
@@ -195,9 +214,9 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const insight of input.insights) {
+  for (const [index, insight] of input.insights.entries()) {
     addDeduped(items, {
-      id: `insight:${insight.id}`,
+      id: notebookId('insight', insight.id, insight.created_at, insight.content, index),
       kind: 'insight',
       label: 'insight',
       title: 'Insight',
@@ -209,9 +228,9 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const reflection of input.reflections) {
+  for (const [index, reflection] of input.reflections.entries()) {
     addDeduped(items, {
-      id: `reflection:${reflection.id}`,
+      id: notebookId('reflection', reflection.id, reflection.created_at, reflection.content, index),
       kind: 'reflection',
       label: 'reflection',
       title: 'Reflection',
@@ -223,11 +242,11 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const belief of input.beliefs) {
+  for (const [index, belief] of input.beliefs.entries()) {
     const date = belief.updated_at || belief.created_at;
     if (!date) continue;
     addDeduped(items, {
-      id: `belief:${belief.id || normalizeText(belief.text).slice(0, 80)}`,
+      id: notebookId('belief', belief.id, date, belief.text, index),
       kind: 'belief',
       label: 'belief',
       title: belief.domain || belief.confidence_tier || 'Belief',
@@ -239,11 +258,11 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
     });
   }
 
-  for (const activity of input.activityLog) {
+  for (const [index, activity] of input.activityLog.entries()) {
     if (CONTENT_ACTIVITY_TYPES.has(activity.activity_type)) continue;
     const text = activity.summary || activity.title || activity.activity_type.replace(/_/g, ' ');
     addDeduped(items, {
-      id: `activity:${activity.id}`,
+      id: notebookId('activity', activity.id, activity.created_at, text, index),
       kind: 'activity',
       label: activityLabel(activity.activity_type),
       title: activity.title || activity.activity_type.replace(/_/g, ' '),

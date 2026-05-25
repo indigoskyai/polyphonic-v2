@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useDialogFocus } from '@/hooks/useDialogFocus';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useMobileShellStore } from '@/stores/mobileShellStore';
@@ -82,9 +83,17 @@ export default function MobileNavDrawer() {
   const openContextDrawer = useDrawerStore((s) => s.open);
   const closeContextDrawer = useDrawerStore((s) => s.close);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
+  const setActiveAgent = useAgentScopeStore((s) => s.setActiveAgent);
   const [query, setQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agentScopeOpen, setAgentScopeOpen] = useState(false);
   const settingsNavRef = useRef<HTMLDivElement | null>(null);
+  const activeAgentName = useMemo(
+    () => availableAgents.find((agent) => agent.id === activeAgentId)?.name ?? 'Luca',
+    [activeAgentId, availableAgents],
+  );
 
   // Auto-expand the Settings group when the drawer opens on a settings route,
   // so the current section is in view.
@@ -151,6 +160,13 @@ export default function MobileNavDrawer() {
     close();
   };
 
+  const handleSelectAgentScope = (id: string) => {
+    if (!id) return;
+    if (id !== activeAgentId) setActiveAgent(id);
+    setAgentScopeOpen(false);
+    close();
+  };
+
   const handleSignOut = async () => {
     await signOut();
     close();
@@ -197,6 +213,52 @@ export default function MobileNavDrawer() {
         </label>
 
         <div className="mobile-nav-scroll">
+          <section className="mobile-agent-scope" aria-label="Agent scope">
+            <button
+              type="button"
+              className="mobile-agent-scope-trigger"
+              onClick={() => setAgentScopeOpen((value) => !value)}
+              aria-expanded={agentScopeOpen}
+            >
+              <span className="mobile-agent-scope-dot" aria-hidden="true" />
+              <span className="mobile-agent-scope-copy">
+                <span className="mobile-agent-scope-kicker">Active agent</span>
+                <span className="mobile-agent-scope-name">{activeAgentName}</span>
+                <span className="mobile-agent-scope-sub">Journal · Memory · Mind</span>
+              </span>
+              <ChevronRight
+                className="mobile-agent-scope-chevron"
+                size={16}
+                strokeWidth={1.7}
+                style={{
+                  transform: agentScopeOpen ? 'rotate(90deg)' : 'none',
+                }}
+              />
+            </button>
+
+            {agentScopeOpen && (
+              <div className="mobile-agent-scope-list" role="listbox" aria-label="Choose active agent">
+                {availableAgents.map((agent) => {
+                  const active = agent.id === activeAgentId;
+                  return (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      className="mobile-agent-scope-option"
+                      data-active={active ? 'true' : undefined}
+                      onClick={() => handleSelectAgentScope(agent.id)}
+                      role="option"
+                      aria-selected={active}
+                    >
+                      <span className="mobile-agent-scope-option-dot" aria-hidden="true" />
+                      <span>{agent.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           <div className="mobile-nav-actions">
             <button type="button" className="mobile-nav-primary" onClick={handleNewChat}>
               <Plus size={19} strokeWidth={1.8} />

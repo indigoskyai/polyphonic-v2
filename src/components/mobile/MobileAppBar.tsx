@@ -17,6 +17,18 @@ function threadIdFromPath(pathname: string): string | null {
   return id || null;
 }
 
+function isAgentScopedSurface(pathname: string): boolean {
+  return (
+    pathname.startsWith('/chat') ||
+    pathname.startsWith('/journal') ||
+    pathname.startsWith('/memory') ||
+    pathname.startsWith('/mind') ||
+    pathname.startsWith('/profile/identity') ||
+    pathname.startsWith('/profile/skills') ||
+    pathname.startsWith('/profile/schedule')
+  );
+}
+
 export default function MobileAppBar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,12 +71,13 @@ export default function MobileAppBar() {
   const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';
   const title = isChatSurface ? activeAgentName : meta.title;
   const subtitle = isChatSurface ? (threadTitle || 'new chat') : meta.subtitle;
+  const showAgentPicker = !!user && isAgentScopedSurface(location.pathname);
 
   const handleAgentChange = useCallback(async (id: string) => {
     if (!id || id === runtimeAgentId) return;
     setActiveAgent(id);
 
-    if (!user) return;
+    if (!user || !isChatSurface) return;
 
     if (!currentThreadId) {
       const nextThreadId = await createThread(user.id, id);
@@ -82,6 +95,7 @@ export default function MobileAppBar() {
   }, [
     createThread,
     currentThreadId,
+    isChatSurface,
     messages.length,
     navigate,
     runtimeAgentId,
@@ -115,13 +129,18 @@ export default function MobileAppBar() {
       </button>
 
       <div className="mobile-bar-title" aria-live="polite">
-        {isChatSurface && user ? (
-          <div className="mobile-bar-agent-picker">
-            <AgentPicker
-              activeAgentId={runtimeAgentId}
-              onChange={(id) => { void handleAgentChange(id); }}
-              variant="header"
-            />
+        {showAgentPicker ? (
+          <div className="mobile-bar-agent-stack">
+            <div className="mobile-bar-agent-picker">
+              <AgentPicker
+                activeAgentId={runtimeAgentId}
+                onChange={(id) => { void handleAgentChange(id); }}
+                variant="header"
+              />
+            </div>
+            {!isChatSurface && (
+              <div className="mobile-bar-agent-surface">{meta.title}</div>
+            )}
           </div>
         ) : (
           <div className="mobile-bar-title-main">{title}</div>
