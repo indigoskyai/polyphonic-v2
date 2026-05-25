@@ -2275,9 +2275,9 @@ html {
   .input-textarea {
     font-size: 16px;
     line-height: 1.45;
-    min-height: 30px;
+    min-height: 50px;
     max-height: 154px;
-    padding: 12px 17px 8px;
+    padding: 13px 17px 8px;
   }
 
   .input-footer {
@@ -2286,41 +2286,6 @@ html {
     min-width: 0;
     min-height: 40px;
     padding: 2px 7px 7px 9px;
-  }
-
-  /* ── Collapsed → expanded composer (mobile, ChatGPT-style) ──
-     Resting state is a compact single-line pill showing only the placeholder.
-     Focus (tap) or any typed text expands it to reveal attach / mic / send. */
-  .input-shell .input-textarea {
-    transition: min-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
-                padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .input-shell .input-footer {
-    overflow: hidden;
-    transition: max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 180ms ease,
-                padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .input-shell:not(.composer-collapsed) .input-footer {
-    max-height: 56px;
-    opacity: 1;
-  }
-  .input-shell.composer-collapsed .input-textarea {
-    /* border-box: total height includes padding. One 16px/1.45 line needs
-       ~24px of content, so 50px total − 26px vertical padding = 24px clears it. */
-    min-height: 50px;
-    max-height: 50px;
-    padding: 13px 18px;
-    overflow: hidden;
-  }
-  .input-shell.composer-collapsed .input-footer {
-    max-height: 0;
-    min-height: 0;
-    margin: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    opacity: 0;
-    pointer-events: none;
   }
 
   .agent-pills {
