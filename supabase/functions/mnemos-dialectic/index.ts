@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { isDialecticEnabled } from "../_shared/config.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { loadOrCreateLucaIdentity } from "../_shared/agents/luca-identity.ts";
@@ -49,6 +50,11 @@ serve(async (req) => {
     });
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401, corsHeaders);
+
+    if (!isDialecticEnabled(user.id)) {
+      await recordCronSuccess("mnemos-dialectic", Date.now() - __jobStart);
+      return json({ ok: true, skipped: "dialectic_disabled" }, 200, corsHeaders);
+    }
 
     const body = await req.json().catch(() => ({}));
     const threadId = typeof body.thread_id === "string" ? body.thread_id : "";

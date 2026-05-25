@@ -12,6 +12,7 @@ import {
   loadPendingRevisions,
   type PendingRevision,
 } from "../agents/pending-revisions.ts";
+import { isDialecticEnabled } from "../config.ts";
 import {
   formatAgentSkillsPrompt,
   loadRelevantAgentSkills,
@@ -195,7 +196,7 @@ export async function loadContinuityPacket(
   const include = {
     history: options.includeHistory !== false,
     identity: options.includeIdentity !== false,
-    pendingRevisions: options.includePendingRevisions !== false,
+    pendingRevisions: options.includePendingRevisions !== false && isDialecticEnabled(options.userId),
     hypomnema: options.includeHypomnema !== false,
     functionalMemory: options.includeFunctionalMemory !== false,
     mnemos: options.includeMnemos !== false,

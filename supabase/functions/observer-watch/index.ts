@@ -4,6 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isDialecticEnabled } from "../_shared/config.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
@@ -48,6 +49,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const dialecticEnabled = isDialecticEnabled(user.id);
 
     const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) {
@@ -102,6 +104,7 @@ serve(async (req) => {
       emotionalBlock ? `\n${emotionalBlock}` : "",
       `\nRecent conversation:\n${transcript}`,
       priorNotesBlock,
+      dialecticEnabled ? "" : "\n\nDialectic revisions are currently disabled. Return pending_revisions as an empty array; only observer note insertions are active.",
       `\n\n${OBSERVER_WATCH_INSTRUCTIONS}`,
     ].filter(Boolean).join("\n");
 
@@ -198,12 +201,17 @@ serve(async (req) => {
         status: "pending",
       }));
 
-    if (revisions.length > 0) {
+    if (dialecticEnabled && revisions.length > 0) {
       await supabase.from("pending_revisions").insert(revisions);
     }
 
     await recordCronSuccess("observer-watch", Date.now() - __jobStart);
-    return new Response(JSON.stringify({ ok: true, inserted: insertions.length, revisions: revisions.length }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      inserted: insertions.length,
+      revisions: dialecticEnabled ? revisions.length : 0,
+      skipped_revisions: dialecticEnabled ? undefined : "dialectic_disabled",
+    }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

@@ -78,6 +78,7 @@ describe('Continuity Kernel write path', () => {
 
     const deps: ContinuityWriteDeps = {
       env: (name) => {
+        if (name === 'DIALECTIC_ENABLED') return 'true';
         if (name === 'SUPABASE_URL') return 'https://example.supabase.co';
         if (name === 'SUPABASE_SERVICE_ROLE_KEY') return 'service-role';
         return undefined;
@@ -159,7 +160,12 @@ describe('Continuity Kernel write path', () => {
     expect(report.operations).toContainEqual(expect.objectContaining({
       name: 'pending_revisions',
       status: 'skipped',
-      reason: 'no pending revisions',
+      reason: 'dialectic disabled',
+    }));
+    expect(report.operations).toContainEqual(expect.objectContaining({
+      name: 'mnemos_dialectic',
+      status: 'skipped',
+      reason: 'dialectic disabled',
     }));
     expect(report.operations).toContainEqual(expect.objectContaining({
       name: 'observer_watch',

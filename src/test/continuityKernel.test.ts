@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildLucaPromptPartsFromContinuity,
   buildThreadContinuityNote,
@@ -17,6 +17,18 @@ import { sanitizeContinuityBoundaryText } from '../../supabase/functions/_shared
 import type { ActivationResult, Engram } from '../../supabase/functions/_shared/mnemos/types';
 
 const supabaseStub = {} as any;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function stubDialecticEnabled(enabled: boolean) {
+  vi.stubGlobal('Deno', {
+    env: {
+      get: (name: string) => name === 'DIALECTIC_ENABLED' ? String(enabled) : undefined,
+    },
+  });
+}
 
 function engram(content: string, engram_type: Engram['engram_type'] = 'semantic'): ActivationResult {
   return {
@@ -77,6 +89,8 @@ describe('Continuity Kernel read path', () => {
   });
 
   it('assembles one packet with stable precedence-ready prompt parts', async () => {
+    stubDialecticEnabled(true);
+
     const loaders: ContinuityLoaders = {
       history: async () => [
         { id: 'm1', role: 'user', content: 'we were working on continuity', created_at: '2026-05-01T00:00:00.000Z' },
@@ -166,6 +180,41 @@ describe('Continuity Kernel read path', () => {
     expect(hypomnemaIndex).toBeLessThan(functionalIndex);
     expect(functionalIndex).toBeLessThan(mnemosIndex);
     expect(mnemosIndex).toBeLessThan(skillsIndex);
+  });
+
+  it('keeps pending revisions out of the live prompt while the dialectic flag is disabled', async () => {
+    const packet = await loadContinuityPacket(supabaseStub, {
+      userId: 'u1',
+      agentId: 'luca',
+      threadId: 't1',
+      userMessage: 'continue the memory work',
+    }, {
+      history: async () => [],
+      identity: async () => ({ soulMd: '', selfModel: '', userModel: '', convictions: '' }),
+      pendingRevisions: async () => [
+        {
+          id: 'r1',
+          revision_type: 'correction',
+          what_was_said: 'old',
+          what_to_say_now: 'new',
+          rationale: null,
+          created_at: '2026-05-04T00:00:00.000Z',
+        },
+      ],
+      hypomnema: async () => ({ block: '', count: 0, rendered: 0 }),
+      functionalMemories: async () => [],
+      mnemos: async () => [],
+      skills: async () => [],
+      emotionalState: async () => null,
+      beliefs: async () => [],
+    });
+
+    expect(packet.pendingRevisions).toEqual([]);
+    expect(packet.pendingRevisionsBlock).toBe('');
+    expect(packet.diagnostics).toContainEqual(expect.objectContaining({
+      layer: 'pending_revisions',
+      status: 'skipped',
+    }));
   });
 
   it('records layer failures in diagnostics while preserving the rest of continuity', async () => {

@@ -2,6 +2,7 @@ import {
   finalizePendingRevisions,
   type PendingRevision,
 } from "../agents/pending-revisions.ts";
+import { isDialecticEnabled } from "../config.ts";
 import { MnemosEngine } from "../mnemos/engine.ts";
 
 type SupabaseLike = {
@@ -97,11 +98,12 @@ export function queueContinuityTurnWrites(
   const hasTurn = Boolean(opts.userMessage?.trim() && opts.agentResponse?.trim());
   const pendingRevisions = opts.pendingRevisions || [];
   const apiKey = opts.apiKey || "";
+  const dialecticEnabled = isDialecticEnabled(opts.userId, (name) => readEnv(name, deps));
 
   queue(
     "pending_revisions",
-    hasTurn && pendingRevisions.length > 0 && Boolean(apiKey),
-    pendingRevisions.length === 0 ? "no pending revisions" : apiKey ? "empty turn" : "no api key",
+    dialecticEnabled && hasTurn && pendingRevisions.length > 0 && Boolean(apiKey),
+    !dialecticEnabled ? "dialectic disabled" : pendingRevisions.length === 0 ? "no pending revisions" : apiKey ? "empty turn" : "no api key",
     () => (deps.finalizePendingRevisions || finalizePendingRevisions)(
       opts.supabase,
       apiKey,
@@ -136,8 +138,8 @@ export function queueContinuityTurnWrites(
 
   queue(
     "mnemos_dialectic",
-    hasTurn && agentId === "luca" && Boolean(opts.authHeader),
-    agentId !== "luca" ? "non-luca agent" : opts.authHeader ? "empty turn" : "no auth header",
+    dialecticEnabled && hasTurn && agentId === "luca" && Boolean(opts.authHeader),
+    !dialecticEnabled ? "dialectic disabled" : agentId !== "luca" ? "non-luca agent" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("mnemos-dialectic", {
       thread_id: opts.threadId,
       agent_id: agentId,
