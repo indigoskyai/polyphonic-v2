@@ -2137,9 +2137,9 @@ html {
   .send-btn.armed { animation: none; }
 }
 .send-btn svg { width: 15px; height: 15px; }
-.send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.6); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
-.send-btn .send-icon { transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
-.send-btn.streaming .send-icon { opacity: 0; transform: scale(0.6); }
+.send-btn .stop-icon { position: absolute; opacity: 0; transform: scale(0.55); transition: opacity 0.24s cubic-bezier(0.22,1,0.36,1), transform 0.24s cubic-bezier(0.22,1,0.36,1); }
+.send-btn .send-icon { transition: opacity 0.24s cubic-bezier(0.22,1,0.36,1), transform 0.24s cubic-bezier(0.22,1,0.36,1); }
+.send-btn.streaming .send-icon { opacity: 0; transform: scale(0.55); }
 .send-btn.streaming .stop-icon { opacity: 1; transform: scale(1); }
 .send-btn.streaming { color: var(--text-secondary); }
 .send-btn.ensemble-armed {
