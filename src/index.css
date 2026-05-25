@@ -2186,6 +2186,64 @@ html {
   background: rgba(28, 24, 20, 0.92);
 }
 
+/* ── Modes bottom sheet (mobile) ──────────────────────────────────────────
+   iOS mis-positions the trigger-anchored popover while the keyboard is up, so
+   on mobile the modes menu is a bottom-anchored sheet: the keyboard is
+   dismissed on open and the sheet slides up over a dim backdrop. Same two
+   items, sized for touch. z-index matches the agent picker portal (9999) which
+   is known to surface correctly on device. */
+.modes-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  z-index: 9998;
+  cursor: pointer;
+  animation: modes-backdrop-in 200ms var(--ease-out) both;
+}
+@keyframes modes-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
+.modes-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  padding: 6px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.012) 60%, rgba(255,255,255,0)), #0c0c0e;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.55);
+  animation: modes-sheet-up 320ms var(--ease-premium) both;
+}
+@keyframes modes-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modes-sheet::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  margin: 8px auto 6px;
+}
+.modes-sheet-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-whisper);
+  padding: 4px 6px 9px;
+}
+.modes-sheet .modes-item {
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 14px;
+  gap: 12px;
+}
+.modes-sheet .modes-item-name { font-size: 15px; }
+.modes-sheet .modes-item + .modes-item { margin-top: 2px; }
+
 /* ── Dictation button (Web Speech API mic) ────────────────────────────────
    Sits right before the send button. Idle state matches send-btn's quiet
    icon-button vocabulary. Listening state borrows the sage armed treatment

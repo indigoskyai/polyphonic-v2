@@ -2482,6 +2482,7 @@ export default function ChatView() {
                         ensembleLocked={ensembleLocked}
                         onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
                         onToggleEnsemble={toggleEnsemble}
+                        isMobile={isMobile}
                       />
                     </>
                   )}
@@ -3014,6 +3015,7 @@ export default function ChatView() {
                     ensembleLocked={ensembleLocked}
                     onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
                     onToggleEnsemble={toggleEnsemble}
+                    isMobile={isMobile}
                   />
                 </>
               )}

@@ -15,6 +15,13 @@ interface ModesDropdownProps {
   onToggleAgentMode: () => void;
   /** Click handler — receives the mouse event so shift-click can lock. */
   onToggleEnsemble: (e: ReactMouseEvent) => void;
+  /**
+   * Mobile renders a bottom sheet instead of a trigger-anchored popover. The
+   * popover uses position:fixed math off the trigger's rect, which iOS Safari
+   * mis-resolves while the keyboard is up (visual vs layout viewport), landing
+   * the menu off-screen. The sheet is bottom-anchored and keyboard-independent.
+   */
+  isMobile?: boolean;
 }
 
 /**
@@ -35,12 +42,23 @@ export default function ModesDropdown({
   ensembleLocked,
   onToggleAgentMode,
   onToggleEnsemble,
+  isMobile = false,
 }: ModesDropdownProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [popPos, setPopPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Mobile: dismiss the keyboard before the sheet slides up, so a bottom-
+  // anchored sheet isn't occluded by it. (The composer's onMouseDown
+  // preventDefault keeps the tap from blurring, so blur explicitly here.)
+  const handleTriggerClick = () => {
+    if (!open && isMobile && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setOpen((v) => !v);
+  };
 
   const ensembleOn = ensembleArmed || ensembleLocked;
   const anyActive = agentModeArmed || ensembleOn;
@@ -54,8 +72,10 @@ export default function ModesDropdown({
     return 'Modes';
   })();
 
-  // Position the portal popover relative to the trigger button.
+  // Position the portal popover relative to the trigger button. Desktop only —
+  // mobile uses a bottom-anchored sheet that needs no trigger math.
   useLayoutEffect(() => {
+    if (isMobile) return;
     if (!open || !triggerRef.current || !popRef.current) return;
     const place = () => {
       if (!triggerRef.current || !popRef.current) return;
@@ -77,7 +97,7 @@ export default function ModesDropdown({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   // Close on outside click + Escape. Click-tracking includes both the wrap
   // (trigger) and the portaled popover so menu interactions don't dismiss.
@@ -100,13 +120,48 @@ export default function ModesDropdown({
     };
   }, [open]);
 
+  const menuItems = (
+    <>
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={agentModeArmed}
+        className={`modes-item${agentModeArmed ? ' armed' : ''}`}
+        onClick={() => onToggleAgentMode()}
+        title="Agent runtime — tool-using runtime for research, multi-step planning, and context checks. Luca only."
+      >
+        <PocketKnife size={13} strokeWidth={1.5} className="modes-item-icon" aria-hidden="true" />
+        <span className="modes-item-name">Agent</span>
+        <Switch on={agentModeArmed} />
+      </button>
+
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={ensembleOn}
+        className={`modes-item${ensembleOn ? ' armed' : ''}${ensembleLocked ? ' locked' : ''}`}
+        onClick={(e) => onToggleEnsemble(e)}
+        title="Ensemble — consult multiple models for one answer. Shift-click to lock across messages."
+      >
+        <Boxes size={13} strokeWidth={1.5} className="modes-item-icon" aria-hidden="true" />
+        <span className="modes-item-name">
+          Ensemble
+          {ensembleLocked && (
+            <Lock size={9} strokeWidth={1.8} className="modes-item-lock" aria-label="locked" />
+          )}
+        </span>
+        <Switch on={ensembleOn} />
+      </button>
+    </>
+  );
+
   return (
     <div ref={wrapRef} className="modes-wrap">
       <button
         ref={triggerRef}
         type="button"
         className={`modes-trigger${anyActive ? ' armed' : ''}${open ? ' open' : ''}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleTriggerClick}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -114,7 +169,8 @@ export default function ModesDropdown({
         <ChevronDown size={11} strokeWidth={1.6} className="modes-chev" aria-hidden="true" />
       </button>
 
-      {open && createPortal(
+      {/* Desktop: trigger-anchored popover. */}
+      {open && !isMobile && createPortal(
         <div
           ref={popRef}
           className="modes-pop"
@@ -125,37 +181,24 @@ export default function ModesDropdown({
               : { visibility: 'hidden' }
           }
         >
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={agentModeArmed}
-            className={`modes-item${agentModeArmed ? ' armed' : ''}`}
-            onClick={() => onToggleAgentMode()}
-            title="Agent runtime — tool-using runtime for research, multi-step planning, and context checks. Luca only."
-          >
-            <PocketKnife size={13} strokeWidth={1.5} className="modes-item-icon" aria-hidden="true" />
-            <span className="modes-item-name">Agent</span>
-            <Switch on={agentModeArmed} />
-          </button>
-
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={ensembleOn}
-            className={`modes-item${ensembleOn ? ' armed' : ''}${ensembleLocked ? ' locked' : ''}`}
-            onClick={(e) => onToggleEnsemble(e)}
-            title="Ensemble — consult multiple models for one answer. Shift-click to lock across messages."
-          >
-            <Boxes size={13} strokeWidth={1.5} className="modes-item-icon" aria-hidden="true" />
-            <span className="modes-item-name">
-              Ensemble
-              {ensembleLocked && (
-                <Lock size={9} strokeWidth={1.8} className="modes-item-lock" aria-label="locked" />
-              )}
-            </span>
-            <Switch on={ensembleOn} />
-          </button>
+          {menuItems}
         </div>,
+        document.body,
+      )}
+
+      {/* Mobile: bottom sheet — keyboard-independent, with a dismiss backdrop. */}
+      {open && isMobile && createPortal(
+        <>
+          <div
+            className="modes-sheet-backdrop"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div ref={popRef} className="modes-sheet" role="menu" aria-label="Modes">
+            <div className="modes-sheet-title">Modes</div>
+            {menuItems}
+          </div>
+        </>,
         document.body,
       )}
     </div>
