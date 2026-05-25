@@ -1104,8 +1104,12 @@ html {
 
 .mobile-app-bar {
   flex: 0 0 auto;
-  min-height: calc(50px + env(safe-area-inset-top));
-  padding: calc(env(safe-area-inset-top) + 6px) 8px 4px;
+  /* Clear the status bar / Dynamic Island: safe-area inset + a real gap below
+     it (was only +6px, which jammed the bar against the island). max() floor
+     keeps clearance on non-notch / standalone where the inset can read 0.
+     Wider side padding so the menu / activity buttons aren't on the edge. */
+  min-height: calc(max(env(safe-area-inset-top), 10px) + 60px);
+  padding: calc(max(env(safe-area-inset-top), 10px) + 16px) 14px 6px;
   display: none;
   align-items: center;
   gap: 8px;
