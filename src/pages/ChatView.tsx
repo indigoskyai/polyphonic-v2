@@ -2433,7 +2433,7 @@ export default function ChatView() {
               wrapper instead of shrinking to its (now smaller) footer
               content after the modes consolidation. */}
           <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
+            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2960,7 +2960,7 @@ export default function ChatView() {
 
       {/* Input zone */}
       <div className="input-zone">
-        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}`}>
+        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
           <input
             ref={fileInputRef}
             type="file"

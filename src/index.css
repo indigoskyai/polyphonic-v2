@@ -2385,6 +2385,49 @@ html {
     height: 44px;
     margin-right: 0;
   }
+
+  /* ── Collapsed → expanded composer (mobile) ──
+     Resting (unfocused + empty + no attachments) is a compact single-line pill:
+     just the placeholder, on the premium lit-from-above surface. Tap (focus) or
+     any typed text expands it to reveal +/mic/send. The surface carries through
+     both states — only the footer reveals, so there's no reflow of the field.
+     The + button still works while expanded because .input-footer's onMouseDown
+     preventDefault keeps the tap from blurring (and re-collapsing) the field. */
+  .input-shell .input-textarea {
+    transition: padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .input-shell.composer-collapsed .input-textarea {
+    padding: 13px 18px;            /* center the single line within the pill */
+    overflow: hidden;
+  }
+  /* Footer — collapsing direction (default): contents fade fast, then close */
+  .input-shell .input-footer {
+    overflow: hidden;
+    transition: max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 120ms ease,
+                transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+                padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Footer — expanding direction: panel opens first, then controls rise + fade */
+  .input-shell:not(.composer-collapsed) .input-footer {
+    max-height: 52px;
+    opacity: 1;
+    transform: translateY(0);
+    transition: max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 220ms ease 90ms,
+                transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 50ms,
+                padding 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .input-shell.composer-collapsed .input-footer {
+    max-height: 0;
+    min-height: 0;
+    margin: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+  }
 }
 
 /* ======================================================================
