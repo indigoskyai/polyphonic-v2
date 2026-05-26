@@ -3022,8 +3022,8 @@ export type Database = {
           ensemble_models: Json | null
           font_size: number
           id: string
-          interface_mode: string
           interface_density: string
+          interface_mode: string
           landing_agent_id: string | null
           multi_model_enabled: boolean | null
           observer_models: string[] | null
@@ -3052,8 +3052,8 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
-          interface_mode?: string
           interface_density?: string
+          interface_mode?: string
           landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
@@ -3082,8 +3082,8 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
-          interface_mode?: string
           interface_density?: string
+          interface_mode?: string
           landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null

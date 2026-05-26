@@ -52,23 +52,21 @@ export default function CompanionImportPanel({
     if (!open) return;
     let cancelled = false;
     setLoadingDevices(true);
-    supabase
-      .from('openclaw_devices')
-      .select('id, name, platform, status, last_seen_at, bridge_version')
-      .order('created_at', { ascending: false })
-      .limit(6)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.warn('[CompanionImportPanel] could not load bridge devices', error);
-          setDevices([]);
-        } else {
-          setDevices((data ?? []) as BridgeDevice[]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingDevices(false);
-      });
+    (async () => {
+      const { data, error } = await supabase
+        .from('openclaw_devices')
+        .select('id, name, platform, status, last_seen_at, bridge_version')
+        .order('created_at', { ascending: false })
+        .limit(6);
+      if (cancelled) return;
+      if (error) {
+        console.warn('[CompanionImportPanel] could not load bridge devices', error);
+        setDevices([]);
+      } else {
+        setDevices((data ?? []) as BridgeDevice[]);
+      }
+      if (!cancelled) setLoadingDevices(false);
+    })();
     return () => { cancelled = true; };
   }, [open]);
 
