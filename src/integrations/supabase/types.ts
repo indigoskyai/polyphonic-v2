@@ -3022,13 +3022,10 @@ export type Database = {
           ensemble_models: Json | null
           font_size: number
           id: string
-          interface_mode: string
           interface_density: string
           landing_agent_id: string | null
           multi_model_enabled: boolean | null
           observer_models: string[] | null
-          onboarding_completed_at: string | null
-          onboarding_preferences: Json
           reasoning_effort: string | null
           show_agent_colors: boolean
           show_thinking: boolean
@@ -3052,13 +3049,10 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
-          interface_mode?: string
           interface_density?: string
           landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
-          onboarding_completed_at?: string | null
-          onboarding_preferences?: Json
           reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
@@ -3082,13 +3076,10 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
-          interface_mode?: string
           interface_density?: string
           landing_agent_id?: string | null
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
-          onboarding_completed_at?: string | null
-          onboarding_preferences?: Json
           reasoning_effort?: string | null
           show_agent_colors?: boolean
           show_thinking?: boolean
