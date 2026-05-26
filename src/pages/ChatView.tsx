@@ -1122,7 +1122,7 @@ export default function ChatView() {
 
       if (initiations && initiations.length > 0) {
         setWelcomeBack({ type: 'initiation', content: initiations[0].message });
-        setDynamicPlaceholder(`${currentAgentLabel} wants to tell you something...`);
+        setDynamicPlaceholder("What's on your mind?");
         return;
       }
 
