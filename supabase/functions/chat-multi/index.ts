@@ -199,6 +199,29 @@ function looksLikeAgentForgeRequest(text: string): boolean {
   return asksToMake && mentionsAgent;
 }
 
+function looksLikeLegacyToolPlannerRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  if (looksLikeAgentForgeRequest(text)) return true;
+
+  const asksForCurrentInfo =
+    /\b(search|look\s*up|browse|read\s+(this\s+)?url|open\s+this\s+link|cite|citation|source|sources)\b/.test(normalized) ||
+    /\b(today|latest|current|recent|now|this week|this month|breaking|news|weather|price|stock|exchange rate)\b/.test(normalized) ||
+    /https?:\/\//.test(normalized);
+
+  const asksForGeneratedMedia =
+    /\b(generate|create|make|draw|paint|render|design|illustrate|edit|modify|change)\b/.test(normalized) &&
+    /\b(image|picture|photo|illustration|logo|icon|diagram|chart|svg|artifact|html|page|app|component|visual)\b/.test(normalized);
+
+  const asksForExistingTool =
+    /\b(use|run|invoke|call)\b.{0,40}\b(tool|mcp|browser|web search|image generator|artifact|subagent)\b/.test(normalized) ||
+    /\bconsult\s+(anima|vektor)\b/.test(normalized);
+
+  const asksForWorkspaceFile =
+    /\b(read|write|save|create|delete|list|open)\b.{0,40}\b(file|workspace|document|folder)\b/.test(normalized);
+
+  return asksForCurrentInfo || asksForGeneratedMedia || asksForExistingTool || asksForWorkspaceFile;
+}
+
 function looksLikeForgeApprovalFollowup(text: string): boolean {
   const normalized = text
     .toLowerCase()
@@ -433,7 +456,11 @@ serve(async (req) => {
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca";
     const forceForgeRequest = agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
-    const shouldRunLegacyToolPlanner = !onboardingHandoff && backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
+    const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
+    const shouldRunLegacyToolPlanner =
+      !onboardingHandoff &&
+      backend.allowTools &&
+      (explicitAgentRuntime || forceForgeRequest || likelyToolRequest);
 
     if (!onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);

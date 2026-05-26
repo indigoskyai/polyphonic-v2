@@ -60,6 +60,9 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
     expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
+    expect(chatMulti).toContain('function looksLikeLegacyToolPlannerRequest');
+    expect(chatMulti).toContain('const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
+    expect(chatMulti).toContain('(explicitAgentRuntime || forceForgeRequest || likelyToolRequest)');
     expect(chatMulti).toContain('const onboardingHandoff');
     expect(chatMulti).toContain('!onboardingHandoff && looksLikeAgentForgeRequest');
     expect(chatMulti).toContain('Do not mention the hidden handoff, do not call Forge yet');
