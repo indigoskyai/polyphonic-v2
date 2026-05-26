@@ -58,7 +58,7 @@ describe('Agent Forge runtime', () => {
     expect(sdk).toContain('Never changes agent data directly');
 
     expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
-    expect(chatMulti).toContain('!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
+    expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
     expect(chatMulti).toContain('const onboardingHandoff');
     expect(chatMulti).toContain('!onboardingHandoff && looksLikeAgentForgeRequest');

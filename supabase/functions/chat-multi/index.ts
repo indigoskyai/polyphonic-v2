@@ -624,7 +624,7 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-    if (!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
+    if (!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
