@@ -2461,24 +2461,33 @@ html {
                 shadow). This is the true-black version of a drop shadow: a
                 literal OUTER shadow is invisible on #000 (you can't darken
                 pure black), so we darken the fill itself instead.
-     The breathing shimmer (::before, prime-staggered pools) is the living edge;
-     a 0.012 whisper border is the only static base under it. Tuned faint for
-     OLED, which renders these values hotter than a desktop capture. */
+     The breathing shimmer (::before, prime-staggered pools) is KEPT but dialed
+     to a true subliminal whisper on mobile — at the base 0.85 opacity it was
+     buried the border ring and made any static border + modeling invisible
+     under it. At 0.16 it's a barely-perceptible life, and the static border
+     reads as a clean uniform line. Tuned faint for OLED. */
   .input-shell {
     border-radius: 24px;
     background: linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.020) 56%, rgba(255,255,255,0.012)), #08080a;
-    border: 1px solid rgba(255, 255, 255, 0.012);
+    border: 1px solid rgba(255, 255, 255, 0.045);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -16px 20px -13px rgba(0,0,0,0.5);
     transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1), border-color 0.45s cubic-bezier(0.22,1,0.36,1);
   }
-  /* Keep the static base a whisper in EVERY state — the shimmer + the lit lip
-     are the wake, not a heavier border. (Overrides the desktop hover/focus
-     border-color, which would otherwise jump to ~0.09–0.10 on mobile.) */
+  /* Hold the static border constant across hover/focus — the wake is the lit
+     lip + a small bump in shimmer opacity, not a heavier line. (Overrides the
+     desktop hover/focus values, which would otherwise jump to ~0.09–0.10.) */
   .input-shell:hover,
   .input-shell.focused,
   .input-shell:focus-within {
-    border-color: rgba(255, 255, 255, 0.012);
+    border-color: rgba(255, 255, 255, 0.045);
   }
+  /* Shimmer dialed to a subliminal whisper on mobile (base ::before opacity is
+     0.85 / focus 1, which buried everything). Focus brings it up a hair —
+     still nowhere near the desktop strength. */
+  .input-shell::before,
+  .input-shell:hover::before { opacity: 0.16; }
+  .input-shell.focused::before,
+  .input-shell:focus-within::before { opacity: 0.24; }
   .input-shell.focused {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -16px 20px -13px rgba(0,0,0,0.5);
   }
