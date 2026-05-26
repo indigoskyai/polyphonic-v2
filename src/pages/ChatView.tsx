@@ -28,6 +28,7 @@ import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import LandingAmbient from '@/components/chat/LandingAmbient';
+import CompanionImportPanel from '@/components/chat/CompanionImportPanel';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useArtifactStore } from '@/stores/artifactStore';
@@ -51,6 +52,7 @@ import {
   readLandingPrompt,
 } from '@/lib/guestChat';
 import { getForgeProposalMetadata } from '@/lib/agentForge';
+import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/companionImport';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
@@ -715,6 +717,7 @@ export default function ChatView() {
   const sendInFlightRef = useRef(false);
   const composerSendTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [companionImportOpen, setCompanionImportOpen] = useState(false);
   const landingHandoffStartedAtRef = useRef(new Date().toISOString());
   const pendingAttachments = useAttachmentStore((s) => s.pending);
   const addAttachments = useAttachmentStore((s) => s.add);
@@ -1266,6 +1269,28 @@ export default function ChatView() {
     if (accepted.length > 0) addAttachments(accepted);
     setAttachmentError(rejected.length > 0 ? rejected.slice(0, 2).join(' · ') : null);
   }, [addAttachments, byokEnabled, pendingAttachments.length]);
+
+  const openCompanionFilePicker = useCallback(() => {
+    setCompanionImportOpen(false);
+    fileInputRef.current?.click();
+  }, []);
+
+  const startCompanionImportConversation = useCallback((source: CompanionImportSource, deviceName?: string | null) => {
+    const text = buildCompanionImportHandoff(source, deviceName);
+    setCompanionImportOpen(false);
+    window.setTimeout(() => {
+      void sendMessageRef.current?.({ text, hiddenHandoff: true });
+    }, 30);
+  }, []);
+
+  const openBridgeSetup = useCallback(() => {
+    setCompanionImportOpen(false);
+    navigate('/settings/local-runtime');
+  }, [navigate]);
+
+  useEffect(() => {
+    if (alcoveOpen && companionImportOpen) setCompanionImportOpen(false);
+  }, [alcoveOpen, companionImportOpen]);
 
   const uploadPendingAttachments = useCallback(async (threadForUpload: string): Promise<PersistedAttachment[]> => {
     if (!user || pendingAttachments.length === 0) return [];
@@ -2457,6 +2482,16 @@ export default function ChatView() {
               {renderObserverAlcove()}
               {!alcoveOpen && renderModelKeyNotice()}
               {!alcoveOpen && renderPendingAttachments()}
+              {!alcoveOpen && (
+                <CompanionImportPanel
+                  open={companionImportOpen}
+                  onClose={() => setCompanionImportOpen(false)}
+                  onAttachFiles={openCompanionFilePicker}
+                  onStartCompanionImport={() => startCompanionImportConversation('generic')}
+                  onStartOpenClawImport={(deviceName) => startCompanionImportConversation('openclaw', deviceName)}
+                  onOpenBridgeSetup={openBridgeSetup}
+                />
+              )}
               <div className="input-row">
                 <textarea
                   ref={textareaRef}
@@ -2477,7 +2512,7 @@ export default function ChatView() {
               </div>
               <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
                 <div className="agent-pills">
-                  {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
+                  {!alcoveOpen && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
                   {!isMobile && renderGuestStatusChip()}
                   {!isMobile && (
                     <ObserverEyeChip
@@ -2986,6 +3021,16 @@ export default function ChatView() {
 
           {!alcoveOpen && renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
+          {!alcoveOpen && (
+            <CompanionImportPanel
+              open={companionImportOpen}
+              onClose={() => setCompanionImportOpen(false)}
+              onAttachFiles={openCompanionFilePicker}
+              onStartCompanionImport={() => startCompanionImportConversation('generic')}
+              onStartOpenClawImport={(deviceName) => startCompanionImportConversation('openclaw', deviceName)}
+              onOpenBridgeSetup={openBridgeSetup}
+            />
+          )}
 
           {/* Textarea */}
           <div className="input-row">
@@ -3010,7 +3055,7 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
             <div className="agent-pills">
-              {!alcoveOpen && <AttachmentPlusButton onClick={() => fileInputRef.current?.click()} />}
+              {!alcoveOpen && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
               {!isMobile && renderGuestStatusChip()}
               {!isMobile && (
                 <ObserverEyeChip
