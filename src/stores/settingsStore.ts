@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
+import type { InterfaceMode, OnboardingPreferences } from '@/lib/interfaceMode';
 
 export interface Settings {
   default_model: string;
@@ -9,6 +10,9 @@ export interface Settings {
   auto_title: boolean;
   interface_density: string;
   font_size: number;
+  interface_mode: InterfaceMode;
+  onboarding_completed_at: string | null;
+  onboarding_preferences: OnboardingPreferences | Record<string, never>;
   show_timestamps: boolean;
   show_agent_colors: boolean;
   clockbar_visible: boolean;
@@ -42,6 +46,9 @@ export const defaultSettings: Settings = {
   auto_title: true,
   interface_density: 'default',
   font_size: 14,
+  interface_mode: 'guided',
+  onboarding_completed_at: null,
+  onboarding_preferences: {},
   show_timestamps: true,
   show_agent_colors: true,
   clockbar_visible: false,

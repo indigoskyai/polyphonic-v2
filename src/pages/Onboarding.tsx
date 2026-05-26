@@ -141,7 +141,7 @@ export default function Onboarding() {
     try {
       const mode = applyOnboardingPreferences(preferences);
       setSidebarVisible(mode === 'studio');
-      await markOnboarded(user.id);
+      await markOnboarded(user.id, undefined, { interfaceMode: mode, preferences });
       const threadId = await createThread(user.id, 'luca');
       stashChatHandoff(buildOnboardingHandoffPrompt(preferences), { hidden: true });
       navigate(`/chat/${threadId}`, { replace: true });
@@ -160,7 +160,10 @@ export default function Onboarding() {
     setLoading(true);
     setError(null);
     try {
-      await markOnboarded(user.id);
+      await markOnboarded(user.id, undefined, {
+        interfaceMode: 'guided',
+        preferences: { intent: 'explore_first', comfort: 'medium', expectations: ['companion'] },
+      });
       navigate('/chat', { replace: true });
     } catch (err) {
       console.error('[Onboarding] skip failed', err);

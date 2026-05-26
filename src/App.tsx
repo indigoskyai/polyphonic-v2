@@ -105,6 +105,7 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
+    setChecked(false);
     const isPublicRoute =
       location.pathname.startsWith('/auth/')
       || location.pathname === '/reset-password'
@@ -146,11 +147,23 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       if (first) {
         navigate('/onboarding', { replace: true });
+        return;
       }
       setChecked(true);
     });
     return () => { cancelled = true; };
   }, [user?.id, location.pathname, location.search, navigate]);
+
+  if (!checked) {
+    return (
+      <div
+        className="flex h-screen items-center justify-center"
+        style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}
+      >
+        Loading...
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }

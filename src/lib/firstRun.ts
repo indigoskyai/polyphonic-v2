@@ -1,30 +1,42 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { InterfaceMode, OnboardingPreferences } from '@/lib/interfaceMode';
 
 /**
- * isFirstRun — returns true if the user has no threads, no messages, and
- * no display_name set yet. Used by `FirstRunGate` in App.tsx to decide
+ * isFirstRun — returns true if the user has not completed onboarding and
+ * has no existing chat activity. Used by `FirstRunGate` in App.tsx to decide
  * whether to route the user to onboarding.
  *
- * Uses `Promise.allSettled` so a transient failure on one of the three
- * checks doesn't bounce the user — the gate prefers a forgiving read on
- * the assumption that re-running the gate later will be cheap.
+ * OAuth signups create profile display names automatically, so display_name
+ * is not a valid onboarding signal. The durable marker lives on user_settings.
  */
 export async function isFirstRun(userId: string): Promise<boolean> {
   const settled = await Promise.allSettled([
     supabase.from('threads').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-    supabase.from('profiles').select('display_name').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_settings').select('onboarding_completed_at').eq('user_id', userId).maybeSingle(),
   ]);
 
   const threadRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
   const messageRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
-  const profileRes = settled[2].status === 'fulfilled' ? settled[2].value : null;
+  const settingsRes = settled[2].status === 'fulfilled' ? settled[2].value : null;
+
+  const activityCheckFailed =
+    settled[0].status === 'rejected'
+    || settled[1].status === 'rejected'
+    || Boolean(threadRes?.error)
+    || Boolean(messageRes?.error);
+
+  // If the activity reads fail, do not trap a signed-in user in onboarding.
+  // They can still re-enter with ?onboarding=1.
+  if (activityCheckFailed) return false;
+
+  const completedAt = (settingsRes?.data as { onboarding_completed_at?: string | null } | null)?.onboarding_completed_at;
+  if (completedAt) return false;
 
   const threadCount = threadRes?.count ?? 0;
   const messageCount = messageRes?.count ?? 0;
-  const hasDisplayName = !!(profileRes?.data as { display_name?: string | null } | null)?.display_name;
 
-  return threadCount === 0 && messageCount === 0 && !hasDisplayName;
+  return threadCount === 0 && messageCount === 0;
 }
 
 /**
@@ -41,7 +53,31 @@ export async function isFirstRun(userId: string): Promise<boolean> {
  * row never got the `display_name` placeholder, so `isFirstRun()` stayed
  * true and the gate routed the user back.
  */
-export async function markOnboarded(userId: string, displayName?: string): Promise<void> {
+function isMissingOnboardingColumn(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === '42703' || /onboarding_completed_at|interface_mode|onboarding_preferences/i.test(error.message || '');
+}
+
+export async function markOnboarded(
+  userId: string,
+  displayName?: string,
+  options: { interfaceMode?: InterfaceMode; preferences?: OnboardingPreferences } = {},
+): Promise<void> {
+  const settingsPatch: Record<string, unknown> = {
+    user_id: userId,
+    onboarding_completed_at: new Date().toISOString(),
+  };
+  if (options.interfaceMode) settingsPatch.interface_mode = options.interfaceMode;
+  if (options.preferences) settingsPatch.onboarding_preferences = options.preferences;
+
+  const { error: settingsErr } = await supabase
+    .from('user_settings')
+    .upsert(settingsPatch, { onConflict: 'user_id' });
+
+  if (settingsErr && !isMissingOnboardingColumn(settingsErr)) {
+    throw new Error(`markOnboarded: settings update failed: ${settingsErr.message}`);
+  }
+
   const patch: Record<string, unknown> = {};
   if (displayName && displayName.trim()) patch.display_name = displayName.trim();
 
