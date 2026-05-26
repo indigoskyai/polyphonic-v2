@@ -5,7 +5,7 @@ import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { AuthError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { FREE_LUCA_MODEL, resolveChatBackend } from "../_shared/model-backend.ts";
 
-type GuideActionType = "navigate" | "highlight" | "scroll_to" | "open_drawer";
+type GuideActionType = "navigate" | "highlight" | "scroll_to" | "open_drawer" | "set_interface_mode";
 
 type GuideAction = {
   type: GuideActionType;
@@ -20,8 +20,17 @@ type GuideMessage = {
 
 const ALLOWED_NAV_TARGETS = new Set([
   "/chat",
-  "/settings/models",
   "/settings/agents",
+  "/settings/models",
+  "/settings/appearance",
+  "/settings/general",
+  "/settings/voice",
+  "/settings/local-runtime",
+  "/settings/portability",
+  "/settings/account",
+  "/settings/skills",
+  "/settings/routines",
+  "/settings/cron-health",
   "/journal",
   "/memory",
   "/mind",
@@ -33,6 +42,12 @@ const ALLOWED_NAV_TARGETS = new Set([
 const ALLOWED_DRAWER_TARGETS = new Set([
   "notifications",
   "activity-timeline",
+]);
+
+const ALLOWED_INTERFACE_MODES = new Set([
+  "companion",
+  "guided",
+  "studio",
 ]);
 
 function asString(value: unknown, fallback = ""): string {
@@ -64,6 +79,7 @@ function safeActions(value: unknown, allowedHighlights: Set<string>): GuideActio
     if (!target || !type) continue;
     if (type === "navigate" && !ALLOWED_NAV_TARGETS.has(target)) continue;
     if (type === "open_drawer" && !ALLOWED_DRAWER_TARGETS.has(target)) continue;
+    if (type === "set_interface_mode" && !ALLOWED_INTERFACE_MODES.has(target)) continue;
     if ((type === "highlight" || type === "scroll_to") && !allowedHighlights.has(target)) continue;
     out.push({
       type,
@@ -152,6 +168,8 @@ Current screen context:
 - page title: ${asString(context.pageTitle, "Polyphonic")}
 - route family: ${asString(context.routeFamily, "app")}
 - active agent: ${asString(context.activeAgentName, "Luca")} (${asString(context.activeAgentId, "luca")})
+- interface mode: ${asString(context.interfaceMode, "guided")}
+- interface mode summary: ${asString(context.interfaceModeSummary, "The user wants a guided app surface.")}
 - current thread id: ${asString(context.currentThreadId, "none")}
 - page summary: ${asString(context.summary, "No summary available.")}
 
@@ -161,15 +179,20 @@ ${Array.from(ALLOWED_NAV_TARGETS).map((target) => `- ${target}`).join("\n")}
 Allowed drawer targets:
 ${Array.from(ALLOWED_DRAWER_TARGETS).map((target) => `- ${target}`).join("\n")}
 
+Allowed interface-mode controls:
+${Array.from(ALLOWED_INTERFACE_MODES).map((target) => `- ${target}`).join("\n")}
+
 Available highlight or scroll targets on this page:
 ${availableTargets.map((target) => `- ${target.id}: ${target.label} — ${target.description}`).join("\n") || "- none"}
 
 Behavior:
 - Be concise, warm, direct, and practical.
+- Respect the user's interface mode: ${asString(context.interfaceModeInstruction, "Start with the simplest visible path, and treat deeper Polyphonic features as optional.")}
 - You may explain what the user is looking at and what they can do next.
 - If the user asks you to show, open, find, or point to something, include a safe action when one matches the allowed targets.
+- If the user asks for less complexity, more guidance, or the full studio, include a set_interface_mode action for companion, guided, or studio.
 - Never invent action targets. Use only the exact allowed paths, drawer ids, or highlight ids above.
-- Do not claim you changed data. You can navigate, point, or explain only.
+- Do not claim you changed persistent data. You can navigate, point, switch interface mode, or explain only.
 - Observer is not a full agent. If relevant, say Observer is a sidecar for reading a conversation.
 - If the user asks about onboarding, offer to walk them through setup with actions.
 
@@ -177,7 +200,7 @@ Output JSON only:
 {
   "reply": "short natural language response",
   "actions": [
-    { "type": "navigate" | "highlight" | "scroll_to" | "open_drawer", "target": "exact_allowed_target", "label": "short button label" }
+    { "type": "navigate" | "highlight" | "scroll_to" | "open_drawer" | "set_interface_mode", "target": "exact_allowed_target", "label": "short button label" }
   ]
 }`;
 

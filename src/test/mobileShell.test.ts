@@ -22,6 +22,12 @@ describe('mobile shell surface metadata', () => {
     expect(getMobileSurfaceMeta('/memory').title).toBe('Memory');
     expect(getMobileSurfaceMeta('/projects').subtitle).toBe('Workspace context');
     expect(getMobileSurfaceMeta('/profile/identity').subtitle).toBe('Psychological portrait');
-    expect(getMobileSurfaceMeta('/settings/models').contextAction).toBe('activity');
+    expect(getMobileSurfaceMeta('/settings/models')).toMatchObject({
+      title: 'Models',
+      subtitle: 'AI connections',
+      contextAction: 'activity',
+    });
+    expect(getMobileSurfaceMeta('/settings/appearance').title).toBe('Appearance');
+    expect(getMobileSurfaceMeta('/settings/agents').subtitle).toBe('Create and tune agents');
   });
 });

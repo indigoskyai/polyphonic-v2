@@ -285,6 +285,10 @@ serve(async (req) => {
 
     const messageWithAttachments = appendAttachmentContext(message, attachments);
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    const onboardingHandoff =
+      clientContext &&
+      typeof clientContext === "object" &&
+      (clientContext as Record<string, unknown>).onboarding_handoff === true;
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -428,8 +432,8 @@ serve(async (req) => {
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || (agentId === "luca" ? SYSTEM_PROMPT : "");
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca";
-    const forceForgeRequest = agentIsSystemLuca && looksLikeAgentForgeRequest(messageWithAttachments);
-    const shouldRunLegacyToolPlanner = backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
+    const forceForgeRequest = agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
+    const shouldRunLegacyToolPlanner = !onboardingHandoff && backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
 
     if (agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
@@ -598,7 +602,10 @@ serve(async (req) => {
           hypomnemaBlock: continuity.hypomnema.block,
           continuityNote,
         });
-    const turnSystemPrompt = [enrichedSystemPrompt, simpleOpeningDirective].filter(Boolean).join("\n\n");
+    const onboardingHandoffDirective = onboardingHandoff
+      ? "This turn is a hidden onboarding handoff, not a message the user typed. Use it only as context. Begin the visible conversation yourself as Luca: welcome them, reflect the direction they chose in plain language, and ask one or two high-signal questions to start shaping the agent or migration. Do not mention the hidden handoff, do not call Forge yet, and do not create a proposal card until the user has actually participated in the conversation."
+      : "";
+    const turnSystemPrompt = [enrichedSystemPrompt, onboardingHandoffDirective, simpleOpeningDirective].filter(Boolean).join("\n\n");
 
     // When the tool planner is enabled, advertise the tools so the model
     // doesn't claim it lacks the capability. Actual invocation happens via

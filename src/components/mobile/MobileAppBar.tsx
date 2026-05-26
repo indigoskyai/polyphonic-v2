@@ -10,6 +10,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useMobileShellStore } from '@/stores/mobileShellStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { useThreadStore } from '@/stores/threadStore';
+import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
+import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
 
 function threadIdFromPath(pathname: string): string | null {
   if (!pathname.startsWith('/chat/')) return null;
@@ -44,6 +46,7 @@ export default function MobileAppBar() {
   const openContextDrawer = useDrawerStore((s) => s.open);
   const closeContextDrawer = useDrawerStore((s) => s.close);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const setActiveAgent = useAgentScopeStore((s) => s.setActiveAgent);
   const availableAgents = useAgentScopeStore((s) => s.availableAgents);
@@ -66,7 +69,13 @@ export default function MobileAppBar() {
     [currentThreadId, routeThreadId, threads],
   );
 
-  const meta = getMobileSurfaceMeta(location.pathname, threadTitle);
+  const baseMeta = getMobileSurfaceMeta(location.pathname, threadTitle);
+  const studioNavigation = shouldShowStudioNavigation(interfaceMode);
+  const meta = !studioNavigation && location.pathname.startsWith('/journal')
+    ? { ...baseMeta, title: 'Notebook', subtitle: 'Inner life and creations' }
+    : !studioNavigation && location.pathname.startsWith('/projects')
+      ? { ...baseMeta, title: 'Create', subtitle: 'Artifacts and work' }
+      : baseMeta;
   const isChatSurface = location.pathname.startsWith('/chat');
   const runtimeAgentId = isChatSurface ? (currentThread?.agent_id || landingAgentId) : activeAgentId;
   const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';

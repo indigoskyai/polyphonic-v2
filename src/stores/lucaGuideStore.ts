@@ -20,7 +20,7 @@ interface LucaGuideState {
 const WELCOME_MESSAGE: LucaGuideMessage = {
   id: 'guide-welcome',
   role: 'assistant',
-  content: "i'm here. ask me about this screen, or try: “show me where setup starts,” “what does this page do,” or “how do agents and memory fit together?”",
+  content: "i'm here. ask me about this screen, or try: “show me where setup starts,” “what does this page do,” or “when should i open the full studio?”",
   createdAt: new Date(0).toISOString(),
 };
 

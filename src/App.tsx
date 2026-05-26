@@ -22,6 +22,9 @@ import { useDrawerStore } from "./stores/drawerStore";
 import { useNotificationStore } from "./stores/notificationStore";
 import { useAgentScopeStore } from "./stores/agentScopeStore";
 import { useTokenGateStore } from "./stores/tokenGateStore";
+import { useInterfaceModeStore } from "./stores/interfaceModeStore";
+import { useSidebarStore } from "./stores/sidebarStore";
+import { shouldDefaultSidebarVisible } from "./lib/interfaceMode";
 import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
 import { isAnonymousUser } from "./lib/accessTier";
 import { readLandingChatTransitionFlag } from "./lib/guestChat";
@@ -154,8 +157,12 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
 
 function ProtectedRoute({ children, skipTokenGate: _skipTokenGate = false }: { children: React.ReactNode; skipTokenGate?: boolean }) {
   const { user, loading } = useAuthStore();
+  const location = useLocation();
   if (loading) return <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-deep)', color: 'var(--text-tertiary)' }}>Loading...</div>;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) {
+    const next = `${location.pathname}${location.search}`;
+    return <Navigate to={`/auth/login?next=${encodeURIComponent(next)}`} replace />;
+  }
   void _skipTokenGate;
   return <>{children}</>;
 }
@@ -195,6 +202,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loadAgentScopes = useAgentScopeStore((s) => s.load);
   const tokenGateStatus = useTokenGateStore((s) => s.status);
   const hydrateTokenGate = useTokenGateStore((s) => s.hydrate);
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -232,12 +241,17 @@ function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [location.pathname]);
 
+  useEffect(() => {
+    setSidebarVisible(shouldDefaultSidebarVisible(interfaceMode));
+  }, [interfaceMode, setSidebarVisible]);
+
   useSubagentRealtime();
 
   return (
     <div
       className="app-shell h-screen flex overflow-hidden"
       data-mobile={isMobile ? 'true' : undefined}
+      data-interface-mode={interfaceMode}
       style={{ background: 'var(--floor)' }}
     >
       {isMobile ? <MobileAppBar /> : <><Rail /><Sidebar /></>}

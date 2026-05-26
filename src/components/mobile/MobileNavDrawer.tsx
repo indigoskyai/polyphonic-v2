@@ -20,21 +20,31 @@ import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
 import { useMobileShellStore } from '@/stores/mobileShellStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { useThreadStore, type Thread } from '@/stores/threadStore';
+import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
 
 // Primary surfaces — mirrors the desktop nav rail (Chat, Memory, Mind, Journal,
 // Projects, Profile). The old mobile list carried Group (a dev-only mock),
 // Workspace and Checkpoints — none of which are in the web nav — and was
 // missing Journal.
-const PRIMARY_ROUTES = [
+const STUDIO_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Mind', path: '/mind', icon: Brain },
   { label: 'Journal', path: '/journal', icon: NotebookPen },
   { label: 'Projects', path: '/projects', icon: FolderKanban },
   { label: 'Profile', path: '/profile', icon: CircleUserRound },
+];
+
+const SIMPLE_ROUTES = [
+  { label: 'Chat', path: '/chat', icon: MessageCircle },
+  { label: 'Notebook', path: '/journal', icon: NotebookPen },
+  { label: 'Create', path: '/projects', icon: FolderKanban },
+  { label: 'Mind', path: '/mind', icon: Brain },
+  { label: 'Agents', path: '/settings/agents', icon: Bot },
 ];
 
 // All settings sub-pages (mirrors the desktop SidebarSettings nav), surfaced on
@@ -57,7 +67,7 @@ const SETTINGS_ROUTES = [
 
 function isActiveRoute(pathname: string, path: string): boolean {
   if (path === '/chat') return pathname.startsWith('/chat');
-  if (path === '/settings/agents') return pathname.startsWith('/settings') || pathname.startsWith('/profile/skills') || pathname.startsWith('/profile/schedule');
+  if (path === '/settings/agents') return pathname.startsWith('/settings/agents');
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
@@ -86,6 +96,7 @@ export default function MobileNavDrawer() {
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const availableAgents = useAgentScopeStore((s) => s.availableAgents);
   const setActiveAgent = useAgentScopeStore((s) => s.setActiveAgent);
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
   const [query, setQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentScopeOpen, setAgentScopeOpen] = useState(false);
@@ -94,6 +105,7 @@ export default function MobileNavDrawer() {
     () => availableAgents.find((agent) => agent.id === activeAgentId)?.name ?? 'Luca',
     [activeAgentId, availableAgents],
   );
+  const primaryRoutes = shouldShowStudioNavigation(interfaceMode) ? STUDIO_ROUTES : SIMPLE_ROUTES;
 
   // Auto-expand the Settings group when the drawer opens on a settings route,
   // so the current section is in view.
@@ -272,7 +284,7 @@ export default function MobileNavDrawer() {
           </div>
 
           <nav className="mobile-nav-section" aria-label="Navigate">
-            {PRIMARY_ROUTES.map(({ label, path, icon: Icon }) => (
+            {primaryRoutes.map(({ label, path, icon: Icon }) => (
               <button
                 key={path}
                 type="button"

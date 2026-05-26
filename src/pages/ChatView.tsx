@@ -43,7 +43,13 @@ import { useAgentConsultStore, selectByThread as selectConsultsByThread } from '
 import { supabase } from '@/integrations/supabase/client';
 import { parseEdgeError, friendlyMessage } from '@/lib/edgeError';
 import { insertMessageWithFreshSession, isMessagePersistenceAuthError } from '@/lib/messagePersistence';
-import { clearLandingChatTransitionFlag, consumeLandingAutosendFlag, readLandingChatTransitionFlag, readLandingPrompt } from '@/lib/guestChat';
+import {
+  clearLandingChatTransitionFlag,
+  consumeLandingAutosendFlag,
+  consumeLandingHiddenHandoffFlag,
+  readLandingChatTransitionFlag,
+  readLandingPrompt,
+} from '@/lib/guestChat';
 import { getForgeProposalMetadata } from '@/lib/agentForge';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
@@ -602,7 +608,10 @@ export default function ChatView() {
   // always matches reality. The Settings page's `multi_model_enabled` row is
   // preserved for future use but does not auto-arm the composer.
 
-  const [input, setInput] = useState(() => readLandingPrompt());
+  const [landingHiddenHandoff] = useState(() => consumeLandingHiddenHandoffFlag());
+  const [landingInitialPrompt] = useState(() => readLandingPrompt());
+  const hiddenLandingPromptRef = useRef(landingHiddenHandoff ? landingInitialPrompt : '');
+  const [input, setInput] = useState(() => landingHiddenHandoff ? '' : landingInitialPrompt);
   const [forgeBusyById, setForgeBusyById] = useState<Record<string, boolean>>({});
   const [forgeErrorById, setForgeErrorById] = useState<Record<string, string | null>>({});
   const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
@@ -654,7 +663,7 @@ export default function ChatView() {
   // Allow inline UI (e.g. ImageCard "Edit with prompt") to prefill the
   // composer and optionally auto-send. Listens for window event dispatched
   // from MediaLightbox/ImageCard.
-  const sendMessageRef = useRef<((opts?: { text?: string }) => void) | null>(null);
+  const sendMessageRef = useRef<((opts?: { text?: string; hiddenHandoff?: boolean }) => void) | null>(null);
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
@@ -1703,9 +1712,10 @@ export default function ChatView() {
     }
   }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, createThread, pendingAgentId, navigate, loadThreads]);
 
-  const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[] }) => {
+  const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[]; hiddenHandoff?: boolean }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
     const replayAttachments = options?.attachments ?? null;
+    const hiddenHandoff = options?.hiddenHandoff === true;
     if (modelKeyMissing) return;
     if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming || firstTurnHandoff) return;
     if (sendInFlightRef.current) return;
@@ -1726,7 +1736,7 @@ export default function ChatView() {
       composerSendTimeoutRef.current = null;
     }, 720);
 
-    const isFirstTurn = !currentThreadId && messages.length === 0 && !options?.text;
+    const isFirstTurn = !hiddenHandoff && !currentThreadId && messages.length === 0 && !options?.text;
     if (isFirstTurn) {
       setFirstTurnHandoff({
         id: crypto.randomUUID(),
@@ -1768,50 +1778,52 @@ export default function ChatView() {
     }
 
     let persistedUserMessage: Message | null = null;
-    try {
-      const inserted = await insertMessageWithFreshSession({
-        thread_id: tid,
-        user_id: user.id,
-        role: 'user',
-        content: messageText,
-        attachments: uploadedAttachments.length > 0 ? uploadedAttachments as any : null,
-        metadata: {
-          client_turn_id: clientTurnId,
-          idempotency_key: `chat:${tid}:${clientTurnId}`,
-          access_tier: accessTier,
-        },
-      });
-      persistedUserMessage = inserted as unknown as Message;
-    } catch (insertUserError) {
-      sendInFlightRef.current = false;
-      setFirstTurnHandoff(null);
-      if (isFirstTurn && !options?.text) setInput(sourceText);
-      const detail = insertUserError instanceof Error ? insertUserError.message : String(insertUserError);
-      const authExpired = isMessagePersistenceAuthError(insertUserError);
-      addMessage({
-        thread_id: tid, user_id: user.id, role: 'assistant',
-        content: authExpired ? 'Could not save your message. Please sign in again, then retry.' : 'Could not save your message. Please try again.',
-        model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
-        kind: 'agent_error',
-        metadata: {
-          agent: activeAgentId,
-          message: authExpired ? 'Could not save your message. Sign in again, then retry.' : 'Could not save your message.',
-          detail,
-          retry_text: messageText,
-          retry_attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
-          auth_expired: authExpired,
-        },
-      } as any);
-      return;
-    }
+    if (!hiddenHandoff) {
+      try {
+        const inserted = await insertMessageWithFreshSession({
+          thread_id: tid,
+          user_id: user.id,
+          role: 'user',
+          content: messageText,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments as any : null,
+          metadata: {
+            client_turn_id: clientTurnId,
+            idempotency_key: `chat:${tid}:${clientTurnId}`,
+            access_tier: accessTier,
+          },
+        });
+        persistedUserMessage = inserted as unknown as Message;
+      } catch (insertUserError) {
+        sendInFlightRef.current = false;
+        setFirstTurnHandoff(null);
+        if (isFirstTurn && !options?.text) setInput(sourceText);
+        const detail = insertUserError instanceof Error ? insertUserError.message : String(insertUserError);
+        const authExpired = isMessagePersistenceAuthError(insertUserError);
+        addMessage({
+          thread_id: tid, user_id: user.id, role: 'assistant',
+          content: authExpired ? 'Could not save your message. Please sign in again, then retry.' : 'Could not save your message. Please try again.',
+          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+          kind: 'agent_error',
+          metadata: {
+            agent: activeAgentId,
+            message: authExpired ? 'Could not save your message. Sign in again, then retry.' : 'Could not save your message.',
+            detail,
+            retry_text: messageText,
+            retry_attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+            auth_expired: authExpired,
+          },
+        } as any);
+        return;
+      }
 
-    addMessage({
-      ...persistedUserMessage!,
-      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
-    } as Message);
+      addMessage({
+        ...persistedUserMessage!,
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+      } as Message);
+    }
     setFirstTurnHandoff(null);
 
-    if (!options?.text || options.text === input) {
+    if (hiddenHandoff || !options?.text || options.text === input) {
       setInput('');
       clearAttachments();
       setAttachmentError(null);
@@ -1862,7 +1874,8 @@ export default function ChatView() {
             active_agent_id: activeAgentId,
             active_agent_name: currentAgentLabel,
             access_tier: accessTier,
-            composer_surface: landingAutosend ? 'landing_handoff' : 'chat',
+            composer_surface: hiddenHandoff ? 'hidden_onboarding_handoff' : landingAutosend ? 'landing_handoff' : 'chat',
+            onboarding_handoff: hiddenHandoff,
             sidebar_visible: sidebarVisible,
             observer_alcove_open: alcoveOpen,
           },
@@ -2147,13 +2160,13 @@ export default function ChatView() {
     if (!landingAutosend || landingAutosendConsumedRef.current) return;
     if (!user || isStreaming || firstTurnHandoff) return;
     if (threadId && currentThreadId !== threadId) return;
-    const text = input.trim();
+    const text = (landingHiddenHandoff ? hiddenLandingPromptRef.current : input).trim();
     if (!text) return;
     landingAutosendConsumedRef.current = true;
     window.setTimeout(() => {
-      void sendMessageRef.current?.({ text });
+      void sendMessageRef.current?.({ text, hiddenHandoff: landingHiddenHandoff });
     }, 80);
-  }, [landingAutosend, user?.id, isStreaming, firstTurnHandoff, threadId, currentThreadId, input]);
+  }, [landingAutosend, landingHiddenHandoff, user?.id, isStreaming, firstTurnHandoff, threadId, currentThreadId, input]);
 
   // Auto-disarm ensemble after a successful send (locked stays on)
   const prevStreamingRef = useRef(isStreaming);
@@ -2311,7 +2324,7 @@ export default function ChatView() {
   }, [queueAttachmentFiles, resetDragState]);
 
   const landingAutosendPreviewText =
-    landingAutosend && messages.length === 0 && !isStreaming ? input.trim() : '';
+    !landingHiddenHandoff && landingAutosend && messages.length === 0 && !isStreaming ? input.trim() : '';
   const displayFirstTurnHandoff: FirstTurnHandoff | null = firstTurnHandoff ?? (
     landingAutosendPreviewText
       ? {

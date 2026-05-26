@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, LocateFixed, MessageCircle, Navigation, Send, X } from 'lucide-react';
+import {
+  ChevronRight,
+  Copy,
+  LocateFixed,
+  Navigation,
+  PencilLine,
+  RotateCcw,
+  Send,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useDrawerStore, type DrawerKey } from '@/stores/drawerStore';
+import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
 import { useLucaGuideStore } from '@/stores/lucaGuideStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThreadStore } from '@/stores/threadStore';
+import { getInterfaceModePolicy, shouldDefaultSidebarVisible, type InterfaceMode } from '@/lib/interfaceMode';
 import {
   GUIDE_DRAWER_TARGETS,
   GUIDE_NAV_TARGETS,
@@ -26,6 +40,7 @@ function findGuideTarget(targetId: string): HTMLElement | null {
 function actionIcon(type: LucaGuideAction['type']) {
   if (type === 'navigate') return <Navigation size={13} strokeWidth={1.7} />;
   if (type === 'open_drawer') return <ChevronRight size={13} strokeWidth={1.7} />;
+  if (type === 'set_interface_mode') return <SlidersHorizontal size={13} strokeWidth={1.7} />;
   return <LocateFixed size={13} strokeWidth={1.7} />;
 }
 
@@ -41,6 +56,9 @@ export default function LucaGuideOverlay() {
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const availableAgents = useAgentScopeStore((s) => s.availableAgents);
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
+  const setInterfaceMode = useInterfaceModeStore((s) => s.setMode);
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
   const open = useLucaGuideStore((s) => s.open);
   const messages = useLucaGuideStore((s) => s.messages);
   const sending = useLucaGuideStore((s) => s.sending);
@@ -53,6 +71,7 @@ export default function LucaGuideOverlay() {
   const clearHighlight = useLucaGuideStore((s) => s.clearHighlight);
   const [input, setInput] = useState('');
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const hiddenOnChatRoute = isChatRoute(location.pathname);
@@ -60,6 +79,7 @@ export default function LucaGuideOverlay() {
   const activeAgentName = useMemo(() => {
     return availableAgents.find((agent) => agent.id === activeAgentId)?.name || 'Luca';
   }, [activeAgentId, availableAgents]);
+  const modePolicy = useMemo(() => getInterfaceModePolicy(interfaceMode), [interfaceMode]);
 
   const context: LucaGuideContext = useMemo(() => {
     const info = routeInfo(location.pathname);
@@ -71,10 +91,13 @@ export default function LucaGuideOverlay() {
       summary: info.summary,
       activeAgentId,
       activeAgentName,
+      interfaceMode,
+      interfaceModeSummary: modePolicy.summary,
+      interfaceModeInstruction: modePolicy.guideInstruction,
       currentThreadId,
       availableTargets: targetsForPath(location.pathname),
     };
-  }, [activeAgentId, activeAgentName, currentThreadId, location.pathname, location.search]);
+  }, [activeAgentId, activeAgentName, currentThreadId, interfaceMode, location.pathname, location.search, modePolicy.guideInstruction, modePolicy.summary]);
 
   useEffect(() => {
     if (!open) return;
@@ -128,6 +151,12 @@ export default function LucaGuideOverlay() {
       openDrawer(action.target as Exclude<DrawerKey, null>);
       return;
     }
+    if (action.type === 'set_interface_mode') {
+      const mode = action.target as InterfaceMode;
+      setInterfaceMode(mode);
+      setSidebarVisible(shouldDefaultSidebarVisible(mode));
+      return;
+    }
     const target = findGuideTarget(action.target);
     if (target && action.type === 'scroll_to') {
       target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
@@ -135,10 +164,24 @@ export default function LucaGuideOverlay() {
     highlight(action.target);
   };
 
+  const copyTranscript = async () => {
+    const transcript = messages
+      .map((message) => `${message.role === 'user' ? 'You' : 'Luca'}: ${message.content}`)
+      .join('\n\n');
+    if (!transcript.trim()) return;
+    try {
+      await navigator.clipboard.writeText(transcript);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   const quickPrompts = [
     `What should I know about ${context.pageTitle}?`,
     'Show me where setup starts.',
-    'How do agents and memory fit together?',
+    interfaceMode === 'studio' ? 'How do agents and memory fit together?' : 'When should I open the full studio?',
   ];
 
   if (hiddenOnChatRoute) return null;
@@ -154,7 +197,7 @@ export default function LucaGuideOverlay() {
         aria-label={open ? 'Close Luca guide' : 'Open Luca guide'}
       >
         <span className="luca-guide-mark" aria-hidden="true">L</span>
-        <span>Luca</span>
+        <span className="luca-guide-launcher-text">Ask Luca</span>
       </button>
 
       {open && (
@@ -163,12 +206,18 @@ export default function LucaGuideOverlay() {
             <div className="luca-guide-head-main">
               <span className="luca-guide-mark large" aria-hidden="true">L</span>
               <div>
-                <div className="luca-guide-kicker">Luca · app guide</div>
-                <div className="luca-guide-title">{context.pageTitle}</div>
+                <div className="luca-guide-kicker">Luca</div>
+                <div className="luca-guide-title">Ask anything</div>
+                <div className="luca-guide-subtitle">{context.pageTitle} · {modePolicy.label}</div>
               </div>
             </div>
             <div className="luca-guide-head-actions">
-              <button type="button" onClick={clear} aria-label="Clear Luca guide chat">clear</button>
+              <button type="button" onClick={copyTranscript} aria-label="Copy Luca guide chat" title="Copy transcript">
+                <Copy size={15} strokeWidth={1.7} />
+              </button>
+              <button type="button" onClick={clear} aria-label="Start a fresh Luca guide chat" title="Start fresh">
+                <PencilLine size={15} strokeWidth={1.7} />
+              </button>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close Luca guide">
                 <X size={15} strokeWidth={1.7} />
               </button>
@@ -176,7 +225,7 @@ export default function LucaGuideOverlay() {
           </div>
 
           <div className="luca-guide-context">
-            <MessageCircle size={14} strokeWidth={1.65} aria-hidden="true" />
+            <Sparkles size={14} strokeWidth={1.65} aria-hidden="true" />
             <span>{context.summary}</span>
           </div>
 
@@ -204,10 +253,12 @@ export default function LucaGuideOverlay() {
             {sending && (
               <div className="luca-guide-message assistant pending">
                 <div className="luca-guide-message-label">luca</div>
-                <div className="luca-guide-message-body">checking this page...</div>
+                <div className="luca-guide-message-body">looking at this screen...</div>
               </div>
             )}
           </div>
+
+          {copied && <div className="luca-guide-copy-note">Copied transcript</div>}
 
           <div className="luca-guide-shortcuts" data-open={shortcutsOpen ? 'true' : undefined}>
             <button
@@ -217,8 +268,8 @@ export default function LucaGuideOverlay() {
               aria-expanded={shortcutsOpen}
             >
               <ChevronRight size={13} strokeWidth={1.7} aria-hidden="true" />
-              <span>Suggestions</span>
-              <small>3 prompts · 6 places</small>
+              <span>Helpful prompts and places</span>
+              <small>Optional</small>
             </button>
 
             {shortcutsOpen && (
@@ -276,12 +327,12 @@ export default function LucaGuideOverlay() {
                   void submit();
                 }
               }}
-              placeholder="Ask Luca about this screen..."
+              placeholder="Ask anything"
               rows={2}
               disabled={sending}
             />
             <button type="submit" disabled={!input.trim() || sending} aria-label="Send to Luca guide">
-              <Send size={15} strokeWidth={1.7} />
+              {sending ? <RotateCcw size={15} strokeWidth={1.7} /> : <Send size={15} strokeWidth={1.7} />}
             </button>
           </form>
         </section>

@@ -295,7 +295,7 @@ Rules:
 - Never use create_artifact to create, define, or test a custom agent. Agent creation must use forge_agent or, if underspecified, a clarifying question.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
-- If the user asks to create, build, make, design, forge, or revise a custom agent, use forge_agent once there is enough identity detail to draft the full Open Clause shape. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
+- If the user asks to create, build, make, design, forge, or revise a custom agent, use the tool named exactly forge_agent once there is enough identity detail to draft the full Open Clause shape. Do not call ForgeAgentBlueprint or invent another tool name. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
 - If the user asks for a generic agent, companion agent, test agent, or says Luca can choose / come up with the personality, treat that as enough creative delegation: invent a coherent, modest Open Clause blueprint and call forge_agent. Do not ask for more details unless the user has given mutually incompatible requirements.
 - forge_agent blueprints must be complete agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
 - If a sub-task can run in parallel without blocking the main conversation, dispatch_subagent is the tool. Reserve it for genuinely parallelizable work.
@@ -307,6 +307,44 @@ Rules:
 
 function toolName(schema: any): string {
   return String(schema?.function?.name || "");
+}
+
+function canonicalToolName(name: unknown): string {
+  const raw = String(name || "");
+  if (
+    raw === "forge_agent" ||
+    raw === "ForgeAgentBlueprint" ||
+    raw === "forgeAgentBlueprint" ||
+    raw === "forge_agent_blueprint"
+  ) {
+    return "forge_agent";
+  }
+  return raw;
+}
+
+function normalizeForgeArgs(args: any): {
+  action: "propose_create" | "propose_update";
+  target_agent_id?: string;
+  blueprint: any;
+} {
+  const action = args?.action === "propose_update" ? "propose_update" : "propose_create";
+  if (args?.blueprint && typeof args.blueprint === "object") {
+    return {
+      action,
+      target_agent_id: typeof args.target_agent_id === "string" ? args.target_agent_id : undefined,
+      blueprint: args.blueprint,
+    };
+  }
+  // Some Gemini/OpenRouter tool-planning turns have used the schema title as a
+  // function name (`ForgeAgentBlueprint`) and passed the blueprint object as the
+  // full argument payload. Treat that as the canonical Forge proposal call
+  // instead of failing with "Unknown tool".
+  const { action: _action, target_agent_id, ...blueprint } = args || {};
+  return {
+    action: typeof target_agent_id === "string" ? "propose_update" : action,
+    target_agent_id: typeof target_agent_id === "string" ? target_agent_id : undefined,
+    blueprint,
+  };
 }
 
 function latestUserContent(messages: any[]): string {
@@ -530,7 +568,7 @@ serve(async (req) => {
 
     console.log(
       "Tool calls planned:",
-      toolCalls.map((tc: any) => tc.function.name)
+      toolCalls.map((tc: any) => canonicalToolName(tc.function.name))
     );
 
     const mcpByName = new Map(mcpTools.map((tool) => [tool.registeredName, tool]));
@@ -538,7 +576,8 @@ serve(async (req) => {
     // Execute tools in parallel
     const toolResults = await Promise.all(
       toolCalls.map(async (tc: any) => {
-        const fnName = tc.function.name;
+        const rawFnName = tc.function.name;
+        const fnName = canonicalToolName(rawFnName);
         let args: any;
         try {
           args =
@@ -548,10 +587,10 @@ serve(async (req) => {
         } catch {
           return {
             tool_call_id: tc.id,
-            tool: fnName,
-            input: tc.function.arguments,
-            output: { error: "Failed to parse tool arguments" },
-          };
+              tool: fnName,
+              input: tc.function.arguments,
+              output: { error: "Failed to parse tool arguments" },
+            };
         }
 
         const controller = new AbortController();
@@ -566,7 +605,7 @@ serve(async (req) => {
         try {
           let edgeFn: string;
           let body: any;
-          const mcpTool = mcpByName.get(fnName);
+          const mcpTool = mcpByName.get(rawFnName) || mcpByName.get(fnName);
 
           if (fnName === "web_search") {
             edgeFn = "anima-web-search";
@@ -597,15 +636,16 @@ serve(async (req) => {
               content: args.content,
             };
           } else if (fnName === "forge_agent") {
+            const forgeArgs = normalizeForgeArgs(args);
             edgeFn = "agent-forge";
             body = {
               user_id: userId,
               thread_id,
               source_message_id,
               source_agent_id: "luca",
-              action: args.action,
-              target_agent_id: args.target_agent_id,
-              blueprint: args.blueprint,
+              action: forgeArgs.action,
+              target_agent_id: forgeArgs.target_agent_id,
+              blueprint: forgeArgs.blueprint,
             };
           } else if (fnName === "update_soul" || fnName === "update_self_model") {
             clearTimeout(timeout);
@@ -737,7 +777,7 @@ serve(async (req) => {
           id: tc.id,
           type: "function",
           function: {
-            name: tc.function.name,
+            name: canonicalToolName(tc.function.name),
             arguments:
               typeof tc.function.arguments === "string"
                 ? tc.function.arguments

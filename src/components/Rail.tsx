@@ -16,6 +16,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
+import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
+import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
 import { prefetchRoute } from '@/lib/routePrefetch';
 
 /**
@@ -45,6 +47,8 @@ export default function Rail() {
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
+  const studioMode = shouldShowStudioNavigation(interfaceMode);
 
   // Navigate to a section AND ensure the sidebar is open. Clicking a rail
   // icon when the sidebar is collapsed should both jump to that section and
@@ -68,8 +72,9 @@ export default function Rail() {
   }, [toggleSidebar]);
 
   const helpActive = location.pathname.startsWith('/settings/help');
+  const agentsActive = location.pathname.startsWith('/settings/agents');
   const settingsActive =
-    (location.pathname.startsWith('/settings') && !helpActive) ||
+    (location.pathname.startsWith('/settings') && !helpActive && (studioMode || !agentsActive)) ||
     location.pathname.startsWith('/profile/skills') ||
     location.pathname.startsWith('/profile/schedule');
 
@@ -78,6 +83,7 @@ export default function Rail() {
     : location.pathname.startsWith('/mind') ? 'mind'
     : location.pathname.startsWith('/journal') ? 'journal'
     : location.pathname.startsWith('/projects') ? 'projects'
+    : location.pathname.startsWith('/settings/agents') ? 'agents'
     : location.pathname.startsWith('/profile/identity') ? 'mind'
     : location.pathname.startsWith('/profile/revisions') ? 'mind'
     : location.pathname.startsWith('/profile') ? 'profile'
@@ -149,7 +155,8 @@ export default function Rail() {
         />
       </button>
 
-      {/* Primary nav — every click auto-opens the sidebar via goTo() */}
+      {/* Primary nav — Companion/Guided modes tell the simpler story first;
+          Studio keeps the full diagnostic map. */}
       <NavIcon
         icon={<MessageSquare size={15} strokeWidth={1.55} />}
         label="Chat"
@@ -158,46 +165,72 @@ export default function Rail() {
         active={activeView === 'chat'}
         onClick={() => goTo('/chat')}
       />
+      {studioMode && (
+        <NavIcon
+          icon={<Brain size={15} strokeWidth={1.55} />}
+          label="Memory"
+          path="/memory"
+          guideId="rail-memory"
+          active={activeView === 'memory'}
+          onClick={() => goTo('/memory')}
+        />
+      )}
       <NavIcon
-        icon={<Brain size={15} strokeWidth={1.55} />}
-        label="Memory"
-        path="/memory"
-        guideId="rail-memory"
-        active={activeView === 'memory'}
-        onClick={() => goTo('/memory')}
+        icon={studioMode ? <Bot size={15} strokeWidth={1.55} /> : <NotebookPen size={15} strokeWidth={1.55} />}
+        label={studioMode ? 'Mind' : 'Notebook'}
+        path={studioMode ? '/mind' : '/journal'}
+        guideId={studioMode ? 'rail-mind' : 'rail-journal'}
+        active={studioMode ? activeView === 'mind' : activeView === 'journal'}
+        onClick={() => goTo(studioMode ? '/mind' : '/journal')}
       />
-      <NavIcon
-        icon={<Bot size={15} strokeWidth={1.55} />}
-        label="Mind"
-        path="/mind"
-        guideId="rail-mind"
-        active={activeView === 'mind'}
-        onClick={() => goTo('/mind')}
-      />
-      <NavIcon
-        icon={<NotebookPen size={15} strokeWidth={1.55} />}
-        label="Journal"
-        path="/journal"
-        guideId="rail-journal"
-        active={activeView === 'journal'}
-        onClick={() => goTo('/journal')}
-      />
+      {studioMode && (
+        <NavIcon
+          icon={<NotebookPen size={15} strokeWidth={1.55} />}
+          label="Journal"
+          path="/journal"
+          guideId="rail-journal"
+          active={activeView === 'journal'}
+          onClick={() => goTo('/journal')}
+        />
+      )}
       <NavIcon
         icon={<Layers size={15} strokeWidth={1.55} />}
-        label="Projects"
+        label={studioMode ? 'Projects' : 'Create'}
         path="/projects"
         guideId="rail-projects"
         active={activeView === 'projects'}
         onClick={() => goTo('/projects')}
       />
-      <NavIcon
-        icon={<User size={15} strokeWidth={1.55} />}
-        label="Profile"
-        path="/profile"
-        guideId="rail-profile"
-        active={activeView === 'profile'}
-        onClick={() => goTo('/profile')}
-      />
+      {!studioMode && (
+        <>
+          <NavIcon
+            icon={<Brain size={15} strokeWidth={1.55} />}
+            label="Mind"
+            path="/mind"
+            guideId="rail-mind"
+            active={activeView === 'mind'}
+            onClick={() => goTo('/mind')}
+          />
+          <NavIcon
+            icon={<Bot size={15} strokeWidth={1.55} />}
+            label="Agents"
+            path="/settings/agents"
+            guideId="rail-agents"
+            active={activeView === 'agents'}
+            onClick={() => goTo('/settings/agents')}
+          />
+        </>
+      )}
+      {studioMode && (
+        <NavIcon
+          icon={<User size={15} strokeWidth={1.55} />}
+          label="Profile"
+          path="/profile"
+          guideId="rail-profile"
+          active={activeView === 'profile'}
+          onClick={() => goTo('/profile')}
+        />
+      )}
 
       {/* Spacer — clicking the empty area between nav and utilities toggles
           the sidebar, so the user can collapse/expand by clicking anywhere

@@ -1,6 +1,7 @@
 import type { DrawerKey } from '@/stores/drawerStore';
+import { isInterfaceMode, type InterfaceMode } from '@/lib/interfaceMode';
 
-export type LucaGuideActionType = 'navigate' | 'highlight' | 'scroll_to' | 'open_drawer';
+export type LucaGuideActionType = 'navigate' | 'highlight' | 'scroll_to' | 'open_drawer' | 'set_interface_mode';
 
 export interface LucaGuideAction {
   type: LucaGuideActionType;
@@ -30,14 +31,26 @@ export interface LucaGuideContext {
   summary: string;
   activeAgentId: string;
   activeAgentName: string;
+  interfaceMode: InterfaceMode;
+  interfaceModeSummary: string;
+  interfaceModeInstruction: string;
   currentThreadId: string | null;
   availableTargets: LucaGuideTarget[];
 }
 
 export const GUIDE_NAV_TARGETS: LucaGuideTarget[] = [
   { id: '/chat', label: 'Chat', description: 'Open the main conversation surface.' },
-  { id: '/settings/models', label: 'Models', description: 'Open model and OpenRouter key setup.' },
   { id: '/settings/agents', label: 'Agents', description: 'Open the custom-agent list and editor.' },
+  { id: '/settings/models', label: 'Models', description: 'Open model and OpenRouter key setup.' },
+  { id: '/settings/appearance', label: 'Appearance', description: 'Open interface mode, density, and display controls.' },
+  { id: '/settings/general', label: 'General', description: 'Open general workspace preferences.' },
+  { id: '/settings/voice', label: 'Voice', description: 'Open voice and security controls.' },
+  { id: '/settings/local-runtime', label: 'Local runtime', description: 'Open local runtime and machine-side setup.' },
+  { id: '/settings/portability', label: 'Import & export', description: 'Open data import, export, and portability controls.' },
+  { id: '/settings/account', label: 'Account', description: 'Open account and preference controls.' },
+  { id: '/settings/skills', label: 'Self-model', description: 'Open skill and self-model controls.' },
+  { id: '/settings/routines', label: 'Routines', description: 'Open routine and schedule controls.' },
+  { id: '/settings/cron-health', label: 'Cron health', description: 'Open background routine health.' },
   { id: '/journal', label: 'Journal', description: 'Open the unified notebook feed.' },
   { id: '/memory', label: 'Memory', description: 'Open the memory and substrate browser.' },
   { id: '/mind', label: 'Mind', description: 'Open the advanced inner-life diagnostic section.' },
@@ -56,6 +69,7 @@ const GLOBAL_HIGHLIGHT_TARGETS: LucaGuideTarget[] = [
   { id: 'rail-memory', label: 'Memory rail button', description: 'The left rail shortcut for Memory.' },
   { id: 'rail-mind', label: 'Mind rail button', description: 'The left rail shortcut for Mind.' },
   { id: 'rail-journal', label: 'Journal rail button', description: 'The left rail shortcut for Journal.' },
+  { id: 'rail-agents', label: 'Agents rail button', description: 'The left rail shortcut for custom agents in Companion and Guided modes.' },
   { id: 'rail-profile', label: 'Profile rail button', description: 'The left rail shortcut for Profile.' },
   { id: 'rail-help', label: 'Help rail button', description: 'The persistent guide button near Settings.' },
   { id: 'rail-settings', label: 'Settings rail button', description: 'The left rail shortcut for Settings.' },
@@ -83,11 +97,67 @@ export function routeInfo(path: string): Pick<LucaGuideContext, 'pageTitle' | 'r
       summary: 'Create, edit, and inspect Luca or custom-agent configuration.',
     };
   }
+  if (path.startsWith('/settings/appearance')) {
+    return {
+      pageTitle: 'Appearance',
+      routeFamily: 'settings',
+      summary: 'Interface mode, density, typography, and persistent surface visibility.',
+    };
+  }
+  if (path.startsWith('/settings/general')) {
+    return {
+      pageTitle: 'General',
+      routeFamily: 'settings',
+      summary: 'General workspace preferences and defaults.',
+    };
+  }
   if (path.startsWith('/settings/help')) {
     return {
       pageTitle: 'Guide',
       routeFamily: 'settings',
       summary: 'The app guide explaining setup, agents, profile, memory, and troubleshooting.',
+    };
+  }
+  if (path.startsWith('/settings/voice')) {
+    return {
+      pageTitle: 'Voice & security',
+      routeFamily: 'settings',
+      summary: 'Voice connection, speech behavior, and security preferences.',
+    };
+  }
+  if (path.startsWith('/settings/local-runtime')) {
+    return {
+      pageTitle: 'Local runtime',
+      routeFamily: 'settings',
+      summary: 'Local runtime configuration and machine-side setup.',
+    };
+  }
+  if (path.startsWith('/settings/account')) {
+    return {
+      pageTitle: 'Account',
+      routeFamily: 'settings',
+      summary: 'Account details and user preferences.',
+    };
+  }
+  if (path.startsWith('/settings/skills')) {
+    return {
+      pageTitle: 'Self-model',
+      routeFamily: 'settings',
+      summary: 'Skills, self-model controls, and agent capability settings.',
+    };
+  }
+  if (path.startsWith('/settings/routines')) {
+    return {
+      pageTitle: 'Routines',
+      routeFamily: 'settings',
+      summary: 'Schedules, routines, and autonomous follow-up controls.',
+    };
+  }
+  if (path.startsWith('/settings/cron-health')) {
+    return {
+      pageTitle: 'Cron health',
+      routeFamily: 'settings',
+      summary: 'Background routine health and scheduled-task diagnostics.',
     };
   }
   if (path.startsWith('/settings')) {
@@ -174,6 +244,10 @@ export function sanitizeGuideAction(action: LucaGuideAction): LucaGuideAction | 
   }
   if (action.type === 'open_drawer') {
     if (!ALLOWED_DRAWERS.has(target as Exclude<DrawerKey, null>)) return null;
+    return { ...action, target };
+  }
+  if (action.type === 'set_interface_mode') {
+    if (!isInterfaceMode(target)) return null;
     return { ...action, target };
   }
   if (action.type === 'highlight' || action.type === 'scroll_to') {

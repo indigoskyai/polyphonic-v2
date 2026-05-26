@@ -3,19 +3,26 @@ import { supabase } from '@/integrations/supabase/client';
 export const LANDING_PROMPT_KEY = 'polyphonic_landing_prompt';
 export const LANDING_AUTOSEND_KEY = 'polyphonic_landing_autosend';
 export const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
+export const LANDING_HIDDEN_HANDOFF_KEY = 'polyphonic_landing_hidden_handoff';
 const GUEST_UNAVAILABLE_MESSAGE =
   'Free Luca chat is temporarily unavailable. Please try again a little later.';
 
-function stashLandingHandoff(prompt: string): void {
+export function stashChatHandoff(prompt: string, options?: { hidden?: boolean }): void {
   sessionStorage.setItem(LANDING_PROMPT_KEY, prompt.trim());
   sessionStorage.setItem(LANDING_AUTOSEND_KEY, '1');
   sessionStorage.setItem(LANDING_CHAT_TRANSITION_KEY, '1');
+  if (options?.hidden) {
+    sessionStorage.setItem(LANDING_HIDDEN_HANDOFF_KEY, '1');
+  } else {
+    sessionStorage.removeItem(LANDING_HIDDEN_HANDOFF_KEY);
+  }
 }
 
 function clearLandingHandoff(): void {
   sessionStorage.removeItem(LANDING_PROMPT_KEY);
   sessionStorage.removeItem(LANDING_AUTOSEND_KEY);
   sessionStorage.removeItem(LANDING_CHAT_TRANSITION_KEY);
+  sessionStorage.removeItem(LANDING_HIDDEN_HANDOFF_KEY);
 }
 
 function normalizeGuestError(message?: string): string {
@@ -43,7 +50,7 @@ async function ensureSessionUserId(): Promise<string> {
 }
 
 export async function startGuestChat(prompt: string): Promise<string> {
-  stashLandingHandoff(prompt);
+  stashChatHandoff(prompt);
   try {
     const userId = await ensureSessionUserId();
     const { data, error } = await supabase
@@ -75,6 +82,16 @@ export function consumeLandingAutosendFlag(): boolean {
   try {
     const flag = sessionStorage.getItem(LANDING_AUTOSEND_KEY);
     if (flag) sessionStorage.removeItem(LANDING_AUTOSEND_KEY);
+    return flag === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function consumeLandingHiddenHandoffFlag(): boolean {
+  try {
+    const flag = sessionStorage.getItem(LANDING_HIDDEN_HANDOFF_KEY);
+    if (flag) sessionStorage.removeItem(LANDING_HIDDEN_HANDOFF_KEY);
     return flag === '1';
   } catch {
     return false;

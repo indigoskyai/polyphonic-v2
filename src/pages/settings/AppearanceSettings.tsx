@@ -1,4 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { Toggle, RadioGroup } from '@/components/settings/FormControls';
 import { Section } from '@/components/settings/Section';
 import { Slider } from '@/components/settings/Slider';
@@ -7,6 +9,7 @@ import {
   AgentDot,
 } from '@/components/settings/SettingsPage';
 import { useClock } from '@/components/settings/useClock';
+import { shouldDefaultSidebarVisible, type InterfaceMode } from '@/lib/interfaceMode';
 
 const DENSITY_OPTIONS = [
   {
@@ -26,6 +29,24 @@ const DENSITY_OPTIONS = [
   },
 ];
 
+const MODE_OPTIONS: Array<{ value: InterfaceMode; label: string; hint: string }> = [
+  {
+    value: 'companion',
+    label: 'Companion',
+    hint: 'Chat-first. The interface stays quiet and surfaces Notebook, Create, Mind, and Agents.',
+  },
+  {
+    value: 'guided',
+    label: 'Guided',
+    hint: 'Recommended. Keeps the simple map, while Luca can reveal deeper surfaces as needed.',
+  },
+  {
+    value: 'studio',
+    label: 'Studio',
+    hint: 'The complete Polyphonic workbench with Memory, Profile, diagnostics, and settings depth.',
+  },
+];
+
 export default function AppearanceSettings() {
   const {
     font_size,
@@ -35,8 +56,15 @@ export default function AppearanceSettings() {
     interface_density,
     updateSetting,
   } = useSettingsStore();
+  const interfaceMode = useInterfaceModeStore((s) => s.mode);
+  const setInterfaceMode = useInterfaceModeStore((s) => s.setMode);
+  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
 
   const time = useClock();
+  const handleModeChange = (mode: InterfaceMode) => {
+    setInterfaceMode(mode);
+    setSidebarVisible(shouldDefaultSidebarVisible(mode));
+  };
 
   return (
     <SettingsPage
@@ -75,6 +103,19 @@ export default function AppearanceSettings() {
       <div className="set-body">
         <Section
           number="01"
+          name="Mode"
+          title="Interface mode"
+          desc="Choose how much of Polyphonic is visible by default. The substrate stays the same; this only changes how much interface the app shows first."
+        >
+          <RadioGroup
+            options={MODE_OPTIONS}
+            value={interfaceMode}
+            onChange={(v) => handleModeChange(v as InterfaceMode)}
+          />
+        </Section>
+
+        <Section
+          number="02"
           name="Layout"
           title="Interface density"
           desc="How tightly content packs into each surface. Comfortable adds breathing room; compact maximizes information per screen."
@@ -87,7 +128,7 @@ export default function AppearanceSettings() {
         </Section>
 
         <Section
-          number="02"
+          number="03"
           name="Typography"
           title="Font size"
           desc="Base size for message and reading text. Code blocks scale proportionally."
@@ -113,7 +154,7 @@ export default function AppearanceSettings() {
         </Section>
 
         <Section
-          number="03"
+          number="04"
           name="Display"
           title="Surface visibility"
           desc="What stays visible across views. Each control persists until toggled."

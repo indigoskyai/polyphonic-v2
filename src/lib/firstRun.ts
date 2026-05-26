@@ -44,13 +44,10 @@ export async function isFirstRun(userId: string): Promise<boolean> {
 export async function markOnboarded(userId: string, displayName?: string): Promise<void> {
   const patch: Record<string, unknown> = {};
   if (displayName && displayName.trim()) patch.display_name = displayName.trim();
-  // Ensure a profile row exists with at least a placeholder display_name so
-  // the first-run check flips to false.
-  if (Object.keys(patch).length === 0) patch.display_name = 'Anon';
 
   const { data: existing, error: existsErr } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, display_name')
     .eq('user_id', userId)
     .maybeSingle();
   if (existsErr) {
@@ -58,11 +55,17 @@ export async function markOnboarded(userId: string, displayName?: string): Promi
   }
 
   if (existing) {
+    const existingName = (existing as { display_name?: string | null }).display_name;
+    if (Object.keys(patch).length === 0 && existingName?.trim()) return;
+    // Ensure a profile row has at least a placeholder display_name so the
+    // first-run check flips to false, without overwriting a real name.
+    if (Object.keys(patch).length === 0) patch.display_name = 'Anon';
     const { error: updateErr } = await supabase.from('profiles').update(patch).eq('user_id', userId);
     if (updateErr) {
       throw new Error(`markOnboarded: profile update failed: ${updateErr.message}`);
     }
   } else {
+    if (Object.keys(patch).length === 0) patch.display_name = 'Anon';
     const { error: insertErr } = await supabase.from('profiles').insert({ user_id: userId, ...patch });
     if (insertErr) {
       throw new Error(`markOnboarded: profile insert failed: ${insertErr.message}`);

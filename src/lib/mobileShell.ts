@@ -44,6 +44,50 @@ export function getMobileSurfaceMeta(
     return { title: 'Profile', subtitle: 'Psychological portrait', contextAction: 'activity' };
   }
 
+  if (pathname.startsWith('/settings/agents')) {
+    return { title: 'Agents', subtitle: 'Create and tune agents', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/appearance')) {
+    return { title: 'Appearance', subtitle: 'Interface mode and display', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/general')) {
+    return { title: 'General', subtitle: 'Workspace defaults', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/models')) {
+    return { title: 'Models', subtitle: 'AI connections', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/local-runtime')) {
+    return { title: 'Local runtime', subtitle: 'Local agent bridge', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/voice')) {
+    return { title: 'Voice & security', subtitle: 'Speech and safeguards', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/skills')) {
+    return { title: 'Self-model', subtitle: 'Skills and capabilities', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/routines')) {
+    return { title: 'Routines', subtitle: 'Schedules and follow-ups', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/account')) {
+    return { title: 'Account', subtitle: 'Preferences and plan', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/help')) {
+    return { title: 'Guide', subtitle: 'How Polyphonic works', contextAction: 'activity' };
+  }
+
+  if (pathname.startsWith('/settings/cron-health')) {
+    return { title: 'Cron health', subtitle: 'Routine diagnostics', contextAction: 'activity' };
+  }
+
   if (pathname.startsWith('/workspace')) {
     return { title: 'Workspace', subtitle: 'Artifacts and work', contextAction: 'activity' };
   }

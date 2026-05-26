@@ -19,6 +19,7 @@ describe('global Luca guide overlay', () => {
     expect(overlay).toContain("pathname === '/chat' || pathname.startsWith('/chat/')");
     expect(overlay).toContain('if (hiddenOnChatRoute) return null');
     expect(overlay).toContain('routeInfo(location.pathname)');
+    expect(overlay).toContain('interfaceModeInstruction: modePolicy.guideInstruction');
     expect(overlay).toContain('availableTargets: targetsForPath(location.pathname)');
   });
 
@@ -31,6 +32,9 @@ describe('global Luca guide overlay', () => {
     expect(store).toContain('context');
     expect(config).toContain('[functions.luca-app-guide]\nverify_jwt = false');
     expect(edge).toContain("You are Luca, acting inside Polyphonic's global app guide overlay");
+    expect(edge).toContain('interface mode summary');
+    expect(edge).toContain("Respect the user's interface mode");
+    expect(edge).toContain('"/settings/appearance"');
     expect(edge).toContain('Allowed navigation targets');
     expect(edge).toContain('Output JSON only');
   });
@@ -38,16 +42,22 @@ describe('global Luca guide overlay', () => {
   it('keeps app actions constrained to navigation, drawers, and guide highlights', () => {
     const lib = readRepoFile('src/lib/lucaGuide.ts');
     const overlay = readRepoFile('src/components/guide/LucaGuideOverlay.tsx');
+    const edge = readRepoFile('supabase/functions/luca-app-guide/index.ts');
     const rail = readRepoFile('src/components/Rail.tsx');
     const section = readRepoFile('src/components/settings/Section.tsx');
     const guide = readRepoFile('src/pages/settings/HelpGuide.tsx');
 
-    expect(lib).toContain("export type LucaGuideActionType = 'navigate' | 'highlight' | 'scroll_to' | 'open_drawer'");
+    expect(lib).toContain("export type LucaGuideActionType = 'navigate' | 'highlight' | 'scroll_to' | 'open_drawer' | 'set_interface_mode'");
     expect(lib).toContain('sanitizeGuideAction');
     expect(lib).toContain("'/settings/models'");
+    expect(lib).toContain("'/settings/appearance'");
+    expect(lib).toContain("'rail-agents'");
     expect(lib).toContain("'rail-help'");
+    expect(edge).toContain('Allowed interface-mode controls');
+    expect(edge).toContain('set_interface_mode');
     expect(overlay).toContain('runAction');
     expect(overlay).toContain('openDrawer(action.target');
+    expect(overlay).toContain('setInterfaceMode(mode)');
     expect(rail).toContain('data-guide-id={guideId}');
     expect(section).toContain('guideId?: string');
     expect(guide).toContain('guideId="help-profile-section"');

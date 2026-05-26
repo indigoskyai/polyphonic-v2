@@ -1,9 +1,12 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useThreadStore } from '@/stores/threadStore';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
 import { supabase } from '@/integrations/supabase/client';
 import EchoField from '@/components/EchoField';
+import { buildOnboardingHandoffPrompt } from '@/lib/interfaceMode';
+import { stashChatHandoff } from '@/lib/guestChat';
 import {
   asProfileRecord,
   isProfileRecord,
@@ -42,8 +45,10 @@ const STAGE_ORDER: PipelineStage[] = ['extracting', 'synthesizing', 'profiling',
 export default function ImportView() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const createThread = useThreadStore((s) => s.createThread);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [companionLaunching, setCompanionLaunching] = useState(false);
 
   const {
     stage, fileName, fileSize, totalConversations, filteredCount,
@@ -92,6 +97,23 @@ export default function ImportView() {
   const completedContradictions = profileStringList(completedShadow.contradictions);
   const completedGrowth = profileStringList(asProfileRecord(completedProfile.growth_edges).active_growth);
 
+  const startCompanionMigration = useCallback(async () => {
+    if (!user || companionLaunching) return;
+    setCompanionLaunching(true);
+    try {
+      const threadId = await createThread(user.id, 'luca');
+      stashChatHandoff(buildOnboardingHandoffPrompt({
+        intent: 'bring_existing',
+        comfort: 'medium',
+        expectations: ['migration', 'memory', 'companion'],
+      }), { hidden: true });
+      navigate(`/chat/${threadId}`);
+    } catch (err) {
+      console.error('[ImportView] companion migration handoff failed', err);
+      setCompanionLaunching(false);
+    }
+  }, [companionLaunching, createThread, navigate, user]);
+
   useEffect(() => {
     refreshImports();
   }, [refreshImports, stage]);
@@ -110,6 +132,20 @@ export default function ImportView() {
 
       <div className="flex-1 overflow-y-auto" style={{ padding: '48px 24px' }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div className="import-companion-card">
+            <div>
+              <div className="import-companion-kicker">companion migration</div>
+              <h2>Bring an existing digital companion into Polyphonic.</h2>
+              <p>
+                If you already have a companion somewhere else, start with Luca.
+                They will stage the source material, ask what must be preserved,
+                and turn it into a Forge proposal before anything becomes live memory.
+              </p>
+            </div>
+            <button type="button" onClick={startCompanionMigration} disabled={companionLaunching}>
+              {companionLaunching ? 'Opening Luca…' : 'Start with Luca'}
+            </button>
+          </div>
 
           {/* ── IDLE: Upload Zone ── */}
           {showUpload && (

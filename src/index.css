@@ -5897,6 +5897,8 @@ html {
   min-height: 100dvh;
   align-items: stretch;
   justify-content: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .onb-shell-v2::before {
@@ -6139,8 +6141,16 @@ html {
   gap: 12px;
 }
 
+.onb-nav-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .onb-primary,
-.onb-link {
+.onb-link,
+.onb-back {
   appearance: none;
   border-radius: 999px;
   font-size: 12px;
@@ -6175,15 +6185,30 @@ html {
   padding: 10px 12px;
 }
 
+.onb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--text-secondary);
+}
+
 .onb-link:hover,
-.onb-link:focus-visible {
+.onb-link:focus-visible,
+.onb-back:hover,
+.onb-back:focus-visible {
   color: var(--text-primary);
   background: var(--overlay-hover);
+  border-color: var(--border-subtle);
   outline: none;
 }
 
 .onb-primary:disabled,
-.onb-link:disabled {
+.onb-link:disabled,
+.onb-back:disabled {
   opacity: 0.55;
   cursor: default;
 }
@@ -6276,6 +6301,14 @@ html {
 
   .onb-choice {
     min-height: 112px;
+  }
+
+  .onb-nav {
+    align-items: stretch;
+  }
+
+  .onb-nav-secondary {
+    flex-wrap: wrap;
   }
 
   .import-companion-card {
@@ -8421,56 +8454,88 @@ html {
   gap: 18px 24px;
 }
 
-/* Launcher — flat / technical / minimal (OpenAI · Vercel · Claude register).
-   No elevation, no gloss, no glassy blur, no glow: a solid surface pill with a
-   hairline border. Hover brightens border + text only (no lift). Depth cues are
-   deliberately absent — the app is moving away from 3D affordances. */
 .luca-guide-launcher {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 22px;
+  bottom: 22px;
   z-index: 190;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 14px 0 7px;
-  border: 1px solid var(--border-subtle);
+  justify-content: flex-start;
+  gap: 10px;
+  width: 54px;
+  height: 54px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 999px;
-  background: var(--surface-1);
-  color: var(--text-secondary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
+    rgba(7, 7, 9, 0.92);
+  color: rgba(235, 232, 224, 0.84);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-body-tight);
+  overflow: hidden;
   transition:
+    width 220ms var(--ease-out),
+    transform 180ms var(--ease-out),
+    opacity 160ms var(--ease-out),
     border-color 160ms var(--ease-out),
     background 160ms var(--ease-out),
     color 160ms var(--ease-out);
 }
 
 .luca-guide-launcher:hover,
-.luca-guide-launcher[data-open="true"] {
-  border-color: var(--border-strong);
-  background: #17171b;
+.luca-guide-launcher:focus-visible {
+  width: 126px;
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+    rgba(13, 13, 16, 0.96);
   color: var(--text-primary);
 }
 
-/* Flat identity mark — hairline-bordered chip with a clean sans L. No gloss
-   gradient, no inset highlight, no glow ring, no elevation. The chat-window
-   header L (.large) inherits it. */
+.luca-guide-launcher[data-open="true"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.96);
+}
+
+.luca-guide-launcher-text {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 220ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+
+.luca-guide-launcher:hover .luca-guide-launcher-text,
+.luca-guide-launcher:focus-visible .luca-guide-launcher-text {
+  max-width: 80px;
+  opacity: 1;
+}
+
 .luca-guide-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background:
+    radial-gradient(circle at 45% 35%, rgba(255, 245, 224, 0.22), transparent 46%),
+    rgba(255, 255, 255, 0.055);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 12px;
@@ -8480,28 +8545,44 @@ html {
 }
 
 .luca-guide-mark.large {
-  width: 30px;
-  height: 30px;
-  font-size: 14px;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
 }
 
 .luca-guide-panel {
   position: fixed;
-  right: 24px;
-  bottom: 74px;
-  z-index: 189;
+  right: 20px;
+  bottom: 20px;
+  z-index: 191;
   display: flex;
   flex-direction: column;
-  width: min(420px, calc(100vw - 48px));
-  height: min(620px, calc(100vh - 110px));
-  max-height: min(680px, calc(100vh - 110px));
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: rgba(15, 15, 16, 0.96);
-  box-shadow: var(--shadow-panel), var(--shadow-inset-highlight);
+  width: min(456px, calc(100vw - 40px));
+  height: min(720px, calc(100dvh - 40px));
+  max-height: min(720px, calc(100dvh - 40px));
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 72px),
+    rgba(14, 14, 16, 0.975);
+  box-shadow:
+    0 26px 86px rgba(0, 0, 0, 0.58),
+    0 2px 10px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.085);
   overflow: hidden;
-  backdrop-filter: blur(22px);
-  animation: routeStageIn 180ms var(--ease-out) both;
+  backdrop-filter: blur(26px) saturate(1.06);
+  animation: guidePanelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes guidePanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.982);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .luca-guide-head {
@@ -8509,7 +8590,7 @@ html {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 13px;
+  padding: 18px 18px 15px;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -8533,13 +8614,21 @@ html {
 }
 
 .luca-guide-title {
-  margin-top: 5px;
+  margin-top: 4px;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: var(--weight-medium);
-  line-height: 1.2;
+  line-height: 1.12;
   color: var(--ink);
   letter-spacing: var(--track-body-tight);
+}
+
+.luca-guide-subtitle {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .luca-guide-head-actions {
@@ -8552,10 +8641,10 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid var(--hairline);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--text-tertiary);
@@ -8571,8 +8660,8 @@ html {
 }
 
 .luca-guide-head-actions button:hover {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.07);
   color: var(--text-primary);
 }
 
@@ -8580,11 +8669,11 @@ html {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 10px;
-  padding: 12px 16px;
+  padding: 13px 18px;
   border-bottom: 1px solid var(--hairline);
   color: var(--text-body);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.55;
 }
 
@@ -8599,12 +8688,12 @@ html {
   flex: 1 1 auto;
   gap: 12px;
   min-height: 0;
-  padding: 14px 16px;
+  padding: 18px;
   overflow-y: auto;
 }
 
 .luca-guide-message {
-  max-width: 92%;
+  max-width: 88%;
 }
 
 .luca-guide-message.user {
@@ -8618,12 +8707,12 @@ html {
 .luca-guide-message-body {
   margin-top: 5px;
   padding: 10px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 16px;
   color: var(--text-body);
-  background: rgba(255, 255, 255, 0.018);
+  background: rgba(255, 255, 255, 0.028);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: var(--weight-book);
   letter-spacing: var(--track-body-tight);
   line-height: 1.58;
@@ -8632,9 +8721,9 @@ html {
 }
 
 .luca-guide-message.user .luca-guide-message-body {
-  color: var(--ink);
-  background: rgba(201, 168, 124, 0.07);
-  border-color: rgba(201, 168, 124, 0.18);
+  color: rgba(18, 18, 20, 0.96);
+  background: rgba(239, 236, 229, 0.94);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .luca-guide-message.pending .luca-guide-message-body {
@@ -8657,7 +8746,7 @@ html {
   gap: 6px;
   border: 1px solid var(--hairline);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.016);
+  background: rgba(255, 255, 255, 0.024);
   color: var(--text-body);
   cursor: pointer;
   font-family: var(--font-sans);
@@ -8708,8 +8797,8 @@ html {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 38px;
-  padding: 0 16px;
+  min-height: 40px;
+  padding: 0 18px;
   border: 0;
   background: rgba(255, 255, 255, 0.012);
   color: var(--text-tertiary);
@@ -8753,36 +8842,39 @@ html {
 .luca-guide-shortcuts-panel {
   display: grid;
   gap: 10px;
-  padding: 0 16px 14px;
+  padding: 0 18px 14px;
   animation: routeStageIn 160ms var(--ease-out) both;
 }
 
 .luca-guide-composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--hairline);
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  margin: 0 14px 14px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .luca-guide-composer textarea {
-  min-height: 50px;
+  min-height: 44px;
   max-height: 130px;
   resize: vertical;
-  border: 1px solid var(--border-faint);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.018);
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
   color: var(--text-body);
   outline: none;
-  padding: 9px 10px;
+  padding: 10px 10px;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
 .luca-guide-composer textarea:focus {
-  border-color: var(--border-subtle);
-  background: rgba(255, 255, 255, 0.026);
+  background: transparent;
 }
 
 .luca-guide-composer button {
@@ -8790,13 +8882,36 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border-subtle);
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.026);
-  color: var(--text-primary);
+  background: rgba(235, 232, 224, 0.9);
+  color: rgba(12, 12, 14, 0.94);
   cursor: pointer;
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+
+.luca-guide-composer button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateY(-1px);
+}
+
+.luca-guide-copy-note {
+  align-self: center;
+  margin: 0 0 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
 }
 
 .luca-guide-composer button:disabled,
@@ -8924,15 +9039,40 @@ html {
 
   .luca-guide-launcher {
     right: 16px;
-    bottom: 18px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .luca-guide-panel {
-    right: 12px;
-    bottom: 66px;
-    width: calc(100vw - 24px);
-    height: calc(100vh - 92px);
-    max-height: calc(100vh - 92px);
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .luca-guide-head {
+    padding: 16px 16px 14px;
+  }
+
+  .luca-guide-context,
+  .luca-guide-messages {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .luca-guide-message {
+    max-width: 94%;
+  }
+
+  .luca-guide-composer {
+    margin-left: 12px;
+    margin-right: 12px;
   }
 
   .agent-row {

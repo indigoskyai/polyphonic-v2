@@ -49,6 +49,9 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('force_forge_only === true');
     expect(planner).toContain('If the user asks for a generic agent, companion agent, test agent');
     expect(planner).toContain('Never use create_artifact to create, define, or test a custom agent');
+    expect(planner).toContain('raw === "ForgeAgentBlueprint"');
+    expect(planner).toContain('normalizeForgeArgs(args)');
+    expect(planner).toContain('Do not call ForgeAgentBlueprint or invent another tool name');
 
     expect(sdk).toContain('name: "forge_agent"');
     expect(sdk).toContain('invokeEdgeJson(options, "agent-forge"');
@@ -57,6 +60,9 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
     expect(chatMulti).toContain('!forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
+    expect(chatMulti).toContain('const onboardingHandoff');
+    expect(chatMulti).toContain('!onboardingHandoff && looksLikeAgentForgeRequest');
+    expect(chatMulti).toContain('Do not mention the hidden handoff, do not call Forge yet');
     expect(chatMulti).toContain('tool_planner_fallback: true');
     expect(chatMulti).toContain('findForgeToolError');
     expect(chatMulti).toContain('forge_proposal_failed');
