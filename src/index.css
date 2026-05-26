@@ -2452,31 +2452,35 @@ html {
     background: linear-gradient(to top, #000, transparent);
   }
 
-  /* Composer surface — flat, true black, lit from above but SUBLIMINAL.
-     The only light is a whisper on the top rim: flat fill (no perceptible
-     gradient), NO perimeter border, and NO halo — the sides and bottom melt
-     into the floor. Tuned deliberately faint because OLED renders these values
-     hotter than a desktop capture. Like Claude/ChatGPT: you feel the lift, you
-     don't see it. Focus brings the rim up a hair — a wake, not a glow. */
+  /* Composer surface — "artifact of the surface." Three light moves on true
+     black, all obeying one light from above, each tuned just below conscious
+     notice so it reads modeled and premium without announcing anything:
+       move 1 — a graded, top-lit fill (brighter at top, falling off)
+       move 2 — a lit top lip (light grazing the top rim)
+       move 3 — a soft inner-bottom settle (the slab recedes into its own
+                shadow). This is the true-black version of a drop shadow: a
+                literal OUTER shadow is invisible on #000 (you can't darken
+                pure black), so we darken the fill itself instead.
+     The breathing shimmer (::before, prime-staggered pools) is the living edge;
+     a 0.012 whisper border is the only static base under it. Tuned faint for
+     OLED, which renders these values hotter than a desktop capture. */
   .input-shell {
     border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.019) 85%), #08080a;
-    border: 1px solid transparent;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.038), 0 2px 9px rgba(0,0,0,0.2);
-    transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1);
+    background: linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.020) 56%, rgba(255,255,255,0.012)), #08080a;
+    border: 1px solid rgba(255, 255, 255, 0.012);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -16px 20px -13px rgba(0,0,0,0.5);
+    transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1), border-color 0.45s cubic-bezier(0.22,1,0.36,1);
   }
-  /* No perimeter line in ANY state — a crisp border catches the eye on OLED no
-     matter how faint, so there isn't one. The shape reads from the soft fill +
-     the top-rim light alone. Also disable the desktop shimmer glow strip
-     (::before), which otherwise renders as a lit, animated border on mobile. */
+  /* Keep the static base a whisper in EVERY state — the shimmer + the lit lip
+     are the wake, not a heavier border. (Overrides the desktop hover/focus
+     border-color, which would otherwise jump to ~0.09–0.10 on mobile.) */
   .input-shell:hover,
   .input-shell.focused,
   .input-shell:focus-within {
-    border-color: transparent;
+    border-color: rgba(255, 255, 255, 0.012);
   }
-  .input-shell::before { display: none; }
   .input-shell.focused {
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 3px 12px rgba(0,0,0,0.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -16px 20px -13px rgba(0,0,0,0.5);
   }
   /* warm whisper caret + selection — the one signature touch */
   .input-shell .input-textarea { caret-color: rgb(255, 198, 152); }
