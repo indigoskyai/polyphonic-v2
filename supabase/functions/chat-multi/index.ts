@@ -435,7 +435,7 @@ serve(async (req) => {
     const forceForgeRequest = agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner = !onboardingHandoff && backend.allowTools && (explicitAgentRuntime || agentIsSystemLuca || forceForgeRequest);
 
-    if (agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
+    if (!onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
       if (recentForgeProposal) {
         let ackMessage = "";

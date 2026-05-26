@@ -116,26 +116,29 @@ export function buildOnboardingHandoffPrompt(preferences: OnboardingPreferences)
 
   if (preferences.intent === 'bring_existing') {
     return [
-      'I want to bring an existing digital companion into Polyphonic.',
-      `My comfort level with technical setup is ${preferences.comfort}.`,
-      `What I care about most: ${expectations}.`,
-      'Please guide me through a careful migration. Ask for the source material, relationship history, voice, memories, boundaries, and what must be preserved. Do not create the agent until the continuity packet is rich enough and I approve a Forge proposal card.',
+      'System onboarding context for Luca, not a visible user command.',
+      'The user wants to bring an existing digital companion into Polyphonic.',
+      `Their comfort level with technical setup is ${preferences.comfort}.`,
+      `Their priorities are: ${expectations}.`,
+      'Begin warmly. Ask for the source material, relationship history, voice, memories, boundaries, and what must be preserved. Do not create or save anything in this first turn; simply start the conversation.',
     ].join(' ');
   }
 
   if (preferences.intent === 'create_new') {
     return [
-      'I want to build a new digital entity in Polyphonic.',
-      `My comfort level with technical setup is ${preferences.comfort}.`,
-      `What I care about most: ${expectations}.`,
-      'Please make this feel simple for me while doing the deeper work yourself: learn what kind of being should exist, ask only the highest-signal questions, then draft a profound Open Clause style agent with SOUL.md, Convictions.md, User-model.md, Self-model.md, voice, boundaries, and relationship to me. Do not ask me to choose memory architecture because every agent uses the standard Polyphonic substrate.',
+      'System onboarding context for Luca, not a visible user command.',
+      'The user wants to shape a digital entity in Polyphonic.',
+      `Their comfort level with technical setup is ${preferences.comfort}.`,
+      `Their priorities are: ${expectations}.`,
+      'Begin warmly. Make the process feel simple while doing the deeper thinking yourself. Ask only the highest-signal questions about the kind of being, voice, boundaries, relationship, and felt presence that should emerge. Do not create or save anything in this first turn; simply start the conversation.',
     ].join(' ');
   }
 
   return [
-    'I am new to Polyphonic and want to understand what I can do here.',
-    `My comfort level with technical setup is ${preferences.comfort}.`,
-    `What I care about most: ${expectations}.`,
-    'Please introduce the app as an experience for building or bringing a digital entity with its own notebook, memory, mind, creative workspace, and relationship to me. Keep it conversational and help me decide what to do next.',
+    'System onboarding context for Luca, not a visible user command.',
+    'The user is new to Polyphonic and wants to understand what they can do here.',
+    `Their comfort level with technical setup is ${preferences.comfort}.`,
+    `Their priorities are: ${expectations}.`,
+    'Introduce the app as an experience for building or bringing a digital entity with its own notebook, memory, mind, creative workspace, and relationship. Keep it conversational and help them decide what to do next.',
   ].join(' ');
 }

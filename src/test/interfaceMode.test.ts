@@ -40,7 +40,7 @@ describe('interface mode onboarding', () => {
     })).toBe('studio');
   });
 
-  it('builds a Luca handoff that asks for migration preservation before Forge', () => {
+  it('builds a Luca handoff that asks for migration preservation without looking like a tool command', () => {
     const preferences: OnboardingPreferences = {
       intent: 'bring_existing',
       comfort: 'medium',
@@ -51,8 +51,26 @@ describe('interface mode onboarding', () => {
 
     expect(prompt).toContain('bring an existing digital companion');
     expect(prompt).toContain('what must be preserved');
-    expect(prompt).toContain('Do not create the agent until');
-    expect(prompt).toContain('Forge proposal card');
+    expect(prompt).toContain('Do not create or save anything in this first turn');
+    expect(prompt).not.toContain('Forge');
+    expect(prompt).not.toContain('agent');
+  });
+
+  it('builds a creation handoff as context rather than an immediate create-agent command', () => {
+    const preferences: OnboardingPreferences = {
+      intent: 'create_new',
+      comfort: 'low',
+      expectations: ['companion', 'memory'],
+    };
+
+    const prompt = buildOnboardingHandoffPrompt(preferences);
+
+    expect(prompt).toContain('System onboarding context for Luca');
+    expect(prompt).toContain('shape a digital entity');
+    expect(prompt).toContain('Do not create or save anything in this first turn');
+    expect(prompt).not.toContain('Forge');
+    expect(prompt).not.toContain('Open Clause');
+    expect(prompt).not.toContain('agent');
   });
 
   it('validates stored interface modes', () => {
