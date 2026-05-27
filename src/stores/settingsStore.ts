@@ -82,6 +82,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       .single();
     if (data) {
       set({ ...defaultSettings, ...data, loaded: true });
+      // Cross-device source of truth: hydrate the interface mode store
+      // from server so a user who picked 'studio' on desktop and
+      // 'guided' on mobile sees consistent visibility per device login.
+      if (data.interface_mode) {
+        const { useInterfaceModeStore } = await import('@/stores/interfaceModeStore');
+        useInterfaceModeStore.getState().hydrateFromServer(data.interface_mode as InterfaceMode);
+      }
     } else {
       set({ loaded: true });
     }

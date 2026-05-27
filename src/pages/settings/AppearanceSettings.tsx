@@ -33,17 +33,17 @@ const MODE_OPTIONS: Array<{ value: InterfaceMode; label: string; hint: string }>
   {
     value: 'companion',
     label: 'Companion',
-    hint: 'Chat-first. The interface stays quiet and surfaces Notebook, Create, Mind, and Agents.',
+    hint: 'Chat-first. Only the four core surfaces (Chat, Notebook, Memory, Agents) are visible; the sidebar stays collapsed until you reach for it.',
   },
   {
     value: 'guided',
     label: 'Guided',
-    hint: 'Recommended. Keeps the simple map, while Luca can reveal deeper surfaces as needed.',
+    hint: 'Recommended. Same four core surfaces, sidebar reachable in one click. Luca can point you to deeper surfaces by URL when they matter.',
   },
   {
     value: 'studio',
     label: 'Studio',
-    hint: 'The complete Polyphonic workbench with Memory, Profile, diagnostics, and settings depth.',
+    hint: 'The complete Polyphonic workbench: Mind, Journal, Projects, Profile, and full settings depth in the rail. Sidebar open by default.',
   },
 ];
 
@@ -62,7 +62,11 @@ export default function AppearanceSettings() {
 
   const time = useClock();
   const handleModeChange = (mode: InterfaceMode) => {
-    setInterfaceMode(mode);
+    // setInterfaceMode now persists to both localStorage and user_settings;
+    // fire-and-forget the Promise — the sidebar + rail react to the
+    // synchronous store update immediately. DB write completes in the
+    // background and survives reload + cross-device login.
+    void setInterfaceMode(mode);
     setSidebarVisible(shouldDefaultSidebarVisible(mode));
   };
 

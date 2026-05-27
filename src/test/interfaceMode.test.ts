@@ -144,3 +144,23 @@ describe('Rail surface gating', () => {
     expect(resolveActiveRailSurfaceId('companion', '/mind')).toBe(null);
   });
 });
+
+describe('Interface mode store', () => {
+  it('hydrateFromServer updates the mode when the server value differs', async () => {
+    const { useInterfaceModeStore } = await import('@/stores/interfaceModeStore');
+    useInterfaceModeStore.getState().hydrateFromServer('studio');
+    expect(useInterfaceModeStore.getState().mode).toBe('studio');
+    useInterfaceModeStore.getState().hydrateFromServer('companion');
+    expect(useInterfaceModeStore.getState().mode).toBe('companion');
+  });
+
+  it('hydrateFromServer is a no-op when the value is null or undefined', async () => {
+    const { useInterfaceModeStore } = await import('@/stores/interfaceModeStore');
+    useInterfaceModeStore.getState().hydrateFromServer('guided');
+    expect(useInterfaceModeStore.getState().mode).toBe('guided');
+    useInterfaceModeStore.getState().hydrateFromServer(null);
+    expect(useInterfaceModeStore.getState().mode).toBe('guided');
+    useInterfaceModeStore.getState().hydrateFromServer(undefined);
+    expect(useInterfaceModeStore.getState().mode).toBe('guided');
+  });
+});
