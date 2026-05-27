@@ -17,8 +17,23 @@ import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
 import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
-import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
+import {
+  getRailSurfaces,
+  resolveActiveRailSurfaceId,
+  shouldShowStudioNavigation,
+  type RailSurfaceIcon,
+} from '@/lib/interfaceMode';
 import { prefetchRoute } from '@/lib/routePrefetch';
+
+const ICON_FOR_SURFACE: Record<RailSurfaceIcon, React.ReactNode> = {
+  chat:     <MessageSquare size={15} strokeWidth={1.55} />,
+  notebook: <NotebookPen   size={15} strokeWidth={1.55} />,
+  memory:   <Brain         size={15} strokeWidth={1.55} />,
+  agents:   <Bot           size={15} strokeWidth={1.55} />,
+  mind:     <Brain         size={15} strokeWidth={1.55} />,
+  projects: <Layers        size={15} strokeWidth={1.55} />,
+  profile:  <User          size={15} strokeWidth={1.55} />,
+};
 
 /**
  * Rail — always-visible thin column on the floor.
@@ -49,6 +64,8 @@ export default function Rail() {
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
   const interfaceMode = useInterfaceModeStore((s) => s.mode);
   const studioMode = shouldShowStudioNavigation(interfaceMode);
+  const surfaces = getRailSurfaces(interfaceMode);
+  const activeSurfaceId = resolveActiveRailSurfaceId(interfaceMode, location.pathname);
 
   // Navigate to a section AND ensure the sidebar is open. Clicking a rail
   // icon when the sidebar is collapsed should both jump to that section and
@@ -72,23 +89,15 @@ export default function Rail() {
   }, [toggleSidebar]);
 
   const helpActive = location.pathname.startsWith('/settings/help');
-  const agentsActive = location.pathname.startsWith('/settings/agents');
+  // Settings highlight: any /settings/* route in studio mode, but in
+  // companion/guided modes Agents takes its own slot so /settings/agents
+  // belongs to that surface, not Settings.
   const settingsActive =
-    (location.pathname.startsWith('/settings') && !helpActive && (studioMode || !agentsActive)) ||
-    location.pathname.startsWith('/profile/skills') ||
-    location.pathname.startsWith('/profile/schedule');
-
-  const activeView = location.pathname.startsWith('/chat') ? 'chat'
-    : location.pathname.startsWith('/memory') ? 'memory'
-    : location.pathname.startsWith('/mind') ? 'mind'
-    : location.pathname.startsWith('/journal') ? 'journal'
-    : location.pathname.startsWith('/projects') ? 'projects'
-    : location.pathname.startsWith('/settings/agents') ? 'agents'
-    : location.pathname.startsWith('/profile/identity') ? 'mind'
-    : location.pathname.startsWith('/profile/revisions') ? 'mind'
-    : location.pathname.startsWith('/profile') ? 'profile'
-    : location.pathname.startsWith('/dashboard') ? 'mind'
-    : 'chat';
+    (location.pathname.startsWith('/settings')
+      && !helpActive
+      && (studioMode || activeSurfaceId !== 'agents'))
+    || location.pathname.startsWith('/profile/skills')
+    || location.pathname.startsWith('/profile/schedule');
 
   return (
     <div
@@ -155,82 +164,19 @@ export default function Rail() {
         />
       </button>
 
-      {/* Primary nav — Companion/Guided modes tell the simpler story first;
-          Studio keeps the full diagnostic map. */}
-      <NavIcon
-        icon={<MessageSquare size={15} strokeWidth={1.55} />}
-        label="Chat"
-        path="/chat"
-        guideId="rail-chat"
-        active={activeView === 'chat'}
-        onClick={() => goTo('/chat')}
-      />
-      {studioMode && (
+      {/* Primary nav — driven by getRailSurfaces(mode). Companion/Guided
+          collapse to four surfaces; Studio keeps the full diagnostic map. */}
+      {surfaces.map((surface) => (
         <NavIcon
-          icon={<Brain size={15} strokeWidth={1.55} />}
-          label="Memory"
-          path="/memory"
-          guideId="rail-memory"
-          active={activeView === 'memory'}
-          onClick={() => goTo('/memory')}
+          key={surface.id}
+          icon={ICON_FOR_SURFACE[surface.icon]}
+          label={surface.label}
+          path={surface.path}
+          guideId={surface.guideId}
+          active={activeSurfaceId === surface.id}
+          onClick={() => goTo(surface.path)}
         />
-      )}
-      <NavIcon
-        icon={studioMode ? <Bot size={15} strokeWidth={1.55} /> : <NotebookPen size={15} strokeWidth={1.55} />}
-        label={studioMode ? 'Mind' : 'Notebook'}
-        path={studioMode ? '/mind' : '/journal'}
-        guideId={studioMode ? 'rail-mind' : 'rail-journal'}
-        active={studioMode ? activeView === 'mind' : activeView === 'journal'}
-        onClick={() => goTo(studioMode ? '/mind' : '/journal')}
-      />
-      {studioMode && (
-        <NavIcon
-          icon={<NotebookPen size={15} strokeWidth={1.55} />}
-          label="Journal"
-          path="/journal"
-          guideId="rail-journal"
-          active={activeView === 'journal'}
-          onClick={() => goTo('/journal')}
-        />
-      )}
-      <NavIcon
-        icon={<Layers size={15} strokeWidth={1.55} />}
-        label={studioMode ? 'Projects' : 'Create'}
-        path="/projects"
-        guideId="rail-projects"
-        active={activeView === 'projects'}
-        onClick={() => goTo('/projects')}
-      />
-      {!studioMode && (
-        <>
-          <NavIcon
-            icon={<Brain size={15} strokeWidth={1.55} />}
-            label="Mind"
-            path="/mind"
-            guideId="rail-mind"
-            active={activeView === 'mind'}
-            onClick={() => goTo('/mind')}
-          />
-          <NavIcon
-            icon={<Bot size={15} strokeWidth={1.55} />}
-            label="Agents"
-            path="/settings/agents"
-            guideId="rail-agents"
-            active={activeView === 'agents'}
-            onClick={() => goTo('/settings/agents')}
-          />
-        </>
-      )}
-      {studioMode && (
-        <NavIcon
-          icon={<User size={15} strokeWidth={1.55} />}
-          label="Profile"
-          path="/profile"
-          guideId="rail-profile"
-          active={activeView === 'profile'}
-          onClick={() => goTo('/profile')}
-        />
-      )}
+      ))}
 
       {/* Spacer — clicking the empty area between nav and utilities toggles
           the sidebar, so the user can collapse/expand by clicking anywhere

@@ -3,7 +3,9 @@ import {
   buildOnboardingHandoffPrompt,
   chooseInterfaceMode,
   getInterfaceModePolicy,
+  getRailSurfaces,
   isInterfaceMode,
+  resolveActiveRailSurfaceId,
   shouldDefaultSidebarVisible,
   shouldShowStudioNavigation,
   type OnboardingPreferences,
@@ -95,5 +97,50 @@ describe('interface mode onboarding', () => {
     expect(readLandingPrompt()).toBe('hidden onboarding context');
     expect(consumeLandingAutosendFlag()).toBe(true);
     expect(consumeLandingHiddenHandoffFlag()).toBe(true);
+  });
+});
+
+describe('Rail surface gating', () => {
+  it('exposes exactly four surfaces in companion mode (Chat / Notebook / Memory / Agents)', () => {
+    const surfaces = getRailSurfaces('companion');
+    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'notebook', 'memory', 'agents']);
+  });
+
+  it('exposes the same four surfaces in guided mode', () => {
+    const surfaces = getRailSurfaces('guided');
+    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'notebook', 'memory', 'agents']);
+  });
+
+  it('exposes the full diagnostic map in studio mode (including Mind/Journal/Projects/Profile)', () => {
+    const ids = getRailSurfaces('studio').map((s) => s.id);
+    expect(ids).toContain('chat');
+    expect(ids).toContain('memory');
+    expect(ids).toContain('mind');
+    expect(ids).toContain('journal');
+    expect(ids).toContain('projects');
+    expect(ids).toContain('profile');
+  });
+
+  it('points Notebook at /notebook in guided mode (Phase 1 redirects to /journal)', () => {
+    const notebook = getRailSurfaces('guided').find((s) => s.id === 'notebook');
+    expect(notebook?.path).toBe('/notebook');
+    expect(notebook?.matchPaths).toContain('/journal');
+  });
+
+  it('resolves /settings/agents/xyz to the Agents surface in guided mode', () => {
+    expect(resolveActiveRailSurfaceId('guided', '/settings/agents/abc-123')).toBe('agents');
+  });
+
+  it('resolves /journal to Notebook in guided mode (Phase 1 redirect path)', () => {
+    expect(resolveActiveRailSurfaceId('guided', '/journal')).toBe('notebook');
+  });
+
+  it('resolves /profile/identity to Mind in studio mode (legacy alias)', () => {
+    expect(resolveActiveRailSurfaceId('studio', '/profile/identity/foo')).toBe('mind');
+  });
+
+  it('returns null when the current path is not represented in the mode', () => {
+    // /mind is not in the companion/guided surface list — falls through cleanly.
+    expect(resolveActiveRailSurfaceId('companion', '/mind')).toBe(null);
   });
 });

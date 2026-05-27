@@ -431,6 +431,8 @@ const App = () => (
                 <Route path="/_mockups/styles" element={<StyleGallery />} />
                 <Route path="/_mockups/composer" element={<ComposerGallery />} />
                 <Route path="/dashboard" element={<Navigate to="/mind" replace />} />
+                {/* Phase 1 stub — Phase 2 replaces with NotebookView at /notebook. */}
+                <Route path="/notebook" element={<Navigate to="/journal" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
