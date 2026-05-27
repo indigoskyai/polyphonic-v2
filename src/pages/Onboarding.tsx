@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Brain, MessageCircle, NotebookPen, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Brain, MessageCircle, NotebookPen, Sparkles, Upload } from 'lucide-react';
 import EchoField from '@/components/EchoField';
 import { useAuthStore } from '@/stores/authStore';
 import { useThreadStore } from '@/stores/threadStore';
@@ -39,7 +39,7 @@ const INTENTS: Array<{
   {
     id: 'explore_first',
     title: 'Look around first',
-    body: 'Start quietly. Luca will explain the notebook, mind, memory, creation space, and agent system in context.',
+    body: 'Start quietly. Luca will explain the notebook, memory, and agents in context as you talk.',
     icon: MessageCircle,
   },
 ];
@@ -57,7 +57,7 @@ const COMFORT: Array<{
   {
     id: 'medium',
     title: 'Guide me through it',
-    body: 'The app keeps the core surfaces close: Chat, Notebook, Create, Mind, and Agents.',
+    body: 'The app keeps the four core surfaces close: Chat, Notebook, Memory, and Agents.',
   },
   {
     id: 'high',
@@ -269,9 +269,9 @@ export default function Onboarding() {
               </div>
               <div className="onb-preview-strip" aria-label="Core Polyphonic surfaces">
                 <PreviewTile icon={<MessageCircle size={17} />} title="Chat" body="Talk naturally. Luca does the setup work beside you." />
-                <PreviewTile icon={<NotebookPen size={17} />} title="Notebook" body="Journal, thoughts, dreams, creations, and agent activity." />
-                <PreviewTile icon={<Sparkles size={17} />} title="Create" body="Images, writing, HTML pages, and artifacts." />
-                <PreviewTile icon={<Brain size={17} />} title="Mind" body="Your profile and the agent's own inner substrate." />
+                <PreviewTile icon={<NotebookPen size={17} />} title="Notebook" body="Journal, thoughts, dreams, and creative work in one feed." />
+                <PreviewTile icon={<Brain size={17} />} title="Memory" body="The living substrate — watch the relationship deepen." />
+                <PreviewTile icon={<Bot size={17} />} title="Agents" body="Shape Luca's voice or bring an entity of your own." />
               </div>
             </div>
           )}

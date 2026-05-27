@@ -199,6 +199,6 @@ export function buildOnboardingHandoffPrompt(preferences: OnboardingPreferences)
     'The user is new to Polyphonic and wants to understand what they can do here.',
     `Their comfort level with technical setup is ${preferences.comfort}.`,
     `Their priorities are: ${expectations}.`,
-    'Introduce the app as an experience for building or bringing a digital entity with its own notebook, memory, mind, creative workspace, and relationship. Keep it conversational and help them decide what to do next.',
+    'Introduce the app as an experience for building or bringing a digital entity with its own notebook, memory, and identity — and a chat where the relationship grows. Keep it conversational and help them decide what to do next.',
   ].join(' ');
 }
