@@ -6,6 +6,7 @@
  * and selected activity.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
@@ -42,6 +43,13 @@ function confidenceLabel(score?: number): string | null {
 
 export default function JournalView() {
   const user = useAuthStore((s) => s.user);
+  const location = useLocation();
+  // Same view, two routes: /notebook (simplified vocabulary) and /journal
+  // (studio vocabulary). The data and component are identical; only the
+  // surface label adapts. This avoids two near-duplicate pages drifting.
+  const onNotebookRoute = location.pathname.startsWith('/notebook');
+  const surfaceLabel = onNotebookRoute ? 'Notebook' : 'Journal';
+  const surfaceEyebrow = onNotebookRoute ? 'NOTEBOOK' : 'JOURNAL';
   const {
     load,
     loadMindData,
@@ -92,10 +100,10 @@ export default function JournalView() {
       <div className="flex-1 overflow-y-auto" style={{ padding: 0 }}>
         <MindStreamShell
           num="08"
-          streamLabel="JOURNAL"
-          title="Journal"
-          subtitle={`${notebookItems.length} notes. ${activeAgentName}'s notebook across journal, dreams, thoughts, reflections, beliefs, and activity.`}
-          searchPlaceholder="Search notebook..."
+          streamLabel={surfaceEyebrow}
+          title={surfaceLabel}
+          subtitle={`${notebookItems.length} notes. ${activeAgentName}'s ${surfaceLabel.toLowerCase()} across journal, dreams, thoughts, reflections, beliefs, and activity.`}
+          searchPlaceholder={`Search ${surfaceLabel.toLowerCase()}…`}
           filter={filter}
           onFilterChange={(value) => setFilter(value as NotebookFilter)}
           filters={NOTEBOOK_FILTERS}

@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import AgentScopeSelect from './AgentScopeSelect';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { buildNotebookItems } from '@/lib/notebook';
 
 export default function SidebarJournal() {
+  const location = useLocation();
+  const surfaceLabel = location.pathname.startsWith('/notebook') ? 'Notebook' : 'Journal';
   const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const {
     journalEntries,
@@ -37,18 +40,18 @@ export default function SidebarJournal() {
   return (
     <div className="r2-sidebar">
       <div className="sidebar-head">
-        <h2 className="sidebar-head-title">Journal</h2>
+        <h2 className="sidebar-head-title">{surfaceLabel}</h2>
       </div>
       <AgentScopeSelect />
 
       <div className="sidebar-search">
         <span className="sidebar-search-glyph">⌕</span>
-        <span className="sidebar-search-text">Search notebook…</span>
+        <span className="sidebar-search-text">Search {surfaceLabel.toLowerCase()}…</span>
         <span className="sidebar-search-kbd">⌘K</span>
       </div>
 
       <div className="sidebar-section-eye">
-        Notebook <span className="count">{items.length}</span>
+        {surfaceLabel} <span className="count">{items.length}</span>
       </div>
 
       <div className="sidebar-list">
