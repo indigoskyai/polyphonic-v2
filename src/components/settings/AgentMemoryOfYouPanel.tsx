@@ -15,6 +15,7 @@
  */
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import RichBody from '@/components/rich/RichBody';
 
 interface Props {
   agentId: string;
@@ -101,18 +102,10 @@ export default function AgentMemoryOfYouPanel({ agentId, userId }: Props) {
 
   return (
     <div>
-      <div
-        style={{
-          fontSize: 14,
-          lineHeight: 1.7,
-          color: 'var(--text-secondary)',
-          whiteSpace: 'pre-wrap',
-          fontFamily: 'var(--font-sans)',
-          paddingLeft: 12,
-          borderLeft: '1px solid var(--border-faint)',
-        }}
-      >
-        {doc.content}
+      {/* Render the user-model as markdown (it's authored in markdown), with a
+          quiet left-rule accent so it reads as the agent's own document. */}
+      <div style={{ paddingLeft: 14, borderLeft: '1px solid var(--border-faint)' }}>
+        <RichBody source={doc.content} />
       </div>
       <div
         style={{
