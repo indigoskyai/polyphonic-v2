@@ -24,11 +24,16 @@ import { generateMockGraph } from '@/lib/mockGraphData';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
+// Engram-type hues — muted jewel tones (a restrained step toward the saturated
+// EngramsTab palette: episodic blue, semantic gold, procedural sage, belief
+// mauve). Perceptible enough that the graph reads as a living, subtly-colored
+// memory constellation, restrained enough to stay on-brand on the warm-black
+// canvas. The earlier values were near-gray, which flattened the whole field.
 const TYPE_TINTS: Record<string, [number, number, number]> = {
-  episodic:   [190, 200, 215],
-  semantic:   [215, 205, 185],
-  procedural: [195, 205, 200],
-  belief:     [205, 195, 215],
+  episodic:   [126, 162, 198],
+  semantic:   [201, 173, 130],
+  procedural: [142, 176, 160],
+  belief:     [178, 150, 200],
 };
 
 const CANVAS_BG          = 'rgba(0, 0, 0, 0)';
@@ -440,7 +445,9 @@ export default function GraphTab() {
         } else if (isDimmed) {
           ctx.fillStyle = `rgba(220, 219, 216, ${0.04 * fadeIn})`;
         } else {
-          ctx.fillStyle = `rgba(220, 219, 216, ${0.085 * fadeIn})`;
+          // At rest, carry a faint type tint (not flat gray) so the
+          // constellation reads as subtly hued by memory type.
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.14 * fadeIn})`;
         }
         ctx.fill();
 

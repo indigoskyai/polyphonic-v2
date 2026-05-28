@@ -162,9 +162,9 @@ export default function JournalView() {
                         <article
                           key={item.id}
                           style={{
-                            background: 'var(--canvas)',
+                            background: 'var(--surface-1)',
                             border: '1px solid var(--border-faint)',
-                            borderRadius: 12,
+                            borderRadius: 'var(--radius-lg)',
                             padding: '18px 22px 20px',
                             boxShadow: 'var(--shadow-inset-highlight)',
                           }}
@@ -264,10 +264,10 @@ export default function JournalView() {
 
                           <div
                             style={{
-                              color: 'var(--text-secondary)',
-                              fontSize: 15,
-                              lineHeight: 1.75,
-                              letterSpacing: 0,
+                              color: 'var(--text-body)',
+                              fontSize: 14.5,
+                              lineHeight: 1.7,
+                              letterSpacing: 'var(--track-body)',
                             }}
                           >
                             {item.body.split('\n').map((line, i) => (
