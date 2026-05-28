@@ -111,7 +111,11 @@ export default function JournalView() {
           onQueryChange={setQuery}
         >
           {visible.length === 0 ? (
-            <div className="s-empty">No notebook entries match this view.</div>
+            <div className="s-empty">
+              {notebookItems.length === 0
+                ? `Nothing in the ${surfaceLabel.toLowerCase()} yet. As ${activeAgentName} thinks, journals, dreams, and reflects, those entries gather here.`
+                : 'No entries match this view.'}
+            </div>
           ) : (
             <div style={{ maxWidth: 820, margin: '0 auto', padding: '8px 24px 80px' }}>
               {Array.from(grouped.entries()).map(([date, entries]) => (

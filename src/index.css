@@ -4011,6 +4011,21 @@ html {
   color: var(--text-primary);
   background: var(--overlay-hover);
 }
+.drawer-close-btn:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Keyboard focus ring for custom ARIA controls (Toggle/RadioGroup/ModelCard)
+   that render as divs with role + tabIndex — without this, keyboard users
+   get no visible focus on settings toggles, radios, and model checkboxes. */
+[role="switch"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="checkbox"]:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
 
 .drawer-body {
   flex: 1;
@@ -8353,15 +8368,20 @@ html {
   letter-spacing: var(--track-body-tight);
   cursor: pointer;
   transition:
-    background 180ms var(--ease-out),
-    border-color 180ms var(--ease-out),
-    color 180ms var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .set-btn:hover {
   background: var(--surface-2);
   border-color: var(--border-subtle);
   color: var(--ink);
+}
+
+.set-btn:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .set-btn:disabled {
