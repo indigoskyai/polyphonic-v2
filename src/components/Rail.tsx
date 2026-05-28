@@ -25,40 +25,70 @@ import {
 } from '@/lib/interfaceMode';
 import { prefetchRoute } from '@/lib/routePrefetch';
 
+// Per-route section content — the same components the old standalone Sidebar
+// card resolved. They now render *inside* the rail surface when it's
+// expanded, so the rail "reveals further to become the panel" instead of a
+// separate card sliding in beside it.
+import SidebarChat from './sidebar/SidebarChat';
+import SidebarMemory from './sidebar/SidebarMemory';
+import SidebarMind from './sidebar/SidebarMind';
+import SidebarProfile from './sidebar/SidebarProfile';
+import SidebarImport from './sidebar/SidebarImport';
+import SidebarProjects from './sidebar/SidebarProjects';
+import SidebarSettings from './sidebar/SidebarSettings';
+import SidebarJournal from './sidebar/SidebarJournal';
+
 const ICON_FOR_SURFACE: Record<RailSurfaceIcon, React.ReactNode> = {
-  chat:     <MessageSquare size={15} strokeWidth={1.55} />,
-  notebook: <NotebookPen   size={15} strokeWidth={1.55} />,
-  memory:   <Brain         size={15} strokeWidth={1.55} />,
-  agents:   <Bot           size={15} strokeWidth={1.55} />,
-  mind:     <Brain         size={15} strokeWidth={1.55} />,
-  projects: <Layers        size={15} strokeWidth={1.55} />,
-  profile:  <User          size={15} strokeWidth={1.55} />,
+  chat:     <MessageSquare size={16} strokeWidth={1.6} />,
+  notebook: <NotebookPen   size={16} strokeWidth={1.6} />,
+  memory:   <Brain         size={16} strokeWidth={1.6} />,
+  agents:   <Bot           size={16} strokeWidth={1.6} />,
+  mind:     <Brain         size={16} strokeWidth={1.6} />,
+  projects: <Layers        size={16} strokeWidth={1.6} />,
+  profile:  <User          size={16} strokeWidth={1.6} />,
 };
 
+const RAIL_COLLAPSED = 52;
+
+function resolveSectionContent(path: string): React.ComponentType {
+  if (path.startsWith('/memory')) return SidebarMemory;
+  if (path.startsWith('/mind')) return SidebarMind;
+  if (path.startsWith('/journal')) return SidebarJournal;
+  if (path.startsWith('/notebook')) return SidebarJournal;
+  if (path.startsWith('/profile/identity')) return SidebarMind;
+  if (path.startsWith('/profile/revisions')) return SidebarMind;
+  if (path.startsWith('/profile/skills')) return SidebarSettings;
+  if (path.startsWith('/profile/schedule')) return SidebarSettings;
+  if (path.startsWith('/profile')) return SidebarProfile;
+  if (path === '/settings/public-profile') return SidebarProfile;
+  if (path.startsWith('/import')) return SidebarImport;
+  if (path.startsWith('/projects')) return SidebarProjects;
+  if (path.startsWith('/settings')) return SidebarSettings;
+  return SidebarChat;
+}
+
 /**
- * Rail — always-visible thin column on the floor.
+ * Rail — the single left navigation surface.
  *
- * Holds the brand mark, panel toggle, primary nav icons, and bottom
- * utilities (Activity bell + Settings). Sits at --rail-width and uses
- * the floor color directly (no card surface) so it reads as a deliberate
- * piece of the depth, framing the elevated sidebar card to its right.
+ * One surface that *widens* rather than a thin icon rail plus a separate
+ * floating panel card. Collapsed it's an icon column on the floor; expanded
+ * the same surface grows to reveal each button's label and the active
+ * section's content below the primary nav. The main card is the only
+ * elevated card and simply reflows right as this surface widens — so it
+ * reads as "the main card slid over to uncover more of the rail," not as a
+ * second card appearing.
  *
- * Each icon shows a hover label (tooltip) via the [data-label] CSS hook
- * defined in index.css — solid background, 350ms hover delay so labels
- * don't pop while you're scrubbing through the rail. The wrapper carries
- * an explicit z-index so labels clear the sidebar reliably.
- *
- * Toggle behavior: clicking the brand mark or the panel-toggle button
- * (or pressing ⌘\) toggles the sidebar via sidebarStore. The sidebar
- * handles its own slide animation; the rail never moves.
+ * Toggle: brand mark, the panel-toggle button, or ⌘\ flip expanded state
+ * via sidebarStore.
  */
 export default function Rail() {
   const _user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
-  const sidebarVisible = useSidebarStore((s) => s.visible);
-  const setSidebarVisible = useSidebarStore((s) => s.setVisible);
-  const toggleSidebar = useSidebarStore((s) => s.toggle);
+  const expanded = useSidebarStore((s) => s.visible);
+  const expandedWidth = useSidebarStore((s) => s.width);
+  const setExpanded = useSidebarStore((s) => s.setVisible);
+  const toggle = useSidebarStore((s) => s.toggle);
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
@@ -67,31 +97,26 @@ export default function Rail() {
   const surfaces = getRailSurfaces(interfaceMode);
   const activeSurfaceId = resolveActiveRailSurfaceId(interfaceMode, location.pathname);
 
-  // Navigate to a section AND ensure the sidebar is open. Clicking a rail
-  // icon when the sidebar is collapsed should both jump to that section and
-  // reveal its content — never leave the user in a state where they tapped
-  // the icon but nothing visible changed beyond the active highlight.
-  const goTo = (path: string) => {
-    setSidebarVisible(true);
-    navigate(path);
-  };
+  const SectionContent = resolveSectionContent(location.pathname);
 
-  // Toggle sidebar via ⌘\ (or Ctrl+\)
+  // Navigate without forcing the panel open — collapsed users can still
+  // jump between sections by clicking icons. Expansion is its own gesture
+  // (brand mark / toggle / ⌘\), matching the classic chat-app rail.
+  const goTo = (path: string) => navigate(path);
+
+  // Toggle via ⌘\ (or Ctrl+\)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
-        toggleSidebar();
+        toggle();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [toggleSidebar]);
+  }, [toggle]);
 
   const helpActive = location.pathname.startsWith('/settings/help');
-  // Settings highlight: any /settings/* route in studio mode, but in
-  // companion/guided modes Agents takes its own slot so /settings/agents
-  // belongs to that surface, not Settings.
   const settingsActive =
     (location.pathname.startsWith('/settings')
       && !helpActive
@@ -101,169 +126,201 @@ export default function Rail() {
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col items-center"
+      className="rail-surface flex flex-col"
+      data-expanded={expanded ? 'true' : undefined}
       style={{
-        width: 'var(--rail-width)',
-        minWidth: 'var(--rail-width)',
-        padding: '12px 0',
-        gap: 2,
+        width: expanded ? expandedWidth : RAIL_COLLAPSED,
+        minWidth: expanded ? expandedWidth : RAIL_COLLAPSED,
         background: 'transparent',
         position: 'relative',
-        // z-index above the sidebar so hover labels never get clipped.
+        overflow: 'hidden',
         zIndex: 10,
+        transition:
+          'width var(--dur-slow, 500ms) var(--ease-premium, cubic-bezier(0.22,1,0.36,1)), min-width var(--dur-slow, 500ms) var(--ease-premium, cubic-bezier(0.22,1,0.36,1))',
       }}
     >
-      {/* Brand mark — clickable to toggle sidebar (matches the original
-          Rail's identity-as-toggle pattern). */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        title="Polyphonic"
-        aria-label="Toggle sidebar"
-        style={{
-          appearance: 'none',
-          width: 26,
-          height: 26,
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 6,
-          background: 'rgba(255, 255, 255, 0.018)',
-          color: 'var(--text-tertiary)',
-          fontFamily: 'var(--font-sans)',
-          fontSize: 11,
-          fontWeight: 300,
-          cursor: 'pointer',
-          flexShrink: 0,
-          marginBottom: 6,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition:
-            'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
-        }}
+      {/* Header — brand mark + collapse affordance. */}
+      <div
+        className="flex items-center"
+        style={{ height: 44, padding: expanded ? '0 10px 0 13px' : '0', justifyContent: expanded ? 'space-between' : 'center', flexShrink: 0 }}
       >
-        P
-      </button>
-
-      {/* Toggle button — explicit panel-collapse affordance with rotating
-          chevron. No hover tooltip (Riley's call: the icon is its own
-          affordance and the keyboard shortcut is documented elsewhere). */}
-      <button
-        type="button"
-        className="rail-nav-icon w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
-        onClick={toggleSidebar}
-        aria-label={sidebarVisible ? 'Collapse panel' : 'Expand panel'}
-        style={{ color: 'var(--text-soft)' }}
-      >
-        <PanelLeft
-          size={14}
-          strokeWidth={1.6}
+        <button
+          type="button"
+          onClick={toggle}
+          title="Polyphonic"
+          aria-label="Toggle panel"
           style={{
-            transform: sidebarVisible ? 'none' : 'rotate(180deg)',
-            transition: 'transform var(--dur-normal) var(--ease-premium)',
+            appearance: 'none',
+            width: 26,
+            height: 26,
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 6,
+            background: 'rgba(255, 255, 255, 0.018)',
+            color: 'var(--text-tertiary)',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 11,
+            fontWeight: 300,
+            cursor: 'pointer',
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
+        >
+          P
+        </button>
+        {expanded && (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label="Collapse panel"
+            className="rail-nav-icon"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-soft)',
+            }}
+          >
+            <PanelLeft size={15} strokeWidth={1.6} />
+          </button>
+        )}
+      </div>
+
+      {/* Primary nav */}
+      <div className="flex flex-col" style={{ gap: 2, padding: expanded ? '4px 8px' : '4px 0', flexShrink: 0 }}>
+        {surfaces.map((surface) => (
+          <RailNavRow
+            key={surface.id}
+            icon={ICON_FOR_SURFACE[surface.icon]}
+            label={surface.label}
+            guideId={surface.guideId}
+            expanded={expanded}
+            active={activeSurfaceId === surface.id}
+            onClick={() => goTo(surface.path)}
+            prime={() => prefetchRoute(surface.path)}
+          />
+        ))}
+      </div>
+
+      {/* Expanded: section content fills the remaining height. Collapsed: a
+          flexible spacer pushes the utilities to the bottom. */}
+      {expanded ? (
+        <div className="rail-section flex-1 min-h-0 flex flex-col" style={{ marginTop: 6, overflow: 'hidden' }}>
+          <div style={{ height: 1, background: 'var(--border-faint)', margin: '0 12px 4px' }} />
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+            <SectionContent />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1" />
+      )}
+
+      {/* Bottom utilities */}
+      <div className="flex flex-col" style={{ gap: 2, padding: expanded ? '4px 8px 8px' : '4px 0 8px', flexShrink: 0 }}>
+        <RailNavRow
+          icon={<Activity size={15} strokeWidth={1.6} />}
+          label="Activity"
+          guideId="rail-activity"
+          expanded={expanded}
+          active={activeDrawer === 'notifications'}
+          badge={pendingCount > 0}
+          onClick={() => openDrawer('notifications')}
         />
-      </button>
-
-      {/* Primary nav — driven by getRailSurfaces(mode). Companion/Guided
-          collapse to four surfaces; Studio keeps the full diagnostic map. */}
-      {surfaces.map((surface) => (
-        <NavIcon
-          key={surface.id}
-          icon={ICON_FOR_SURFACE[surface.icon]}
-          label={surface.label}
-          path={surface.path}
-          guideId={surface.guideId}
-          active={activeSurfaceId === surface.id}
-          onClick={() => goTo(surface.path)}
+        <RailNavRow
+          icon={<HelpCircle size={16} strokeWidth={1.6} />}
+          label="Help"
+          guideId="rail-help"
+          expanded={expanded}
+          active={helpActive}
+          onClick={() => goTo('/settings/help')}
+          prime={() => prefetchRoute('/settings/help')}
         />
-      ))}
-
-      {/* Spacer — clicking the empty area between nav and utilities toggles
-          the sidebar, so the user can collapse/expand by clicking anywhere
-          in the rail's open space (not just on the toggle button). */}
-      <button
-        type="button"
-        className="flex-1 w-full"
-        onClick={toggleSidebar}
-        aria-label="Toggle panel"
-        style={{
-          appearance: 'none',
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 0,
-          margin: 0,
-        }}
-      />
-
-      {/* Activity bell — opens notifications drawer. The pendingCount dot
-          breathes the same sage rhythm as the brand identity. */}
-      <button
-        type="button"
-        className="rail-bell shrink-0"
-        data-active={activeDrawer === 'notifications' ? 'true' : undefined}
-        data-label="Activity"
-        data-guide-id="rail-activity"
-        onClick={() => openDrawer('notifications')}
-        aria-label={`Activity${pendingCount > 0 ? ` — ${pendingCount} pending` : ''}`}
-      >
-        <Activity size={14} strokeWidth={1.55} />
-        {pendingCount > 0 && <span className="rail-bell__dot" aria-hidden="true" />}
-      </button>
-
-      <NavIcon
-        icon={<HelpCircle size={15} strokeWidth={1.55} />}
-        label="Help"
-        path="/settings/help"
-        guideId="rail-help"
-        active={helpActive}
-        onClick={() => goTo('/settings/help')}
-      />
-
-      {/* Settings — auto-opens the sidebar like the other nav icons */}
-      <NavIcon
-        icon={<Cog size={15} strokeWidth={1.55} />}
-        label="Settings"
-        path="/settings/agents"
-        guideId="rail-settings"
-        active={settingsActive}
-        onClick={() => goTo('/settings/agents')}
-      />
+        <RailNavRow
+          icon={<Cog size={16} strokeWidth={1.6} />}
+          label="Settings"
+          guideId="rail-settings"
+          expanded={expanded}
+          active={settingsActive}
+          onClick={() => goTo('/settings/agents')}
+          prime={() => prefetchRoute('/settings/agents')}
+        />
+      </div>
     </div>
   );
 }
 
-interface NavIconProps {
+interface RailNavRowProps {
   icon: React.ReactNode;
   label: string;
-  path: string;
   guideId?: string;
+  expanded: boolean;
   active: boolean;
+  badge?: boolean;
   onClick: () => void;
+  prime?: () => void;
 }
 
-function NavIcon({ icon, label, path, guideId, active, onClick }: NavIconProps) {
-  const prime = () => prefetchRoute(path);
-
+function RailNavRow({ icon, label, guideId, expanded, active, badge, onClick, prime }: RailNavRowProps) {
   return (
     <button
       type="button"
-      className="rail-nav-icon w-7 h-7 rounded flex items-center justify-center cursor-pointer shrink-0"
+      className="rail-nav-row"
       data-active={active ? 'true' : undefined}
-      data-label={label}
+      data-label={expanded ? undefined : label}
       data-guide-id={guideId}
-      style={{
-        color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-        background: active ? 'var(--overlay-active)' : undefined,
-      }}
       onClick={onClick}
       onPointerEnter={prime}
       onFocus={prime}
       onPointerDown={prime}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+        width: expanded ? '100%' : 52,
+        height: 34,
+        // Icon stays at a constant x in both states so the label appears to
+        // "reveal" beside a fixed icon rather than the icon sliding around.
+        padding: expanded ? '0 12px' : '0',
+        justifyContent: expanded ? 'flex-start' : 'center',
+        borderRadius: 8,
+        border: 'none',
+        cursor: 'pointer',
+        background: active ? 'var(--overlay-active)' : 'transparent',
+        color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 14,
+        fontWeight: active ? 500 : 450,
+        letterSpacing: 'var(--track-ui)',
+        transition: 'background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
+      }}
     >
-      {icon}
+      <span style={{ flexShrink: 0, display: 'inline-flex', position: 'relative' }}>
+        {icon}
+        {badge && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: -2,
+              right: -2,
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--luca, #c9a87c)',
+            }}
+          />
+        )}
+      </span>
+      {expanded && (
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      )}
     </button>
   );
 }

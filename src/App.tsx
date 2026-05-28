@@ -9,7 +9,6 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
 import Rail from "./components/Rail";
-import Sidebar from "./components/Sidebar";
 // NavColumn (the bacedc3 unified column) is preserved at git tag
 // `pre-rail-rewrite` and the file still lives in the tree for reference,
 // but is no longer wired in. Rail + Sidebar is the active layout.
@@ -267,7 +266,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       data-interface-mode={interfaceMode}
       style={{ background: 'var(--floor)' }}
     >
-      {isMobile ? <MobileAppBar /> : <><Rail /><Sidebar /></>}
+      {isMobile ? <MobileAppBar /> : <Rail />}
       <div
         className="app-main flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
         style={{

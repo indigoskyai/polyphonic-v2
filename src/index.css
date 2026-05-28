@@ -965,11 +965,13 @@ html {
    z-index 100 + rail's own stacking context (z-index 10) keeps it above
    the sidebar card. */
 .rail-nav-icon[data-label],
-.rail-bell[data-label] {
+.rail-bell[data-label],
+.rail-nav-row[data-label] {
   position: relative;
 }
 .rail-nav-icon[data-label]::after,
-.rail-bell[data-label]::after {
+.rail-bell[data-label]::after,
+.rail-nav-row[data-label]::after {
   content: attr(data-label);
   position: absolute;
   left: calc(100% + 10px);
@@ -997,9 +999,29 @@ html {
     0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .rail-nav-icon:hover[data-label]::after,
-.rail-bell:hover[data-label]::after {
+.rail-bell:hover[data-label]::after,
+.rail-nav-row:hover[data-label]::after {
   opacity: 1;
   transform: translateY(-50%) translateX(0);
+}
+
+/* ── Unified rail nav rows ───────────────────────────────────────
+   The rail surface is one continuous element that widens; rows hold a
+   fixed-position icon with a label that reveals when expanded. Hover and
+   active states match the old rail-nav-icon so the feel is unchanged. */
+.rail-nav-row:hover {
+  background: var(--overlay-hover) !important;
+  color: var(--text-secondary) !important;
+}
+.rail-nav-row[data-active="true"] {
+  color: var(--text-primary) !important;
+}
+.rail-nav-row:active {
+  transform: scale(0.98);
+}
+.rail-nav-row:focus-visible {
+  outline: 1px solid var(--border-focus, var(--text-ghost));
+  outline-offset: 2px;
 }
 
 .mobile-app-bar {
