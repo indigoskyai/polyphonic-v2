@@ -21,6 +21,7 @@ import {
 } from "../_shared/mnemos/dialectic.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { resolveOpenRouterKeyForUser, resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
 // nudge (notable activity surface). Revisions below this still persist and
@@ -58,7 +59,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const threadId = typeof body.thread_id === "string" ? body.thread_id : "";
-    const agentId = typeof body.agent_id === "string" ? body.agent_id : "luca";
+    const agentId = normalizeAgentId(body.agent_id);
     const force = body.force === true;
 
     if (!threadId) return json({ error: "Missing thread_id" }, 400, corsHeaders);
@@ -71,6 +72,7 @@ serve(async (req) => {
     const { data: recentMessages } = await supabase
       .from("messages")
       .select("id, role, content, agent, created_at")
+      .eq("user_id", user.id)
       .eq("thread_id", threadId)
       .order("created_at", { ascending: false })
       .limit(40);
@@ -97,6 +99,8 @@ serve(async (req) => {
       loadOrCreateLucaIdentity(supabase, user.id, agentId),
       supabase.from("observer_notes")
         .select("kind, content, created_at")
+        .eq("user_id", user.id)
+        .eq("agent_id", agentId)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: false })
         .limit(10),

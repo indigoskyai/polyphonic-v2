@@ -18,6 +18,9 @@ describe('agent-scoped autonomy runtime', () => {
     expect(scope).toContain('NON_SUBSTRATE_AGENT_IDS');
     expect(scope).toContain('"observer"');
     expect(scope).toContain('filter((scope) => isSubstrateAgentId');
+    expect(scope).toContain('filterValidAgentScopes');
+    expect(scope).toContain('.from("agent_configs")');
+    expect(scope).toContain('.eq("pending", false)');
   });
 
   it('passes agent_id through older inner-life functions', () => {
@@ -77,5 +80,49 @@ describe('agent-scoped autonomy runtime', () => {
     expect(gate).toContain('.eq("agent_id", scopedAgentId)');
     expect(gate).toContain('agent_id: scopedAgentId');
     expect(gate).toContain('primary_agent_id.eq');
+  });
+
+  it('keeps visible background context inside the active user and agent', () => {
+    const emotional = readRepoFile('supabase/functions/anima-emotional-state/index.ts');
+    const journal = readRepoFile('supabase/functions/journal-write/index.ts');
+    const chat = readRepoFile('src/pages/ChatView.tsx');
+    const hypomnemaGate = readRepoFile('supabase/functions/hypomnema-gate/index.ts');
+    const hypomnemaWrite = readRepoFile('supabase/functions/_shared/hypomnema/write.ts');
+
+    expect(emotional).toContain('.or(`agent_id.eq.${agent_id},primary_agent_id.eq.${agent_id}`)');
+    expect(emotional).toContain('.in("thread_id", recentThreadIds)');
+    expect(emotional).toContain('.eq("agent_id", agent_id)');
+
+    expect(journal).toContain('.eq("id", conversation_id)');
+    expect(journal).toContain('.eq("user_id", user_id)');
+    expect(journal).toContain('.or(`agent_id.eq.${agentId},primary_agent_id.eq.${agentId}`)');
+
+    expect(chat).toContain(".from('thought_initiations')");
+    expect(chat).toContain(".eq('agent_id', activeAgentId)");
+    expect(chat).toContain(".from('threads')");
+
+    expect(hypomnemaGate).toContain('agent_id: normalizeAgentId(opts.agentId)');
+    expect(hypomnemaWrite).toContain('.from("mnemos_emotional_state")');
+    expect(hypomnemaWrite).toContain('.eq("agent_id", agentId)');
+  });
+
+  it('scopes legacy memory extraction, synthesis, and import paths by agent', () => {
+    const extract = readRepoFile('supabase/functions/memory-extract/index.ts');
+    const reflect = readRepoFile('supabase/functions/memory-reflect/index.ts');
+    const synthesize = readRepoFile('supabase/functions/memory-synthesize/index.ts');
+    const chatgptImport = readRepoFile('supabase/functions/import-chatgpt/index.ts');
+
+    for (const source of [extract, reflect, synthesize, chatgptImport]) {
+      expect(source).toContain('normalizeAgentId');
+      expect(source).toContain('nonSubstrateResponse');
+      expect(source).toContain('.eq("agent_id", agent_id)');
+      expect(source).toContain('agent_id,');
+    }
+
+    expect(extract).toContain('.eq("thread_id", conversation_id)');
+    expect(extract).toContain('body: JSON.stringify({ user_id, agent_id })');
+    expect(reflect).toContain('visibleMemoryIds');
+    expect(synthesize).toContain('.eq("user_id", user_id)');
+    expect(chatgptImport).toContain('.eq("user_id", user_id)');
   });
 });

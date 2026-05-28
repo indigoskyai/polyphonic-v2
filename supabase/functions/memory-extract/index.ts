@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 // ── Task 1.1: Upgraded extraction prompt with Behavioral Change Test ──
 const EXTRACTION_PROMPT = `You are a memory extraction specialist. Your job is to analyze a conversation and identify information worth remembering permanently.
@@ -208,7 +209,12 @@ serve(async (req) => {
     }
 
     const user_id = claimsData.claims.sub;
-    const { conversation_id } = await req.json();
+    const body = await req.json();
+    const { conversation_id } = body;
+    const agent_id = normalizeAgentId(body.agent_id);
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "memory-extract", getCorsHeaders(req));
+    }
 
     // Create reflection job
     const { data: job } = await supabase
@@ -228,7 +234,9 @@ serve(async (req) => {
     const { data: messages, error: msgError } = await supabase
       .from("messages")
       .select("role, content, created_at")
-      .eq("conversation_id", conversation_id)
+      .eq("user_id", user_id)
+      .eq("thread_id", conversation_id)
+      .or(`agent.is.null,agent.eq.${agent_id},role.eq.user`)
       .order("created_at", { ascending: true });
 
     if (msgError || !messages || messages.length < 2) {
@@ -254,6 +262,7 @@ serve(async (req) => {
       .from("memories")
       .select("id, content, memory_type, confidence, tags")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -561,6 +570,7 @@ serve(async (req) => {
       // Build memory rows for insertion
       const memoryRows: any[] = dedupedMemories.map((m: any) => ({
         user_id,
+        agent_id,
         content: m.content,
         memory_type: sanitizeMemoryType(m.memory_type),
         relevance_score: m.confidence ?? 0.5,
@@ -661,6 +671,7 @@ serve(async (req) => {
         .from("curiosity_questions")
         .update({ status: "expired" })
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("status", "pending")
         .lt("created_at", fourteenDaysAgo);
 
@@ -669,6 +680,7 @@ serve(async (req) => {
         .from("curiosity_questions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("status", "pending");
 
       const maxNewQuestions = Math.max(0, 3 - (pendingCount || 0));
@@ -679,6 +691,7 @@ serve(async (req) => {
           .from("curiosity_questions")
           .select("question")
           .eq("user_id", user_id)
+          .eq("agent_id", agent_id)
           .in("status", ["pending", "shown"]);
 
         const existingSet = new Set(
@@ -692,6 +705,7 @@ serve(async (req) => {
         if (newQuestions.length > 0) {
           const questionRows = newQuestions.map((q: any) => ({
             user_id,
+            agent_id,
             question: q.question,
             context: q.context || null,
             curiosity_score: q.curiosity_score ?? 0.5,
@@ -714,6 +728,7 @@ serve(async (req) => {
           .from("memories")
           .select("id")
           .eq("user_id", user_id)
+          .eq("agent_id", agent_id)
           .eq("content", conflict.new_memory_content)
           .limit(1);
 
@@ -751,6 +766,7 @@ serve(async (req) => {
         .from("memories")
         .select("id, content, memory_type, tags")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("source_conversation_id", conversation_id)
         .eq("is_deleted", false)
         .in("memory_type", ["principle", "preference"]);
@@ -768,7 +784,12 @@ serve(async (req) => {
           const isPersonaFeedback = personaPatterns.some(p => p.test(mem.content));
           if (isPersonaFeedback) {
             const tags = [...(mem.tags || []), "persona_feedback"];
-            await supabase.from("memories").update({ tags }).eq("id", mem.id);
+            await supabase
+              .from("memories")
+              .update({ tags })
+              .eq("id", mem.id)
+              .eq("user_id", user_id)
+              .eq("agent_id", agent_id);
           }
         }
       }
@@ -779,6 +800,7 @@ serve(async (req) => {
       .from("memories")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false);
 
     if (count && count > 50) {
@@ -788,7 +810,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceRoleKey}`,
         },
-        body: JSON.stringify({ user_id }),
+        body: JSON.stringify({ user_id, agent_id }),
       }).catch((e) => console.error("Reflection trigger failed:", e));
     }
 
@@ -799,6 +821,7 @@ serve(async (req) => {
           .from("memories")
           .select("id, content, memory_type, confidence, tags")
           .eq("user_id", user_id)
+          .eq("agent_id", agent_id)
           .eq("source_conversation_id", conversation_id)
           .eq("is_deleted", false)
           .in("memory_type", ["principle", "preference"]);
@@ -809,6 +832,7 @@ serve(async (req) => {
             .from("beliefs")
             .select("content")
             .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
             .eq("active", true);
 
           const existingSet = new Set(
@@ -835,6 +859,7 @@ serve(async (req) => {
 
             await supabase.from("beliefs").insert({
               user_id,
+              agent_id,
               content: mem.content,
               confidence: Math.min(0.99, mem.confidence || 0.5),
               domain,
@@ -856,7 +881,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceRoleKey}`,
       },
-      body: JSON.stringify({ user_id }),
+      body: JSON.stringify({ user_id, agent_id }),
     }).catch((e) => console.error("Emotional state update failed:", e));
 
     return new Response(

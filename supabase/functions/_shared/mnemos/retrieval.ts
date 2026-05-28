@@ -334,7 +334,9 @@ async function reconsolidate(
         // Move dormant engrams back to active on access
         ...(r.engram.state === "dormant" ? { state: "active" } : {}),
       })
-      .eq("id", r.engram.id);
+      .eq("id", r.engram.id)
+      .eq("user_id", r.engram.user_id)
+      .eq("agent_id", r.engram.agent_id);
   });
 
   // Fire all updates concurrently — don't block on individual results
@@ -429,6 +431,7 @@ async function hybridSeed(
     const { data: hydrated, error: hydErr } = await supabase
       .from("engrams")
       .select("id, user_id, agent_id, content, engram_type, strength, stability, accessibility, emotional_valence, emotional_arousal, surprise_score, source_context, tags, state, last_accessed_at, access_count, created_at, updated_at")
+      .eq("user_id", userId)
       .eq("agent_id", agentId)
       .in("id", missingIds);
     if (hydErr) {

@@ -105,6 +105,21 @@ serve(async (req) => {
     const agentId = (agentConfig.id as string) || requestedAgentId;
     const agentName = (agentConfig.name as string | null) || agentId;
 
+    // Validate conversation_id (thread_id) belongs to this user and this agent before
+    // it can contribute context or be attached to the journal entry. Edge functions
+    // use the service role, so RLS cannot protect this path for us.
+    let validConversationId: string | null = null;
+    if (conversation_id) {
+      const { data: convCheck } = await supabase
+        .from("threads")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .or(`agent_id.eq.${agentId},primary_agent_id.eq.${agentId}`)
+        .maybeSingle();
+      validConversationId = convCheck ? conversation_id : null;
+    }
+
     // Decrypt user's API key from encrypted storage
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
@@ -164,11 +179,12 @@ serve(async (req) => {
 
     // Gather context: recent conversations (last 24h for periodic, specific for post-conversation)
     let recentMessages: any[] = [];
-    if (trigger_type === "post_conversation" && conversation_id) {
+    if (trigger_type === "post_conversation" && validConversationId) {
       const { data: msgs } = await supabase
         .from("messages")
         .select("role, content, created_at")
-        .eq("thread_id", conversation_id)
+        .eq("user_id", user_id)
+        .eq("thread_id", validConversationId)
         .or(`agent.is.null,agent.eq.${agentId},role.eq.user`)
         .order("created_at", { ascending: true })
         .limit(50);
@@ -190,7 +206,9 @@ serve(async (req) => {
         const { data: msgs } = await supabase
           .from("messages")
           .select("role, content, created_at, thread_id")
+          .eq("user_id", user_id)
           .in("thread_id", threadIds)
+          .or(`agent.is.null,agent.eq.${agentId},role.eq.user`)
           .order("created_at", { ascending: true })
           .limit(100);
         recentMessages = msgs || [];
@@ -332,17 +350,6 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
     if (lastLine.startsWith("mood:")) {
       mood = lastLine.replace("mood:", "").trim();
       content = lines.slice(0, -1).join("\n").trim();
-    }
-
-    // Validate conversation_id (thread_id) exists before using it
-    let validConversationId: string | null = null;
-    if (conversation_id) {
-      const { data: convCheck } = await supabase
-        .from("threads")
-        .select("id")
-        .eq("id", conversation_id)
-        .maybeSingle();
-      validConversationId = convCheck ? conversation_id : null;
     }
 
     // Save the journal entry using service role (bypasses RLS)
