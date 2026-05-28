@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -101,29 +101,43 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
   const navigate = useNavigate();
-  const [checked, setChecked] = useState(false);
+  // First-run is a once-per-session, per-user decision — NOT a per-navigation
+  // one. The previous version reset a `checked` flag at the top of an effect
+  // keyed on location.pathname, so every click blanked the whole app to a
+  // black "Loading..." screen while isFirstRun re-queried the DB. We instead
+  // remember the user id we've already cleared and never re-gate after that.
+  const clearedUserRef = useRef<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const isPublicRoute =
+    location.pathname.startsWith('/auth/')
+    || location.pathname === '/reset-password'
+    || location.pathname === '/privacy'
+    || location.pathname === '/terms'
+    || location.pathname.startsWith('/u/')
+    || location.pathname.startsWith('/@')
+    || location.pathname.startsWith('/_mockups');
+
+  const exemptFromGate =
+    isPublicRoute
+    || !user
+    || (user && isAnonymousUser(user))
+    || location.pathname === '/onboarding';
 
   useEffect(() => {
-    setChecked(false);
-    const isPublicRoute =
-      location.pathname.startsWith('/auth/')
-      || location.pathname === '/reset-password'
-      || location.pathname === '/privacy'
-      || location.pathname === '/terms'
-      || location.pathname.startsWith('/u/')
-      || location.pathname.startsWith('/@')
-      || location.pathname.startsWith('/_mockups');
-
-    if (isPublicRoute) { setChecked(true); return; }
-    if (!user) { setChecked(true); return; }
-    if (isAnonymousUser(user)) { setChecked(true); return; }
-    if (location.pathname === '/onboarding') { setChecked(true); return; }
+    if (exemptFromGate || !user) return;
     // Force re-entry via ?onboarding=1 (for QA)
     if (location.search.includes('onboarding=1')) {
       navigate('/onboarding', { replace: true });
       return;
     }
+    // Already determined this user is past first-run — do not re-check or
+    // gate on subsequent navigations. This is what keeps section-to-section
+    // clicks from flashing the loading screen.
+    if (clearedUserRef.current === user.id) return;
+
     let cancelled = false;
+    setChecking(true);
     // One-shot retry on isFirstRun failure — a single transient network
     // blip would otherwise risk throwing the user back to onboarding even
     // after they've completed it. Tara hit a related case (2026-05-10).
@@ -148,12 +162,21 @@ function FirstRunGate({ children }: { children: React.ReactNode }) {
         navigate('/onboarding', { replace: true });
         return;
       }
-      setChecked(true);
+      clearedUserRef.current = user.id;
+      setChecking(false);
     });
     return () => { cancelled = true; };
-  }, [user?.id, location.pathname, location.search, navigate]);
+  }, [user?.id, location.pathname, location.search, navigate, exemptFromGate]);
 
-  if (!checked) {
+  // Gate only while the *initial* check for this user is in flight. Once the
+  // user is cleared, navigations never re-trigger this.
+  const needsGate =
+    !exemptFromGate
+    && !!user
+    && clearedUserRef.current !== user.id
+    && checking;
+
+  if (needsGate) {
     return (
       <div
         className="flex h-screen items-center justify-center"
