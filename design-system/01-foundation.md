@@ -120,6 +120,11 @@ None. This is the bedrock.
 --red-accent:   #f87171;
 --red-bg:       rgba(248, 113, 113, 0.06);
 --red-border:   rgba(248, 113, 113, 0.18);
+
+--blue-accent:  #0070F3;  /* Luca's identity glyph + subtle indicators; the one electric note in the warm palette — use sparingly as a signal */
+--blue-bg:      rgba(0, 112, 243, 0.06);
+--blue-border:  rgba(0, 112, 243, 0.20);
+--blue-glow:    0 0 8px rgba(0, 112, 243, 0.5);
 ```
 
 ### 1.7 — Geometry

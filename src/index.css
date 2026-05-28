@@ -159,6 +159,15 @@
   --red-border: rgba(248, 113, 113, 0.18);
   --danger:     var(--red-accent);
 
+  /* Semantic accents — electric blue (Vercel-spec #0070F3). Luca's
+     always-on identity glyph; also the chosen cue for subtle indicators
+     / color signals. The one electric note in the warm palette — use
+     sparingly as a signal, never as decoration. */
+  --blue-accent: #0070F3;
+  --blue-bg:     rgba(0, 112, 243, 0.06);
+  --blue-border: rgba(0, 112, 243, 0.20);
+  --blue-glow:   0 0 8px rgba(0, 112, 243, 0.5);
+
   --metric-fill:      rgba(234, 232, 228, 0.42);
   --metric-fill-soft: rgba(234, 232, 228, 0.28);
 
