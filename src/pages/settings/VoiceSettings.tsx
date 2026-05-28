@@ -121,7 +121,7 @@ export default function VoiceSettings() {
                   border: '1px solid hsl(var(--border))',
                   borderRadius: 999,
                   padding: '8px 14px',
-                  fontFamily: 'var(--font-mono, ui-monospace)',
+                  fontFamily: 'var(--font-mono)',
                   fontSize: 12,
                   color: 'hsl(var(--foreground))',
                   outline: 'none',

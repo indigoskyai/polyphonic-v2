@@ -207,11 +207,10 @@ export default function AgentsList() {
                       fontSize: 14,
                       padding: '4px 8px',
                       borderRadius: 4,
-                      transition: 'color 180ms var(--ease-out)',
+                      transition: 'color var(--dur-fast) var(--ease-out)',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color =
-                        'var(--rose-accent, #c97c8a)';
+                      e.currentTarget.style.color = 'var(--red-accent)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.color = 'var(--text-tertiary)';

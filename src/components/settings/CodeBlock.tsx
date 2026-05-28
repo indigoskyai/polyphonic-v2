@@ -30,7 +30,7 @@ export function CodeBlock({ code, prompt = '$' }: CodeBlockProps) {
         alignItems: 'stretch',
         background: 'var(--surface-1)',
         border: '1px solid var(--border-faint)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
         marginBottom: 14,
       }}
@@ -73,11 +73,11 @@ export function CodeBlock({ code, prompt = '$' }: CodeBlockProps) {
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
           fontWeight: 'var(--weight-medium)',
-          color: copied ? 'var(--green-accent, #4ade80)' : 'var(--text-tertiary)',
+          color: copied ? 'var(--green-accent)' : 'var(--text-tertiary)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
           cursor: 'pointer',
-          transition: 'color 180ms var(--ease-out), background 180ms var(--ease-out)',
+          transition: 'color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out)',
         }}
         onMouseEnter={(e) => {
           if (!copied) {
@@ -139,7 +139,7 @@ export function PairCodeDisplay({
         padding: '24px 28px',
         background: 'var(--surface-1)',
         border: '1px solid var(--border-faint)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         marginBottom: 14,
       }}
     >
@@ -229,7 +229,7 @@ function DigitGroup({ digits, active }: { digits: string[]; active: boolean }) {
             justifyContent: 'center',
             background: 'var(--canvas)',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md, 10px)',
+            borderRadius: 'var(--radius-md)',
             fontFamily: 'var(--font-mono)',
             fontSize: 28,
             color: active ? 'var(--ink)' : 'var(--text-faint)',

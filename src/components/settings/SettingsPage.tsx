@@ -75,7 +75,7 @@ export function Folio({
 
 /* AgentDot — small colored dot used in Folio left side. */
 export function AgentDot({
-  color = 'var(--luca-color, #c9a87c)',
+  color = 'var(--accent-soft)',
 }: {
   color?: string;
 }) {

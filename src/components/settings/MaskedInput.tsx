@@ -31,12 +31,12 @@ export function MaskedInput({
         alignItems: 'stretch',
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
-        transition: 'border-color 180ms var(--ease-out)',
+        transition: 'border-color var(--dur-fast) var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
+        e.currentTarget.style.borderColor = 'var(--border-focus)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -77,7 +77,7 @@ export function MaskedInput({
           textTransform: 'uppercase',
           cursor: 'pointer',
           borderLeft: '1px solid var(--hairline)',
-          transition: 'color 180ms var(--ease-out)',
+          transition: 'color var(--dur-fast) var(--ease-out)',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = 'var(--text-primary)';
@@ -112,10 +112,10 @@ export function KeyStored({
 }: KeyStoredProps) {
   const statusColor =
     status === 'connected'
-      ? 'var(--green-accent, #4ade80)'
+      ? 'var(--green-accent)'
       : status === 'errored'
-      ? 'var(--rose-accent, #c97c8a)'
-      : 'var(--amber-soft, #d9a744)';
+      ? 'var(--red-accent)'
+      : 'var(--amber-soft)';
 
   const statusLabel =
     status === 'connected'
@@ -133,7 +133,7 @@ export function KeyStored({
         padding: '12px 16px',
         background: 'var(--surface-1)',
         border: '1px solid var(--border-faint)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
       }}
     >
       <span

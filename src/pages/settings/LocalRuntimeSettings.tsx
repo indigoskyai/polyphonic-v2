@@ -228,7 +228,7 @@ export default function LocalRuntimeSettings() {
                 letterSpacing: 'var(--track-body-tight)',
                 background: 'var(--surface-1)',
                 border: '1px solid var(--border-faint)',
-                borderRadius: 'var(--radius-md, 10px)',
+                borderRadius: 'var(--radius-md)',
               }}
             >
               No devices paired yet. Install the bridge above and pair your

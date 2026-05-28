@@ -43,9 +43,9 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
         padding: '12px 14px',
         background: active ? 'var(--surface-2)' : 'var(--surface-1)',
         border: `1px solid ${active ? 'var(--border)' : 'var(--border-faint)'}`,
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
-        transition: 'background 180ms var(--ease-out), border-color 180ms var(--ease-out)',
+        transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
       }}
       onMouseEnter={(e) => {
         if (!active) {
@@ -71,7 +71,7 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          transition: 'border-color 180ms var(--ease-out), background 180ms var(--ease-out)',
+          transition: 'border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out)',
         }}
       >
         {active && (
@@ -126,9 +126,9 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
           const flagStyles =
             flag.variant === 'reasoning'
               ? {
-                  color: 'var(--amber-soft, #d9a744)',
-                  borderColor: 'rgba(217, 167, 68, 0.18)',
-                  background: 'rgba(217, 167, 68, 0.04)',
+                  color: 'var(--amber-soft)',
+                  borderColor: 'color-mix(in srgb, var(--amber-soft) 18%, transparent)',
+                  background: 'color-mix(in srgb, var(--amber-soft) 4%, transparent)',
                 }
               : {
                   color: 'var(--text-soft)',

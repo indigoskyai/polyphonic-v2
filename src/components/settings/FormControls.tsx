@@ -105,7 +105,7 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) 
         background: on ? 'var(--surface-3)' : 'transparent',
         border: `1px solid ${on ? 'var(--border-strong)' : 'var(--border)'}`,
         borderRadius: 999,
-        transition: 'all 180ms var(--ease-out)',
+        transition: 'all var(--dur-fast) var(--ease-out)',
       }}
       onClick={onChange}
       onKeyDown={(e) => {
@@ -123,7 +123,7 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) 
           top: 2,
           left: on ? 20 : 2,
           background: on ? 'var(--ink)' : 'var(--text-tertiary)',
-          transition: 'all 180ms var(--ease-out)',
+          transition: 'all var(--dur-fast) var(--ease-out)',
         }}
       />
     </div>
@@ -184,8 +184,8 @@ export function RadioGroup({
               padding: '12px 14px',
               background: active ? 'var(--surface-2)' : 'var(--surface-1)',
               border: `1px solid ${active ? 'var(--border)' : 'var(--border-faint)'}`,
-              borderRadius: 'var(--radius-md, 10px)',
-              transition: 'background 180ms var(--ease-out), border-color 180ms var(--ease-out)',
+              borderRadius: 'var(--radius-md)',
+              transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
             }}
             onMouseEnter={(e) => {
               if (!active) {
@@ -211,7 +211,7 @@ export function RadioGroup({
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
-                transition: 'border-color 180ms var(--ease-out)',
+                transition: 'border-color var(--dur-fast) var(--ease-out)',
               }}
             >
               {active && (
@@ -287,17 +287,17 @@ export function TextInput({
         width: '100%',
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         padding: '0 14px',
         fontSize: mono ? 12.5 : 'var(--settings-body-size)',
         color: 'var(--text-primary)',
         fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
         letterSpacing: 'var(--track-body-tight)',
         outline: 'none',
-        transition: 'border-color 180ms var(--ease-out)',
+        transition: 'border-color var(--dur-fast) var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
+        e.currentTarget.style.borderColor = 'var(--border-focus)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -333,7 +333,7 @@ export function TextArea({
         width: '100%',
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         padding: '12px 14px',
         fontSize: mono ? 12.5 : 'var(--settings-body-size)',
         color: 'var(--text-primary)',
@@ -342,10 +342,10 @@ export function TextArea({
         outline: 'none',
         resize: 'vertical',
         lineHeight: mono ? 1.7 : 1.6,
-        transition: 'border-color 180ms var(--ease-out)',
+        transition: 'border-color var(--dur-fast) var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
+        e.currentTarget.style.borderColor = 'var(--border-focus)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -377,7 +377,7 @@ export function SelectInput({
         height: 40,
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         padding: '0 14px',
         fontSize: 'var(--settings-body-size)',
         color: 'var(--text-primary)',
@@ -386,10 +386,10 @@ export function SelectInput({
         cursor: 'pointer',
         minWidth: width,
         outline: 'none',
-        transition: 'border-color 180ms var(--ease-out)',
+        transition: 'border-color var(--dur-fast) var(--ease-out)',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.20)';
+        e.currentTarget.style.borderColor = 'var(--border-focus)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)';
@@ -517,7 +517,7 @@ export function ConfirmDialog({
         style={{
           background: 'var(--surface-1)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md, 10px)',
+          borderRadius: 'var(--radius-md)',
           padding: 28,
           maxWidth: 440,
           width: '90%',

@@ -8238,7 +8238,7 @@ html {
 
 .set-section-eye.destructive,
 .set-section-eye.destructive .num {
-  color: var(--rose-accent, #c97c8a);
+  color: var(--rose-accent);
 }
 
 .set-section-eye.destructive .num {

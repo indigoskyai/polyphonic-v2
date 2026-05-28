@@ -144,7 +144,7 @@ export default function CronHealthSettings() {
               background: 'var(--surface-1)',
               border: '1px solid var(--border-faint)',
               borderRadius: 12,
-              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.025)',
+              boxShadow: 'var(--shadow-inset-highlight)',
               marginBottom: 22,
             }}
           >
@@ -228,7 +228,7 @@ export default function CronHealthSettings() {
               background: 'var(--surface-1)',
               border: '1px solid var(--border-faint)',
               borderRadius: 12,
-              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.025)',
+              boxShadow: 'var(--shadow-inset-highlight)',
               overflow: 'hidden',
             }}
           >

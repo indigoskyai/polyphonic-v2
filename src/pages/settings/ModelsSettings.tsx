@@ -235,7 +235,7 @@ export default function ModelsSettings() {
                 marginTop: 10,
                 fontSize: 'var(--settings-caption-size)',
                 fontWeight: 'var(--weight-book)',
-                color: 'var(--rose-accent, #c97c8a)',
+                color: 'var(--red-accent)',
                 fontFamily: 'var(--font-sans)',
                 letterSpacing: 'var(--track-body-tight)',
               }}

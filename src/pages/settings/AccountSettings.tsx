@@ -153,7 +153,7 @@ export default function AccountSettings() {
                 style={{
                   marginTop: 12,
                   fontSize: 12,
-                  color: 'var(--rose-accent, #c97c8a)',
+                  color: 'var(--red-accent)',
                   fontFamily: 'var(--font-sans)',
                   letterSpacing: 'var(--track-body-tight)',
                 }}
@@ -182,7 +182,7 @@ export default function AccountSettings() {
                 style={{
                   marginTop: 12,
                   fontSize: 12,
-                  color: 'var(--rose-accent, #c97c8a)',
+                  color: 'var(--red-accent)',
                   fontFamily: 'var(--font-sans)',
                   letterSpacing: 'var(--track-body-tight)',
                 }}

@@ -73,7 +73,7 @@ export function AccountRow({ label, description, value }: AccountRowProps) {
 
 export function AccountPlanPill({
   label = 'Pro',
-  color = 'var(--luca-color, #c9a87c)',
+  color = 'var(--accent-soft)',
 }: {
   label?: string;
   color?: string;
@@ -88,8 +88,8 @@ export function AccountPlanPill({
         color,
         letterSpacing: 'var(--track-folio)',
         textTransform: 'uppercase',
-        background: 'rgba(201, 168, 124, 0.06)',
-        border: '1px solid rgba(201, 168, 124, 0.20)',
+        background: 'color-mix(in srgb, var(--accent-soft) 6%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--accent-soft) 20%, transparent)',
         borderRadius: 999,
       }}
     >
@@ -124,7 +124,7 @@ export function ComingSoonBlock({
         padding: '32px 28px',
         background: 'var(--surface-1)',
         border: '1px solid var(--border-faint)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
@@ -136,12 +136,12 @@ export function ComingSoonBlock({
           fontFamily: 'var(--font-mono)',
           fontSize: 9.5,
           fontWeight: 'var(--weight-medium)',
-          color: 'var(--amber-soft, #d9a744)',
+          color: 'var(--amber-soft)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
           padding: '4px 10px',
-          background: 'rgba(217, 167, 68, 0.04)',
-          border: '1px solid rgba(217, 167, 68, 0.20)',
+          background: 'color-mix(in srgb, var(--amber-soft) 4%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--amber-soft) 20%, transparent)',
           borderRadius: 999,
         }}
       >
@@ -205,7 +205,7 @@ export function HandlePreview({ domain, handle }: HandlePreviewProps) {
         padding: '8px 14px',
         background: 'var(--canvas)',
         border: '1px solid var(--hairline)',
-        borderRadius: 'var(--radius-md, 10px)',
+        borderRadius: 'var(--radius-md)',
         fontFamily: 'var(--font-mono)',
         fontSize: 12.5,
         letterSpacing: 'var(--track-body-tight)',

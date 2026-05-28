@@ -60,14 +60,14 @@ export function InlinePill({
   const styles =
     variant === 'rose'
       ? {
-          color: 'var(--rose-accent, #c97c8a)',
-          background: 'rgba(201, 124, 138, 0.04)',
-          border: '1px solid rgba(201, 124, 138, 0.20)',
+          color: 'var(--rose-accent)',
+          background: 'color-mix(in srgb, var(--rose-accent) 5%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--rose-accent) 20%, transparent)',
         }
       : {
-          color: 'var(--amber-soft, #d9a744)',
-          background: 'rgba(217, 167, 68, 0.04)',
-          border: '1px solid rgba(217, 167, 68, 0.20)',
+          color: 'var(--amber-soft)',
+          background: 'color-mix(in srgb, var(--amber-soft) 5%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--amber-soft) 20%, transparent)',
         };
 
   return (

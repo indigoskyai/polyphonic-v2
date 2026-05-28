@@ -29,9 +29,9 @@ export function DeviceRow({
 }: DeviceRowProps) {
   const statusColor =
     status === 'online'
-      ? 'var(--green-accent, #4ade80)'
+      ? 'var(--green-accent)'
       : status === 'revoked'
-      ? 'var(--rose-accent, #c97c8a)'
+      ? 'var(--red-accent)'
       : 'var(--text-soft)';
 
   const statusLabel =
@@ -47,8 +47,8 @@ export function DeviceRow({
         padding: '14px 16px',
         margin: '0 -16px',
         borderBottom: '1px solid var(--hairline)',
-        borderRadius: 'var(--radius-md, 10px)',
-        transition: 'background 180ms var(--ease-out)',
+        borderRadius: 'var(--radius-md)',
+        transition: 'background var(--dur-fast) var(--ease-out)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = 'var(--overlay-hover)';
@@ -185,7 +185,7 @@ export function DeviceRow({
           alignItems: 'center',
           justifyContent: 'center',
           borderRadius: 4,
-          transition: 'color 180ms var(--ease-out), background 180ms var(--ease-out)',
+          transition: 'color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out)',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = 'var(--ink)';

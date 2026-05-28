@@ -121,7 +121,7 @@ export default function AgentRightNowPanel({ agentId }: Props) {
           style={{
             fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
-            fontWeight: 'var(--weight-medium, 500)',
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--text-soft)',
             letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
@@ -142,7 +142,7 @@ export default function AgentRightNowPanel({ agentId }: Props) {
           style={{
             fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
-            fontWeight: 'var(--weight-medium, 500)',
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--text-soft)',
             letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
@@ -163,7 +163,7 @@ export default function AgentRightNowPanel({ agentId }: Props) {
           style={{
             fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
-            fontWeight: 'var(--weight-medium, 500)',
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--text-soft)',
             letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
