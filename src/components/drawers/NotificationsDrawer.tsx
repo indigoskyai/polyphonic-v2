@@ -127,7 +127,7 @@ function RationaleToggle({ rationale }: { rationale: string }) {
             fontSize: 12,
             lineHeight: 1.55,
             background: 'var(--surface-raised)',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-sm)',
           }}
         >
           {rationale}

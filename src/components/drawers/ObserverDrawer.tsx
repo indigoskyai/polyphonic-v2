@@ -66,7 +66,7 @@ export default function ObserverDrawer() {
         <span style={{
           fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
           letterSpacing: 'var(--track-meta)', color: 'var(--text-ghost)',
-          padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 999,
+          padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)',
           marginLeft: 8,
         }}>
           resident · locked
@@ -89,7 +89,7 @@ export default function ObserverDrawer() {
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border-faint)',
                   borderLeft: `2px solid ${KIND_COLOR[n.kind]}`,
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-sm)',
                 }}>
                   <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -131,7 +131,7 @@ export default function ObserverDrawer() {
                 padding: '8px 10px',
                 background: m.role === 'user' ? 'transparent' : 'var(--bg-surface)',
                 border: m.role === 'user' ? '1px dashed var(--border-faint)' : '1px solid var(--border-faint)',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-sm)',
                 fontSize: 12, lineHeight: 1.55, color: 'var(--text-body)',
                 whiteSpace: 'pre-wrap',
               }}>
@@ -167,7 +167,7 @@ export default function ObserverDrawer() {
                 flex: 1, resize: 'none',
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-faint)',
-                borderRadius: 6, padding: '6px 8px',
+                borderRadius: 'var(--radius-sm)', padding: '6px 8px',
                 color: 'var(--text-body)', fontSize: 12,
                 fontFamily: 'var(--font-sans)', outline: 'none',
               }}
@@ -177,7 +177,7 @@ export default function ObserverDrawer() {
               type="submit"
               disabled={asking || !input.trim() || !threadId}
               style={{
-                padding: '6px 12px', borderRadius: 999,
+                padding: '6px 12px', borderRadius: 'var(--radius-pill)',
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border)',
                 color: 'var(--text-body)', fontSize: 11, cursor: 'pointer',

@@ -55,7 +55,7 @@ function StatusPill({ status }: { status: AgentConsultation['status'] }) {
     status;
   const colour =
     status === 'pending' ? 'var(--text-ghost)' :
-    status === 'failed' ? 'var(--danger, #c87575)' :
+    status === 'failed' ? 'var(--danger)' :
     'var(--text-tertiary)';
   return (
     <span
