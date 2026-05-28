@@ -3302,10 +3302,15 @@ html {
   font-weight: 400;
   line-height: 1.65;
   letter-spacing: var(--track-body);
-  color: var(--text-body);
+  /* The agent's prose is the primary reading content — crisp, high-contrast
+     (guide: primary content → --text-primary). */
+  color: var(--text-primary);
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* Your own message echoes back a touch softer, so the agent's voice reads as
+   the focal content and a glance distinguishes speaker without color noise. */
+.msg-row--user .msg-body { color: var(--text-body); }
 .msg-body p { margin-bottom: 12px; }
 .msg-body p:last-child { margin-bottom: 0; }
 

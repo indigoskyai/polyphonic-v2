@@ -224,7 +224,7 @@ export default function Rail() {
       {/* Bottom utilities */}
       <div className="flex flex-col" style={{ gap: 2, padding: expanded ? '4px 8px 8px' : '4px 0 8px', flexShrink: 0 }}>
         <RailNavRow
-          icon={<Activity size={15} strokeWidth={1.6} />}
+          icon={<Activity size={16} strokeWidth={1.6} />}
           label="Activity"
           guideId="rail-activity"
           expanded={expanded}
