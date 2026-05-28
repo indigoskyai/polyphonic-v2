@@ -189,11 +189,14 @@ function buildSimpleOpeningReasoningParams(): Record<string, unknown> {
 function looksLikeAgentForgeRequest(text: string): boolean {
   const normalized = text.toLowerCase();
   const asksToMake =
-    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit)\b/.test(normalized) ||
+    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit|recreate|rebuild|convert|migrate|import|bring)\b/.test(normalized) ||
     /\bnew\b/.test(normalized);
   const mentionsAgent =
     /\bcustom\s+agent\b/.test(normalized) ||
     /\bagent\b/.test(normalized) ||
+    /\bdigital\s+(entity|companion|being|mind)\b/.test(normalized) ||
+    /\b(companion|persona)\b/.test(normalized) ||
+    /\bcharacter\s+card\b/.test(normalized) ||
     /\bopen\s+clause\b/.test(normalized) ||
     /\bopenclaw\b/.test(normalized);
   return asksToMake && mentionsAgent;
@@ -459,8 +462,7 @@ serve(async (req) => {
     const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
       !onboardingHandoff &&
-      backend.allowTools &&
-      (explicitAgentRuntime || forceForgeRequest || likelyToolRequest);
+      (forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)));
 
     if (!onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
@@ -801,7 +803,7 @@ serve(async (req) => {
           reasoningEffort: effectiveReasoningEffort,
           reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
           maxTokens: simpleOpeningTurn ? 1024 : undefined,
-          guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make)\b/i.test(messageWithAttachments),
+          guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make|entity|companion|openclaw|open\s+clause)\b/i.test(messageWithAttachments),
         },
       );
     }

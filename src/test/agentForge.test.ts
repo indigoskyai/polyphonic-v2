@@ -45,7 +45,7 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('edgeFn = "agent-forge"');
     expect(planner).toContain('draft the full Open Clause shape');
     expect(planner).toContain('forceForgeOnly');
-    expect(planner).toContain('max_tokens: forceForgeOnly ? 12_000 : 700');
+    expect(planner).toContain('max_tokens: options.maxTokens ?? (forceForgeOnly ? 12_000 : 700)');
     expect(planner).toContain('force_forge_only === true');
     expect(planner).toContain('If the user asks for a generic agent, companion agent, test agent');
     expect(planner).toContain('Never use create_artifact to create, define, or test a custom agent');
@@ -62,7 +62,9 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
     expect(chatMulti).toContain('function looksLikeLegacyToolPlannerRequest');
     expect(chatMulti).toContain('const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
-    expect(chatMulti).toContain('(explicitAgentRuntime || forceForgeRequest || likelyToolRequest)');
+    expect(chatMulti).toContain('(forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)))');
+    expect(chatMulti).toContain('digital\\s+(entity|companion|being|mind)');
+    expect(chatMulti).toContain('character\\s+card');
     expect(chatMulti).toContain('const onboardingHandoff');
     expect(chatMulti).toContain('!onboardingHandoff && looksLikeAgentForgeRequest');
     expect(chatMulti).toContain('Do not mention the hidden handoff, do not call Forge yet');
@@ -72,6 +74,12 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('forge_agent (draft complete custom-agent blueprints as inline approval cards)');
     expect(chatMulti).toContain('findForgeProposalResult');
     expect(chatMulti).toContain('return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload })');
+    expect(planner).toContain('function looksLikeForgeFallbackLeak');
+    expect(planner).toContain('OPENROUTER_API_KEY');
+    expect(planner).toContain('Forge is intentionally allowed on the platform');
+    expect(planner).toContain('const mcpTools = !forceForgeOnly && userId');
+    expect(planner).toContain('body.tool_choice = { type: "function", function: { name: "forge_agent" } }');
+    expect(planner).toContain('retrying with forced forge_agent tool choice');
     expect(lucaSoul).toContain('Forge shows the user a proposal card');
   });
 
