@@ -4,7 +4,7 @@ This is the focused design-and-aesthetic ledger for the May 2026 design pass. Co
 
 This file is for "what does the app *look* and *feel* like, and is the visual language consistent and award-tier across every surface."
 
-**Last design pass:** commits `bacedc3` → `2512be0` → `fd09ba4` on `main`. Frontend auto-deployed via Lovable.
+**Last design pass:** the 2026 design-excellence pass — four-surface rebuild + unified rail (`f600062`), then the visual-craft restoration (`437a27d` typography → per-surface polish → `52e514b` a11y). Earlier passes: `bacedc3` → `2512be0` → `fd09ba4`. Frontend auto-deployed via Lovable.
 
 ---
 
@@ -52,18 +52,19 @@ Riley's words. Translation:
 - Dictation: useDictation hook (Web Speech API), DictationButton with custom ShimmerMic SVG when listening. Mic icon stroke uses an animated `linearGradient` with `gradientTransform animateTransform` translating -24 → 24 over 2.4s — same shimmer vocabulary as `.guardian-label` text-fill, applied to the SVG.
 - ExpressiveField shape responds to active modes: `0` Sphere (default Luca) / `10` Echo (Ensemble nested concentric) / `4` Torus (Agent runtime). Engine-level fix for chained mid-morph retargeting in `expressiveField.js` `triggerManualMorph` so toggling modes mid-flight morphs from current particle positions instead of snapping back.
 - `--accent-soft` token defined as `#c9a87c` (was undefined, breaking armed states across composer).
-- Luca composer Ghost icon hardcoded to Vercel blue `#0070F3` (distinct from sage agent-color used in identity dots elsewhere).
+- Luca composer Ghost icon → `--blue-accent` token (`#0070F3`). Promoted from a hardcoded literal in the 2026 typography pass (Riley: keep the electric blue, and reuse it for subtle indicators) — now a reusable "one electric note in the warm palette" signal with full bg/border/glow ladder.
 
-### Rail + Sidebar architecture
-- Restored from pre-bacedc3 (separate `Rail.tsx` + `Sidebar.tsx` instead of unified `NavColumn`).
-- Rail at `--rail-width: 36px`, sits on the floor as the primary nav. Brand mark + panel-toggle + curated-lucide nav (Chat / Memory / Mind / Journal / Projects / Profile) + Activity bell + Settings.
-- Hover labels via `[data-label]::after` with solid `#1a181d` background, 350ms delay, layered shadow. z-index 10 on rail wrapper so labels clear the sidebar.
-- Sidebar slides to `width: 0 + opacity: 0` on collapse (560ms cubic-bezier).
-- Right-edge resize handle with localStorage persistence (default 240, clamped 200-480). Width transitions suspended during active drag for 1:1 cursor tracking.
-- Multiple toggle affordances: brand mark click, toggle button click, empty-rail-space click (transparent button filling the spacer), ⌘\ keyboard shortcut.
-- Nav icon clicks auto-open the sidebar (`setVisible(true)` + `navigate(path)` via `goTo()` helper) so users never tap an icon and see only an active highlight change.
-- `NavColumn.tsx` preserved unused for reference; restorable via `git tag pre-rail-rewrite`.
-- Per-section sidebar dispatch: SidebarChat / SidebarMemory / SidebarMind / SidebarJournal / SidebarProjects / SidebarProfile / SidebarSettings / SidebarImport (pre-existing, route-mapped in `Sidebar.tsx`).
+### Rail architecture (unified expanding surface — reworked 2026, `f600062`)
+- The rail and the section panel are now **one surface, not two cards**. Collapsed = a slim icon rail on the floor; expanding slides the main card right to reveal more of the *same* rail surface, and each nav icon reveals its label inline. (Replaces the earlier separate `Rail.tsx` + `Sidebar.tsx` two-card model.)
+- `Sidebar.tsx` and `NavColumn.tsx` are **DELETED** (commit `ac75edc`); pre-rework originals recoverable at tag `pre-rail-rewrite`.
+- Nav is gated by `interface_mode` (companion/guided/studio) via `getRailSurfaces()` — guided shows the four-surface set (Chat / Notebook / Memory / Agents), studio shows the full set (+ Mind / Journal / Projects / Profile).
+- Brand "P" monogram in **Instrument Serif italic**; brand border `--border-faint` at rest. Active row uses neutral `--overlay-active` (never sage). Nav icons standardized to 16px / stroke 1.6. Focus-visible ring on every row. Activity bell + Settings anchor the bottom.
+
+### Typography restoration (2026 design-excellence pass — `437a27d`+)
+- The **code had drifted from this guide**: `--font-sans` rendered Inter (not Switzer), `--font-serif` was aliased to sans (Instrument Serif gone), `--font-grotesque` was an undocumented Inter Tight, and the entire `--track-*` ladder was zeroed (flat, characterless type — the "fonts feel off" Riley flagged).
+- **Restored:** Switzer primary; Instrument Serif (italic) for the rail monogram, stream/notebook headings, and the onboarding hero; the intentional tracking ladder (tight −0.02 → folio 0.16em). `--font-grotesque` deprecated to a Switzer alias.
+- **Per-surface token-fidelity sweep:** `JournalView` KIND_TONE hex → `--tone-*`; full settings family motion/radii/color hedges → tokens; drawer instance radii → tokens; decorative tints → `color-mix()` off tokens; `--blue-accent` promoted. Memory graph given a luminous "dramatic" constellation treatment (toggle-preserved).
+- Verified live (Chrome MCP, signed-in, 1440 + 375). tsc clean, 342 tests green, production build succeeds.
 
 ### Reading-column design pass
 - Mind streams (`Thoughts` / `Dreams` / `Wanderings` / `Insights` / `Reflections` / `Beliefs` / `Activity`): `.s-stream-inner` 1280 → 880, `.s-list` / `.s-activity-list` / new `.s-belief-list` constrained to 760 centered.

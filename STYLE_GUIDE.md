@@ -73,6 +73,9 @@ The starting point for any new feature or surface in polyphonic-v2. Read this fi
 
 --red-accent      #f87171   — Decay, error, destructive
 --red-bg/border
+
+--blue-accent     #0070F3   — Luca's identity glyph; subtle indicators / color cues
+--blue-bg/border/glow       — the one electric note in the warm palette; use as a signal, sparingly
 ```
 
 ### Motion
@@ -252,20 +255,30 @@ Standard section labels: `PROVENANCE`, `METADATA`, `EVIDENCE`, `RELATED MEMORIES
 ```
 --font-sans    Switzer       — All body UI, buttons, labels
 --font-mono    JetBrains Mono — Timestamps, IDs, codes, mono labels, telemetry
---font-serif   Instrument Serif — ONLY rail L monogram + stream headings (italic)
+--font-serif   Instrument Serif — rail "P" monogram, stream/notebook headings,
+                                  + the onboarding hero ("luca's voice"), italic
 ```
+
+> Note: `--font-grotesque` is a deprecated alias that now resolves to
+> `--font-sans` (it was Inter Tight pre-restoration). Don't author new
+> usages; existing call sites render Switzer correctly.
 
 ### Letter-spacing ladder
 
 ```
 --track-tight     -0.02em   Large display 28px+
---track-display   -0.01em   Headings 16-24px
---track-body       0.003em  Body prose
---track-ui         0.01em   UI labels
---track-mono       0.04em   Mono tech text, timestamps
---track-meta       0.08em   UPPERCASE meta labels
---track-folio      0.14em   § folio markers, section labels
+--track-display   -0.011em  Headings 16-24px
+--track-body       0.004em  Body prose
+--track-ui         0.008em  UI labels
+--track-mono       0.08em   Mono tech text, timestamps
+--track-meta       0.12em   UPPERCASE meta labels
+--track-folio      0.16em   § folio markers, section labels
 ```
+
+> These are the live values (`src/index.css`), reconciled by eye in-app
+> during the 2026 typography restoration. Mono/meta/folio run wider than
+> the original spec (0.04/0.08/0.14) — the extra tracking gives the tiny
+> UPPERCASE mono labels real legibility and editorial rhythm.
 
 ### Size ladder (canonical)
 
@@ -295,7 +308,7 @@ Standard section labels: `PROVENANCE`, `METADATA`, `EVIDENCE`, `RELATED MEMORIES
 
 ### Italic usage
 
-- Instrument Serif italic: rail L monogram, stream headings ("Dreams", "Thoughts")
+- Instrument Serif italic: rail "P" monogram, stream/notebook headings ("Dreams", "Thoughts", "Journal"), the onboarding hero headline (Luca's voice)
 - Regular italic: blockquotes, candidate rationale in digest, subtle meta callouts
 
 ---
@@ -364,7 +377,7 @@ When vektor spawns sub-agents, use the blue spectrum `--v1`/`--v2`/`--v3` with `
 - Composer border prime-shimmer (8 pools, 3/5/7/11/13/17/19/23s)
 - Sub-agent 3×3 murmur dot grid (prime-staggered, never syncs)
 - Drawer slide-in (380ms premium ease, with backdrop blur 2px)
-- Onboarding three-name stagger (200/600/1000ms with letter-spacing tween)
+- Onboarding entrance: Instrument Serif italic hero ("Luca's voice") over the EchoField particle orb, with the step card beside it
 - Checkpoint dot dual halos (inner 4px / outer 7px rgba amber)
 - Thought realtime arrival (soft slide-down + warm-glow fade)
 
