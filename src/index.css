@@ -162,6 +162,19 @@
   --metric-fill:      rgba(234, 232, 228, 0.42);
   --metric-fill-soft: rgba(234, 232, 228, 0.28);
 
+  /* Notebook entry tones — the dot/label hue per inner-life entry kind.
+     A restrained, desaturated spectrum (journal warm → activity neutral) so
+     the feed reads as one family. Tokenized out of JournalView's hardcoded map. */
+  --tone-journal:    #c9a87c;
+  --tone-thought:    #8da6c8;
+  --tone-question:   #b0a0d6;
+  --tone-wandering:  #8ca89c;
+  --tone-dream:      #b990c9;
+  --tone-insight:    #d0b171;
+  --tone-reflection: #9db2c8;
+  --tone-belief:     #c58d8d;
+  --tone-activity:   #87908d;
+
   --neutral-rgb:        220, 219, 216;
   --neutral-bright-rgb: 234, 232, 228;
   --neutral-accent:     #8f8d89;

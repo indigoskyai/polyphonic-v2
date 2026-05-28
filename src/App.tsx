@@ -9,9 +9,10 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { isFirstRun } from "./lib/firstRun";
 import { useLocation, useNavigate } from "react-router-dom";
 import Rail from "./components/Rail";
-// NavColumn (the bacedc3 unified column) is preserved at git tag
-// `pre-rail-rewrite` and the file still lives in the tree for reference,
-// but is no longer wired in. Rail + Sidebar is the active layout.
+// The Rail is the single left nav surface — it expands in place to reveal
+// labels + per-section content (no separate Sidebar card). The old
+// NavColumn + standalone Sidebar are removed; restorable at git tag
+// `pre-rail-rewrite` if ever needed.
 import Clockbar from "./components/Clockbar";
 import MobileAppBar from "./components/mobile/MobileAppBar";
 import MobileNavDrawer from "./components/mobile/MobileNavDrawer";

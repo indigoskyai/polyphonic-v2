@@ -136,7 +136,7 @@ export default function Rail() {
         overflow: 'hidden',
         zIndex: 10,
         transition:
-          'width var(--dur-slow, 500ms) var(--ease-premium, cubic-bezier(0.22,1,0.36,1)), min-width var(--dur-slow, 500ms) var(--ease-premium, cubic-bezier(0.22,1,0.36,1))',
+          'width var(--dur-slow) var(--ease-premium), min-width var(--dur-slow) var(--ease-premium)',
       }}
     >
       {/* Header — brand mark + collapse affordance. */}
@@ -315,7 +315,7 @@ function RailNavRow({ icon, label, guideId, expanded, active, badge, onClick, pr
               width: 6,
               height: 6,
               borderRadius: '50%',
-              background: 'var(--luca, #c9a87c)',
+              background: 'var(--accent-soft)',
             }}
           />
         )}

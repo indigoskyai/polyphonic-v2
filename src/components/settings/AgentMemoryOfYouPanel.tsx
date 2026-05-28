@@ -75,7 +75,7 @@ export default function AgentMemoryOfYouPanel({ agentId, userId }: Props) {
 
   if (error) {
     return (
-      <div style={{ fontSize: 12, color: 'var(--rose-accent, #c97c8a)', fontFamily: 'var(--font-mono)' }}>
+      <div style={{ fontSize: 12, color: 'var(--red-accent)', fontFamily: 'var(--font-mono)' }}>
         Could not load: {error}
       </div>
     );
@@ -109,7 +109,7 @@ export default function AgentMemoryOfYouPanel({ agentId, userId }: Props) {
           whiteSpace: 'pre-wrap',
           fontFamily: 'var(--font-sans)',
           paddingLeft: 12,
-          borderLeft: '2px solid var(--border-faint)',
+          borderLeft: '1px solid var(--border-faint)',
         }}
       >
         {doc.content}
@@ -120,7 +120,7 @@ export default function AgentMemoryOfYouPanel({ agentId, userId }: Props) {
           display: 'flex',
           gap: 18,
           fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--settings-mono-size, 11px)',
+          fontSize: 'var(--settings-mono-size)',
           color: 'var(--text-whisper)',
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',

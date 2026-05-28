@@ -21,15 +21,15 @@ import {
 } from '@/lib/notebook';
 
 const KIND_TONE: Record<NotebookItem['kind'], string> = {
-  journal: '#c9a87c',
-  thought: '#8da6c8',
-  question: '#b0a0d6',
-  wandering: '#8ca89c',
-  dream: '#b990c9',
-  insight: '#d0b171',
-  reflection: '#9db2c8',
-  belief: '#c58d8d',
-  activity: '#87908d',
+  journal: 'var(--tone-journal)',
+  thought: 'var(--tone-thought)',
+  question: 'var(--tone-question)',
+  wandering: 'var(--tone-wandering)',
+  dream: 'var(--tone-dream)',
+  insight: 'var(--tone-insight)',
+  reflection: 'var(--tone-reflection)',
+  belief: 'var(--tone-belief)',
+  activity: 'var(--tone-activity)',
 };
 
 function timeLabel(date: string): string {
@@ -196,7 +196,7 @@ export default function JournalView() {
                                     height: 7,
                                     borderRadius: 999,
                                     background: tone,
-                                    boxShadow: `0 0 18px ${tone}55`,
+                                    boxShadow: `0 0 18px color-mix(in srgb, ${tone} 33%, transparent)`,
                                     flexShrink: 0,
                                   }}
                                 />

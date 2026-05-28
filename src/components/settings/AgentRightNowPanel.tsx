@@ -39,7 +39,7 @@ function Bar({ value, signed = false }: { value: number; signed?: boolean }) {
         flex: 1,
         height: 3,
         borderRadius: 2,
-        background: 'var(--surface-1, rgba(255,255,255,0.04))',
+        background: 'var(--surface-1)',
         overflow: 'hidden',
       }}
     >
@@ -50,9 +50,9 @@ function Bar({ value, signed = false }: { value: number; signed?: boolean }) {
           bottom: 0,
           left: signed && pct < 0 ? `${(0.5 + pct / 2) * 100}%` : 0,
           width: signed ? `${(Math.abs(pct) / 2) * 100}%` : `${pct * 100}%`,
-          background: 'var(--metric-fill, rgba(234,232,228,0.42))',
+          background: 'var(--metric-fill)',
           borderRadius: 2,
-          transition: 'width var(--dur-slow, 500ms) var(--ease-premium, cubic-bezier(0.22,1,0.36,1))',
+          transition: 'width var(--dur-slow) var(--ease-premium)',
         }}
       />
     </div>
@@ -65,10 +65,10 @@ function MetricRow({ label, value, signed = false }: { label: string; value: num
       <span
         style={{
           width: 130,
-          fontSize: 'var(--settings-mono-size, 11px)',
+          fontSize: 'var(--settings-mono-size)',
           color: 'var(--text-soft)',
           fontFamily: 'var(--font-mono)',
-          letterSpacing: 'var(--track-folio)',
+          letterSpacing: 'var(--track-meta)',
           textTransform: 'uppercase',
         }}
       >
@@ -119,11 +119,11 @@ export default function AgentRightNowPanel({ agentId }: Props) {
       <div>
         <div
           style={{
-            fontSize: 'var(--settings-mono-size, 11px)',
+            fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
             fontWeight: 'var(--weight-medium, 500)',
             color: 'var(--text-soft)',
-            letterSpacing: 'var(--track-folio)',
+            letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
             marginBottom: 12,
           }}
@@ -140,11 +140,11 @@ export default function AgentRightNowPanel({ agentId }: Props) {
       <div>
         <div
           style={{
-            fontSize: 'var(--settings-mono-size, 11px)',
+            fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
             fontWeight: 'var(--weight-medium, 500)',
             color: 'var(--text-soft)',
-            letterSpacing: 'var(--track-folio)',
+            letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
             marginBottom: 12,
           }}
@@ -161,11 +161,11 @@ export default function AgentRightNowPanel({ agentId }: Props) {
       <div style={{ gridColumn: '1 / -1' }}>
         <div
           style={{
-            fontSize: 'var(--settings-mono-size, 11px)',
+            fontSize: 'var(--settings-mono-size)',
             fontFamily: 'var(--font-mono)',
             fontWeight: 'var(--weight-medium, 500)',
             color: 'var(--text-soft)',
-            letterSpacing: 'var(--track-folio)',
+            letterSpacing: 'var(--track-meta)',
             textTransform: 'uppercase',
             marginBottom: 12,
           }}
