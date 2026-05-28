@@ -39,29 +39,33 @@ const STUDIO_ROUTES = [
   { label: 'Profile', path: '/profile', icon: CircleUserRound },
 ];
 
+// Four-surface mobile nav for companion + guided: Chat / Notebook / Memory /
+// Agents — mirrors the desktop Rail's getRailSurfaces() output. Notebook
+// points at /notebook directly so the URL, drawer label, and page header all
+// say "Notebook" (instead of /journal redirect chain showing "Journal").
 const SIMPLE_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
-  { label: 'Notebook', path: '/journal', icon: NotebookPen },
-  { label: 'Create', path: '/projects', icon: FolderKanban },
-  { label: 'Mind', path: '/mind', icon: Brain },
+  { label: 'Notebook', path: '/notebook', icon: NotebookPen },
+  { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Agents', path: '/settings/agents', icon: Bot },
 ];
 
 // All settings sub-pages (mirrors the desktop SidebarSettings nav), surfaced on
-// mobile as a collapsible group so every settings page is reachable. Before
-// this, only /settings/agents (the redirect target) could be opened on mobile.
-const SETTINGS_ROUTES = [
+// mobile as a collapsible group so every settings page is reachable. Studio-
+// only entries are filtered out in companion + guided modes (matches the
+// desktop SidebarSettings Phase-5 gating).
+const SETTINGS_ROUTES: Array<{ label: string; path: string; studioOnly?: boolean }> = [
   { label: 'Agents', path: '/settings/agents' },
   { label: 'General', path: '/settings/general' },
   { label: 'Models', path: '/settings/models' },
   { label: 'Appearance', path: '/settings/appearance' },
-  { label: 'Self-model', path: '/settings/skills' },
-  { label: 'Routines', path: '/settings/routines' },
-  { label: 'Voice & security', path: '/settings/voice' },
-  { label: 'Local runtime', path: '/settings/local-runtime' },
+  { label: 'Self-model', path: '/settings/skills', studioOnly: true },
+  { label: 'Routines', path: '/settings/routines', studioOnly: true },
+  { label: 'Voice & security', path: '/settings/voice', studioOnly: true },
+  { label: 'Local runtime', path: '/settings/local-runtime', studioOnly: true },
   { label: 'Import & export', path: '/settings/portability' },
   { label: 'Account & preferences', path: '/settings/account' },
-  { label: 'Cron health', path: '/settings/cron-health' },
+  { label: 'Cron health', path: '/settings/cron-health', studioOnly: true },
   { label: 'Guide & help', path: '/settings/help' },
 ];
 
@@ -320,23 +324,25 @@ export default function MobileNavDrawer() {
                 />
               </button>
               {settingsOpen &&
-                SETTINGS_ROUTES.map(({ label, path }) => {
-                  const active =
-                    location.pathname === path || location.pathname.startsWith(`${path}/`);
-                  return (
-                    <button
-                      key={path}
-                      type="button"
-                      className="mobile-nav-row"
-                      style={{ paddingLeft: 46 }}
-                      data-active={active ? 'true' : undefined}
-                      onClick={() => go(path)}
-                      aria-current={active ? 'page' : undefined}
-                    >
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
+                SETTINGS_ROUTES
+                  .filter((entry) => shouldShowStudioNavigation(interfaceMode) || !entry.studioOnly)
+                  .map(({ label, path }) => {
+                    const active =
+                      location.pathname === path || location.pathname.startsWith(`${path}/`);
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        className="mobile-nav-row"
+                        style={{ paddingLeft: 46 }}
+                        data-active={active ? 'true' : undefined}
+                        onClick={() => go(path)}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
             </div>
           </nav>
 
