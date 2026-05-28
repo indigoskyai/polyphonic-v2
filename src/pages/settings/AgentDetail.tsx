@@ -15,6 +15,8 @@ import VoiceCardGrid from '@/components/settings/VoiceCardGrid';
 import Keychain from '@/components/settings/Keychain';
 import StickySaveFooter from '@/components/settings/StickySaveFooter';
 import AgentPersonality from '@/components/settings/AgentPersonality';
+import AgentRightNowPanel from '@/components/settings/AgentRightNowPanel';
+import AgentMemoryOfYouPanel from '@/components/settings/AgentMemoryOfYouPanel';
 import IdentityEditor from '@/components/identity/IdentityEditor';
 import { Section, InlinePill } from '@/components/settings/Section';
 import {
@@ -264,6 +266,26 @@ export default function AgentDetail() {
               </span>
             </div>
           </Section>
+
+          <Section
+            number="02"
+            name="Right now"
+            title="How they are this moment"
+            desc="Live modulators, emotional state, and the beliefs currently shaping how this agent responds. Updates as you talk."
+          >
+            <AgentRightNowPanel agentId={agent.id} />
+          </Section>
+
+          {user && (
+            <Section
+              number="03"
+              name="Memory of you"
+              title="Their evolving picture of you"
+              desc="The user-model document this agent reads from for continuity. Read-only for resident agents."
+            >
+              <AgentMemoryOfYouPanel agentId={agent.id} userId={user.id} />
+            </Section>
+          )}
         </div>
       </SettingsPage>
     );
@@ -433,6 +455,26 @@ export default function AgentDetail() {
 
         <Section
           number="05"
+          name="Right now"
+          title="How they are this moment"
+          desc="Live modulators, emotional state, and the beliefs currently shaping how this agent responds. Updates as you talk."
+        >
+          <AgentRightNowPanel agentId={agent.id} />
+        </Section>
+
+        {user && (
+          <Section
+            number="06"
+            name="Memory of you"
+            title="Their evolving picture of you"
+            desc="The user-model document this agent reads from for continuity. Edit it via the Identity section above, or let it grow on its own through conversation."
+          >
+            <AgentMemoryOfYouPanel agentId={agent.id} userId={user.id} />
+          </Section>
+        )}
+
+        <Section
+          number="07"
           name="Tools"
           title="Capabilities"
           desc="Enable capabilities. Gated tools will ask for confirmation before running."
@@ -444,7 +486,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="06"
+          number="08"
           name="MCP servers"
           title="External context sources"
           desc="External context sources attached to this agent."
@@ -456,7 +498,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="07"
+          number="09"
           name="Sub-agents"
           title="Dedicated helpers"
           desc="Dedicated helpers spawned under this orchestrator."
@@ -471,7 +513,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="08"
+          number="10"
           name="Voice"
           title="Spoken response"
           desc="TTS configuration for spoken responses."
@@ -483,7 +525,7 @@ export default function AgentDetail() {
         </Section>
 
         <Section
-          number="09"
+          number="11"
           name="Keychain"
           title="Provider keys"
           desc="Provider API keys. Only the last three characters are shown."
