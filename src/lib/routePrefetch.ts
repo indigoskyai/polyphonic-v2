@@ -80,6 +80,29 @@ export function prefetchCoreSettingsRoutes() {
   });
 }
 
+// Primary rail destinations. Prefetched on idle once the shell mounts so a
+// direct click (or keyboard nav) to any top-level section never hits a cold
+// lazy chunk and shows the route skeleton. Hover-prefetch still covers the
+// long tail; this guarantees the surfaces a user reaches for constantly are
+// always warm.
+const primaryNavPaths = [
+  '/chat',
+  '/memory',
+  '/mind',
+  '/journal',
+  '/projects',
+  '/profile',
+  '/settings/agents',
+];
+
+export function prefetchPrimaryNavRoutes() {
+  scheduleIdle(() => {
+    for (const path of primaryNavPaths) {
+      prefetchRoute(path);
+    }
+  });
+}
+
 export const navigationAuditRoutes = {
   rail: ['/chat', '/memory', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
   settings: coreSettingsPaths,

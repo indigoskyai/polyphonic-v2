@@ -24,7 +24,7 @@ import { useTokenGateStore } from "./stores/tokenGateStore";
 import { useInterfaceModeStore } from "./stores/interfaceModeStore";
 import { useSidebarStore } from "./stores/sidebarStore";
 import { shouldDefaultSidebarVisible } from "./lib/interfaceMode";
-import { prefetchCoreSettingsRoutes } from "./lib/routePrefetch";
+import { prefetchCoreSettingsRoutes, prefetchPrimaryNavRoutes } from "./lib/routePrefetch";
 import { isAnonymousUser } from "./lib/accessTier";
 import { readLandingChatTransitionFlag } from "./lib/guestChat";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
@@ -257,6 +257,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
     setSidebarVisible(shouldDefaultSidebarVisible(interfaceMode));
   }, [interfaceMode, setSidebarVisible]);
 
+  // Warm the primary nav chunks on idle once the shell mounts, so the first
+  // click to any top-level section is instant rather than showing the lazy
+  // route skeleton.
+  useEffect(() => {
+    prefetchPrimaryNavRoutes();
+  }, []);
+
   useSubagentRealtime();
 
   return (
@@ -279,10 +286,16 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <ConnectionBanner />
         <ImportProgressBanner />
         <Suspense fallback={<PanelRouteFallback />}>
-          <div
-            key={`${location.pathname}${location.search}`}
-            className="route-transition-stage flex-1 min-h-0 min-w-0 flex flex-col"
-          >
+          {/* No key here on purpose. A key tied to the pathname forced the
+              entire route subtree to unmount/remount on every navigation —
+              replaying routeStageIn (opacity + 5px slide) and the view's own
+              viewFadeIn, which read as a full-page reload. Without it, the
+              stage persists; React swaps only the inner view (different
+              component → mounts with its gentle viewFadeIn; same component
+              with new params, e.g. chat threads or profile sub-pages →
+              reconciles in place, no remount). Stores are stale-while-
+              revalidate, so content never blanks during the swap. */}
+          <div className="route-transition-stage flex-1 min-h-0 min-w-0 flex flex-col">
             {children}
           </div>
         </Suspense>
