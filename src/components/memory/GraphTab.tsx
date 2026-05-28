@@ -24,17 +24,29 @@ import { generateMockGraph } from '@/lib/mockGraphData';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 // ── Visual tokens ───────────────────────────────────────────────────────────
-// Engram-type hues — muted jewel tones (a restrained step toward the saturated
-// EngramsTab palette: episodic blue, semantic gold, procedural sage, belief
-// mauve). Perceptible enough that the graph reads as a living, subtly-colored
-// memory constellation, restrained enough to stay on-brand on the warm-black
-// canvas. The earlier values were near-gray, which flattened the whole field.
-const TYPE_TINTS: Record<string, [number, number, number]> = {
-  episodic:   [126, 162, 198],
-  semantic:   [201, 173, 130],
-  procedural: [142, 176, 160],
-  belief:     [178, 150, 200],
-};
+// GRAPH INTENSITY — toggle between the two tuned looks. 'restrained' is the
+// calm, muted constellation (committed at 96ad460). 'dramatic' is the luminous
+// centerpiece: brighter hues, larger strength-scaled nodes, soft glow halos,
+// brighter type-tinted edges. Flip GRAPH_INTENSITY to revert instantly.
+type GraphIntensity = 'restrained' | 'dramatic';
+const GRAPH_INTENSITY: GraphIntensity = 'dramatic';
+const DRAMATIC = GRAPH_INTENSITY === 'dramatic';
+
+// Engram-type hues. RESTRAINED set (revert anchor):
+//   episodic [126,162,198] · semantic [201,173,130] · procedural [142,176,160] · belief [178,150,200]
+const TYPE_TINTS: Record<string, [number, number, number]> = DRAMATIC
+  ? {
+      episodic:   [104, 168, 228],
+      semantic:   [222, 180, 116],
+      procedural: [120, 206, 168],
+      belief:     [196, 150, 236],
+    }
+  : {
+      episodic:   [126, 162, 198],
+      semantic:   [201, 173, 130],
+      procedural: [142, 176, 160],
+      belief:     [178, 150, 200],
+    };
 
 const CANVAS_BG          = 'rgba(0, 0, 0, 0)';
 const NODE_FILL_DIM      = 'rgba(220, 219, 216, 0.085)';
@@ -212,8 +224,12 @@ export default function GraphTab() {
     activeEngrams.forEach((engram, i) => {
       const prev = nodesRef.current.get(engram.id);
       const degree = degreeMap.get(engram.id) ?? 0;
-      // Disc radius: blend strength + log(degree)
-      const r = 2.6 + Math.min(3.6, Math.sqrt(degree) * 0.85) + engram.strength * 1.6;
+      // Disc radius: blend strength + log(degree). Dramatic mode enlarges the
+      // discs and weights strength harder so high-strength memories read as
+      // luminous anchors.
+      const r = DRAMATIC
+        ? 3.4 + Math.min(5.5, Math.sqrt(degree) * 1.15) + engram.strength * 3.0
+        : 2.6 + Math.min(3.6, Math.sqrt(degree) * 0.85) + engram.strength * 1.6;
 
       if (prev) {
         prev.engram = engram;
@@ -416,9 +432,9 @@ export default function GraphTab() {
           ctx.strokeStyle = EDGE_DIM;
           ctx.lineWidth = (0.45 / cam.zoom) * fadeIn;
         } else {
-          const baseAlpha = (0.05 + Math.min(0.18, e.weight * 0.13)) * fadeIn;
+          const baseAlpha = (DRAMATIC ? 0.10 + Math.min(0.30, e.weight * 0.22) : 0.05 + Math.min(0.18, e.weight * 0.13)) * fadeIn;
           ctx.strokeStyle = `${EDGE_BASE} ${baseAlpha.toFixed(3)})`;
-          ctx.lineWidth = 0.5 / cam.zoom;
+          ctx.lineWidth = (DRAMATIC ? 0.8 : 0.5) / cam.zoom;
         }
         ctx.stroke();
       }
@@ -435,31 +451,44 @@ export default function GraphTab() {
         const age = Math.min(1, (now - node.spawnedAt) / 1400);
         const fadeIn = prefersReducedMotion ? 1 : easeOutCubic(age);
 
+        // Dramatic glow halo — a soft luminous bloom behind each disc so the
+        // constellation reads as points of light. Radial gradient, tint-hued.
+        if (DRAMATIC && !isDimmed) {
+          const glowR = r * (isHovered || isSelected ? 4.0 : 2.8);
+          const ga = (isHovered || isSelected ? 0.34 : isNeighbor ? 0.24 : 0.17) * fadeIn;
+          const grad = ctx.createRadialGradient(node.x, node.y, r * 0.35, node.x, node.y, glowR);
+          grad.addColorStop(0, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${ga})`);
+          grad.addColorStop(1, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         // Filled disc
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         if (isSelected || isHovered) {
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.42 * fadeIn})`;
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.6 : 0.42) * fadeIn})`;
         } else if (isNeighbor) {
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.22 * fadeIn})`;
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.38 : 0.22) * fadeIn})`;
         } else if (isDimmed) {
           ctx.fillStyle = `rgba(220, 219, 216, ${0.04 * fadeIn})`;
         } else {
-          // At rest, carry a faint type tint (not flat gray) so the
-          // constellation reads as subtly hued by memory type.
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.14 * fadeIn})`;
+          // At rest, a solid-ish hued core (the glow supplies the bloom).
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.30 : 0.14) * fadeIn})`;
         }
         ctx.fill();
 
-        // Crisp 1px ring (with type tint at low alpha for non-focused)
+        // Crisp 1px ring (with type tint for non-focused)
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         ctx.strokeStyle = isHovered
           ? NODE_STROKE_HOVER
           : isDimmed
             ? NODE_STROKE_DIM
-            : `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.55 * fadeIn})`;
-        ctx.lineWidth = 1 / cam.zoom;
+            : `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.78 : 0.55) * fadeIn})`;
+        ctx.lineWidth = (DRAMATIC ? 1.2 : 1) / cam.zoom;
         ctx.stroke();
 
         // Selection halo
