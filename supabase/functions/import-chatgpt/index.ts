@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 // Linearize ChatGPT's tree-structured mapping into chronological messages
 function linearizeMapping(mapping: Record<string, any>): { role: string; content: string }[] {
@@ -268,7 +269,12 @@ serve(async (req) => {
     }
 
     const user_id = user.id;
-    const { conversations, import_id, chunk_index, total_chunks, accumulated_memories } = await req.json();
+    const body = await req.json();
+    const { conversations, import_id, chunk_index, total_chunks, accumulated_memories } = body;
+    const agent_id = normalizeAgentId(body.agent_id);
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "import-chatgpt", getCorsHeaders(req));
+    }
 
     if (!conversations || !Array.isArray(conversations) || !import_id || chunk_index === undefined) {
       return new Response(JSON.stringify({ error: "Invalid request: need conversations, import_id, chunk_index" }), {
@@ -334,6 +340,7 @@ serve(async (req) => {
       .from("memories")
       .select("id, content, memory_type, confidence")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(150);
@@ -455,6 +462,7 @@ ${batchText}`;
 
         memoryRows.push({
           user_id,
+          agent_id,
           content: m.content,
           memory_type: m.memory_type || "fact",
           relevance_score: cappedConfidence,
@@ -503,6 +511,7 @@ ${batchText}`;
           .from("curiosity_questions")
           .select("question")
           .eq("user_id", user_id)
+          .eq("agent_id", agent_id)
           .in("status", ["pending", "shown"])
           .limit(50);
 
@@ -515,6 +524,7 @@ ${batchText}`;
         if (newQuestions.length > 0) {
           const qRows = newQuestions.map((q: any) => ({
             user_id,
+            agent_id,
             question: q.question,
             context: q.context || null,
             curiosity_score: q.curiosity_score ?? 0.5,
@@ -547,7 +557,9 @@ ${batchText}`;
           questions_generated: (currentImport.questions_generated || 0) + questionsGenerated,
           conflicts_detected: (currentImport.conflicts_detected || 0) + conflictsDetected,
           pipeline_stage: "extracting",
-        }).eq("id", import_id);
+        })
+          .eq("id", import_id)
+          .eq("user_id", user_id);
       }
     } catch (importUpdateError) {
       console.log("[IMPORT] chat_imports table not available, skipping progress update:", importUpdateError);

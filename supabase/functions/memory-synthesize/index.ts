@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const SYNTHESIS_PROMPT = `You are a Narrative Synthesis Agent. You analyze ALL extracted memories from a user's conversation history to create a deep, unified understanding of who this person is.
 
@@ -126,7 +127,12 @@ serve(async (req) => {
     }
 
     const user_id = claimsData.claims.sub as string;
-    const { import_id } = await req.json();
+    const body = await req.json();
+    const { import_id } = body;
+    const agent_id = normalizeAgentId(body.agent_id);
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "memory-synthesize", getCorsHeaders(req));
+    }
 
     // Use Lovable AI Gateway (no user key required)
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -139,14 +145,19 @@ serve(async (req) => {
 
     // Update import stage
     if (import_id) {
-      await supabase.from("chat_imports").update({ pipeline_stage: "synthesizing" }).eq("id", import_id);
+      await supabase
+        .from("chat_imports")
+        .update({ pipeline_stage: "synthesizing" })
+        .eq("id", import_id)
+        .eq("user_id", user_id);
     }
 
-    // Fetch ALL memories for this user
+    // Fetch all memories for this user/agent scope
     const { data: allMemories } = await supabase
       .from("memories")
       .select("id, content, memory_type, confidence, emotional_intensity, detail_level, narrative_thread, tags, created_at")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("confidence", { ascending: false })
       .limit(500);
@@ -226,12 +237,14 @@ ${memoryDump}`;
       .from("memories")
       .update({ is_deleted: true })
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .contains("tags", ["synthesis"]);
 
     // ── Insert synthesis memories ──
     if (synthesisResult.synthesis_memories?.length > 0) {
       const synthRows = synthesisResult.synthesis_memories.map((m: any) => ({
         user_id,
+        agent_id,
         content: m.content,
         memory_type: m.memory_type || "context",
         relevance_score: m.confidence ?? 0.8,
@@ -265,6 +278,7 @@ ${memoryDump}`;
     if (synthesisResult.identity_profile) {
       const { error: idErr } = await supabase.from("memories").insert({
         user_id,
+        agent_id,
         content: synthesisResult.identity_profile,
         memory_type: "context",
         relevance_score: 0.95,
@@ -289,6 +303,7 @@ ${memoryDump}`;
     if (synthesisResult.narrative_threads?.length > 0) {
       const threadRows = synthesisResult.narrative_threads.map((t: any) => ({
         user_id,
+        agent_id,
         content: `NARRATIVE THREAD — ${t.label}: ${t.summary}`,
         memory_type: "context",
         relevance_score: 0.85,
@@ -324,6 +339,7 @@ ${memoryDump}`;
             .from("memories")
             .select("id")
             .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
             .eq("content", dupContent)
             .eq("is_deleted", false)
             .limit(1);
@@ -332,7 +348,9 @@ ${memoryDump}`;
             await supabase
               .from("memories")
               .update({ is_deleted: true })
-              .eq("id", found[0].id);
+              .eq("id", found[0].id)
+              .eq("user_id", user_id)
+              .eq("agent_id", agent_id);
             deduped++;
           }
         }

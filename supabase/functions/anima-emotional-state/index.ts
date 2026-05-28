@@ -58,6 +58,27 @@ serve(async (req) => {
     }
 
     const since48h = new Date(Date.now() - 48 * 3600000).toISOString();
+    const { data: recentThreads } = await supabase
+      .from("threads")
+      .select("id")
+      .eq("user_id", user_id)
+      .or(`agent_id.eq.${agent_id},primary_agent_id.eq.${agent_id}`)
+      .gte("updated_at", since48h)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    const recentThreadIds = (recentThreads || []).map((thread: { id: string }) => thread.id);
+    const recentMessagesQuery = recentThreadIds.length > 0
+      ? supabase
+        .from("messages")
+        .select("role, content, created_at")
+        .eq("user_id", user_id)
+        .in("thread_id", recentThreadIds)
+        .or(`role.eq.user,agent.eq.${agent_id}`)
+        .gte("created_at", since48h)
+        .order("created_at", { ascending: false })
+        .limit(100)
+      : Promise.resolve({ data: [] });
 
     // Parallel data fetch
     const [
@@ -68,13 +89,7 @@ serve(async (req) => {
       { data: recentQuestions },
       { data: prevState },
     ] = await Promise.all([
-      supabase
-        .from("messages")
-        .select("role, content, created_at")
-        .eq("user_id", user_id)
-        .gte("created_at", since48h)
-        .order("created_at", { ascending: false })
-        .limit(100),
+      recentMessagesQuery,
       supabase
         .from("journal_entries")
         .select("content, mood, created_at")
@@ -102,6 +117,7 @@ serve(async (req) => {
         .from("curiosity_questions")
         .select("id")
         .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .eq("status", "pending"),
       supabase
         .from("emotional_state")

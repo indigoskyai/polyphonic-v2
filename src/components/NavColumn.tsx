@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/notificationStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { prefetchRoute } from '@/lib/routePrefetch';
 import { supabase } from '@/integrations/supabase/client';
 import SidebarChat from './sidebar/SidebarChat';
@@ -88,6 +89,7 @@ export default function NavColumn() {
   const openDrawer = useDrawerStore((s) => s.open);
   const activeDrawer = useDrawerStore((s) => s.active);
   const pendingCount = useNotificationStore(selectPendingInitiationsCount);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const settingsOpen = path.startsWith('/settings')
     || path.startsWith('/profile/skills')
     || path.startsWith('/profile/schedule');
@@ -95,11 +97,14 @@ export default function NavColumn() {
   useEffect(() => {
     if (!user) return;
     supabase.from('emotional_state').select('curiosity, restlessness, warmth, clarity, creative_flow, isolation')
-      .eq('user_id', user.id).maybeSingle()
+      .eq('user_id', user.id)
+      .eq('agent_id', activeAgentId)
+      .maybeSingle()
       .then(({ data }) => {
         if (data) setEmotionalIndicator(computeEmotionalIndicator(data as Record<string, number>));
+        else setEmotionalIndicator(computeEmotionalIndicator(null));
       });
-  }, [user]);
+  }, [user, activeAgentId]);
 
   const activeView = path.startsWith('/chat') ? 'chat'
     : path.startsWith('/memory') ? 'memory'

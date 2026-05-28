@@ -161,6 +161,7 @@ export class MnemosEngine {
           updated_at: new Date().toISOString(),
         })
         .eq("id", belief.id)
+        .eq("user_id", userId)
         .eq("agent_id", agentId)
         .select()
         .single();

@@ -1127,6 +1127,7 @@ export default function ChatView() {
         .from('thought_initiations')
         .select('message, created_at')
         .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -1166,16 +1167,17 @@ export default function ChatView() {
         return;
       }
 
-      // Check time since last message
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('created_at')
+      // Check time since this agent's last thread activity.
+      const { data: lastThread } = await supabase
+        .from('threads')
+        .select('updated_at')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .or(`agent_id.eq.${activeAgentId},primary_agent_id.eq.${activeAgentId}`)
+        .order('updated_at', { ascending: false })
         .limit(1);
       if (canceled) return;
 
-      const lastTime = lastMsg?.[0]?.created_at ? new Date(lastMsg[0].created_at).getTime() : 0;
+      const lastTime = lastThread?.[0]?.updated_at ? new Date(lastThread[0].updated_at).getTime() : 0;
       const gapHours = (Date.now() - lastTime) / 3_600_000;
 
       if (gapHours > 2) {

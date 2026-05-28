@@ -402,7 +402,9 @@ export async function encode(
         const { error: embedErr } = await client
           .from("engrams")
           .update({ embedding: embed.vector, embedding_model: embed.model })
-          .eq("id", engram.id);
+          .eq("id", engram.id)
+          .eq("user_id", userId)
+          .eq("agent_id", agentId);
         if (embedErr) {
           console.warn("[mnemos.encode] embedding update failed:", embedErr.message);
         }
@@ -443,7 +445,10 @@ export async function encode(
       // Supersession (M6): contradicting connections archive the older engram
       // so retrieval doesn't surface both. Best-effort, non-fatal.
       if (disc.connectionType === "contradicts") {
-        applySupersession(client, engram.id, disc.targetId, "contradicts").catch(() => {});
+        applySupersession(client, engram.id, disc.targetId, "contradicts", {
+          userId,
+          agentId,
+        }).catch(() => {});
       }
     }
     // Non-fatal: if a connection insert fails (e.g. duplicate), continue

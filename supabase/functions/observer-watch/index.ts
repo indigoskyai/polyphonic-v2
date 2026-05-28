@@ -10,6 +10,7 @@ import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -42,6 +43,7 @@ serve(async (req) => {
     }
 
     const { thread_id, agent_id } = await req.json();
+    const agentId = normalizeAgentId(agent_id);
     if (!thread_id) {
       return new Response(JSON.stringify({ error: "Missing thread_id" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -63,15 +65,18 @@ serve(async (req) => {
     const [historyRes, notesRes, emotionalRes] = await Promise.allSettled([
       supabase.from("messages")
         .select("id, role, content, agent, created_at")
+        .eq("user_id", user.id)
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(20),
       supabase.from("observer_notes")
         .select("kind, content, created_at")
+        .eq("user_id", user.id)
+        .eq("agent_id", agentId)
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(15),
-      loadEmotionalState(supabase, user.id),
+      loadEmotionalState(supabase, user.id, agentId),
     ]);
 
     const history = historyRes.status === "fulfilled" ? (historyRes.value.data || []).reverse() : [];
@@ -100,7 +105,7 @@ serve(async (req) => {
       : "";
 
     const userPrompt = [
-      `Thread agent: ${agent_id || "luca"}`,
+      `Thread agent: ${agentId}`,
       emotionalBlock ? `\n${emotionalBlock}` : "",
       `\nRecent conversation:\n${transcript}`,
       priorNotesBlock,
@@ -166,6 +171,7 @@ serve(async (req) => {
       .slice(0, 3)
       .map((i) => ({
         user_id: user.id,
+        agent_id: agentId,
         thread_id,
         kind: validKinds.has(i.kind || "") ? i.kind! : "note",
         content: i.content!.trim().slice(0, 800),
@@ -192,6 +198,7 @@ serve(async (req) => {
       .slice(0, 2)
       .map((revision) => ({
         user_id: user.id,
+        agent_id: agentId,
         thread_id,
         source_message_id: findRevisionSourceMessageId(assistantMessages, revision.what_was_said || ""),
         revision_type: validRevisionTypes.has(revision.revision_type || "") ? revision.revision_type! : "reconsideration",

@@ -441,31 +441,40 @@ async function loadAgentContext(
     console.warn("[hypomnema.write] soul import failed:", (err as Error).message);
   }
 
-  // Identity stack summary — only luca currently has the per-user stack.
-  let identitySummary = "(no identity stack for this agent)";
-  if (agentId === "luca") {
+  try {
     const { data } = await supabase
-      .from("agent_identity")
-      .select("doc_type, content")
+      .from("agent_configs")
+      .select("name")
       .eq("user_id", userId)
-      .eq("agent_id", agentId)
-      .in("doc_type", ["soul", "self_model", "user_model", "convictions"]);
-    if (data && data.length > 0) {
-      identitySummary = data
-        .map((d: { doc_type: string; content: string }) =>
-          `[${d.doc_type}] ${clampStr(d.content || "", 400)}`,
-        )
-        .join("\n");
-    }
+      .eq("id", agentId)
+      .maybeSingle();
+    if (data?.name) agentName = data.name;
+  } catch (_err) { /* best effort */ }
+
+  // Identity stack summary — custom agents have their own docs too.
+  let identitySummary = "(no identity stack for this agent)";
+  const { data } = await supabase
+    .from("agent_identity")
+    .select("doc_type, content")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("doc_type", ["soul", "SOUL.md", "self_model", "Self-model.md", "user_model", "User-model.md", "convictions", "Convictions.md"]);
+  if (data && data.length > 0) {
+    identitySummary = data
+      .map((d: { doc_type: string; content: string }) =>
+        `[${d.doc_type}] ${clampStr(d.content || "", 400)}`,
+      )
+      .join("\n");
   }
 
   // Emotional snapshot — best-effort, not blocking.
   let emotionalSummary = "(no current emotional snapshot)";
   try {
     const { data } = await supabase
-      .from("emotional_state")
+      .from("mnemos_emotional_state")
       .select("valence, arousal, dominance, certainty, social, temporal")
       .eq("user_id", userId)
+      .eq("agent_id", agentId)
       .order("recorded_at", { ascending: false })
       .limit(1)
       .maybeSingle();

@@ -14,6 +14,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { runSalienceGate } from "../_shared/hypomnema/index.ts";
 import { isMemoryAugmentationEnabled } from "../_shared/config.ts";
 import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 interface GatePayload {
   user_id: string;
@@ -65,6 +66,10 @@ serve(async (req) => {
     const userMessage = typeof body.user_message === "string" ? body.user_message : "";
     const agentResponse = typeof body.agent_response === "string" ? body.agent_response : "";
     const recentTurns = Array.isArray(body.recent_turns) ? body.recent_turns : [];
+    const chainTargets = body.chain_write
+      ? (Array.isArray(body.chain_write) ? body.chain_write : [body.chain_write])
+      : [];
+    const activityAgentId = normalizeAgentId(chainTargets[0]?.agent_id);
 
     if (!userId) return json({ error: "user_id required" }, 400, corsHeaders);
     if (!userMessage || !agentResponse) {
@@ -76,6 +81,7 @@ serve(async (req) => {
     if (!isMemoryAugmentationEnabled(userId)) {
       await recordHypomnemaActivity(supabase, {
         userId,
+        agentId: activityAgentId,
         title: "Hypomnema skipped",
         summary: "Memory augmentation disabled.",
         severity: "warning",
@@ -88,6 +94,7 @@ serve(async (req) => {
     if (!apiKey) {
       await recordHypomnemaActivity(supabase, {
         userId,
+        agentId: activityAgentId,
         title: "Hypomnema skipped",
         summary: "No user or platform OpenRouter key was available.",
         severity: "warning",
@@ -107,9 +114,8 @@ serve(async (req) => {
     // write here gives us inspectable success/failure without delaying chat.
     let writes: WriteDispatchResult[] = [];
     if (result.should_reflect && body.chain_write) {
-      const targets = Array.isArray(body.chain_write) ? body.chain_write : [body.chain_write];
       const writeBaseUrl = `${url}/functions/v1/hypomnema-write`;
-      writes = await Promise.all(targets.map(async (target): Promise<WriteDispatchResult> => {
+      writes = await Promise.all(chainTargets.map(async (target): Promise<WriteDispatchResult> => {
         const writeBody: Record<string, unknown> = {
           user_id: userId,
           agent_id: target.agent_id,
@@ -153,6 +159,7 @@ serve(async (req) => {
 
     await recordHypomnemaActivity(supabase, {
       userId,
+      agentId: activityAgentId,
       title: result.should_reflect ? "Hypomnema gate triggered" : "Hypomnema skipped",
       summary: result.reason || (result.should_reflect ? "Reflection queued." : "Gate skipped reflection."),
       severity: result.should_reflect && writes.some(writeDispatchFailed)
@@ -190,6 +197,7 @@ async function recordHypomnemaActivity(
   supabase: any,
   opts: {
     userId: string;
+    agentId?: string;
     title: string;
     summary: string;
     severity: "info" | "warning" | "error";
@@ -198,6 +206,7 @@ async function recordHypomnemaActivity(
 ): Promise<void> {
   await supabase.from("entity_activity_log").insert({
     user_id: opts.userId,
+    agent_id: normalizeAgentId(opts.agentId),
     activity_type: "hypomnema_gate",
     title: opts.title,
     summary: opts.summary,

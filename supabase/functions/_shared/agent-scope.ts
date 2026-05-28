@@ -54,14 +54,65 @@ export async function loadActiveAgentScopes(
     return [];
   }
 
-  return [...new Map((data || []).map((row: {
+  const candidateScopes = [...new Map((data || []).map((row: {
     user_id: string;
     agent_id?: string | null;
     primary_agent_id?: string | null;
   }) => {
     const agentId = resolveScopeAgentId(row);
     return [`${row.user_id}:${agentId}`, { userId: row.user_id, agentId }];
-  })).values()].filter((scope) => isSubstrateAgentId((scope as AgentScope).agentId)) as AgentScope[];
+  })).values()]
+    .filter((scope) => isSubstrateAgentId((scope as AgentScope).agentId)) as AgentScope[];
+
+  return filterValidAgentScopes(supabase, candidateScopes);
+}
+
+export async function filterValidAgentScopes(
+  supabase: any,
+  scopes: AgentScope[],
+): Promise<AgentScope[]> {
+  const normalized = scopes
+    .map((scope) => ({
+      userId: scope.userId,
+      agentId: normalizeAgentId(scope.agentId),
+    }))
+    .filter((scope) => scope.userId && isSubstrateAgentId(scope.agentId));
+
+  const lucaScopes = normalized.filter((scope) => scope.agentId === "luca");
+  const customScopes = normalized.filter((scope) => scope.agentId !== "luca");
+  if (customScopes.length === 0) return lucaScopes;
+
+  const userIds = [...new Set(customScopes.map((scope) => scope.userId))];
+  const agentIds = [...new Set(customScopes.map((scope) => scope.agentId))];
+  const { data, error } = await supabase
+    .from("agent_configs")
+    .select("user_id, id")
+    .in("user_id", userIds)
+    .in("id", agentIds)
+    .eq("pending", false);
+
+  if (error) {
+    console.warn("[agent-scope] failed to validate active custom scopes:", error.message);
+    return lucaScopes;
+  }
+
+  const validCustom = new Set(
+    (data || []).map((row: { user_id: string; id: string }) => `${row.user_id}:${normalizeAgentId(row.id)}`),
+  );
+
+  return [
+    ...lucaScopes,
+    ...customScopes.filter((scope) => validCustom.has(`${scope.userId}:${scope.agentId}`)),
+  ];
+}
+
+export async function isValidAgentScope(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<boolean> {
+  const filtered = await filterValidAgentScopes(supabase, [{ userId, agentId }]);
+  return filtered.length > 0;
 }
 
 export async function allowsProactiveAutonomy(
@@ -72,6 +123,8 @@ export async function allowsProactiveAutonomy(
   const normalizedAgentId = normalizeAgentId(agentId);
   if (!isSubstrateAgentId(normalizedAgentId)) return false;
   if (normalizedAgentId === "luca") return true;
+
+  if (!(await isValidAgentScope(supabase, userId, normalizedAgentId))) return false;
 
   const { data } = await supabase
     .from("agent_configs")

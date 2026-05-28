@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -23,11 +24,12 @@ serve(async (req) => {
     }
 
     let user_id: string;
+    let bodyData: any = {};
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (authHeader === `Bearer ${serviceRoleKey}`) {
       // Internal service call - trust user_id from body
-      const body = await req.json();
-      user_id = body.user_id;
+      bodyData = await req.json();
+      user_id = bodyData.user_id;
       if (!user_id || typeof user_id !== "string" || !uuidRegex.test(user_id)) {
         return new Response(JSON.stringify({ error: 'Valid user_id required for service calls' }), {
           status: 400,
@@ -50,6 +52,12 @@ serve(async (req) => {
         });
       }
       user_id = claimsData.claims.sub as string;
+      bodyData = await req.json().catch(() => ({}));
+    }
+
+    const agent_id = normalizeAgentId(bodyData.agent_id);
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "memory-reflect", getCorsHeaders(req));
     }
 
     // Get user's API key
@@ -69,6 +77,7 @@ serve(async (req) => {
       .from("memories")
       .select("id, content, memory_type, confidence, confidence_source, relevance_score, created_at, access_count, tags, emotional_valence, emotional_intensity, decay_factor, is_watchlist, sharpness")
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -250,6 +259,7 @@ Rules:
     let memoriesCreated = 0;
     let memoriesUpdated = 0;
     let connectionsCreated = 0;
+    const visibleMemoryIds = new Set((memories || []).map((memory: any) => memory.id));
 
     // Insert syntheses with supersession chain
     if (result.syntheses?.length > 0) {
@@ -258,6 +268,7 @@ Rules:
           .from("memories")
           .insert({
             user_id,
+            agent_id,
             content: s.content,
             memory_type: "synthesis",
             confidence: s.confidence ?? 0.8,
@@ -269,22 +280,26 @@ Rules:
           .select("id")
           .single();
 
-        if (newMem && s.supersedes_ids?.length > 0) {
+        const scopedSupersedesIds = (s.supersedes_ids || []).filter((id: string) => visibleMemoryIds.has(id));
+        if (newMem && scopedSupersedesIds.length > 0) {
           // Mark superseded memories
-          for (const oldId of s.supersedes_ids) {
+          for (const oldId of scopedSupersedesIds) {
             await supabase
               .from("memories")
               .update({ superseded_by: newMem.id })
               .eq("id", oldId)
-              .eq("user_id", user_id);
+              .eq("user_id", user_id)
+              .eq("agent_id", agent_id);
           }
           // Set supersedes on the new synthesis (first one)
           await supabase
             .from("memories")
-            .update({ supersedes: s.supersedes_ids[0] })
-            .eq("id", newMem.id);
+            .update({ supersedes: scopedSupersedesIds[0] })
+            .eq("id", newMem.id)
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id);
 
-          memoriesUpdated += s.supersedes_ids.length;
+          memoriesUpdated += scopedSupersedesIds.length;
         }
         memoriesCreated++;
       }
@@ -353,35 +368,41 @@ Rules:
           .from("memories")
           .update(update)
           .eq("id", d.memory_id)
-          .eq("user_id", user_id);
+          .eq("user_id", user_id)
+          .eq("agent_id", agent_id);
         memoriesUpdated++;
       }
     }
 
     // Create connections
     if (result.connections?.length > 0) {
-      const connRows = result.connections.map((c: any) => ({
-        source_memory_id: c.source_id,
-        target_memory_id: c.target_id,
-        relation_type: c.relation_type,
-        strength: c.strength ?? 0.5,
-        user_id,
-      }));
+      const connRows = result.connections
+        .filter((c: any) => visibleMemoryIds.has(c.source_id) && visibleMemoryIds.has(c.target_id))
+        .map((c: any) => ({
+          source_memory_id: c.source_id,
+          target_memory_id: c.target_id,
+          relation_type: c.relation_type,
+          strength: c.strength ?? 0.5,
+          user_id,
+        }));
 
-      const { error: connError } = await supabase
-        .from("memory_connections")
-        .upsert(connRows, { onConflict: "source_memory_id,target_memory_id,relation_type" });
-      if (!connError) connectionsCreated = connRows.length;
+      if (connRows.length > 0) {
+        const { error: connError } = await supabase
+          .from("memory_connections")
+          .upsert(connRows, { onConflict: "source_memory_id,target_memory_id,relation_type" });
+        if (!connError) connectionsCreated = connRows.length;
+      }
     }
 
     // Soft-delete redundant memories
     if (result.soft_delete_ids?.length > 0) {
-      for (const id of result.soft_delete_ids) {
+      for (const id of result.soft_delete_ids.filter((id: string) => visibleMemoryIds.has(id))) {
         await supabase
           .from("memories")
           .update({ is_deleted: true, deleted_at: new Date().toISOString() })
           .eq("id", id)
-          .eq("user_id", user_id);
+          .eq("user_id", user_id)
+          .eq("agent_id", agent_id);
       }
     }
 
