@@ -78,9 +78,13 @@ describe('design token contrast', () => {
 });
 
 describe('typography system', () => {
-  it('keeps the app on the shared Mnemos/foundation type ladder', () => {
-    expect(token('font-grotesque')).toContain('Inter Tight');
-    expect(token('font-sans')).toContain('Inter');
+  it('keeps the app on the restored Switzer + Instrument Serif type ladder', () => {
+    // Switzer is the primary grotesque (was drifted to Inter); Instrument Serif
+    // is the restored accent face; --font-grotesque is deprecated and aliased
+    // onto the sans stack (it used to force Inter Tight).
+    expect(token('font-sans')).toContain('Switzer');
+    expect(token('font-serif')).toContain('Instrument Serif');
+    expect(token('font-grotesque')).toContain('var(--font-sans)');
     expect(token('font-mono')).toContain('JetBrains Mono');
 
     expect(token('weight-thin')).toBe('280');
@@ -91,18 +95,17 @@ describe('typography system', () => {
     expect(token('type-3xl')).toBe('35px');
   });
 
-  it('uses non-negative tracking for prose and display roles while preserving mono metadata spacing', () => {
-    for (const textToken of [
-      'track-display-tight',
-      'track-tight',
-      'track-display',
-      'track-body-tight',
-      'track-body',
-      'track-ui',
-    ]) {
-      expect(token(textToken)).not.toContain('-');
+  it('restores intentional negative tracking on display/tight roles and openness on body/ui', () => {
+    // Display + tight headings tighten (negative em) — the all-zero drift is gone.
+    for (const textToken of ['track-display-tight', 'track-tight', 'track-display']) {
+      expect(token(textToken).startsWith('-'), `${textToken} should be negative`).toBe(true);
     }
-
+    // Body + UI roles stay non-negative (a hair of openness, never negative).
+    for (const textToken of ['track-body-tight', 'track-body', 'track-ui']) {
+      expect(token(textToken).startsWith('-'), `${textToken} should be non-negative`).toBe(false);
+    }
+    // Mono metadata spacing preserved through the restoration.
+    expect(token('track-mono')).toBe('0.08em');
     expect(token('track-meta')).toBe('0.12em');
     expect(token('track-folio')).toBe('0.16em');
   });

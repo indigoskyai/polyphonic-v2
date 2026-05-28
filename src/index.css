@@ -1,5 +1,5 @@
 @import url('https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@280;300;320;400;450;520&family=Inter:ital,wght@0,350;0,370;0,400;0,420;0,450;0,550;1,400;1,450&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 @import './components/canvas-profile/canvas.css';
 
@@ -184,20 +184,26 @@
   --inset-gap:         6px;
   --devbar-height:     0px;
 
-  /* Typography stack */
-  --font-sans:      'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Switzer', 'Segoe UI', sans-serif;
-  --font-grotesque: 'Inter Tight', 'SF Pro Display', var(--font-sans);
+  /* Typography stack
+     Switzer (Fontshare) is the primary grotesque — clean, warm, editorial-neutral.
+     Instrument Serif is the accent face: italic stream/inner-life headings + the
+     rail monogram, used sparingly. JetBrains Mono for telemetry/timestamps/IDs.
+     --font-grotesque is deprecated (was Inter Tight) — aliased to sans so any
+     lingering call sites render Switzer until they're migrated off it. */
+  --font-sans:      'Switzer', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font-grotesque: var(--font-sans);
   --font-mono:      'JetBrains Mono', 'SF Mono', 'Geist Mono', 'Fira Code', ui-monospace, monospace;
-  /* --font-serif removed: collapsed onto --font-sans for unified hierarchy */
-  --font-serif:     var(--font-sans);
+  --font-serif:     'Instrument Serif', Georgia, 'Times New Roman', serif;
 
-  /* Letter-spacing scale */
-  --track-display-tight: 0em;
-  --track-tight:         0em;
-  --track-display:       0em;
-  --track-body-tight:    0em;
-  --track-body:          0em;
-  --track-ui:            0em;
+  /* Letter-spacing scale — restored from the all-zero drift. Display + headings
+     tighten; body gets a hair of openness; UI labels a touch more. Mono/meta/
+     folio retain their (working, non-zero) tuned values. */
+  --track-display-tight: -0.022em;
+  --track-tight:         -0.02em;
+  --track-display:       -0.011em;
+  --track-body-tight:    0.001em;
+  --track-body:          0.004em;
+  --track-ui:            0.008em;
   --track-mono:          0.08em;
   --track-meta:          0.12em;
   --track-folio:         0.16em;
@@ -11390,8 +11396,8 @@ html {
   margin-bottom: 12px;
 }
 .m-stream-name {
-  font-family: var(--font-sans); font-size: 14px;
-  color: var(--text-primary); font-weight: 500; letter-spacing: var(--track-body);
+  font-family: var(--font-serif); font-size: 16px; font-style: italic;
+  color: var(--text-primary); font-weight: 400; letter-spacing: 0;
 }
 .m-stream-count {
   font-family: var(--font-mono); font-size: 11px;
@@ -11534,9 +11540,9 @@ html {
 .s-hero-eye .v   { color: var(--text-soft); }
 .s-hero-eye .stream { color: var(--text-whisper); }
 .s-hero-title {
-  font-family: var(--font-sans); font-size: 32px; color: var(--ink);
-  letter-spacing: var(--track-tight); line-height: 1.05;
-  font-weight: 500; margin-bottom: 8px;
+  font-family: var(--font-serif); font-size: 34px; color: var(--ink);
+  letter-spacing: 0; line-height: 1.08;
+  font-weight: 400; font-style: italic; margin-bottom: 8px;
 }
 .s-hero-sub {
   font-family: var(--font-sans); font-size: 13.5px;
