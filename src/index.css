@@ -9141,19 +9141,13 @@ html {
   border-radius: var(--radius-lg);
   background: var(--surface-1);
   box-shadow: var(--shadow-inset-highlight);
-  transition: border-color var(--dur-fast) var(--ease-out);
-}
-
-.luca-guide-composer:focus-within {
-  border-color: var(--border-focus);
 }
 
 .luca-guide-composer textarea {
   min-height: 44px;
   max-height: 130px;
-  resize: vertical;
+  resize: none;
   border: 0;
-  border-radius: 13px;
   background: transparent;
   color: var(--text-body);
   outline: none;
