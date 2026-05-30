@@ -313,6 +313,23 @@ Standard section labels: `PROVENANCE`, `METADATA`, `EVIDENCE`, `RELATED MEMORIES
 
 ---
 
+## Brand mark
+
+The Polyphonic symbol is **⏀** — a circle bisected by a vertical line that
+extends beyond it (the "monochord": one string over a resonant body, for
+*poly·phonic*). Single source of truth: `src/components/PolyphonicMark.tsx`
+(stroke = `currentColor`, tunable `size`/`strokeWidth`). Use it **anywhere a
+brand symbol is needed** — rail brand mark, favicon, companion overlay,
+auth/landing chrome, OG art. Never re-draw it inline; import the component so
+a form tweak propagates everywhere at once.
+
+The Luca launcher/avatar **"L"** is the *agent's* mark and stays a letter —
+distinct from the Polyphonic brand symbol. (Raster assets — `favicon.ico`,
+`favicon.png`, `og:image` — must be regenerated from `favicon.svg` when the
+mark changes.)
+
+---
+
 ## Iconography
 
 - **Library:** Lucide React (or Lucide icons if ported). Don't mix with Heroicons or anything else.
