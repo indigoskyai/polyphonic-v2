@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useTokenGateStore } from '@/stores/tokenGateStore';
 import LandingParticleField from '@/components/LandingParticleField';
+import PolyphonicMark from '@/components/PolyphonicMark';
 import {
   connectAndSign,
   detectWallets,
@@ -125,17 +126,20 @@ export default function AccessGatePage() {
         className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5"
         style={{ zIndex: 3 }}
       >
-        <span
-          style={{
-            fontFamily:
-              "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
-            fontSize: 12,
-            fontWeight: 200,
-            letterSpacing: '0.22em',
-            color: 'var(--text-body)',
-          }}
-        >
-          POLYPHONIC
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+          <PolyphonicMark size={14} strokeWidth={6} style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+          <span
+            style={{
+              fontFamily:
+                "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
+              fontSize: 12,
+              fontWeight: 200,
+              letterSpacing: '0.22em',
+              color: 'var(--text-body)',
+            }}
+          >
+            POLYPHONIC
+          </span>
         </span>
         <button
           type="button"

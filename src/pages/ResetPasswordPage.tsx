@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import LandingParticleField, {
   type LandingFieldHandle,
 } from '@/components/LandingParticleField';
+import PolyphonicMark from '@/components/PolyphonicMark';
 
 /**
  * Public route. Supabase recovery links land here with a `type=recovery`
@@ -320,6 +321,7 @@ function Card({ children }: { children: React.ReactNode }) {
               pointerEvents: 'none',
             }}
           />
+          <PolyphonicMark size={14} strokeWidth={6} style={{ color: 'var(--text-soft)', marginRight: 9, flexShrink: 0 }} />
           <span
             style={{
               fontFamily:
