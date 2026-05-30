@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import PolyphonicMark from '@/components/PolyphonicMark';
 import { supabase } from '@/integrations/supabase/client';
 import {
   authRedirectTo,
@@ -321,6 +322,7 @@ function ComposerHeading({
         userSelect: 'none',
       }}
     >
+      <PolyphonicMark size={40} strokeWidth={5} style={{ color: 'var(--ink)', marginBottom: 26 }} />
       <h1
         style={{
           // System SF Pro Display chain at hairline weight — matches
@@ -612,6 +614,7 @@ function AuthShell({
               pointerEvents: 'none',
             }}
           />
+          <PolyphonicMark size={14} strokeWidth={6} style={{ color: 'var(--text-soft)', marginRight: 9, flexShrink: 0 }} />
           <span
             style={{
               fontFamily:
