@@ -63,15 +63,13 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .filter("provenance->>import_id", "eq", import_id);
 
-    // Delete curiosity questions created during the import window
-    const startTime = importRecord.created_at;
-    const endTime = importRecord.completed_at || new Date().toISOString();
-    const { count: questionsDeleted } = await supabase
-      .from("curiosity_questions")
+    // Delete derived rows only when they carry explicit import provenance.
+    // Time-window cleanup can remove unrelated agent activity created nearby.
+    const { count: engramsDeleted } = await supabase
+      .from("engrams")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
-      .gte("created_at", startTime)
-      .lte("created_at", endTime);
+      .filter("source_context->>import_id", "eq", import_id);
 
     // Mark the import as cleared
     await supabase
@@ -83,7 +81,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         memories_deleted: memoriesDeleted || 0,
-        questions_deleted: questionsDeleted || 0,
+        engrams_deleted: engramsDeleted || 0,
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );

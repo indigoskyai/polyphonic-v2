@@ -16,7 +16,7 @@ const routeLoaders: Record<string, RouteLoader> = {
   '/settings/appearance': () => import('@/pages/settings/AppearanceSettings'),
   '/settings/skills': () => import('@/pages/ProfileSkillsView'),
   '/settings/routines': () => import('@/pages/ProfileScheduleView'),
-  '/settings/voice': () => import('@/pages/settings/SettingsPlaceholder'),
+  '/settings/voice': () => import('@/pages/settings/VoiceSettings'),
   '/settings/local-runtime': () => import('@/pages/settings/LocalRuntimeSettings'),
   '/settings/portability': () => import('@/pages/ImportView'),
   '/settings/account': () => import('@/pages/settings/AccountSettings'),
@@ -80,24 +80,33 @@ export function prefetchCoreSettingsRoutes() {
   });
 }
 
-// Primary rail destinations. Prefetched on idle once the shell mounts so a
-// direct click (or keyboard nav) to any top-level section never hits a cold
-// lazy chunk and shows the route skeleton. Hover-prefetch still covers the
-// long tail; this guarantees the surfaces a user reaches for constantly are
-// always warm.
-const primaryNavPaths = [
+// Keep eager shell prefetch light. Heavy diagnostic routes still warm on
+// hover/focus, but should not be parsed during the first companion/chat session.
+const lightPrimaryNavPaths = [
   '/chat',
-  '/memory',
-  '/mind',
   '/journal',
-  '/projects',
-  '/profile',
   '/settings/agents',
 ];
 
-export function prefetchPrimaryNavRoutes() {
+const heavyPrimaryNavPaths = [
+  '/memory',
+  '/mind',
+  '/projects',
+  '/profile',
+];
+
+function isConstrainedClient() {
+  if (typeof window === 'undefined') return true;
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  return window.matchMedia('(max-width: 767px)').matches || Boolean(nav.connection?.saveData);
+}
+
+export function prefetchPrimaryNavRoutes(options: { includeHeavy?: boolean } = {}) {
   scheduleIdle(() => {
-    for (const path of primaryNavPaths) {
+    const paths = options.includeHeavy && !isConstrainedClient()
+      ? [...lightPrimaryNavPaths, ...heavyPrimaryNavPaths]
+      : lightPrimaryNavPaths;
+    for (const path of paths) {
       prefetchRoute(path);
     }
   });
