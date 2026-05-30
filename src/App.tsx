@@ -13,7 +13,6 @@ import Rail from "./components/Rail";
 // labels + per-section content (no separate Sidebar card). The old
 // NavColumn + standalone Sidebar are removed; restorable at git tag
 // `pre-rail-rewrite` if ever needed.
-import Clockbar from "./components/Clockbar";
 import MobileAppBar from "./components/mobile/MobileAppBar";
 import MobileNavDrawer from "./components/mobile/MobileNavDrawer";
 import CommandPalette from "./components/palette/CommandPalette";
@@ -232,7 +231,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
-  const clockbarVisible = useSettingsStore((s) => s.clockbar_visible);
   const loadNotifications = useNotificationStore((s) => s.load);
   const subscribeNotifications = useNotificationStore((s) => s.subscribe);
   const loadAgentScopes = useAgentScopeStore((s) => s.load);
@@ -323,7 +321,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </div>
         </Suspense>
-        {clockbarVisible && !isMobile && <Clockbar />}
       </div>
       {isMobile && <MobileNavDrawer />}
       <CommandPalette />

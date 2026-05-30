@@ -50,7 +50,6 @@ const MODE_OPTIONS: Array<{ value: InterfaceMode; label: string; hint: string }>
 export default function AppearanceSettings() {
   const {
     font_size,
-    clockbar_visible,
     show_agent_colors,
     show_timestamps,
     interface_density,
@@ -187,20 +186,6 @@ export default function AppearanceSettings() {
                 on={show_agent_colors}
                 onChange={() =>
                   updateSetting('show_agent_colors', !show_agent_colors)
-                }
-              />
-            </div>
-          </div>
-          <div className="set-row">
-            <div className="set-row-copy">
-              <div className="set-row-label">Show clockbar</div>
-              <div className="set-row-desc">Persistent bottom time display.</div>
-            </div>
-            <div className="set-row-control">
-              <Toggle
-                on={clockbar_visible}
-                onChange={() =>
-                  updateSetting('clockbar_visible', !clockbar_visible)
                 }
               />
             </div>
