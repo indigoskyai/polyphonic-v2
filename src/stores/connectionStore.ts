@@ -134,7 +134,9 @@ function openChannel(set: (partial: Partial<ConnectionState>) => void) {
         scheduleReconnect(set);
       } else if (status === 'CLOSED') {
         console.warn('[connectionStore] realtime channel status', status);
-        reconnectAttempts += 1;
+        // Supabase can close idle channels as part of normal lifecycle work.
+        // Reconnect quietly; sustained CHANNEL_ERROR/TIMED_OUT statuses are the
+        // conditions that should interrupt the user.
         markDisconnected(set, 'Realtime updates are reconnecting in the background.', {
           surfaceAfterMs: null,
         });

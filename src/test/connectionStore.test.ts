@@ -75,6 +75,25 @@ describe('connection store realtime health', () => {
     unsubscribe();
   });
 
+  it('keeps repeated idle channel closes quiet', async () => {
+    const useConnectionStore = await loadConnectionStore();
+    const unsubscribe = useConnectionStore.getState().subscribe();
+
+    realtimeMock.channels[0].callback?.('SUBSCRIBED');
+
+    for (let i = 0; i < 4; i += 1) {
+      const channel = realtimeMock.channels[i];
+      channel.callback?.('CLOSED');
+      expect(useConnectionStore.getState()).toMatchObject({ connected: false, visible: false });
+      vi.advanceTimersByTime(1_200);
+    }
+
+    expect(realtimeMock.channel).toHaveBeenCalledTimes(5);
+    expect(useConnectionStore.getState()).toMatchObject({ visible: false });
+
+    unsubscribe();
+  });
+
   it('surfaces a banner only after sustained realtime failure', async () => {
     const useConnectionStore = await loadConnectionStore();
     const unsubscribe = useConnectionStore.getState().subscribe();

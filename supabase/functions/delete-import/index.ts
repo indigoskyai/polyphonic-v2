@@ -62,58 +62,14 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .filter("provenance->>import_id", "eq", import_id);
 
-    // Hard-delete derived rows created during the import's processing window.
-    // Best-effort: derived data (engrams/beliefs/hypomnema/etc.) is not tagged
-    // with import_id, so a full clean slate requires the reset-user-cognition
-    // edge function. We do the time-window cleanup here for the obvious cases.
-    const startTime = importRecord.created_at;
-    const endTime = importRecord.completed_at || new Date().toISOString();
-
-    const { count: questionsDeleted } = await supabase
-      .from("curiosity_questions")
+    // Hard-delete only derived rows that carry explicit import provenance.
+    // Do not use time-window cleanup here: unrelated agent/user cognition can be
+    // created in the same window, and full resets belong to reset-user-cognition.
+    const { count: engramsDeleted } = await supabase
+      .from("engrams")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
-      .gte("created_at", startTime)
-      .lte("created_at", endTime);
-
-    const { count: candidatesDeleted } = await supabase
-      .from("memory_candidates")
-      .delete({ count: "exact" })
-      .eq("user_id", user.id)
-      .gte("created_at", startTime)
-      .lte("created_at", endTime);
-
-    const { count: revisionsDeleted } = await supabase
-      .from("pending_revisions")
-      .delete({ count: "exact" })
-      .eq("user_id", user.id)
-      .gte("created_at", startTime)
-      .lte("created_at", endTime);
-
-    // Wipe inferred cognition for a true clean slate. Derived data
-    // (engrams, beliefs, profile, hypomnema, thoughts, emotions, etc.)
-    // is not tagged with import_id, so without this the profile keeps
-    // reflecting the deleted history. Threads, settings, identity docs,
-    // API keys, projects, and journal entries are intentionally preserved.
-    const COGNITION_TABLES = [
-      "memories", "memory_candidates", "memory_events",
-      "engrams", "engram_archive", "connections", "beliefs", "hypomnema_entry",
-      "psychological_profile", "cognitive_state", "emotional_state", "emotional_history",
-      "mnemos_emotional_state", "mnemos_digests", "profile_daily_pulse",
-      "thought_stream", "thought_initiations", "activity_events", "entity_activity_log",
-      "observer_notes", "observer_logs", "daily_logs",
-      "curiosity_questions", "pending_revisions",
-    ] as const;
-    const cognitionDeleted: Record<string, number> = {};
-    for (const table of COGNITION_TABLES) {
-      try {
-        const { count, error } = await supabase
-          .from(table)
-          .delete({ count: "exact" })
-          .eq("user_id", user.id);
-        if (!error) cognitionDeleted[table] = count ?? 0;
-      } catch { /* table may not exist in this env */ }
-    }
+      .filter("source_context->>import_id", "eq", import_id);
 
     // Hard-delete the import row
     await supabase.from("chat_imports").delete().eq("id", import_id);
@@ -122,10 +78,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         memories_deleted: memoriesDeleted || 0,
-        questions_deleted: questionsDeleted || 0,
-        candidates_deleted: candidatesDeleted || 0,
-        revisions_deleted: revisionsDeleted || 0,
-        cognition_deleted: cognitionDeleted,
+        engrams_deleted: engramsDeleted || 0,
+        note: "Only import-provenance rows were removed. Use reset-user-cognition for an explicit full cognition reset.",
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );

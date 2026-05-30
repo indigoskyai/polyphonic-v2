@@ -823,10 +823,6 @@ export function BurstPlot({ events, height = 100, label }: {
     return { stamps, tMin, tMax, span };
   }, [events]);
 
-  if (!data) {
-    return <EmptyState note={label ? `${label} — no data yet` : 'No timeline data yet'} height={height} />;
-  }
-
   const W = 1000;
   const H = height;
   const padX = 12;
@@ -844,9 +840,13 @@ export function BurstPlot({ events, height = 100, label }: {
   // Build a legend of unique memory_types present (lowercased)
   const typesPresent = useMemo(() => {
     const set = new Set<string>();
-    for (const s of data.stamps) if (s.type) set.add(s.type.toLowerCase());
+    for (const s of data?.stamps ?? []) if (s.type) set.add(s.type.toLowerCase());
     return Array.from(set);
-  }, [data.stamps]);
+  }, [data]);
+
+  if (!data) {
+    return <EmptyState note={label ? `${label} — no data yet` : 'No timeline data yet'} height={height} />;
+  }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -1049,10 +1049,8 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
   const outerRadius = size / 2 - (showLabels ? labelGap + 12 : 12);
   const innerRadius = outerRadius * 0.12;
 
-  if (!axes?.length) return null;
-
   const points = useMemo(() => {
-    return axes.map((a, i) => {
+    return (axes || []).map((a, i) => {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / axes.length;
       return {
         key: a.key,
@@ -1065,6 +1063,8 @@ export function RadialChart({ axes, traces, size = 240, showLabels = true, label
       };
     });
   }, [axes, cx, cy, outerRadius, labelGap]);
+
+  if (!axes?.length) return null;
 
   function tracePath(values: Record<string, number>): string {
     return points.map((p, i) => {

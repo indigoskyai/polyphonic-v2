@@ -279,9 +279,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
     setSidebarVisible(shouldDefaultSidebarVisible(interfaceMode));
   }, [interfaceMode, setSidebarVisible]);
 
-  // Warm the primary nav chunks on idle once the shell mounts, so the first
-  // click to any top-level section is instant rather than showing the lazy
-  // route skeleton.
+  // Warm only lightweight primary chunks on idle. Heavy diagnostic surfaces
+  // stay hover/on-demand so the first companion/chat session stays fast.
   useEffect(() => {
     prefetchPrimaryNavRoutes();
   }, []);

@@ -360,14 +360,41 @@ function latestUserContent(messages: any[]): string {
 function looksLikeAgentForgeRequest(text: string): boolean {
   const normalized = text.toLowerCase();
   const asksToMake =
-    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit)\b/.test(normalized) ||
+    /\b(create|build|make|design|draft|forge|add|revise|update|change|edit|recreate|rebuild|convert|migrate|import|bring)\b/.test(normalized) ||
     /\bnew\b/.test(normalized);
   const mentionsAgent =
     /\bcustom\s+agent\b/.test(normalized) ||
     /\bagent\b/.test(normalized) ||
+    /\bdigital\s+(entity|companion|being|mind)\b/.test(normalized) ||
+    /\b(companion|persona)\b/.test(normalized) ||
+    /\bcharacter\s+card\b/.test(normalized) ||
     /\bopen\s+clause\b/.test(normalized) ||
     /\bopenclaw\b/.test(normalized);
   return asksToMake && mentionsAgent;
+}
+
+function looksLikeForgeFallbackLeak(content: unknown): boolean {
+  if (typeof content !== "string") return false;
+  const normalized = content.toLowerCase();
+  if (
+    normalized.includes("forge_agent") ||
+    normalized.includes("forgeagentblueprint") ||
+    normalized.includes("agent_forge_proposal")
+  ) {
+    return true;
+  }
+  const hasOpenClauseDocs =
+    normalized.includes("soul.md") &&
+    normalized.includes("convictions.md") &&
+    normalized.includes("self-model");
+  const hasBlueprintJson =
+    normalized.includes("identity_docs") &&
+    normalized.includes("avatar_color") &&
+    normalized.includes("voice_description");
+  const claimsProposalWithoutTool =
+    /\b(i drafted|i have drafted|proposal card|review the proposal|approve it)\b/.test(normalized) &&
+    /\b(agent|companion|digital entity|persona)\b/.test(normalized);
+  return hasOpenClauseDocs || hasBlueprintJson || claimsProposalWithoutTool;
 }
 
 serve(async (req) => {
@@ -425,12 +452,19 @@ serve(async (req) => {
       );
     }
 
-    // Get user's API key
+    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
+
+    // Get the user's API key. Forge is intentionally allowed on the platform
+    // key as a narrow exception so first-time users can create their included
+    // agent; the general tool planner still requires BYOK.
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     let openrouterKey = "";
     if (userId) {
       const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
       openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
+    }
+    if (!openrouterKey && forceForgeOnly) {
+      openrouterKey = (Deno.env.get("OPENROUTER_API_KEY") || "").trim();
     }
     if (!openrouterKey) {
       return new Response(
@@ -439,8 +473,7 @@ serve(async (req) => {
       );
     }
 
-    const mcpTools = userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
-    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
+    const mcpTools = !forceForgeOnly && userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
     const toolSchemas = forceForgeOnly
       ? TOOL_SCHEMAS.filter((schema) => toolName(schema) === "forge_agent")
       : [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
@@ -497,8 +530,28 @@ serve(async (req) => {
       forceForgeOnly ? 75_000 : 15_000
     );
 
-    let planningData: any;
-    try {
+    const callPlanningModel = async (
+      planningMessagesForCall: any[],
+      options: {
+        forceToolChoice?: boolean;
+        temperature?: number;
+        maxTokens?: number;
+        signal?: AbortSignal;
+        label?: string;
+      } = {},
+    ): Promise<any> => {
+      const body: Record<string, unknown> = {
+        model: "google/gemini-2.5-flash",
+        messages: planningMessagesForCall,
+        tools: toolSchemas,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.maxTokens ?? (forceForgeOnly ? 12_000 : 700),
+      };
+      if (options.forceToolChoice) {
+        body.tool_choice = { type: "function", function: { name: "forge_agent" } };
+        body.parallel_tool_calls = false;
+      }
+
       const planningResponse = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
@@ -509,33 +562,28 @@ serve(async (req) => {
             "HTTP-Referer": "https://polyphonic.chat",
             "X-Title": "Polyphonic",
           },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: planningMessages,
-            tools: toolSchemas,
-            temperature: 0.2,
-            max_tokens: forceForgeOnly ? 12_000 : 700,
-          }),
-          signal: planningController.signal,
+          body: JSON.stringify(body),
+          signal: options.signal ?? planningController.signal,
         }
       );
-
-      clearTimeout(planningTimeout);
 
       if (!planningResponse.ok) {
         const errText = await planningResponse.text();
         console.error(
-          "Planning call failed:",
+          `${options.label || "Planning"} call failed:`,
           planningResponse.status,
           errText
         );
-        return new Response(
-          JSON.stringify({ used_tools: false, error: "planning_failed" }),
-          { status: 200, headers: jsonHeaders }
-        );
+        throw new Error("planning_failed");
       }
 
-      planningData = await planningResponse.json();
+      return await planningResponse.json();
+    };
+
+    let planningData: any;
+    try {
+      planningData = await callPlanningModel(planningMessages);
+      clearTimeout(planningTimeout);
     } catch (err: unknown) {
       clearTimeout(planningTimeout);
       if (err instanceof Error && err.name === "AbortError") {
@@ -552,8 +600,44 @@ serve(async (req) => {
       );
     }
 
-    const choice = planningData.choices?.[0]?.message;
-    const toolCalls = choice?.tool_calls;
+    let choice = planningData.choices?.[0]?.message;
+    let toolCalls = choice?.tool_calls;
+
+    if (forceForgeOnly && (!toolCalls || toolCalls.length === 0) && looksLikeForgeFallbackLeak(choice?.content)) {
+      console.warn("Forge planner wrote blueprint text instead of calling tool; retrying with forced forge_agent tool choice.");
+      const repairController = new AbortController();
+      const repairTimeout = setTimeout(() => repairController.abort(), 45_000);
+      try {
+        planningData = await callPlanningModel(
+          [
+            planningMessages[0],
+            ...messages.slice(-6),
+            {
+              role: "assistant",
+              content: String(choice?.content || "").slice(0, 4000),
+            },
+            {
+              role: "user",
+              content:
+                "That previous content is a Forge blueprint/tool call written as chat text. Do not explain it. Call the forge_agent tool now with the complete blueprint so Polyphonic can show the proposal card.",
+            },
+          ],
+          {
+            forceToolChoice: true,
+            temperature: 0.1,
+            maxTokens: 12_000,
+            signal: repairController.signal,
+            label: "Forge repair planning",
+          },
+        );
+        choice = planningData.choices?.[0]?.message;
+        toolCalls = choice?.tool_calls;
+      } catch (err: unknown) {
+        console.error("Forge repair planning call error:", err);
+      } finally {
+        clearTimeout(repairTimeout);
+      }
+    }
 
     // No tools needed
     if (!toolCalls || toolCalls.length === 0) {
