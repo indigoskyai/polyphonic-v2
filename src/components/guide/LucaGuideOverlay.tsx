@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import PolyphonicMark from '@/components/PolyphonicMark';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useDrawerStore, type DrawerKey } from '@/stores/drawerStore';
 import { useInterfaceModeStore } from '@/stores/interfaceModeStore';
@@ -224,19 +225,7 @@ export default function LucaGuideOverlay() {
           </div>
 
           <div className="luca-guide-context">
-            {/* Polyphonic mark — nested triangles, matching the favicon. */}
-            <svg
-              width={14}
-              height={14}
-              viewBox="0 0 512 512"
-              fill="none"
-              stroke="currentColor"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polygon points="256,52 470,430 42,430" strokeWidth={34} />
-              <polygon points="256,176 372,374 140,374" strokeWidth={28} />
-            </svg>
+            <PolyphonicMark size={14} strokeWidth={8} />
             <span>{context.summary}</span>
           </div>
 

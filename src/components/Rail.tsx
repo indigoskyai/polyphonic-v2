@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import PolyphonicMark from '@/components/PolyphonicMark';
 import {
   MessageSquare,
   Brain,
@@ -169,7 +170,7 @@ export default function Rail() {
             justifyContent: 'center',
           }}
         >
-          P
+          <PolyphonicMark size={15} strokeWidth={9} />
         </button>
         {expanded && (
           <button
