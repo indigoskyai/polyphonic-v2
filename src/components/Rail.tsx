@@ -150,27 +150,25 @@ export default function Rail() {
           onClick={toggle}
           title="Polyphonic"
           aria-label="Toggle panel"
+          className="rail-brand"
           style={{
             appearance: 'none',
-            width: 26,
-            height: 26,
-            border: '1px solid var(--border-faint)',
-            borderRadius: 6,
-            background: 'rgba(255, 255, 255, 0.018)',
-            color: 'var(--text-soft)',
-            fontFamily: 'var(--font-serif)',
-            fontStyle: 'italic',
-            fontSize: 16,
-            fontWeight: 400,
-            lineHeight: 1,
+            width: 28,
+            height: 28,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-primary)',
             cursor: 'pointer',
             flexShrink: 0,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
+            padding: 0,
+            transition:
+              'color var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out)',
           }}
         >
-          <PolyphonicMark size={15} strokeWidth={9} />
+          <PolyphonicMark size={20} strokeWidth={6.5} />
         </button>
         {expanded && (
           <button

@@ -1052,6 +1052,21 @@ html {
   outline-offset: 2px;
 }
 
+/* Brand logo — the bare mark, no tile. A whisper of glow gives it presence
+   (reads as the brand, not a nav icon); it intensifies on interaction. */
+.rail-brand {
+  filter: drop-shadow(0 0 4px rgba(244, 243, 240, 0.10));
+}
+.rail-brand:hover {
+  color: var(--ink);
+  filter: drop-shadow(0 0 8px rgba(244, 243, 240, 0.22));
+}
+.rail-brand:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
 .mobile-app-bar {
   display: none;
 }
