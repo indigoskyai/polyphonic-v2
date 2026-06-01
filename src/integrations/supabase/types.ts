@@ -621,7 +621,6 @@ export type Database = {
       }
       chat_imports: {
         Row: {
-          agent_id: string
           completed_at: string | null
           conflicts_detected: number | null
           created_at: string
@@ -637,7 +636,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          agent_id?: string
           completed_at?: string | null
           conflicts_detected?: number | null
           created_at?: string
@@ -653,7 +651,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          agent_id?: string
           completed_at?: string | null
           conflicts_detected?: number | null
           created_at?: string
