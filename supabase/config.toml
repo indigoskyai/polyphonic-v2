@@ -109,6 +109,8 @@ project_id = "kknchdnrujzheulqzowv"
     verify_jwt = false
   [functions.profile-chat]
     verify_jwt = false
+  [functions.process-email-queue]
+    verify_jwt = true
   [functions.scheduled-task-run]
     verify_jwt = false
   [functions.skills-distill]
