@@ -10,6 +10,8 @@ export interface Thread {
   archived: boolean;
   heat: string;
   agent_id: string;
+  primary_agent_id: string;
+  participating_agent_ids: string[];
   project_id: string | null;
   created_at: string;
   updated_at: string;
@@ -224,9 +226,17 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   createThread: async (userId, agentId = 'luca', projectId = null) => {
-    const insertPayload: { user_id: string; agent_id: string; project_id?: string } = {
+    const insertPayload: {
+      user_id: string;
+      agent_id: string;
+      primary_agent_id: string;
+      participating_agent_ids: string[];
+      project_id?: string;
+    } = {
       user_id: userId,
       agent_id: agentId,
+      primary_agent_id: agentId,
+      participating_agent_ids: [agentId],
     };
     if (projectId) {
       insertPayload.project_id = projectId;
@@ -304,9 +314,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   updateThreadAgent: async (threadId, agentId) => {
-    await supabase.from('threads').update({ agent_id: agentId }).eq('id', threadId);
+    await supabase
+      .from('threads')
+      .update({
+        agent_id: agentId,
+        primary_agent_id: agentId,
+        participating_agent_ids: [agentId],
+      })
+      .eq('id', threadId);
     set((s) => ({
-      threads: s.threads.map((t) => (t.id === threadId ? { ...t, agent_id: agentId } : t)),
+      threads: s.threads.map((t) => (
+        t.id === threadId
+          ? { ...t, agent_id: agentId, primary_agent_id: agentId, participating_agent_ids: [agentId] }
+          : t
+      )),
     }));
   },
 

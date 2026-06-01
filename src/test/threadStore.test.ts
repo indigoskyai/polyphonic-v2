@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const supabaseMock = vi.hoisted(() => ({
   insert: vi.fn(),
+  update: vi.fn(),
   nextInsertedThread: null as any,
 }));
 
@@ -20,7 +21,10 @@ vi.mock('@/integrations/supabase/client', () => ({
           }),
         };
       },
-      update: () => ({ eq: () => Promise.resolve({}) }),
+      update: (payload: unknown) => {
+        supabaseMock.update(payload);
+        return { eq: () => Promise.resolve({}) };
+      },
     }),
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
     removeChannel: () => {},
@@ -42,6 +46,8 @@ const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState
   pinned: false, starred: false, archived: false,
   heat: 'warm',
   agent_id: 'luca',
+  primary_agent_id: 'luca',
+  participating_agent_ids: ['luca'],
   project_id: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -56,6 +62,8 @@ describe('threadStore thread list helpers', () => {
       pinned: false, starred: false, archived: false,
       heat: 'warm',
       agent_id: 'luca',
+      primary_agent_id: 'luca',
+      participating_agent_ids: ['luca'],
       project_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -85,6 +93,8 @@ describe('threadStore.createThread project scoping', () => {
     expect(supabaseMock.insert).toHaveBeenCalledWith({
       user_id: 'u1',
       agent_id: 'luca',
+      primary_agent_id: 'luca',
+      participating_agent_ids: ['luca'],
     });
   });
 
@@ -96,7 +106,45 @@ describe('threadStore.createThread project scoping', () => {
     expect(supabaseMock.insert).toHaveBeenCalledWith({
       user_id: 'u1',
       agent_id: 'luca',
+      primary_agent_id: 'luca',
+      participating_agent_ids: ['luca'],
       project_id: 'project-1',
+    });
+  });
+
+  it('creates custom-agent threads with primary and participant scope immediately', async () => {
+    supabaseMock.nextInsertedThread = makeThread({
+      id: 'thread-custom',
+      agent_id: 'glyph-weaver',
+      primary_agent_id: 'glyph-weaver',
+      participating_agent_ids: ['glyph-weaver'],
+    });
+
+    await useThreadStore.getState().createThread('u1', 'glyph-weaver');
+
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      user_id: 'u1',
+      agent_id: 'glyph-weaver',
+      primary_agent_id: 'glyph-weaver',
+      participating_agent_ids: ['glyph-weaver'],
+    });
+  });
+
+  it('keeps empty-thread agent switches scoped across all thread identity fields', async () => {
+    supabaseMock.update.mockClear();
+    useThreadStore.setState({ threads: [makeThread({ id: 'thread-1' })], currentThreadId: 'thread-1', messages: [] });
+
+    await useThreadStore.getState().updateThreadAgent('thread-1', 'glyph-weaver');
+
+    expect(supabaseMock.update).toHaveBeenCalledWith({
+      agent_id: 'glyph-weaver',
+      primary_agent_id: 'glyph-weaver',
+      participating_agent_ids: ['glyph-weaver'],
+    });
+    expect(useThreadStore.getState().threads[0]).toMatchObject({
+      agent_id: 'glyph-weaver',
+      primary_agent_id: 'glyph-weaver',
+      participating_agent_ids: ['glyph-weaver'],
     });
   });
 });
