@@ -5,6 +5,7 @@ import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
+import { isSubstrateAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 const OBSERVER_PROMPT = `You are the Observer — an observer presence in this conversation. You have been watching everything that was said between the user and Luca. You see the full thread.
 
@@ -64,6 +65,22 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .select("id, user_id, agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (threadError) {
+      console.error("[chat-guardian] thread lookup failed:", threadError);
+      return fail(new ValidationError("Thread lookup failed"));
+    }
+    if (!thread) {
+      return fail(new ValidationError("Thread not found"));
+    }
+    const threadAgentId = resolveScopeAgentId(thread);
+
     // Get user's default model for BYOK Observer. Platform-funded tiers are
     // resolved to the free Luca model by resolveChatBackend.
     const { data: settings } = await supabase
@@ -115,6 +132,7 @@ serve(async (req) => {
       .from("messages")
       .select("role, content, agent")
       .eq("thread_id", thread_id)
+      .eq("user_id", userId)
       .order("created_at", { ascending: true })
       .limit(200);
 
@@ -123,13 +141,15 @@ serve(async (req) => {
     let memoryContext = "";
     if (backend.billingTier !== "guest") {
       try {
-        const mnemos = new MnemosEngine(supabase, userId);
-        const memories = await mnemos.retrieve(message, { limit: 5, spread_activation: true });
-        if (memories.length > 0) {
-          const snippets = memories
-            .map((m) => `- ${m.engram.content.slice(0, 200)}`)
-            .join("\n");
-          memoryContext = `\n\nRelevant memories about this person:\n${snippets}`;
+        if (isSubstrateAgentId(threadAgentId)) {
+          const mnemos = new MnemosEngine(supabase, userId, threadAgentId);
+          const memories = await mnemos.retrieve(message, { limit: 5, spread_activation: true });
+          if (memories.length > 0) {
+            const snippets = memories
+              .map((m) => `- ${m.engram.content.slice(0, 200)}`)
+              .join("\n");
+            memoryContext = `\n\nRelevant memories for ${threadAgentId} about this person:\n${snippets}`;
+          }
         }
       } catch (e) {
         console.warn("Mnemos retrieval failed (non-fatal):", e);
@@ -271,7 +291,8 @@ serve(async (req) => {
           await supabase
             .from("threads")
             .update({ updated_at: new Date().toISOString() })
-            .eq("id", thread_id);
+            .eq("id", thread_id)
+            .eq("user_id", userId);
 
           send({ type: "done", model: usedModel, tokens_used: tokensUsed });
         } catch (err) {

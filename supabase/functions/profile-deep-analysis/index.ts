@@ -4,6 +4,7 @@ import {
   getCorsHeaders,
   handleCorsPreflightIfNeeded,
 } from "../_shared/cors.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const ANALYSIS_MODEL = "google/gemini-2.5-pro";
 
@@ -496,6 +497,8 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   let import_id: string | undefined;
+  let user_id = "";
+  let agent_id = "luca";
 
   try {
     // Authenticate
@@ -523,9 +526,48 @@ serve(async (req) => {
       });
     }
 
-    const user_id = user.id;
+    user_id = user.id;
     const body = await req.json().catch(() => ({}));
     import_id = body?.import_id;
+    agent_id = normalizeAgentId(body?.agent_id);
+
+    if (import_id) {
+      const { data: importRow, error: importErr } = await supabase
+        .from("chat_imports")
+        .select("id, agent_id")
+        .eq("id", import_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (importErr) {
+        return new Response(JSON.stringify({ error: importErr.message }), {
+          status: 500,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (!importRow) {
+        return new Response(JSON.stringify({ error: "Import not found" }), {
+          status: 404,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      agent_id = normalizeAgentId(body?.agent_id || importRow.agent_id);
+    }
+
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "profile-deep-analysis", getCorsHeaders(req));
+    }
+
+    const updateImport = async (patch: Record<string, unknown>) => {
+      if (!import_id) return;
+      await supabase
+        .from("chat_imports")
+        .update(patch)
+        .eq("id", import_id)
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id);
+    };
 
     // Use Lovable AI Gateway (no user API key required)
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -547,6 +589,7 @@ serve(async (req) => {
       .from("memories")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false);
 
     if (!memCount || memCount < 3) {
@@ -567,9 +610,9 @@ serve(async (req) => {
 
     // Update pipeline stage immediately so UI shows progress
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling",
-      }).eq("id", import_id);
+      });
     }
 
     // Run the heavy 5-pass analysis in the background so the request can
@@ -583,6 +626,7 @@ serve(async (req) => {
         "content, memory_type, confidence, emotional_valence, emotional_intensity, narrative_thread, tags",
       )
       .eq("user_id", user_id)
+      .eq("agent_id", agent_id)
       .eq("is_deleted", false)
       .order("confidence", { ascending: false })
       .limit(400);
@@ -657,9 +701,9 @@ serve(async (req) => {
 
     // Pass 1: Linguistic Fingerprinting
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling:linguistic",
-      }).eq("id", import_id);
+      });
     }
     const pass1 = await aiCall(
       LINGUISTIC_PROMPT,
@@ -669,9 +713,9 @@ serve(async (req) => {
 
     // Pass 2: Psychological Profiling
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling:psychological",
-      }).eq("id", import_id);
+      });
     }
     const pass2 = await aiCall(
       PSYCHOLOGICAL_PROMPT,
@@ -681,9 +725,9 @@ serve(async (req) => {
 
     // Pass 3: Relational Mapping
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling:relational",
-      }).eq("id", import_id);
+      });
     }
     const pass3 = await aiCall(
       RELATIONAL_PROMPT,
@@ -693,9 +737,9 @@ serve(async (req) => {
 
     // Pass 4: Values & Motivation
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling:values",
-      }).eq("id", import_id);
+      });
     }
     const pass4 = await aiCall(
       VALUES_PROMPT,
@@ -705,9 +749,9 @@ serve(async (req) => {
 
     // Pass 5: Shadow Analysis (standalone, so we capture the raw text for citations)
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "profiling:shadow",
-      }).eq("id", import_id);
+      });
     }
     const pass5 = await aiCall(
       SHADOW_PROMPT,
@@ -831,6 +875,7 @@ ${pass5}`;
     if (profile.identity_narrative) {
       engramInserts.push({
         user_id,
+        agent_id,
         content: `IDENTITY PORTRAIT: ${profile.identity_narrative}`,
         engram_type: "semantic",
         strength: 0.95,
@@ -839,7 +884,7 @@ ${pass5}`;
         emotional_valence: 0.3,
         emotional_arousal: 0.4,
         tags: ["profile", "identity", "deep-analysis"],
-        source_context: { pipeline: "profile-deep-analysis-v1", import_id },
+        source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
       });
     }
 
@@ -851,13 +896,14 @@ ${pass5}`;
         .join(", ");
       engramInserts.push({
         user_id,
+        agent_id,
         content: `PERSONALITY DIMENSIONS — ${b5Summary}`,
         engram_type: "semantic",
         strength: 0.9,
         stability: 0.85,
         accessibility: 0.9,
         tags: ["profile", "big-five", "deep-analysis"],
-        source_context: { pipeline: "profile-deep-analysis-v1", import_id },
+        source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
       });
     }
 
@@ -868,13 +914,14 @@ ${pass5}`;
       );
       engramInserts.push({
         user_id,
+        agent_id,
         content: `SHADOW PATTERNS — Blind spots: ${spotTexts.join("; ")}`,
         engram_type: "semantic",
         strength: 0.85,
         stability: 0.8,
         accessibility: 0.85,
         tags: ["profile", "shadow", "deep-analysis"],
-        source_context: { pipeline: "profile-deep-analysis-v1", import_id },
+        source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
       });
     }
 
@@ -884,14 +931,14 @@ ${pass5}`;
 
     // Update import status
     if (import_id) {
-      await supabase.from("chat_imports").update({
+      await updateImport({
         pipeline_stage: "complete",
         status: "completed",
         completed_at: new Date().toISOString(),
-      }).eq("id", import_id);
+      });
     }
 
-    console.log(`Deep analysis complete for user ${user_id}`);
+    console.log(`Deep analysis complete for user ${user_id}/${agent_id}`);
     }; // end runAnalysis
 
     // Kick off the analysis in the background and return immediately.
@@ -901,10 +948,10 @@ ${pass5}`;
     const bgTask = runAnalysis().catch(async (e) => {
       console.error("profile-deep-analysis background error:", e);
       if (import_id) {
-        await supabase.from("chat_imports").update({
+        await updateImport({
           status: "failed",
           pipeline_stage: "error",
-        }).eq("id", import_id).catch(() => {});
+        }).catch(() => {});
       }
     });
 
@@ -931,10 +978,14 @@ ${pass5}`;
   } catch (e) {
     console.error("profile-deep-analysis error:", e);
     if (import_id) {
-      await supabase.from("chat_imports").update({
-        status: "failed",
-        pipeline_stage: "error",
-      }).eq("id", import_id).catch(() => {});
+      try {
+        await supabase.from("chat_imports").update({
+          status: "failed",
+          pipeline_stage: "error",
+        }).eq("id", import_id).eq("user_id", user_id).eq("agent_id", agent_id);
+      } catch {
+        // best effort only
+      }
     }
     const status =
       e instanceof Error && "status" in e && typeof e.status === "number"

@@ -129,7 +129,28 @@ serve(async (req) => {
     const user_id = claimsData.claims.sub as string;
     const body = await req.json();
     const { import_id } = body;
-    const agent_id = normalizeAgentId(body.agent_id);
+    let agent_id = normalizeAgentId(body.agent_id);
+    if (import_id) {
+      const { data: importRow, error: importErr } = await supabase
+        .from("chat_imports")
+        .select("id, agent_id")
+        .eq("id", import_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+      if (importErr) {
+        return new Response(JSON.stringify({ error: importErr.message }), {
+          status: 500,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (!importRow) {
+        return new Response(JSON.stringify({ error: "Import not found" }), {
+          status: 404,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      agent_id = normalizeAgentId(body.agent_id || importRow.agent_id);
+    }
     if (!isSubstrateAgentId(agent_id)) {
       return nonSubstrateResponse(agent_id, "memory-synthesize", getCorsHeaders(req));
     }
@@ -149,7 +170,8 @@ serve(async (req) => {
         .from("chat_imports")
         .update({ pipeline_stage: "synthesizing" })
         .eq("id", import_id)
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id);
     }
 
     // Fetch all memories for this user/agent scope

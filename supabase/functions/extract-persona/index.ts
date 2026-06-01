@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 // ============================================================================
 // EXTRACT-PERSONA: Reconstruct AI companion personality from ChatGPT history
@@ -422,6 +423,29 @@ serve(async (req) => {
     // ── Parse request body ──
     const body = await req.json();
     const { import_id, conversations: rawConversations } = body;
+    let agent_id = normalizeAgentId(body.agent_id);
+
+    if (import_id) {
+      const { data: importRow, error: importErr } = await supabase
+        .from("chat_imports")
+        .select("id, agent_id")
+        .eq("id", import_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+      if (importErr) {
+        return new Response(JSON.stringify({ error: importErr.message }), {
+          status: 500,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (!importRow) {
+        return new Response(JSON.stringify({ error: "Import not found" }), {
+          status: 404,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      agent_id = normalizeAgentId(body.agent_id || importRow.agent_id);
+    }
 
     if (!rawConversations || !Array.isArray(rawConversations) || rawConversations.length === 0) {
       return new Response(
@@ -627,7 +651,9 @@ serve(async (req) => {
         await supabase
           .from("chat_imports")
           .update({ pipeline_stage: "persona_extracted" })
-          .eq("id", import_id);
+          .eq("id", import_id)
+          .eq("user_id", user_id)
+          .eq("agent_id", agent_id);
       } catch (updateErr) {
         console.error("[extract-persona] Import update failed (non-critical):", updateErr);
       }

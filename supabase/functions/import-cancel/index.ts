@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const { data: row } = await supabase
       .from("chat_imports")
-      .select("id, user_id, status")
+      .select("id, user_id, agent_id, status")
       .eq("id", import_id)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -66,7 +66,9 @@ Deno.serve(async (req) => {
         pipeline_stage: "cancelled",
         completed_at: new Date().toISOString(),
       })
-      .eq("id", import_id);
+      .eq("id", import_id)
+      .eq("user_id", user.id)
+      .eq("agent_id", row.agent_id || "luca");
 
     if (updErr) {
       return new Response(JSON.stringify({ error: updErr.message }), {

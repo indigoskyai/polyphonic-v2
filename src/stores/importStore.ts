@@ -34,7 +34,7 @@ interface ImportState {
 
   // Actions
   parseAndFilter: (file: File) => Promise<void>;
-  startImport: (userId: string) => Promise<void>;
+  startImport: (userId: string, agentId?: string) => Promise<void>;
   reset: () => void;
   dismiss: () => void;
 }
@@ -135,6 +135,10 @@ async function getProfileUpdatedAt(userId: string): Promise<string | null> {
     .maybeSingle();
 
   return data?.updated_at ?? null;
+}
+
+function normalizeAgentId(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : 'luca';
 }
 
 export async function waitForProfile(
@@ -254,12 +258,13 @@ export const useImportStore = create<ImportState>((set, get) => ({
     }
   },
 
-  startImport: async (userId: string) => {
+  startImport: async (userId: string, requestedAgentId?: string) => {
     const { preparedConversations, platform, filterStats } = get();
     if (!preparedConversations || !userId) return;
 
     const convos = preparedConversations;
     const totalChunks = Math.ceil(convos.length / CHUNK_SIZE);
+    const agentId = normalizeAgentId(requestedAgentId);
 
     set({ stage: 'extracting', processedChunks: 0, totalChunks, memoriesCreated: 0, questionsGenerated: 0, conflictsDetected: 0, error: null, dismissed: false, profileData: null });
 
@@ -269,6 +274,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
         .from('chat_imports')
         .insert({
           user_id: userId,
+          agent_id: agentId,
           status: 'processing',
           pipeline_stage: 'extracting',
           source_platform: platform || 'unknown',
@@ -312,6 +318,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
             body: JSON.stringify({
               conversations: chunk,
               import_id: importId,
+              agent_id: agentId,
               chunk_index: i,
               total_chunks: totalChunks,
               accumulated_memories: accumulatedMemories.slice(-100),
@@ -354,7 +361,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ import_id: importId }),
+        body: JSON.stringify({ import_id: importId, agent_id: agentId }),
       });
 
       if (!synthesisResponse.ok) {
@@ -372,7 +379,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ import_id: importId }),
+        body: JSON.stringify({ import_id: importId, agent_id: agentId }),
       });
 
       if (!profileResponse.ok) {

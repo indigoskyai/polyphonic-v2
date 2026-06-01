@@ -10,12 +10,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useToast } from '@/hooks/use-toast';
 import ImportDetailPanel from '@/components/ImportDetailPanel';
 import MnemosStreamShell, { type StreamFilter } from './MnemosStreamShell';
 
 type ImportRecord = {
   id: string;
+  agent_id: string;
   status: string;
   pipeline_stage: string | null;
   source_platform: string | null;
@@ -102,6 +104,7 @@ function ImportRow({
 
 export default function ImportsTab() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [imports, setImports] = useState<ImportRecord[]>([]);
@@ -117,6 +120,7 @@ export default function ImportsTab() {
       .from('chat_imports')
       .select('*')
       .eq('user_id', user.id)
+      .eq('agent_id', activeAgentId)
       .order('created_at', { ascending: false })
       .limit(50);
     if (data) {
@@ -125,7 +129,7 @@ export default function ImportsTab() {
       setSelectedImport((prev) => prev ? rows.find((imp) => imp.id === prev.id) ?? prev : prev);
     }
     setLoading(false);
-  }, [user]);
+  }, [activeAgentId, user]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -165,7 +169,7 @@ export default function ImportsTab() {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ agent_id: activeAgentId }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -173,7 +177,7 @@ export default function ImportsTab() {
       }
       toast({
         title: 'Re-analysis started',
-        description: 'Running on your full memory corpus. Check Profile in 3–6 minutes.',
+        description: "Running on this agent's memory corpus. Check Profile in 3-6 minutes.",
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';

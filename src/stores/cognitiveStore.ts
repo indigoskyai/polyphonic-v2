@@ -107,6 +107,7 @@ export interface MindEngram {
 }
 
 interface CognitiveState {
+  scope: { userId: string; agentId: string } | null;
   modulators: Modulators;
   emotions: Emotions;
   beliefs: Belief[];
@@ -150,7 +151,24 @@ function rowMatchesAgent(row: { agent_id?: string | null } | null | undefined, a
   return (row?.agent_id || 'luca') === agentId;
 }
 
-export const useCognitiveStore = create<CognitiveState>((set) => ({
+const emptyScopedState = {
+  modulators: defaultModulators,
+  emotions: defaultEmotions,
+  beliefs: [] as Belief[],
+  thoughts: [] as Thought[],
+  recentEvents: [] as MemoryEvent[],
+  activityLog: [] as ActivityEntry[],
+  emotionalWeather: null as EmotionalWeather | null,
+  dreams: [] as MindEngram[],
+  insights: [] as MindEngram[],
+  reflections: [] as MindEngram[],
+  wanderings: [] as Thought[],
+  journalEntries: [] as JournalEntry[],
+  memoryStats: { total_engrams: 0, active: 0, dormant: 0, archived: 0, connections: 0, beliefs_count: 0 },
+};
+
+export const useCognitiveStore = create<CognitiveState>((set, get) => ({
+  scope: null,
   modulators: defaultModulators,
   emotions: defaultEmotions,
   beliefs: [],
@@ -174,6 +192,11 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   loaded: false,
 
   load: async (userId: string, agentId = 'luca') => {
+    set((s) => (
+      s.scope?.userId === userId && s.scope?.agentId === agentId
+        ? { loaded: false }
+        : { ...emptyScopedState, scope: { userId, agentId }, loaded: false, newThoughtIds: new Set<string>() }
+    ));
     const settled = await Promise.allSettled([
       supabase.from('cognitive_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
       supabase.from('thought_stream').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(50),
@@ -192,6 +215,8 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
     const emos = cog?.emotions as Record<string, number> | null;
     const w = weatherRes.data as EmotionalWeather | null;
 
+    if (get().scope?.userId !== userId || get().scope?.agentId !== agentId) return;
+
     // Beliefs are sourced from the beliefs table in loadMindData — don't set them here to avoid races.
     set({
       modulators: mods ? { ...defaultModulators, ...mods } : defaultModulators,
@@ -205,6 +230,11 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   },
 
   loadMindData: async (userId: string, agentId = 'luca') => {
+    set((s) => (
+      s.scope?.userId === userId && s.scope?.agentId === agentId
+        ? {}
+        : { ...emptyScopedState, scope: { userId, agentId }, loaded: false, newThoughtIds: new Set<string>() }
+    ));
     // Load dreams (engrams with dream tags or source_context type)
     const dreamsPromise = supabase
       .from('engrams')
@@ -308,6 +338,8 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       updated_at: b.updated_at ?? null,
     }));
 
+    if (get().scope?.userId !== userId || get().scope?.agentId !== agentId) return;
+
     set({
       dreams: (dreamsRes.data ?? []) as MindEngram[],
       insights: (insightsRes.data ?? []) as MindEngram[],
@@ -328,10 +360,12 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
   },
 
   subscribe: (userId: string, agentId = 'luca') => {
+    const isCurrentScope = () => get().scope?.userId === userId && get().scope?.agentId === agentId;
     const cogChannel = supabase
       .channel(`cognitive-state:${userId}:${agentId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cognitive_state', filter: `user_id=eq.${userId}` }, (payload) => {
         const row = payload.new as any;
+        if (!isCurrentScope()) return;
         if (!rowMatchesAgent(row, agentId)) return;
         if (row) {
           const mods = row.modulators as Record<string, number> | null;
@@ -350,6 +384,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .channel(`thought-stream:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'thought_stream', filter: `user_id=eq.${userId}` }, (payload) => {
         const newThought = payload.new as Thought;
+        if (!isCurrentScope()) return;
         if (!rowMatchesAgent(newThought, agentId)) return;
         set((s) => {
           const flagged = new Set(s.newThoughtIds);
@@ -366,6 +401,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .channel(`memory-events:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'memory_events', filter: `user_id=eq.${userId}` }, (payload) => {
         const newEvent = payload.new as MemoryEvent;
+        if (!isCurrentScope()) return;
         if (!rowMatchesAgent(newEvent, agentId)) return;
         set((s) => ({ recentEvents: [newEvent, ...s.recentEvents].slice(0, 50) }));
       })
@@ -375,6 +411,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .channel(`entity-activity-log:${userId}:${agentId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${userId}` }, (payload) => {
         const entry = payload.new as ActivityEntry;
+        if (!isCurrentScope()) return;
         if (!rowMatchesAgent(entry, agentId)) return;
         set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 80) }));
       })
@@ -384,6 +421,7 @@ export const useCognitiveStore = create<CognitiveState>((set) => ({
       .channel(`emotional-state:${userId}:${agentId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'emotional_state', filter: `user_id=eq.${userId}` }, (payload) => {
         const w = payload.new as EmotionalWeather;
+        if (!isCurrentScope()) return;
         if (!rowMatchesAgent(w as EmotionalWeather & { agent_id?: string }, agentId)) return;
         if (w) set({ emotionalWeather: w });
       })

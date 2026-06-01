@@ -10,7 +10,7 @@ import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { OBSERVER_SOUL, OBSERVER_WATCH_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
-import { normalizeAgentId } from "../_shared/agent-scope.ts";
+import { normalizeAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -43,7 +43,6 @@ serve(async (req) => {
     }
 
     const { thread_id, agent_id } = await req.json();
-    const agentId = normalizeAgentId(agent_id);
     if (!thread_id) {
       return new Response(JSON.stringify({ error: "Missing thread_id" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -51,6 +50,34 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .select("id, user_id, agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (threadError) {
+      console.error("[observer-watch] thread lookup failed:", threadError);
+      return new Response(JSON.stringify({ error: "Thread lookup failed" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!thread) {
+      return new Response(JSON.stringify({ error: "Thread not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const hasRequestedAgentId = typeof agent_id === "string" && agent_id.trim().length > 0;
+    const requestedAgentId = normalizeAgentId(agent_id);
+    const agentId = resolveScopeAgentId(thread);
+    if (hasRequestedAgentId && requestedAgentId !== agentId) {
+      console.warn("[observer-watch] ignored mismatched requested agent", {
+        requestedAgentId,
+        threadAgentId: agentId,
+        thread_id,
+        user_id: user.id,
+      });
+    }
     const dialecticEnabled = isDialecticEnabled(user.id);
 
     const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);

@@ -77,6 +77,7 @@ function normalizeAssistantContentForDuplicate(content: string): string {
 async function findRecentDuplicateAssistantMessage(
   supabase: SupabaseLike,
   threadId: string,
+  userId: string,
   agentId: string,
   content: string,
 ): Promise<string | null> {
@@ -88,6 +89,7 @@ async function findRecentDuplicateAssistantMessage(
     .from("messages")
     .select("id, content, created_at")
     .eq("thread_id", threadId)
+    .eq("user_id", userId)
     .eq("role", "assistant")
     .eq("agent", agentId)
     .gte("created_at", since)
@@ -321,6 +323,7 @@ async function runOpenRouterAgentSdkTurn(
   const duplicateMessageId = await findRecentDuplicateAssistantMessage(
     options.supabase,
     options.threadId,
+    options.userId,
     options.agentId,
     finalContent,
   );

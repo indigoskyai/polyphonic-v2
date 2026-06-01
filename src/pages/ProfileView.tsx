@@ -25,6 +25,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { useViewTabStore } from '@/stores/viewTabStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import {
   asProfileRecord,
   isProfileRecord,
@@ -168,6 +169,7 @@ class ProfileTabBoundary extends Component<
 
 export default function ProfileView() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
   const [emotionalSeries, setEmotionalSeries] = useState<EmotionalSeries | null>(null);
@@ -219,7 +221,7 @@ export default function ProfileView() {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ agent_id: activeAgentId }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -261,7 +263,7 @@ export default function ProfileView() {
   useEffect(() => {
     if (!user) return;
     loadData();
-  }, [user]);
+  }, [user, activeAgentId]);
 
   async function loadData() {
     if (!user) return;
@@ -277,6 +279,7 @@ export default function ProfileView() {
         .from('memories')
         .select('memory_type, confidence, sharpness, tags, created_at, narrative_thread, emotional_valence, emotional_intensity')
         .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
         .eq('is_deleted', false)
         .order('created_at', { ascending: false })
         .limit(1000),
@@ -284,12 +287,14 @@ export default function ProfileView() {
         .from('mnemos_emotional_state')
         .select('valence, arousal, dominance, certainty, social, temporal, recorded_at')
         .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
         .order('recorded_at', { ascending: false })
         .limit(180),
       supabase
         .from('engrams')
         .select('engram_type, strength, accessibility, state')
         .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
         .eq('state', 'active')
         .limit(500),
     ]);
@@ -646,7 +651,7 @@ export default function ProfileView() {
         </div>
       </div>
 
-      {chatOpen && <ProfileChatPanel onClose={() => setChatOpen(false)} starterPrompts={starterPrompts} />}
+      {chatOpen && <ProfileChatPanel onClose={() => setChatOpen(false)} starterPrompts={starterPrompts} agentId={activeAgentId} />}
     </div>
   );
 }

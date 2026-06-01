@@ -9,6 +9,7 @@ import {
   deriveTriggerKeywords,
   normalizeSkillName,
 } from "../_shared/agents/skills.ts";
+import { resolveScopeAgentId } from "../_shared/agent-scope.ts";
 import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 
 const SKILL_DISTILL_MODEL = "anthropic/claude-haiku-4.5";
@@ -47,6 +48,32 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .select("id, user_id, agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (threadError) {
+      console.warn("[skills-distill] thread lookup failed:", threadError);
+      return json({ ok: true, skipped: "thread_lookup_failed" }, 200, corsHeaders);
+    }
+    if (!thread) {
+      return json({ ok: true, skipped: "thread_not_found" }, 200, corsHeaders);
+    }
+    const threadAgentId = resolveScopeAgentId(thread);
+    const hasRequestedAgentId = typeof agent_id === "string" && agent_id.trim().length > 0;
+    const requestedAgentId = hasRequestedAgentId ? agent_id.trim() : "luca";
+    if (hasRequestedAgentId && requestedAgentId !== threadAgentId) {
+      console.warn("[skills-distill] ignored mismatched requested agent", {
+        requestedAgentId,
+        threadAgentId,
+        thread_id,
+        user_id: user.id,
+      });
+    }
+    const agentId = threadAgentId;
+
     // Load the agent's config so the distiller prompt can be tuned to the
     // agent's name, role, and persona prompt. Falls back to a neutral
     // default if no config row exists (which is fine for legacy 'luca').
@@ -54,10 +81,10 @@ serve(async (req) => {
       .from("agent_configs")
       .select("id, name, role, prompt")
       .eq("user_id", user.id)
-      .eq("id", agent_id)
+      .eq("id", agentId)
       .maybeSingle();
 
-    const agentName = agentConfig?.name || (agent_id === "luca" ? "Luca" : agent_id);
+    const agentName = agentConfig?.name || (agentId === "luca" ? "Luca" : agentId);
     const agentRole = agentConfig?.role || "";
     const agentPrompt = agentConfig?.prompt || "";
 
@@ -86,13 +113,13 @@ serve(async (req) => {
       supabase.from("agent_skills")
         .select("name, description")
         .eq("user_id", user.id)
-        .eq("agent_id", agent_id)
+        .eq("agent_id", agentId)
         .order("updated_at", { ascending: false })
         .limit(30),
       supabase.from("agent_skill_denials")
         .select("skill_name, description")
         .eq("user_id", user.id)
-        .eq("agent_id", agent_id)
+        .eq("agent_id", agentId)
         .order("created_at", { ascending: false })
         .limit(30),
     ]);
@@ -164,7 +191,7 @@ serve(async (req) => {
       .from("agent_skills")
       .upsert({
         user_id: user.id,
-        agent_id,
+        agent_id: agentId,
         name,
         description,
         trigger_keywords: triggerKeywords,

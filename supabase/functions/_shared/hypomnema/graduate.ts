@@ -195,6 +195,7 @@ async function promoteToEngram(
     .from("engrams")
     .insert({
       user_id: row.user_id,
+      agent_id: row.agent_id,
       content: engramContent,
       engram_type: "semantic",
       strength: 0.85,
@@ -339,6 +340,7 @@ export async function graduateAllEligible(supabase: SupabaseClient): Promise<Gra
           query_text: row.content,
           match_count: 3,
           p_user_id: row.user_id,
+          p_agent_id: row.agent_id,
         });
         if (Array.isArray(matches)) {
           nearby = matches.slice(0, 3).map((m: { content: string; similarity?: number }) => ({

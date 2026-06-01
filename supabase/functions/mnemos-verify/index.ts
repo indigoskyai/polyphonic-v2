@@ -23,6 +23,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { authenticateUser } from "../_shared/openclaw/auth.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
+import { isSubstrateAgentId, normalizeAgentId } from "../_shared/agent-scope.ts";
 import {
   computeDecayedValues,
   determineState,
@@ -87,17 +88,28 @@ serve(async (req) => {
   const userId = auth.userId;
 
   let cleanup = true;
+  let agentId = "luca";
   try {
     const body = await req.json();
     if (typeof body?.cleanup === "boolean") cleanup = body.cleanup;
+    agentId = normalizeAgentId(body?.agent_id);
   } catch { /* default cleanup=true */ }
+
+  if (!isSubstrateAgentId(agentId)) {
+    return jsonResp({
+      ok: true,
+      skipped: true,
+      agent_id: agentId,
+      reason: `${agentId} is an observer sidecar, not a Mnemos substrate agent`,
+    }, 200, cors);
+  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const engine = new MnemosEngine(supabase, userId);
+  const engine = new MnemosEngine(supabase, userId, agentId);
   const createdEngramIds: string[] = [];
   const stages: Record<string, unknown> = {};
   const issues: string[] = [];
@@ -118,7 +130,7 @@ serve(async (req) => {
       const result = await engine.encode(beat.content, {
         engram_type: "episodic",
         tags: beat.tags ?? ["mnemos_verify"],
-        source_context: { type: "mnemos_verify", label: beat.label },
+        source_context: { type: "mnemos_verify", label: beat.label, agent_id: agentId },
         emotional_arousal: beat.emotional_arousal,
         emotional_valence: beat.emotional_valence,
       });
@@ -239,6 +251,7 @@ serve(async (req) => {
       );
     await supabase.from("engrams").delete().in("id", createdEngramIds);
     await supabase.from("mnemos_emotional_state").delete().eq("user_id", userId)
+      .eq("agent_id", agentId)
       .gte("recorded_at", new Date(Date.now() - 5 * 60_000).toISOString());
   }
 
@@ -246,6 +259,7 @@ serve(async (req) => {
     {
       ok: issues.length === 0,
       user_id: userId,
+      agent_id: agentId,
       issues,
       stages,
       cleaned_up: cleanup,

@@ -21,7 +21,7 @@ import {
 } from "../_shared/mnemos/dialectic.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { resolveOpenRouterKeyForUser, resolvePrimaryModel } from "../_shared/model-backend.ts";
-import { normalizeAgentId } from "../_shared/agent-scope.ts";
+import { normalizeAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
 // nudge (notable activity surface). Revisions below this still persist and
@@ -59,12 +59,34 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const threadId = typeof body.thread_id === "string" ? body.thread_id : "";
-    const agentId = normalizeAgentId(body.agent_id);
+    const hasRequestedAgentId = typeof body.agent_id === "string" && body.agent_id.trim().length > 0;
+    const requestedAgentId = normalizeAgentId(body.agent_id);
     const force = body.force === true;
 
     if (!threadId) return json({ error: "Missing thread_id" }, 400, corsHeaders);
 
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .select("id, user_id, agent_id, primary_agent_id")
+      .eq("id", threadId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (threadError) {
+      console.error("[mnemos-dialectic] thread lookup failed:", threadError);
+      return json({ error: "Thread lookup failed" }, 400, corsHeaders);
+    }
+    if (!thread) return json({ error: "Thread not found" }, 404, corsHeaders);
+    const agentId = resolveScopeAgentId(thread);
+    if (hasRequestedAgentId && requestedAgentId !== agentId) {
+      console.warn("[mnemos-dialectic] ignored mismatched requested agent", {
+        requestedAgentId,
+        threadAgentId: agentId,
+        thread_id: threadId,
+        user_id: user.id,
+      });
+    }
 
     const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) return json({ ok: true, skipped: "no_api_key" }, 200, corsHeaders);

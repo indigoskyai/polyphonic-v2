@@ -40,13 +40,42 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Device revoked" }, 410);
     }
 
+    const agentConfigId = typeof body.agent_config_id === "string" && body.agent_config_id.trim()
+      ? body.agent_config_id.trim()
+      : null;
+    const threadId = typeof body.thread_id === "string" && body.thread_id.trim()
+      ? body.thread_id.trim()
+      : null;
+
+    if (agentConfigId) {
+      const { data: agentConfig, error: agentErr } = await admin
+        .from("agent_configs")
+        .select("id, user_id")
+        .eq("id", agentConfigId)
+        .eq("user_id", auth.userId)
+        .maybeSingle();
+      if (agentErr) throw agentErr;
+      if (!agentConfig) return jsonResponse({ error: "Agent not found" }, 404);
+    }
+
+    if (threadId) {
+      const { data: thread, error: threadErr } = await admin
+        .from("threads")
+        .select("id, user_id")
+        .eq("id", threadId)
+        .eq("user_id", auth.userId)
+        .maybeSingle();
+      if (threadErr) throw threadErr;
+      if (!thread) return jsonResponse({ error: "Thread not found" }, 404);
+    }
+
     const { data: job, error: jobErr } = await admin
       .from("openclaw_jobs")
       .insert({
         user_id: auth.userId,
         device_id: body.device_id,
-        agent_config_id: body.agent_config_id ?? null,
-        thread_id: body.thread_id ?? null,
+        agent_config_id: agentConfigId,
+        thread_id: threadId,
         kind: body.kind,
         payload: body.payload ?? {},
         status: "queued",
@@ -63,8 +92,8 @@ Deno.serve(async (req) => {
       payload: {
         job_id: job.id,
         kind: body.kind,
-        agent_config_id: body.agent_config_id ?? null,
-        thread_id: body.thread_id ?? null,
+        agent_config_id: agentConfigId,
+        thread_id: threadId,
       },
     });
     await admin.removeChannel(channel);

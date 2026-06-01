@@ -432,6 +432,7 @@ async function loadThreadHistory(
   const { data, error } = await supabase
     .from("messages")
     .select("id, role, content, agent, created_at")
+    .eq("user_id", opts.userId)
     .eq("thread_id", opts.threadId)
     .order("created_at", { ascending: true })
     .limit(opts.historyLimit || 50);

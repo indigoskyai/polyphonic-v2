@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 const MOLTBOOK_API_BASE = "https://api.moltbook.com/v1";
 
@@ -35,7 +36,8 @@ serve(async (req) => {
     }
 
     const user_id = claimsData.claims.sub;
-    const { action, ...params } = await req.json();
+    const { action, agent_id: requestedAgentId, ...params } = await req.json();
+    const agent_id = normalizeAgentId(requestedAgentId);
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action is required" }), {
@@ -102,6 +104,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_register",
         description: `Registered on Moltbook as "${name}"`,
         metadata: { platform: "moltbook", agent_name: name },
@@ -169,6 +172,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_post",
         description: `Posted to Moltbook${submolt ? ` in s/${submolt}` : ""}`,
         metadata: { platform: "moltbook", post_id: postData.id, submolt },
@@ -214,6 +218,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_read",
         description: "Read Moltbook feed",
         metadata: { platform: "moltbook", post_count: feedData.posts?.length || 0 },
@@ -256,6 +261,7 @@ serve(async (req) => {
 
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_disconnect",
         description: "Disconnected Moltbook account",
         metadata: { platform: "moltbook" },

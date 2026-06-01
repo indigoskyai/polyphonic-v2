@@ -7,6 +7,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { OBSERVER_SOUL, OBSERVER_CHAT_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { AuthError, MissingApiKeyError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
@@ -42,6 +43,21 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .select("id, user_id, agent_id, primary_agent_id")
+      .eq("id", thread_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (threadError) {
+      console.error("[observer-chat] thread lookup failed:", threadError);
+      return fail(new ValidationError("Thread lookup failed"));
+    }
+    if (!thread) {
+      return fail(new ValidationError("Thread not found"));
+    }
+    const threadAgentId = resolveScopeAgentId(thread);
+
     const { data: apiKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user.id });
     if (!apiKey) {
       return fail(new MissingApiKeyError("No API key configured."));
@@ -59,20 +75,24 @@ serve(async (req) => {
     const [historyRes, notesRes, observerChatRes, emotionalRes] = await Promise.allSettled([
       supabase.from("messages")
         .select("role, content, agent, created_at")
+        .eq("user_id", user.id)
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(30),
       supabase.from("observer_notes")
         .select("kind, content, created_at, salience")
+        .eq("user_id", user.id)
+        .eq("agent_id", threadAgentId)
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(30),
       supabase.from("observer_chat_messages")
         .select("role, content, created_at")
+        .eq("user_id", user.id)
         .eq("thread_id", thread_id)
         .order("created_at", { ascending: false })
         .limit(20),
-      loadEmotionalState(supabase, user.id),
+      loadEmotionalState(supabase, user.id, threadAgentId),
     ]);
 
     const history = historyRes.status === "fulfilled" ? (historyRes.value.data || []).reverse() : [];

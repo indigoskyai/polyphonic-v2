@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { normalizeAgentId } from "../_shared/agent-scope.ts";
 
 const X_API_BASE = "https://api.x.com/2";
 
@@ -35,7 +36,8 @@ serve(async (req) => {
     }
 
     const user_id = claimsData.claims.sub;
-    const { action, ...params } = await req.json();
+    const { action, agent_id: requestedAgentId, ...params } = await req.json();
+    const agent_id = normalizeAgentId(requestedAgentId);
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action is required" }), {
@@ -101,6 +103,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_post",
         description: `Posted to X: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}"`,
         metadata: { platform: "x", tweet_id: postData.data?.id },
@@ -149,6 +152,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_read",
         description: "Read X mentions",
         metadata: { platform: "x", mention_count: mentionsData.data?.length || 0 },
@@ -204,6 +208,7 @@ serve(async (req) => {
       // Log activity
       await supabase.from("entity_activity_log").insert({
         user_id,
+        agent_id,
         activity_type: "social_reply",
         description: `Replied to tweet ${tweet_id} on X`,
         metadata: { platform: "x", tweet_id: replyData.data?.id, in_reply_to: tweet_id },

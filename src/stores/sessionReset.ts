@@ -50,6 +50,7 @@ export function resetClientSessionStores(): void {
   });
   useHypomnemaStore.setState({ entries: [], loading: false });
   useCognitiveStore.setState({
+    scope: null,
     modulators: {
       arousal: 0.5,
       resolution: 0.5,

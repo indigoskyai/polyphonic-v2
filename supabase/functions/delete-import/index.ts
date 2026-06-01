@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     // Verify ownership
     const { data: importRecord } = await supabase
       .from("chat_imports")
-      .select("id, user_id, created_at, completed_at")
+      .select("id, user_id, agent_id, created_at, completed_at")
       .eq("id", import_id)
       .eq("user_id", user.id)
       .single();
@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       .from("memories")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
+      .eq("agent_id", importRecord.agent_id || "luca")
       .filter("provenance->>import_id", "eq", import_id);
 
     // Hard-delete only derived rows that carry explicit import provenance.
@@ -69,10 +70,16 @@ Deno.serve(async (req) => {
       .from("engrams")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
+      .eq("agent_id", importRecord.agent_id || "luca")
       .filter("source_context->>import_id", "eq", import_id);
 
     // Hard-delete the import row
-    await supabase.from("chat_imports").delete().eq("id", import_id);
+    await supabase
+      .from("chat_imports")
+      .delete()
+      .eq("id", import_id)
+      .eq("user_id", user.id)
+      .eq("agent_id", importRecord.agent_id || "luca");
 
     return new Response(
       JSON.stringify({

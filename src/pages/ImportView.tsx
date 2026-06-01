@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useThreadStore } from '@/stores/threadStore';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { supabase } from '@/integrations/supabase/client';
 import EchoField from '@/components/EchoField';
 import { buildOnboardingHandoffPrompt } from '@/lib/interfaceMode';
@@ -18,6 +19,7 @@ import {
 
 type ImportRecord = {
   id: string;
+  agent_id: string;
   status: string;
   source_platform: string | null;
   total_conversations: number | null;
@@ -44,6 +46,7 @@ const STAGE_ORDER: PipelineStage[] = ['extracting', 'synthesizing', 'profiling',
 
 export default function ImportView() {
   const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const navigate = useNavigate();
   const createThread = useThreadStore((s) => s.createThread);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,12 +78,13 @@ export default function ImportView() {
     if (!user) return;
     const { data } = await supabase
       .from('chat_imports')
-      .select('id, status, source_platform, total_conversations, processed_conversations, memories_created, file_size_bytes, pipeline_stage, created_at, completed_at')
+      .select('id, agent_id, status, source_platform, total_conversations, processed_conversations, memories_created, file_size_bytes, pipeline_stage, created_at, completed_at')
       .eq('user_id', user.id)
+      .eq('agent_id', activeAgentId)
       .order('created_at', { ascending: false })
       .limit(20);
     if (data) setPastImports(data as ImportRecord[]);
-  }, [user]);
+  }, [activeAgentId, user]);
 
   const isProcessing = ['extracting', 'synthesizing', 'profiling'].includes(stage);
   const showPreAnalysis = stage === 'idle' && filterStats !== null;
@@ -374,7 +378,7 @@ export default function ImportView() {
               {/* Actions */}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => user && startImport(user.id)}
+                  onClick={() => user && startImport(user.id, activeAgentId)}
                   className="cursor-pointer"
                   style={{
                     height: 40, padding: '0 28px',

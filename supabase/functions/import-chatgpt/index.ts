@@ -271,16 +271,38 @@ serve(async (req) => {
     const user_id = user.id;
     const body = await req.json();
     const { conversations, import_id, chunk_index, total_chunks, accumulated_memories } = body;
-    const agent_id = normalizeAgentId(body.agent_id);
-    if (!isSubstrateAgentId(agent_id)) {
-      return nonSubstrateResponse(agent_id, "import-chatgpt", getCorsHeaders(req));
-    }
+    let agent_id = normalizeAgentId(body.agent_id);
 
     if (!conversations || !Array.isArray(conversations) || !import_id || chunk_index === undefined) {
       return new Response(JSON.stringify({ error: "Invalid request: need conversations, import_id, chunk_index" }), {
         status: 400,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
+    }
+
+    const { data: importRow, error: importErr } = await supabase
+      .from("chat_imports")
+      .select("id, agent_id")
+      .eq("id", import_id)
+      .eq("user_id", user_id)
+      .maybeSingle();
+
+    if (importErr) {
+      return new Response(JSON.stringify({ error: importErr.message }), {
+        status: 500,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (!importRow) {
+      return new Response(JSON.stringify({ error: "Import not found" }), {
+        status: 404,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    agent_id = normalizeAgentId(body.agent_id || importRow.agent_id);
+    if (!isSubstrateAgentId(agent_id)) {
+      return nonSubstrateResponse(agent_id, "import-chatgpt", getCorsHeaders(req));
     }
 
     // Use Lovable AI Gateway (no user key required)
@@ -548,6 +570,8 @@ ${batchText}`;
         .from("chat_imports")
         .select("processed_conversations, memories_created, questions_generated, conflicts_detected")
         .eq("id", import_id)
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
         .single();
 
       if (currentImport) {
@@ -559,7 +583,8 @@ ${batchText}`;
           pipeline_stage: "extracting",
         })
           .eq("id", import_id)
-          .eq("user_id", user_id);
+          .eq("user_id", user_id)
+          .eq("agent_id", agent_id);
       }
     } catch (importUpdateError) {
       console.log("[IMPORT] chat_imports table not available, skipping progress update:", importUpdateError);

@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
     // by the storage layer that owns snapshot_ref. We record the restore action.
     const { error: applyErr } = await admin.from("entity_activity_log").insert({
       user_id,
+      agent_id: target.agent || "luca",
       activity_type: "checkpoint_restore",
       title: "Restored checkpoint",
       summary: target.summary,

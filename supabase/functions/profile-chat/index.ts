@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { AppError, AuthError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 const MODEL = "google/gemini-2.5-pro";
 
@@ -118,7 +119,11 @@ Deno.serve(async (req) => {
       return fail(new UpstreamUnavailableError("Lovable AI not configured"));
     }
 
-    const { messages: incoming } = await req.json();
+    const { messages: incoming, agent_id } = await req.json();
+    const agentId = normalizeAgentId(agent_id);
+    if (!isSubstrateAgentId(agentId)) {
+      return nonSubstrateResponse(agentId, "profile-chat", corsHeaders);
+    }
     if (!Array.isArray(incoming) || incoming.length === 0) {
       return fail(new ValidationError("messages required"));
     }
@@ -229,6 +234,7 @@ Deno.serve(async (req) => {
             query_text: query,
             match_count: limit,
             p_user_id: user.id,
+            p_agent_id: agentId,
           });
           const items = (matches || []).map((m: any) => {
             memoryCounter += 1;

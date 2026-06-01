@@ -39,6 +39,7 @@ async function findRecentDuplicateAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   threadId: string,
+  userId: string,
   agentId: string,
   content: string,
 ): Promise<string | null> {
@@ -50,6 +51,7 @@ async function findRecentDuplicateAssistantMessage(
     .from("messages")
     .select("id, content, created_at")
     .eq("thread_id", threadId)
+    .eq("user_id", userId)
     .eq("role", "assistant")
     .eq("agent", agentId)
     .gte("created_at", since)
@@ -400,7 +402,7 @@ serve(async (req) => {
           // Save assistant message to DB, unless a retry/replay already saved
           // the exact same assistant turn in the duplicate window.
           let insertedMessage: { id: string | null } | null = null;
-          const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, thread_id, agentId, fullContent);
+          const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, thread_id, userId, agentId, fullContent);
           if (duplicateMessageId) {
             console.warn("[chat] skipped duplicate assistant insert", { thread_id, agentId, duplicateMessageId });
             insertedMessage = { id: duplicateMessageId };

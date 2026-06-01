@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 
 type ImportRecord = {
   id: string;
+  agent_id: string;
   status: string;
   pipeline_stage: string | null;
   source_platform: string | null;
@@ -109,7 +110,7 @@ export default function ImportDetailPanel({ imp, onClose, onDeleted, onReprofile
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ import_id: imp.id, agent_id: imp.agent_id || 'luca' }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));

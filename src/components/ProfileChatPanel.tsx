@@ -31,9 +31,10 @@ type ChatMessage = {
 interface Props {
   onClose: () => void;
   starterPrompts: string[];
+  agentId: string;
 }
 
-export default function ProfileChatPanel({ onClose, starterPrompts }: Props) {
+export default function ProfileChatPanel({ onClose, starterPrompts, agentId }: Props) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -66,6 +67,7 @@ export default function ProfileChatPanel({ onClose, starterPrompts }: Props) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           messages: next.map((m) => ({ role: m.role, content: m.content })),
+          agent_id: agentId,
         }),
       });
 
