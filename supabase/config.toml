@@ -1,172 +1,119 @@
 project_id = "kknchdnrujzheulqzowv"
 
-[functions.chat]
-verify_jwt = false
-
-[functions.chat-multi]
-verify_jwt = false
-
-[functions.memory-extract]
-verify_jwt = false
-
-[functions.memory-reflect]
-verify_jwt = false
-
-[functions.memory-synthesize]
-verify_jwt = false
-
-[functions.memory-decay]
-verify_jwt = false
-
-[functions.journal-write]
-verify_jwt = false
-
-[functions.journal-cron]
-verify_jwt = false
-
-[functions.import-chatgpt]
-verify_jwt = false
-
-[functions.clear-import]
-verify_jwt = false
-
-[functions.generate-image]
-verify_jwt = false
-
-[functions.extract-persona]
-verify_jwt = false
-
-[functions.anima-think]
-verify_jwt = false
-
-[functions.anima-initiate]
-verify_jwt = false
-
-[functions.anima-dream]
-verify_jwt = false
-
-[functions.anima-question]
-verify_jwt = false
-
-[functions.anima-reflect]
-verify_jwt = false
-
-[functions.anima-observe]
-verify_jwt = false
-
-[functions.anima-consolidate]
-verify_jwt = false
-
-[functions.anima-connect]
-verify_jwt = false
-
-[functions.anima-emotional-state]
-verify_jwt = false
-
-[functions.anima-believe]
-verify_jwt = false
-
-[functions.anima-web-search]
-verify_jwt = false
-
-[functions.anima-web-read]
-verify_jwt = false
-
-[functions.anima-image-create]
-verify_jwt = false
-
-[functions.anima-tool-execute]
-verify_jwt = false
-
-[functions.anima-browser]
-verify_jwt = false
-
-[functions.anima-workspace-file]
-verify_jwt = false
-
-[functions.anima-heartbeat]
-verify_jwt = false
-
-[functions.anima-social-moltbook]
-verify_jwt = false
-
-[functions.anima-social-x]
-verify_jwt = false
-
-[functions.chat-guardian]
-verify_jwt = false
-
-[functions.delete-import]
-verify_jwt = false
-
-[functions.profile-chat]
-verify_jwt = false
-
-[functions.checkpoint-restore]
-verify_jwt = false
-
-[functions.checkpoint-diff]
-verify_jwt = false
-
-[functions.agent-config-save]
-verify_jwt = false
-
-[functions.agent-forge]
-verify_jwt = false
-
-[functions.luca-app-guide]
-verify_jwt = false
-
-[functions.agent-identity-save]
-verify_jwt = false
-
-[functions.openclaw-pair]
-verify_jwt = false
-
-[functions.openclaw-deploy]
-verify_jwt = false
-
-[functions.openclaw-enqueue]
-verify_jwt = false
-
-[functions.openclaw-register-result]
-verify_jwt = false
-
-[functions.openclaw-status]
-verify_jwt = false
-
-[functions.openclaw-heartbeat]
-verify_jwt = false
-
-[functions.luca-initiate]
-verify_jwt = false
-
-[functions.luca-pulse]
-verify_jwt = false
-
-[functions.observer-watch]
-verify_jwt = false
-
-[functions.mnemos-dialectic]
-verify_jwt = false
-
-[functions.skills-distill]
-verify_jwt = false
-
-[functions.skills-manage]
-verify_jwt = false
-
-[functions.scheduled-task-run]
-verify_jwt = false
-
-[functions.subagent-run]
-verify_jwt = false
-
-[functions.crisis-followup]
-verify_jwt = false
-
-[functions.agent-consult]
-verify_jwt = false
-
-[functions.delete-user]
-verify_jwt = false
+[functions]
+  [functions.agent-config-save]
+    verify_jwt = false
+  [functions.agent-consult]
+    verify_jwt = false
+  [functions.agent-forge]
+    verify_jwt = false
+  [functions.agent-identity-save]
+    verify_jwt = false
+  [functions.anima-believe]
+    verify_jwt = false
+  [functions.anima-browser]
+    verify_jwt = false
+  [functions.anima-connect]
+    verify_jwt = false
+  [functions.anima-consolidate]
+    verify_jwt = false
+  [functions.anima-dream]
+    verify_jwt = false
+  [functions.anima-emotional-state]
+    verify_jwt = false
+  [functions.anima-heartbeat]
+    verify_jwt = false
+  [functions.anima-image-create]
+    verify_jwt = false
+  [functions.anima-initiate]
+    verify_jwt = false
+  [functions.anima-observe]
+    verify_jwt = false
+  [functions.anima-question]
+    verify_jwt = false
+  [functions.anima-reflect]
+    verify_jwt = false
+  [functions.anima-social-moltbook]
+    verify_jwt = false
+  [functions.anima-social-x]
+    verify_jwt = false
+  [functions.anima-think]
+    verify_jwt = false
+  [functions.anima-tool-execute]
+    verify_jwt = false
+  [functions.anima-web-read]
+    verify_jwt = false
+  [functions.anima-web-search]
+    verify_jwt = false
+  [functions.anima-workspace-file]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.chat]
+    verify_jwt = false
+  [functions.chat-guardian]
+    verify_jwt = false
+  [functions.chat-multi]
+    verify_jwt = false
+  [functions.checkpoint-diff]
+    verify_jwt = false
+  [functions.checkpoint-restore]
+    verify_jwt = false
+  [functions.clear-import]
+    verify_jwt = false
+  [functions.crisis-followup]
+    verify_jwt = false
+  [functions.delete-import]
+    verify_jwt = false
+  [functions.delete-user]
+    verify_jwt = false
+  [functions.extract-persona]
+    verify_jwt = false
+  [functions.generate-image]
+    verify_jwt = false
+  [functions.import-chatgpt]
+    verify_jwt = false
+  [functions.journal-cron]
+    verify_jwt = false
+  [functions.journal-write]
+    verify_jwt = false
+  [functions.luca-app-guide]
+    verify_jwt = false
+  [functions.luca-initiate]
+    verify_jwt = false
+  [functions.luca-pulse]
+    verify_jwt = false
+  [functions.memory-decay]
+    verify_jwt = false
+  [functions.memory-extract]
+    verify_jwt = false
+  [functions.memory-reflect]
+    verify_jwt = false
+  [functions.memory-synthesize]
+    verify_jwt = false
+  [functions.mnemos-dialectic]
+    verify_jwt = false
+  [functions.observer-watch]
+    verify_jwt = false
+  [functions.openclaw-deploy]
+    verify_jwt = false
+  [functions.openclaw-enqueue]
+    verify_jwt = false
+  [functions.openclaw-heartbeat]
+    verify_jwt = false
+  [functions.openclaw-pair]
+    verify_jwt = false
+  [functions.openclaw-register-result]
+    verify_jwt = false
+  [functions.openclaw-status]
+    verify_jwt = false
+  [functions.profile-chat]
+    verify_jwt = false
+  [functions.scheduled-task-run]
+    verify_jwt = false
+  [functions.skills-distill]
+    verify_jwt = false
+  [functions.skills-manage]
+    verify_jwt = false
+  [functions.subagent-run]
+    verify_jwt = false
