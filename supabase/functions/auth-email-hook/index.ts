@@ -36,7 +36,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "polyphonic-v2"
+const SITE_NAME = "Polyphonic"
 const SENDER_DOMAIN = "notify.polyphonic.chat"
 const ROOT_DOMAIN = "polyphonic.chat"
 const FROM_DOMAIN = "polyphonic.chat" // Domain shown in From address (may be root or sender subdomain)
@@ -46,7 +46,7 @@ const FROM_DOMAIN = "polyphonic.chat" // Domain shown in From address (may be ro
 // The sample email uses a fixed placeholder (RFC 6761 .test TLD) so the Go backend
 // can always find-and-replace it with the actual recipient when sending test emails,
 // even if the project's domain has changed since the template was scaffolded.
-const SAMPLE_PROJECT_URL = "https://polyphonic-v2.lovable.app"
+const SAMPLE_PROJECT_URL = "https://polyphonic.chat"
 const SAMPLE_EMAIL = "user@example.test"
 const SAMPLE_DATA: Record<string, object> = {
   signup: {
