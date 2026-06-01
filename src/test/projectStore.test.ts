@@ -27,6 +27,8 @@ function thread(id: string, project_id: string | null, updated_at: string): Thre
     pinned: false, starred: false, archived: false,
     heat: 'warm',
     agent_id: 'luca',
+    primary_agent_id: 'luca',
+    participating_agent_ids: ['luca'],
     project_id,
     created_at: updated_at,
     updated_at,
