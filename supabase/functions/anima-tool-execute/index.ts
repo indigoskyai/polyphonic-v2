@@ -562,6 +562,14 @@ serve(async (req) => {
       }
     }
 
+    const anchoredForgeProposal = await loadAnchoredForgeProposal(
+      supabase,
+      userId || null,
+      typeof thread_id === "string" ? thread_id : null,
+      messages,
+    );
+    const anchoredForgeContext = summarizeAnchoredForgeProposal(anchoredForgeProposal);
+
     // Build planning messages: system + last few user/assistant messages for context
     const planningMessages = [
       {
@@ -569,8 +577,9 @@ serve(async (req) => {
         content:
           buildPlanningSystemPrompt(mcpTools) +
           (forceForgeOnly
-            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact. If the user delegates the personality or asks for a generic/test companion agent, choose sensible complete details yourself and call forge_agent."
+            ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact. If the user delegates the personality or asks for a generic/test companion agent, choose sensible complete details yourself and call forge_agent. When revising an existing Forge proposal card, preserve whether that proposal was a create or update: revisions of unapproved create proposals must remain propose_create and must not invent or pass target_agent_id."
             : "") +
+          anchoredForgeContext +
           lastImageHint +
           (custom_instructions
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
@@ -780,13 +789,19 @@ serve(async (req) => {
           } else if (fnName === "forge_agent") {
             const forgeArgs = normalizeForgeArgs(args);
             edgeFn = "agent-forge";
+            const anchoredAction = anchoredForgeProposal
+              ? (anchoredForgeProposal.action === "update" ? "propose_update" : "propose_create")
+              : forgeArgs.action;
+            const anchoredTargetAgentId = anchoredForgeProposal?.action === "update"
+              ? anchoredForgeProposal.targetAgentId
+              : undefined;
             body = {
               user_id: userId,
               thread_id,
               source_message_id,
               source_agent_id: "luca",
-              action: forgeArgs.action,
-              target_agent_id: forgeArgs.target_agent_id,
+              action: anchoredAction,
+              target_agent_id: anchoredTargetAgentId || (!anchoredForgeProposal ? forgeArgs.target_agent_id : undefined),
               blueprint: forgeArgs.blueprint,
             };
           } else if (fnName === "update_soul" || fnName === "update_self_model") {
