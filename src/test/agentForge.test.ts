@@ -11,7 +11,7 @@ describe('Agent Forge runtime', () => {
     const source = readRepoFile('supabase/functions/agent-forge/index.ts');
     const config = readRepoFile('supabase/config.toml');
 
-    expect(config).toContain('[functions.agent-forge]\nverify_jwt = false');
+    expect(config).toMatch(/\[functions\.agent-forge\]\s+verify_jwt = false/);
     expect(source).toContain('action === "propose_create" || action === "propose_update"');
     expect(source).toContain('action === "cancel"');
     expect(source).toContain('action !== "commit"');
