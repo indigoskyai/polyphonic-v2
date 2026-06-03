@@ -11,7 +11,7 @@ describe('Agent Forge runtime', () => {
     const source = readRepoFile('supabase/functions/agent-forge/index.ts');
     const config = readRepoFile('supabase/config.toml');
 
-    expect(config).toContain('[functions.agent-forge]\nverify_jwt = false');
+    expect(config).toMatch(/\[functions\.agent-forge\]\s+verify_jwt = false/);
     expect(source).toContain('action === "propose_create" || action === "propose_update"');
     expect(source).toContain('action === "cancel"');
     expect(source).toContain('action !== "commit"');
@@ -80,6 +80,9 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('const mcpTools = !forceForgeOnly && userId');
     expect(planner).toContain('body.tool_choice = { type: "function", function: { name: "forge_agent" } }');
     expect(planner).toContain('retrying with forced forge_agent tool choice');
+    expect(planner).toContain('loadAnchoredForgeProposal');
+    expect(planner).toContain('unapproved create proposals must remain propose_create');
+    expect(planner).toContain('anchoredForgeProposal.action === "update" ? "propose_update" : "propose_create"');
     expect(lucaSoul).toContain('Forge shows the user a proposal card');
   });
 
