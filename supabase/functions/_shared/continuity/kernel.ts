@@ -460,6 +460,29 @@ async function loadThreadHistory(
 }
 
 
+function summarizeForgeProposal(msg: ContinuityHistoryMessage): string | null {
+  const md = (msg.metadata || {}) as Record<string, any>;
+  if (md.forge_kind !== "agent_forge_proposal") return null;
+  const bp = (md.blueprint || {}) as Record<string, any>;
+  const docs = (bp.identity_docs || {}) as Record<string, string>;
+  const docCounts = ["soul", "convictions", "user_model", "self_model"]
+    .map((k) => `${k}(${(docs[k] || "").length}c)`)
+    .join(", ");
+  const promptHead = typeof bp.prompt === "string" ? bp.prompt.slice(0, 500) : "";
+  const status = md.forge_status || "pending";
+  const action = md.forge_action || "create";
+  const targetId = md.target_agent_id || md.created_agent_id || "";
+  const lines = [
+    `[Forge proposal id=${msg.id || "?"} · status=${status} · action=${action}${targetId ? ` · agent_id=${targetId}` : ""}]`,
+    `Name: ${bp.name || "?"} · Role: ${bp.role || "?"} · Model: ${bp.model || "?"} · Avatar: ${bp.avatar_color || "?"}`,
+    bp.voice_description ? `Voice: ${bp.voice_description}` : "",
+    bp.summary ? `Summary: ${bp.summary}` : "",
+    promptHead ? `Runtime instructions (first 500c): ${promptHead}` : "",
+    `Identity docs: ${docCounts}`,
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
 function normalizeThreadHistoryForAgent(
   history: ContinuityHistoryMessage[],
   activeAgentId: string,
@@ -467,14 +490,23 @@ function normalizeThreadHistoryForAgent(
   return history.map((msg) => {
     if (msg.role !== "assistant") return msg;
     const messageAgent = msg.agent || "luca";
+    // Replace the Forge proposal stub content with a compact recap of the
+    // blueprint + status, so the authoring agent (Luca) can see on the next
+    // turn what it actually proposed and reason about revisions.
+    const forgeRecap = summarizeForgeProposal(msg);
+    if (forgeRecap && messageAgent === activeAgentId) {
+      return { ...msg, content: forgeRecap };
+    }
     if (messageAgent === activeAgentId) return msg;
+    const otherContent = forgeRecap || msg.content;
     return {
       ...msg,
       role: "user",
-      content: `Context from another agent (${messageAgent}), not your own prior reply:\n${msg.content}`,
+      content: `Context from another agent (${messageAgent}), not your own prior reply:\n${otherContent}`,
     };
   });
 }
+
 
 export async function loadFunctionalMemories(
   supabase: SupabaseLike,
