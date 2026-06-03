@@ -80,6 +80,9 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('const mcpTools = !forceForgeOnly && userId');
     expect(planner).toContain('body.tool_choice = { type: "function", function: { name: "forge_agent" } }');
     expect(planner).toContain('retrying with forced forge_agent tool choice');
+    expect(planner).toContain('loadAnchoredForgeProposal');
+    expect(planner).toContain('unapproved create proposals must remain propose_create');
+    expect(planner).toContain('anchoredForgeProposal.action === "update" ? "propose_update" : "propose_create"');
     expect(lucaSoul).toContain('Forge shows the user a proposal card');
   });
 
