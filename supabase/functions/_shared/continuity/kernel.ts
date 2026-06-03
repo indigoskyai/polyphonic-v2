@@ -434,7 +434,7 @@ async function loadThreadHistory(
   if (!opts.threadId) return [];
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, content, agent, created_at")
+    .select("id, role, content, agent, created_at, kind, metadata")
     .eq("user_id", opts.userId)
     .eq("thread_id", opts.threadId)
     .order("created_at", { ascending: true })
@@ -458,6 +458,7 @@ async function loadThreadHistory(
     activeAgentId,
   );
 }
+
 
 function normalizeThreadHistoryForAgent(
   history: ContinuityHistoryMessage[],
