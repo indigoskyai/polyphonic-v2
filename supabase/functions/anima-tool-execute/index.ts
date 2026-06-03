@@ -795,13 +795,16 @@ serve(async (req) => {
             const anchoredTargetAgentId = anchoredForgeProposal?.action === "update"
               ? anchoredForgeProposal.targetAgentId
               : undefined;
+            const resolvedTargetAgentId = anchoredForgeProposal
+              ? (anchoredForgeProposal.action === "update" ? anchoredTargetAgentId || forgeArgs.target_agent_id : undefined)
+              : forgeArgs.target_agent_id;
             body = {
               user_id: userId,
               thread_id,
               source_message_id,
               source_agent_id: "luca",
               action: anchoredAction,
-              target_agent_id: anchoredTargetAgentId || (!anchoredForgeProposal ? forgeArgs.target_agent_id : undefined),
+              target_agent_id: resolvedTargetAgentId,
               blueprint: forgeArgs.blueprint,
             };
           } else if (fnName === "update_soul" || fnName === "update_self_model") {
