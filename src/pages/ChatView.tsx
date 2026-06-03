@@ -1597,9 +1597,10 @@ export default function ChatView() {
     if (!proposal) return;
     const target = proposal.target_agent_id ? ` Target agent id: ${proposal.target_agent_id}.` : '';
     setInput(
-      `Revise this Forge proposal for ${proposal.blueprint.name}.${target} Please keep the full Open Clause shape, but change: `,
+      `Revise the previous Forge proposal for ${proposal.blueprint.name} (proposal id: ${msg.id}).${target} Keep the full Open Clause shape and every part I don't explicitly change — diff against the prior blueprint, don't start from scratch. Change: `,
     );
   }, []);
+
 
   const switchToForgedAgent = useCallback((agentId: string) => {
     // Land the new agent on its own fresh empty hero — the blank landing that
