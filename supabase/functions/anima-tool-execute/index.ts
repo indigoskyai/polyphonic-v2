@@ -582,7 +582,8 @@ serve(async (req) => {
 
     let planningData: any;
     try {
-      planningData = await callPlanningModel(planningMessages);
+      planningData = await callPlanningModel(planningMessages, forceForgeOnly ? { forceToolChoice: true, temperature: 0.1, maxTokens: 12_000, label: "Forge forced planning" } : undefined);
+
       clearTimeout(planningTimeout);
     } catch (err: unknown) {
       clearTimeout(planningTimeout);
