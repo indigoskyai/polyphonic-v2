@@ -257,6 +257,30 @@ async function insertProposal(
   blueprint: ForgeBlueprint,
   targetAgentId?: string | null,
 ): Promise<{ ok: true; id: string } | { ok: false; response: Response }> {
+  // Detect whether this is a revision of an earlier proposal for the same name
+  // in the same thread, so the stored content (and the next-turn history recap)
+  // reflects that this is a fresh draft, not the first one.
+  let priorProposalCount = 0;
+  try {
+    const { count } = await admin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("thread_id", threadId)
+      .eq("agent", "luca")
+      .filter("metadata->>forge_kind", "eq", "agent_forge_proposal")
+      .filter("metadata->blueprint->>name", "eq", blueprint.name);
+    priorProposalCount = typeof count === "number" ? count : 0;
+  } catch (e) {
+    console.warn("[agent-forge] prior proposal lookup failed:", e);
+  }
+  const isRevision = priorProposalCount > 0;
+  const content = action === "update"
+    ? `Drafted updates to ${blueprint.name} — review the revised Forge proposal below.`
+    : isRevision
+      ? `Drafted a revised ${blueprint.name} — review the new Forge proposal below.`
+      : `Drafted ${blueprint.name} — review the Forge proposal below.`;
+
   const { data, error } = await admin
     .from("messages")
     .insert({
@@ -267,9 +291,7 @@ async function insertProposal(
       // No schema migration in Forge v1: the DB CHECK does not yet allow an
       // agent_forge_proposal kind, so the UI keys off metadata.forge_kind.
       kind: "permission_request",
-      content: action === "create"
-        ? `I drafted ${blueprint.name}. Review the Forge proposal below.`
-        : `I drafted updates for ${blueprint.name}. Review the Forge proposal below.`,
+      content,
       metadata: proposalMetadata({ action, blueprint, targetAgentId }),
     })
     .select("id")
@@ -281,6 +303,7 @@ async function insertProposal(
   }
   return { ok: true, id: data.id as string };
 }
+
 
 async function upsertIdentityDocs(admin: any, userId: string, agentId: string, docs: Record<IdentityDocType, string>) {
   const rows = DOC_TYPES.map((docType) => ({
