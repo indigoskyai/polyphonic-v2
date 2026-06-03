@@ -66,7 +66,10 @@ export interface ContinuityHistoryMessage {
   content: string;
   agent?: string | null;
   created_at?: string | null;
+  kind?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
+
 
 export interface FunctionalMemory {
   id: string;
