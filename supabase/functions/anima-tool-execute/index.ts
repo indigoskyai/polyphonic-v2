@@ -357,6 +357,63 @@ function latestUserContent(messages: any[]): string {
   return "";
 }
 
+type AnchoredForgeProposal = {
+  id: string;
+  action: "create" | "update";
+  status: string;
+  targetAgentId?: string;
+  name: string;
+  blueprint: any;
+};
+
+function extractForgeProposalId(text: string): string | null {
+  const match = text.match(/proposal\s+id:\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  return match?.[1] || null;
+}
+
+function summarizeAnchoredForgeProposal(proposal: AnchoredForgeProposal | null): string {
+  if (!proposal) return "";
+  const bp = proposal.blueprint || {};
+  const docs = bp.identity_docs || {};
+  const docSummary = ["soul", "convictions", "user_model", "self_model"]
+    .map((key) => `${key}: ${typeof docs[key] === "string" ? docs[key].length : 0} chars`)
+    .join(", ");
+  return `\n\nAnchored Forge revision context:\n- proposal_message_id: ${proposal.id}\n- proposal_status: ${proposal.status}\n- original_forge_action: ${proposal.action}\n- target_agent_id: ${proposal.targetAgentId || "(none; this is still an unapproved create proposal)"}\n- name: ${proposal.name || bp.name || "(unnamed)"}\n- role: ${bp.role || ""}\n- model: ${bp.model || ""}\n- avatar_color: ${bp.avatar_color || ""}\n- voice: ${bp.voice_description || ""}\n- summary: ${bp.summary || ""}\n- runtime_prompt:\n${bp.prompt || ""}\n- identity_doc_lengths: ${docSummary}\n- SOUL.md:\n${docs.soul || ""}\n- Convictions.md:\n${docs.convictions || ""}\n- User-model.md:\n${docs.user_model || ""}\n- Self-model.md:\n${docs.self_model || ""}\n\nRevision rule: produce a complete replacement blueprint by applying only the user's requested changes to the anchored blueprint. If original_forge_action is create, call forge_agent with action=propose_create and do not pass target_agent_id. If original_forge_action is update, call forge_agent with action=propose_update and the exact target_agent_id above.`;
+}
+
+async function loadAnchoredForgeProposal(
+  supabase: any,
+  userId: string | null,
+  threadId: string | null,
+  messages: any[],
+): Promise<AnchoredForgeProposal | null> {
+  if (!userId || !threadId) return null;
+  const proposalId = extractForgeProposalId(latestUserContent(messages));
+  if (!proposalId) return null;
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, metadata")
+    .eq("id", proposalId)
+    .eq("user_id", userId)
+    .eq("thread_id", threadId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[anima-tool-execute] anchored Forge proposal lookup failed:", error);
+    return null;
+  }
+  const metadata = data?.metadata && typeof data.metadata === "object" ? data.metadata as Record<string, any> : null;
+  if (!metadata || metadata.forge_kind !== "agent_forge_proposal") return null;
+  const blueprint = metadata.blueprint && typeof metadata.blueprint === "object" ? metadata.blueprint : {};
+  return {
+    id: String(data.id),
+    action: metadata.forge_action === "update" ? "update" : "create",
+    status: typeof metadata.forge_status === "string" ? metadata.forge_status : "pending",
+    targetAgentId: typeof metadata.target_agent_id === "string" ? metadata.target_agent_id : undefined,
+    name: typeof blueprint.name === "string" ? blueprint.name : "",
+    blueprint,
+  };
+}
+
 function looksLikeAgentForgeRequest(text: string): boolean {
   const normalized = text.toLowerCase();
   const asksToMake =
