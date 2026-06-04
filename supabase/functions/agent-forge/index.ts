@@ -85,8 +85,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function fail(message: string, status = 400): Response {
-  return jsonResponse({ ok: false, error: message }, status);
+function fail(message: string, status = 400, extra: Record<string, unknown> = {}): Response {
+  return jsonResponse({ ok: false, error: message, ...extra }, status);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -233,6 +233,21 @@ async function createUniqueAgentId(admin: any, userId: string, name: string): Pr
   return id;
 }
 
+async function ensureUserOpenRouterKey(admin: any, userId: string): Promise<Response | null> {
+  const { data, error } = await admin.rpc("decrypt_user_api_key", { p_user_id: userId });
+  if (error) {
+    console.error("[agent-forge] OpenRouter key check failed:", error);
+    return fail("Could not verify OpenRouter connection", 500);
+  }
+  const key = typeof data === "string" ? data.trim() : "";
+  if (key) return null;
+  return fail(
+    "Connect OpenRouter before creating or updating agents.",
+    400,
+    { code: "missing_api_key", requires_openrouter: true },
+  );
+}
+
 function proposalMetadata(params: {
   action: ForgeCommitAction;
   blueprint: ForgeBlueprint;
@@ -353,6 +368,9 @@ Deno.serve(async (req): Promise<Response> => {
 
   try {
     if (action === "propose_create" || action === "propose_update") {
+      const keyError = await ensureUserOpenRouterKey(admin, userId);
+      if (keyError) return keyError;
+
       const threadId = typeof body.thread_id === "string" ? body.thread_id.trim() : "";
       if (!threadId) return fail("Field 'thread_id' is required", 400);
       const threadError = await ensureThreadOwned(admin, userId, threadId);
@@ -416,6 +434,8 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     if (action !== "commit") return fail(`Unknown Forge action '${action}'`, 400);
+    const keyError = await ensureUserOpenRouterKey(admin, userId);
+    if (keyError) return keyError;
 
     const forgeAction = metadata.forge_action === "update" ? "update" : "create";
     const validation = validateBlueprint(metadata.blueprint);

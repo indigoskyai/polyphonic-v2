@@ -284,6 +284,8 @@ export function filterNotebookItems(items: NotebookItem[], filter: NotebookFilte
     out = out.filter((item) => new Date(item.created_at) >= start);
   } else if (filter === 'salient') {
     out = out.filter((item) => (item.salience ?? 0) >= 0.6 || ['journal', 'belief'].includes(item.kind));
+  } else if (filter === 'thought') {
+    out = out.filter((item) => item.kind === 'thought' || item.kind === 'question');
   } else if (filter !== 'all') {
     out = out.filter((item) => item.kind === filter);
   }

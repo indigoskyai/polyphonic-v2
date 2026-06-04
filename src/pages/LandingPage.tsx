@@ -9,7 +9,8 @@ import {
   signInWithMicrosoft,
   signInWithGitHub,
 } from '@/lib/authFlow';
-import { startGuestChat } from '@/lib/guestChat';
+import { ensureGuideSession } from '@/lib/guestChat';
+import { useLucaGuideStore } from '@/stores/lucaGuideStore';
 import { isAnonymousUser } from '@/lib/accessTier';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import LandingParticleField, {
@@ -55,6 +56,8 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const setSidebarVisible = useSidebarStore((s) => s.setVisible);
+  const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
+  const sendGuideMessage = useLucaGuideStore((s) => s.send);
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [transitioning, setTransitioning] = useState(false);
@@ -119,20 +122,22 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
       const startedAt = performance.now();
       fieldRef.current?.beginHandoff();
       try {
-        const threadId = await startGuestChat(trimmed);
+        await ensureGuideSession();
         const elapsed = performance.now() - startedAt;
         const remaining = CHAT_HANDOFF_MIN_MS - elapsed;
         if (remaining > 0) {
           await new Promise((resolve) => window.setTimeout(resolve, remaining));
         }
         setSidebarVisible(false);
-        navigate(`/chat/${threadId}`);
+        setGuideOpen(true);
+        void sendGuideMessage(trimmed, { path: '/chat', search: '?guide=1' });
+        navigate('/chat?guide=1');
       } catch (err) {
-        setComposerError(err instanceof Error ? err.message : 'Could not open Luca right now.');
+        setComposerError(err instanceof Error ? err.message : 'Could not open the Polyphonic Guide right now.');
         setComposerLaunching(false);
       }
     },
-    [composerLaunching, navigate, setSidebarVisible]
+    [composerLaunching, navigate, sendGuideMessage, setGuideOpen, setSidebarVisible]
   );
 
   // Trigger composer state on first focus. Stays in composer state once
@@ -459,7 +464,7 @@ function LandingComposer({
           <textarea
             ref={taRef}
             className="input-textarea"
-            aria-label="Message Luca"
+            aria-label="Ask the Polyphonic Guide"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onFocus={() => {
@@ -469,7 +474,7 @@ function LandingComposer({
             onBlur={() => setFocused(false)}
             onKeyDown={handleKey}
             rows={1}
-            placeholder={submitting ? 'Opening Luca…' : 'Ask Luca anything…'}
+            placeholder={submitting ? 'Opening the Guide…' : 'Ask about Polyphonic…'}
             spellCheck={false}
             disabled={submitting}
           />
@@ -491,22 +496,22 @@ function LandingComposer({
               <Plus size={15} strokeWidth={1.55} aria-hidden="true" />
             </button>
 
-            {/* Static "luca" pill — visually matches AgentPicker's
+            {/* Static guide pill — visually matches AgentPicker's
                 resting state. Click is a no-op (focuses textarea). */}
             <button
               type="button"
               className="agent-pill targeted luca-only-pill"
               onClick={() => taRef.current?.focus()}
-              title="Talking to Luca"
+              title="Talking to the Polyphonic Guide"
             >
-              luca
+              guide
             </button>
           </div>
 
           <div className="composer-actions">
             <button
               type="submit"
-              aria-label={submitting ? 'Opening Luca' : 'Send message'}
+              aria-label={submitting ? 'Opening the Polyphonic Guide' : 'Send message'}
               className={`send-btn${!sendDisabled ? ' armed' : ''}`}
               disabled={sendDisabled || submitting}
             >

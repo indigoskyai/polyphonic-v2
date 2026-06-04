@@ -96,5 +96,12 @@ describe('OpenRouter Agent SDK runtime gate', () => {
       expect(source).toContain('findRecentDuplicateAssistantMessage');
       expect(source).toContain('skipped duplicate assistant insert');
     }
+
+    expect(chatMulti).toContain('return { id: duplicateMessageId, duplicate: true }');
+    expect(chatMulti).toContain('backend.allowMemoryWrites && !fallbackSavedMessage.duplicate');
+    expect(chatMulti).toContain('backend.allowMemoryWrites && !synthesizedSavedMessage.duplicate');
+    expect(chatMulti).toContain('options.enableContinuityWrites !== false && !assistantWasDuplicate');
+    expect(legacyChat).toContain('backend.allowMemoryWrites && !assistantWasDuplicate');
+    expect(runtime).toContain('if (!assistantWasDuplicate)');
   });
 });

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
-import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
 import { isSubstrateAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
@@ -81,8 +81,8 @@ serve(async (req) => {
     }
     const threadAgentId = resolveScopeAgentId(thread);
 
-    // Get user's default model for BYOK Observer. Platform-funded tiers are
-    // resolved to the free Luca model by resolveChatBackend.
+    // Get user's default model for BYOK Observer. Platform-funded app-help is
+    // reserved for Polyphonic Guide, not Observer or agent continuity.
     const { data: settings } = await supabase
       .from("user_settings")
       .select("synthesis_model")
@@ -99,6 +99,11 @@ serve(async (req) => {
         "upstream_unavailable",
         "Observer is temporarily unavailable. Please try again shortly, or connect your OpenRouter key in Settings.",
         503,
+      ));
+    }
+    if (backend.keySource !== "user") {
+      return fail(new MissingApiKeyError(
+        "Connect OpenRouter before using Observer. The free Polyphonic Guide can answer app/setup questions without a key.",
       ));
     }
     const model = backend.keySource === "platform" ? backend.model : requestedModel;

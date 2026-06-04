@@ -16,6 +16,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useTokenGateStore } from '@/stores/tokenGateStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useLucaGuideStore } from '@/stores/lucaGuideStore';
 
 import EchoField from '@/components/EchoField';
 import ExpressiveField from '@/components/ExpressiveField';
@@ -566,6 +567,7 @@ export default function ChatView() {
   const setStreamingThinking = useThreadStore((s) => s.setStreamingThinking);
   const loadThreads = useThreadStore((s) => s.loadThreads);
   const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
+  const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
   const threadArtifacts = useMemo(
@@ -619,7 +621,6 @@ export default function ChatView() {
   const [landingAutosend] = useState(() => consumeLandingAutosendFlag());
   const [focused, setFocused] = useState(false);
   const [firstTurnHandoff, setFirstTurnHandoff] = useState<FirstTurnHandoff | null>(null);
-  const [guestNoticeDismissed, setGuestNoticeDismissed] = useState(false);
   const [composerSending, setComposerSending] = useState(false);
   const [liveCallOpen, setLiveCallOpen] = useState(false);
   const lastSpokenIdRef = useRef<string | null>(null);
@@ -636,7 +637,6 @@ export default function ChatView() {
     [user, modelKeyStatus, tokenGateStatus],
   );
   const byokEnabled = accessTier === 'byok';
-  const platformFundedLuca = accessTier === 'guest' || accessTier === 'account_free' || accessTier === 'advanced';
   const ensembleActive = byokEnabled && rawEnsembleActive;
   const agentModeActive = byokEnabled && agentModeArmed && activeAgentId === 'luca';
 
@@ -725,21 +725,15 @@ export default function ChatView() {
   const clearAttachments = useAttachmentStore((s) => s.clear);
   const setAttachmentStatus = useAttachmentStore((s) => s.setStatus);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  // Lovable AI Gateway provides a free default backend, so the composer is
-  // never gated on having an OpenRouter key. The banner below becomes a soft
-  // upsell instead of a hard block.
-  const modelKeyMissing = false;
-  const showFreeTierUpsell = platformFundedLuca && modelKeyStatus === 'missing';
+  // Real Luca/custom-agent chat requires the user's OpenRouter key. The free
+  // platform model is reserved for the Polyphonic Guide, not agent continuity.
+  const modelKeyMissing = modelKeyStatus !== 'present';
+  const showFreeTierUpsell = modelKeyMissing;
 
-  useEffect(() => {
-    if (accessTier !== 'guest' || !showFreeTierUpsell) {
-      setGuestNoticeDismissed(false);
-      return;
-    }
-    setGuestNoticeDismissed(false);
-    const timeout = window.setTimeout(() => setGuestNoticeDismissed(true), 6500);
-    return () => window.clearTimeout(timeout);
-  }, [accessTier, showFreeTierUpsell, currentThreadId]);
+  const openPolyphonicGuide = useCallback(() => {
+    setGuideOpen(true);
+    navigate(threadId ? `/chat/${threadId}?guide=1` : '/chat?guide=1', { replace: true });
+  }, [navigate, setGuideOpen, threadId]);
 
   useEffect(() => {
     return () => {
@@ -1377,39 +1371,15 @@ export default function ChatView() {
 
   const renderModelKeyNotice = () => {
     if (!showFreeTierUpsell) return null;
-    if (accessTier === 'guest') {
-      if (guestNoticeDismissed) return null;
-      return (
-        <div className="guest-access-brief" role="status">
-          <div className="guest-access-actions">
-            <button
-              type="button"
-              className="guest-access-action primary"
-              onClick={() => navigate('/auth/signup')}
-            >
-              Create account
-            </button>
-            <button
-              type="button"
-              className="guest-access-action secondary"
-              onClick={() => navigate('/auth/login')}
-            >
-              Sign in
-            </button>
-          </div>
-          <p>
-            Guest Luca includes 20 messages today. Create an account to keep this thread and unlock 50 daily messages.
-          </p>
-        </div>
-      );
-    }
     return (
       <div
         className="composer-key-warning composer-key-warning--compact"
         role="status"
       >
         <span>
-          You're chatting on Polyphonic's Luca model. Connect OpenRouter for model choice, the ensemble council, advanced tools, and agent mode.
+          {modelKeyStatus === 'checking'
+            ? 'Checking your OpenRouter connection…'
+            : 'Connect OpenRouter to chat with Luca, build agents, migrate companions, or use agent memory. You can still ask the Polyphonic Guide about the app.'}
         </span>
         <div>
           <ConnectOpenRouter
@@ -1421,7 +1391,13 @@ export default function ChatView() {
             type="button"
             onClick={() => navigate('/settings/models')}
           >
-            Use a key I already have
+            Paste existing key
+          </button>
+          <button
+            type="button"
+            onClick={openPolyphonicGuide}
+          >
+            Ask Polyphonic Guide
           </button>
         </div>
       </div>
@@ -1429,18 +1405,7 @@ export default function ChatView() {
   };
 
   const renderGuestStatusChip = () => {
-    if (accessTier !== 'guest' || !showFreeTierUpsell || !guestNoticeDismissed) return null;
-    return (
-      <button
-        type="button"
-        className="guest-status-chip"
-        onClick={() => setGuestNoticeDismissed(false)}
-        aria-label="Guest chat limit"
-        title="Guest Luca includes 20 messages today"
-      >
-        guest · 20/day
-      </button>
-    );
+    return null;
   };
 
   const renderObserverAlcove = () => (
@@ -2515,7 +2480,7 @@ export default function ChatView() {
               </div>
               <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
                 <div className="agent-pills">
-                  {!alcoveOpen && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
+                  {!alcoveOpen && byokEnabled && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
                   {!isMobile && renderGuestStatusChip()}
                   {!isMobile && (
                     <ObserverEyeChip
@@ -3058,7 +3023,7 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
             <div className="agent-pills">
-              {!alcoveOpen && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
+              {!alcoveOpen && byokEnabled && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
               {!isMobile && renderGuestStatusChip()}
               {!isMobile && (
                 <ObserverEyeChip

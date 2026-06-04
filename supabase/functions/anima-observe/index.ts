@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { logProcessRan } from "../_shared/activity-gate.ts";
+import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
@@ -100,6 +100,13 @@ serve(async (req) => {
 
     if (!isSubstrateAgentId(agent_id)) {
       return nonSubstrateResponse(agent_id, "anima-observe", getCorsHeaders(req));
+    }
+
+    const gate = await activityGate(supabase, user_id, "observe", agent_id);
+    if (!gate.shouldRun) {
+      return new Response(JSON.stringify({ skipped: true, reason: gate.reason }), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     const mode = bodyData.mode || "panel"; // "single" | "panel"

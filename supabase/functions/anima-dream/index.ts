@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
@@ -69,6 +70,13 @@ serve(async (req) => {
 
     if (!isSubstrateAgentId(agent_id)) {
       return nonSubstrateResponse(agent_id, "anima-dream", getCorsHeaders(req));
+    }
+
+    const gate = await activityGate(supabase, user_id, "dream", agent_id);
+    if (!gate.shouldRun) {
+      return new Response(JSON.stringify({ skipped: true, reason: gate.reason }), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     // Fetch random memory pairs from different tag domains
@@ -224,6 +232,11 @@ serve(async (req) => {
         console.error("Dream generation error:", e);
       }
     }
+
+    await logProcessRan(supabase, user_id, "dream", {
+      dreams_kept: dreamsKept,
+      dreams_discarded: dreamsDiscarded,
+    }, agent_id);
 
     return new Response(JSON.stringify({ dreams_kept: dreamsKept, dreams_discarded: dreamsDiscarded }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

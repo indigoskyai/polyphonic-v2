@@ -5,8 +5,8 @@
  * chronological feed across journals, thoughts, dreams, insights, beliefs,
  * and selected activity.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
@@ -32,6 +32,10 @@ const KIND_TONE: Record<NotebookItem['kind'], string> = {
   activity: 'var(--tone-activity)',
 };
 
+function isNotebookFilter(value: string | null): value is NotebookFilter {
+  return !!value && NOTEBOOK_FILTERS.some((option) => option.id === value);
+}
+
 function timeLabel(date: string): string {
   return new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -44,6 +48,8 @@ function confidenceLabel(score?: number): string | null {
 export default function JournalView() {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedFilter = searchParams.get('view');
   // Same view, two routes: /notebook (simplified vocabulary) and /journal
   // (studio vocabulary). The data and component are identical; only the
   // surface label adapts. This avoids two near-duplicate pages drifting.
@@ -65,8 +71,21 @@ export default function JournalView() {
   } = useCognitiveStore();
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
-  const [filter, setFilter] = useState<NotebookFilter>('all');
+  const filter: NotebookFilter = isNotebookFilter(requestedFilter) ? requestedFilter : 'all';
   const [query, setQuery] = useState('');
+
+  const setNotebookFilter = useCallback(
+    (value: NotebookFilter) => {
+      const next = new URLSearchParams(searchParams);
+      if (value === 'all') {
+        next.delete('view');
+      } else {
+        next.set('view', value);
+      }
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   useEffect(() => {
     if (user) {
@@ -105,7 +124,7 @@ export default function JournalView() {
           subtitle={`${notebookItems.length} notes. ${activeAgentName}'s ${surfaceLabel.toLowerCase()} across journal, dreams, thoughts, reflections, beliefs, and activity.`}
           searchPlaceholder={`Search ${surfaceLabel.toLowerCase()}…`}
           filter={filter}
-          onFilterChange={(value) => setFilter(value as NotebookFilter)}
+          onFilterChange={(value) => setNotebookFilter(value as NotebookFilter)}
           filters={NOTEBOOK_FILTERS}
           query={query}
           onQueryChange={setQuery}

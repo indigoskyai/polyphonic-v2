@@ -44,7 +44,7 @@ import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { claimIdempotencyKey, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
-import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import {
   isOpenRouterAgentRuntimeEnabled,
   openRouterAgentSdkStream,
@@ -388,6 +388,19 @@ serve(async (req) => {
       ));
     }
     const apiKey = backend.apiKey;
+
+    if (backend.keySource !== "user") {
+      const message = "Connect OpenRouter before chatting with Luca or custom agents. The free Polyphonic Guide can answer app/setup questions without a key.";
+      if (idempotencyKey) {
+        await recordIdempotentResponse(supabase, idempotencyKey, userId, "chat-send", {
+          ok: false,
+          error: "missing_api_key",
+          message,
+          requires_openrouter: true,
+        }).catch(() => {});
+      }
+      return fail(new MissingApiKeyError(message));
+    }
 
     // Load the thread's bound agent
     const { data: thread } = await supabase
@@ -1098,20 +1111,21 @@ serve(async (req) => {
             send({ type: "verdict", verdict: "synthesize" });
             send({ type: "content", text: fallbackContent });
             councilV2Trace.verdict = "synthesize";
-            const fallbackMessageId = await saveAssistantMessage(
+            const fallbackSavedMessage = await saveAssistantMessage(
               supabase, thread_id, userId, fallbackContent, "chairman-fallback",
               variants, null, agentId,
               { rankings, aggregate, label_to_model: labelToModel },
               councilV2Trace,
               toolMessages,
             );
+            const fallbackMessageId = fallbackSavedMessage.id;
             await autoTitleThread(supabase, thread_id, messageWithAttachments, fallbackContent, apiKey!);
             const fallbackObservers = collectObservers({
               primaryAgentId: agentId,
               councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
               toolMessages,
             });
-            if (backend.allowMemoryWrites) {
+            if (backend.allowMemoryWrites && !fallbackSavedMessage.duplicate) {
               queueContinuityTurnWrites({
                 supabase,
                 threadId: thread_id,
@@ -1344,13 +1358,14 @@ serve(async (req) => {
           }
 
           // Save the synthesized message
-          const synthesizedMessageId = await saveAssistantMessage(
+          const synthesizedSavedMessage = await saveAssistantMessage(
             supabase, thread_id, userId, synthesizedContent, "synthesis",
             variants, synthesisThinking || null, agentId,
             { rankings, aggregate, label_to_model: labelToModel },
             councilV2Trace,
             toolMessages,
           );
+          const synthesizedMessageId = synthesizedSavedMessage.id;
           // Update thread timestamp
           await supabase
             .from("threads")
@@ -1369,7 +1384,7 @@ serve(async (req) => {
             councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
             toolMessages,
           });
-          if (backend.allowMemoryWrites) {
+          if (backend.allowMemoryWrites && !synthesizedSavedMessage.duplicate) {
             queueContinuityTurnWrites({
               supabase,
               threadId: thread_id,
@@ -2046,6 +2061,11 @@ function shortModelName(model: string): string {
  *  hydrate the CouncilPanel after reload. The legacy memory_events sidecar
  *  for variants is preserved for any existing readers.
  */
+interface SavedAssistantMessageResult {
+  id: string | null;
+  duplicate: boolean;
+}
+
 async function saveAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -2069,7 +2089,7 @@ async function saveAssistantMessage(
     revised_content: string | null;
   } | null = null,
   toolMessages: any[] = [],
-) : Promise<string | null> {
+) : Promise<SavedAssistantMessageResult> {
   // Build metadata payload — when council v2 trace is provided, prefer that
   // shape (kind='council_v2'). Falls back to legacy council shape for any
   // remaining call sites.
@@ -2107,7 +2127,7 @@ async function saveAssistantMessage(
   const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, agentId, content);
   if (duplicateMessageId) {
     console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId, duplicateMessageId });
-    return duplicateMessageId;
+    return { id: duplicateMessageId, duplicate: true };
   }
 
   const { data: inserted, error: insertError } = await supabase.from("messages").insert({
@@ -2138,7 +2158,7 @@ async function saveAssistantMessage(
     });
   }
 
-  return inserted?.id ?? null;
+  return { id: inserted?.id ?? null, duplicate: false };
 }
 
 /** Single-model streaming fallback (same as original chat function). */
@@ -2371,10 +2391,12 @@ async function singleModelStream(
           ? { citations: streamCitations, ...(streamQuery ? { search_query: streamQuery } : {}) }
           : null;
         let insertedMessage: { id: string | null } | null = null;
+        let assistantWasDuplicate = false;
         const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, agentId, fullContent);
         if (duplicateMessageId) {
           console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId, duplicateMessageId });
           insertedMessage = { id: duplicateMessageId };
+          assistantWasDuplicate = true;
         } else {
           const { data: inserted, error: insertError } = await supabase.from("messages").insert({
             thread_id: threadId, user_id: userId, role: "assistant",
@@ -2394,7 +2416,7 @@ async function singleModelStream(
           primaryAgentId: agentId,
           toolMessages,
         });
-        if (options.enableContinuityWrites !== false) {
+        if (options.enableContinuityWrites !== false && !assistantWasDuplicate) {
           queueContinuityTurnWrites({
             supabase,
             threadId,

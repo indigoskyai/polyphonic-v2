@@ -73,7 +73,7 @@ const GLOBAL_HIGHLIGHT_TARGETS: LucaGuideTarget[] = [
   { id: 'rail-profile', label: 'Profile rail button', description: 'The left rail shortcut for Profile.' },
   { id: 'rail-help', label: 'Help rail button', description: 'The persistent guide button near Settings.' },
   { id: 'rail-settings', label: 'Settings rail button', description: 'The left rail shortcut for Settings.' },
-  { id: 'luca-guide-launcher', label: 'Luca guide button', description: 'The floating Luca helper available from non-chat pages.' },
+  { id: 'luca-guide-launcher', label: 'Polyphonic Guide button', description: 'The floating app helper for questions about Polyphonic.' },
 ];
 
 const HELP_TARGETS: LucaGuideTarget[] = [

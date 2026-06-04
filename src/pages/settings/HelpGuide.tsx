@@ -102,7 +102,7 @@ const GLOSSARY = [
 const TROUBLESHOOTING = [
   {
     problem: 'A custom agent says it needs an API key.',
-    fix: 'Open Models and connect OpenRouter. Custom agents are BYOK, while Luca may still have a platform/free route.',
+    fix: 'Open Models and connect OpenRouter. Luca, custom agents, Forge, imports, and memory/autonomy require your own OpenRouter key; the free Polyphonic Guide is only for app questions.',
   },
   {
     problem: 'Creating another custom agent asks for $MNEMOS.',
@@ -202,7 +202,7 @@ export default function HelpGuide() {
           number="02"
           name="Model key"
           title="Set up OpenRouter"
-          desc="Polyphonic stores one encrypted OpenRouter key. That key authorizes model calls for custom agents and advanced model paths."
+          desc="Polyphonic stores one encrypted OpenRouter key. That key authorizes Luca, custom agents, Forge, imports, memory/autonomy, and advanced model paths."
         >
           <div className="guide-callout">
             <KeyRound size={18} strokeWidth={1.7} aria-hidden="true" />

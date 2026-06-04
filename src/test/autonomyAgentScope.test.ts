@@ -75,11 +75,34 @@ describe('agent-scoped autonomy runtime', () => {
 
   it('scopes the activity gate and process logs by agent', () => {
     const gate = readRepoFile('supabase/functions/_shared/activity-gate.ts');
+    const consolidate = readRepoFile('supabase/functions/mnemos-consolidate/index.ts');
 
     expect(gate).toContain('processName: string,\n  agentId = "luca"');
     expect(gate).toContain('.eq("agent_id", scopedAgentId)');
     expect(gate).toContain('agent_id: scopedAgentId');
     expect(gate).toContain('primary_agent_id.eq');
+    expect(consolidate).toContain('.from("activity_events")');
+    expect(consolidate).toContain('.eq("agent_id", agentId)');
+    expect(consolidate).toContain('.eq("metadata->>process", "mnemos-consolidate")');
+    expect(consolidate).toContain('logProcessRan(supabase, uid, "mnemos-consolidate"');
+  });
+
+  it('keeps scheduled model-writing autonomy explicitly gated', () => {
+    const gate = readRepoFile('supabase/functions/_shared/activity-gate.ts');
+    const connect = readRepoFile('supabase/functions/anima-connect/index.ts');
+    const observe = readRepoFile('supabase/functions/anima-observe/index.ts');
+    const dream = readRepoFile('supabase/functions/anima-dream/index.ts');
+
+    for (const process of ['heartbeat', 'wander', 'observe', 'dream', 'connect']) {
+      expect(gate, `${process} has an explicit process gate`).toContain(`${process}: {`);
+    }
+    expect(gate).toContain('no activity gate configured for');
+    expect(gate).toContain('gate error — skipping autonomous run');
+
+    expect(connect).toContain('evaluate as activityGate');
+    expect(connect).toContain('activityGate(supabase, user_id, "connect", agent_id)');
+    expect(observe).toContain('activityGate(supabase, user_id, "observe", agent_id)');
+    expect(dream).toContain('activityGate(supabase, user_id, "dream", agent_id)');
   });
 
   it('keeps visible background context inside the active user and agent', () => {

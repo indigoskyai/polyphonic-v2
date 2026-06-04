@@ -48,6 +48,10 @@ function isChatRoute(pathname: string): boolean {
   return pathname === '/chat' || pathname.startsWith('/chat/');
 }
 
+function guideAllowedOnChat(search: string): boolean {
+  return new URLSearchParams(search).get('guide') === '1';
+}
+
 export default function LucaGuideOverlay() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,7 +78,7 @@ export default function LucaGuideOverlay() {
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const hiddenOnChatRoute = isChatRoute(location.pathname);
+  const hiddenOnChatRoute = isChatRoute(location.pathname) && !guideAllowedOnChat(location.search);
 
   const activeAgentName = useMemo(() => {
     return availableAgents.find((agent) => agent.id === activeAgentId)?.name || 'Luca';
@@ -103,6 +107,10 @@ export default function LucaGuideOverlay() {
     if (!open) return;
     window.setTimeout(() => inputRef.current?.focus(), 80);
   }, [open]);
+
+  useEffect(() => {
+    if (guideAllowedOnChat(location.search)) setOpen(true);
+  }, [location.search, setOpen]);
 
   useEffect(() => {
     if (!hiddenOnChatRoute) return;
@@ -166,7 +174,7 @@ export default function LucaGuideOverlay() {
 
   const copyTranscript = async () => {
     const transcript = messages
-      .map((message) => `${message.role === 'user' ? 'You' : 'Luca'}: ${message.content}`)
+      .map((message) => `${message.role === 'user' ? 'You' : 'Polyphonic Guide'}: ${message.content}`)
       .join('\n\n');
     if (!transcript.trim()) return;
     try {
@@ -194,31 +202,31 @@ export default function LucaGuideOverlay() {
         data-guide-id="luca-guide-launcher"
         data-open={open ? 'true' : undefined}
         onClick={toggleOpen}
-        aria-label={open ? 'Close Luca guide' : 'Open Luca guide'}
+        aria-label={open ? 'Close Polyphonic Guide' : 'Open Polyphonic Guide'}
       >
-        <span className="luca-guide-mark" aria-hidden="true">L</span>
-        <span className="luca-guide-launcher-text">Ask Luca</span>
+        <span className="luca-guide-mark" aria-hidden="true">P</span>
+        <span className="luca-guide-launcher-text">Guide</span>
       </button>
 
       {open && (
-        <section className="luca-guide-panel" aria-label="Luca guide">
+        <section className="luca-guide-panel" aria-label="Polyphonic Guide">
           <div className="luca-guide-head">
             <div className="luca-guide-head-main">
-              <span className="luca-guide-mark large" aria-hidden="true">L</span>
+              <span className="luca-guide-mark large" aria-hidden="true">P</span>
               <div>
-                <div className="luca-guide-kicker">Luca</div>
-                <div className="luca-guide-title">Ask anything</div>
+                <div className="luca-guide-kicker">Polyphonic Guide</div>
+                <div className="luca-guide-title">Ask about the app</div>
                 <div className="luca-guide-subtitle">{context.pageTitle} · {modePolicy.label}</div>
               </div>
             </div>
             <div className="luca-guide-head-actions">
-              <button type="button" onClick={copyTranscript} aria-label="Copy Luca guide chat" title="Copy transcript">
+              <button type="button" onClick={copyTranscript} aria-label="Copy Polyphonic Guide chat" title="Copy transcript">
                 <Copy size={15} strokeWidth={1.7} />
               </button>
-              <button type="button" onClick={clear} aria-label="Start a fresh Luca guide chat" title="Start fresh">
+              <button type="button" onClick={clear} aria-label="Start a fresh Polyphonic Guide chat" title="Start fresh">
                 <PencilLine size={15} strokeWidth={1.7} />
               </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close Luca guide">
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close Polyphonic Guide">
                 <X size={15} strokeWidth={1.7} />
               </button>
             </div>
@@ -232,7 +240,7 @@ export default function LucaGuideOverlay() {
           <div className="luca-guide-messages" ref={scrollRef}>
             {messages.map((message) => (
               <div key={message.id} className={`luca-guide-message ${message.role}`}>
-                <div className="luca-guide-message-label">{message.role === 'user' ? 'you' : 'luca'}</div>
+                <div className="luca-guide-message-label">{message.role === 'user' ? 'you' : 'guide'}</div>
                 <div className="luca-guide-message-body">{message.content}</div>
                 {!!message.actions?.length && (
                   <div className="luca-guide-actions">
@@ -252,7 +260,7 @@ export default function LucaGuideOverlay() {
             ))}
             {sending && (
               <div className="luca-guide-message assistant pending">
-                <div className="luca-guide-message-label">luca</div>
+                <div className="luca-guide-message-label">guide</div>
                 <div className="luca-guide-message-body">looking at this screen...</div>
               </div>
             )}
@@ -274,7 +282,7 @@ export default function LucaGuideOverlay() {
 
             {shortcutsOpen && (
               <div className="luca-guide-shortcuts-panel">
-                <div className="luca-guide-quick" aria-label="Suggested Luca guide questions">
+                <div className="luca-guide-quick" aria-label="Suggested Polyphonic Guide questions">
                   {quickPrompts.map((prompt) => (
                     <button key={prompt} type="button" onClick={() => void submit(prompt)} disabled={sending}>
                       {prompt}
@@ -331,7 +339,7 @@ export default function LucaGuideOverlay() {
               rows={2}
               disabled={sending}
             />
-            <button type="submit" disabled={!input.trim() || sending} aria-label="Send to Luca guide">
+            <button type="submit" disabled={!input.trim() || sending} aria-label="Send to Polyphonic Guide">
               {sending ? <RotateCcw size={15} strokeWidth={1.7} /> : <Send size={15} strokeWidth={1.7} />}
             </button>
           </form>

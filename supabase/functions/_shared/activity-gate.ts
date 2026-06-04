@@ -119,7 +119,44 @@ const PROCESS_CONFIGS: Record<string, ProcessConfig> = {
       hasNewThoughts,
     ],
   },
-  // observe, dream, consolidate, believe — not gated here (have their own logic)
+  wander: {
+    cooldownMs: 6 * 3600000, // scheduled every 3h; let it breathe
+    signals: [
+      hasRecentConversation(24 * 3600000),
+      hasNewThoughts,
+      hasNewJournals,
+      hasEmotionalShift(0.12),
+    ],
+  },
+  observe: {
+    cooldownMs: 12 * 3600000, // observer panel is expensive and should not churn hourly
+    signals: [
+      hasNewThoughts,
+      hasNewJournals,
+      hasEmotionalShift(0.15),
+      hasStagnantBeliefs(1),
+    ],
+  },
+  dream: {
+    cooldownMs: 24 * 3600000, // daily at most
+    signals: [
+      hasRecentConversation(24 * 3600000),
+      hasNewJournals,
+      hasNewMemories,
+    ],
+  },
+  heartbeat: {
+    cooldownMs: 2 * 3600000, // matches cron cadence
+    signals: [
+      hasRecentConversation(24 * 3600000),
+      hasNewThoughts,
+      hasNewJournals,
+      hasHighSalienceQuestions(1),
+      hasStagnantBeliefs(1),
+      hasEmotionalShift(0.12),
+    ],
+  },
+  // consolidate, believe — have their own stricter data checks.
 };
 
 export async function evaluate(
@@ -139,9 +176,10 @@ export async function evaluate(
 
   const config = PROCESS_CONFIGS[processName];
 
-  // If no config for this process, always run (ungated processes)
+  // Unknown processes should not spend tokens or write inner-life records.
+  // Add an explicit config above when a scheduled process is meant to run.
   if (!config) {
-    return { shouldRun: true, reason: "ungated process", urgency: 0 };
+    return { shouldRun: false, reason: `no activity gate configured for ${processName}`, urgency: 0 };
   }
 
   try {
@@ -324,9 +362,10 @@ export async function evaluate(
       urgency: maxUrgency,
     };
   } catch (err) {
-    // Graceful degradation: if gate fails, run anyway
+    // Graceful degradation: if gate fails, skip. A broken signal query should
+    // not spend a user's API key or create autonomous records blindly.
     console.error(`Activity gate error for ${processName}:`, err);
-    return { shouldRun: true, reason: "gate error — defaulting to run", urgency: 0 };
+    return { shouldRun: false, reason: "gate error — skipping autonomous run", urgency: 0 };
   }
 }
 

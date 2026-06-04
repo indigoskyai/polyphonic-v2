@@ -75,8 +75,8 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('findForgeProposalResult');
     expect(chatMulti).toContain('return sseDoneResponse(corsHeaders, { duplicate: true, ...donePayload })');
     expect(planner).toContain('function looksLikeForgeFallbackLeak');
-    expect(planner).toContain('OPENROUTER_API_KEY');
-    expect(planner).toContain('Forge is intentionally allowed on the platform');
+    expect(planner).toContain('Tool planning and Forge both require BYOK now');
+    expect(planner).toContain('missing_api_key');
     expect(planner).toContain('const mcpTools = !forceForgeOnly && userId');
     expect(planner).toContain('body.tool_choice = { type: "function", function: { name: "forge_agent" } }');
     expect(planner).toContain('retrying with forced forge_agent tool choice');

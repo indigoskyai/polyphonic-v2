@@ -1,8 +1,10 @@
 // Resolves which upstream chat-completions backend Luca should use.
 //
-// User OpenRouter keys always win. Without a user key, Polyphonic can fund
-// Luca through OPENROUTER_API_KEY with tier-aware limits and feature gates.
-// This intentionally keeps advanced model freedom and costly tools on BYOK.
+// User OpenRouter keys unlock real Luca/custom-agent runtime. Without a user
+// key, Polyphonic may fund restricted app-help surfaces (Polyphonic Guide)
+// through OPENROUTER_API_KEY with tier-aware limits and feature gates.
+// Real agent continuity, memory/autonomy, tools, Forge, imports, and advanced
+// model freedom stay on BYOK.
 
 export type BillingTier = "guest" | "account_free" | "advanced" | "byok";
 export type KeySource = "user" | "platform";
@@ -153,10 +155,9 @@ function backendForPlatformKey(opts: {
 /**
  * The model the user's primary Luca chat speaks with — so Luca's inner life
  * (thoughts, reflections, wandering, dreams, journal) and its identity-authoring
- * (the dialectic) think in the SAME voice the agent speaks in, instead of a
- * cheaper off-family model. BYOK → the user's selected chat model; platform/free
- * → the funded Luca model. These processes run on the platform key, so this
- * mirrors the voice, not the billing.
+ * think in the SAME voice the agent speaks in, instead of a cheaper off-family
+ * model. BYOK → the user's selected chat model; no BYOK → the restricted
+ * guide/default model. Real agent processes should still require user BYOK.
  */
 export async function resolvePrimaryModel(
   supabase: any,

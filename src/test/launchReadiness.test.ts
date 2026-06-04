@@ -55,7 +55,7 @@ describe('launch readiness static gates', () => {
   it('keeps edge functions wrapped with CORS, catches, and source auth markers', () => {
     const config = readRepoFile('supabase/config.toml');
     const configured = new Map(
-      [...config.matchAll(/^\[functions\.([^\]]+)\]\nverify_jwt\s*=\s*(\w+)/gm)].map((match) => [match[1], match[2]]),
+      [...config.matchAll(/^\s*\[functions\.([^\]]+)\]\s*\n\s*verify_jwt\s*=\s*(\w+)/gm)].map((match) => [match[1], match[2]]),
     );
 
     const rows = edgeFunctionNames().map((name) => {
@@ -68,7 +68,9 @@ describe('launch readiness static gates', () => {
         source.includes('requireServiceRole(req') ||
         source.includes('auth !== `Bearer ${serviceRole}`') ||
         source.includes('authHeader !== `Bearer ${serviceRoleKey}`') ||
-        source.includes('authenticateDeviceToken(');
+        source.includes('authenticateDeviceToken(') ||
+        source.includes('verifyWebhookRequest(') ||
+        source.includes("claims?.role !== 'service_role'");
 
       return {
         name,
@@ -83,7 +85,7 @@ describe('launch readiness static gates', () => {
     // Expected count grows as new edge functions land. Each new function must
     // satisfy the wrapper assertions below; bumping the count is intentional
     // and signals a deliberate review.
-    expect(rows.map((row) => row.name)).toHaveLength(83);
+    expect(rows.map((row) => row.name)).toHaveLength(85);
     expect(rows.filter((row) => !row.hasPreflight).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCorsResponse).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCatch).map((row) => row.name)).toEqual([]);

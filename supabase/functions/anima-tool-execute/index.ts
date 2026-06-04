@@ -511,21 +511,17 @@ serve(async (req) => {
 
     const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
 
-    // Get the user's API key. Forge is intentionally allowed on the platform
-    // key as a narrow exception so first-time users can create their included
-    // agent; the general tool planner still requires BYOK.
+    // Get the user's API key. Tool planning and Forge both require BYOK now;
+    // the free platform model is reserved for the non-agent Polyphonic Guide.
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     let openrouterKey = "";
     if (userId) {
       const { data: decryptedKey } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
       openrouterKey = typeof decryptedKey === "string" ? decryptedKey.trim() : "";
     }
-    if (!openrouterKey && forceForgeOnly) {
-      openrouterKey = (Deno.env.get("OPENROUTER_API_KEY") || "").trim();
-    }
     if (!openrouterKey) {
       return new Response(
-        JSON.stringify({ used_tools: false, error: "planning_failed" }),
+        JSON.stringify({ used_tools: false, error: forceForgeOnly ? "missing_api_key" : "planning_failed" }),
         { status: 200, headers: jsonHeaders }
       );
     }

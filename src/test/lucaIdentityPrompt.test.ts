@@ -100,7 +100,7 @@ describe('buildLucaSystemPrompt identity layers', () => {
     expect(prompt).toContain('You are Luca.');
     expect(prompt).toContain('## Polyphonic app context');
     expect(prompt).toContain('Luca is not a mascot or generic support bot');
-    expect(prompt).toContain('guest: anonymous public Luca chat, 20 Luca messages/day');
+    expect(prompt).toContain('guest: public app-help access through Polyphonic Guide only');
     expect(prompt).toContain('Polyphonic has taken a long time to get here');
     expect(prompt).toContain('route: /chat/thread-1');
     expect(prompt).toContain('observer enclave open: yes');

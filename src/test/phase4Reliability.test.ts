@@ -47,7 +47,7 @@ describe('Phase 4 reliability guardrails', () => {
   it('does not leave config-implicit edge functions without a source auth marker', () => {
     const config = readRepoFile('supabase/config.toml');
     const configured = new Set(
-      [...config.matchAll(/^\[functions\.([^\]]+)\]\nverify_jwt\s*=\s*\w+/gm)].map((m) => m[1]),
+      [...config.matchAll(/^\s*\[functions\.([^\]]+)\]\s*\n\s*verify_jwt\s*=\s*\w+/gm)].map((m) => m[1]),
     );
     const functionsRoot = join(process.cwd(), 'supabase/functions');
     const implicitFunctions = readdirSync(functionsRoot, { withFileTypes: true })
@@ -68,7 +68,9 @@ describe('Phase 4 reliability guardrails', () => {
         source.includes('requireServiceRole(req') ||
         source.includes('auth !== `Bearer ${serviceRole}`') ||
         source.includes('authHeader !== `Bearer ${serviceRoleKey}`') ||
-        source.includes('authenticateDeviceToken(')
+        source.includes('authenticateDeviceToken(') ||
+        source.includes('verifyWebhookRequest(') ||
+        source.includes("claims?.role !== 'service_role'")
       );
     });
 
@@ -165,7 +167,7 @@ describe('Phase 4 reliability guardrails', () => {
     expect(chatView).toContain('const nextThreadId = await createThread(user.id, id)');
     expect(chatView).toContain('navigate(`/chat/${nextThreadId}`)');
 
-    expect(kernel).toContain('.select("id, role, content, agent, created_at")');
+    expect(kernel).toContain('.select("id, role, content, agent, created_at, kind, metadata")');
     expect(kernel).toContain('normalizeThreadHistoryForAgent');
     expect(kernel).toContain('Context from another agent (${messageAgent}), not your own prior reply');
     expect(kernel).toContain('const messageAgent = msg.agent || "luca"');

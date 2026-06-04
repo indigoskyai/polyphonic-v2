@@ -5,6 +5,7 @@ import { useThreadStore } from '@/stores/threadStore';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { supabase } from '@/integrations/supabase/client';
+import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 import EchoField from '@/components/EchoField';
 import { buildOnboardingHandoffPrompt } from '@/lib/interfaceMode';
 import { stashChatHandoff } from '@/lib/guestChat';
@@ -52,6 +53,8 @@ export default function ImportView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [companionLaunching, setCompanionLaunching] = useState(false);
+  const [modelKeyPreview, setModelKeyPreview] = useState<string | null>(null);
+  const [modelKeyLoading, setModelKeyLoading] = useState(true);
 
   const {
     stage, fileName, fileSize, totalConversations, filteredCount,
@@ -100,9 +103,11 @@ export default function ImportView() {
   const completedBlindSpots = profileStringList(completedShadow.blind_spots);
   const completedContradictions = profileStringList(completedShadow.contradictions);
   const completedGrowth = profileStringList(asProfileRecord(completedProfile.growth_edges).active_growth);
+  const modelKeyConnected = Boolean(modelKeyPreview);
 
   const startCompanionMigration = useCallback(async () => {
     if (!user || companionLaunching) return;
+    if (!modelKeyConnected) return;
     setCompanionLaunching(true);
     try {
       const threadId = await createThread(user.id, 'luca');
@@ -116,7 +121,34 @@ export default function ImportView() {
       console.error('[ImportView] companion migration handoff failed', err);
       setCompanionLaunching(false);
     }
-  }, [companionLaunching, createThread, navigate, user]);
+  }, [companionLaunching, createThread, modelKeyConnected, navigate, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadKey = async () => {
+      if (!user) {
+        if (!cancelled) {
+          setModelKeyPreview(null);
+          setModelKeyLoading(false);
+        }
+        return;
+      }
+      setModelKeyLoading(true);
+      const { data } = await supabase
+        .from('user_api_keys')
+        .select('key_preview')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled) {
+        setModelKeyPreview(data?.key_preview ?? null);
+        setModelKeyLoading(false);
+      }
+    };
+    loadKey();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     refreshImports();
@@ -146,9 +178,27 @@ export default function ImportView() {
                 and turn it into a Forge proposal before anything becomes live memory.
               </p>
             </div>
-            <button type="button" onClick={startCompanionMigration} disabled={companionLaunching}>
-              {companionLaunching ? 'Opening Luca…' : 'Start with Luca'}
-            </button>
+            <div className="import-companion-actions">
+              {modelKeyConnected ? (
+                <>
+                  <div className="import-key-status connected">OpenRouter connected · {modelKeyPreview}</div>
+                  <button type="button" onClick={startCompanionMigration} disabled={companionLaunching}>
+                    {companionLaunching ? 'Opening Luca…' : 'Start with Luca'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="import-key-status">
+                    {modelKeyLoading ? 'Checking OpenRouter…' : 'Connect OpenRouter before migration.'}
+                  </div>
+                  <ConnectOpenRouter
+                    variant="ghost"
+                    label="Connect OpenRouter"
+                    onConnected={(preview) => setModelKeyPreview(preview)}
+                  />
+                </>
+              )}
+            </div>
           </div>
 
           {/* ── IDLE: Upload Zone ── */}

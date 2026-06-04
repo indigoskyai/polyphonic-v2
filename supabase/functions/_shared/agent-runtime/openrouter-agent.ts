@@ -320,6 +320,7 @@ async function runOpenRouterAgentSdkTurn(
   const persistedThinking = [agentTraceBlock, fullThinking].filter(Boolean).join("\n\n") || null;
 
   let insertedMessage: { id: string | null } | null = null;
+  let assistantWasDuplicate = false;
   const duplicateMessageId = await findRecentDuplicateAssistantMessage(
     options.supabase,
     options.threadId,
@@ -334,6 +335,7 @@ async function runOpenRouterAgentSdkTurn(
       duplicateMessageId,
     });
     insertedMessage = { id: duplicateMessageId };
+    assistantWasDuplicate = true;
   } else {
     const { data: inserted, error: insertError } = await options.supabase.from("messages").insert({
       thread_id: options.threadId,
@@ -362,19 +364,21 @@ async function runOpenRouterAgentSdkTurn(
 
   autoTitleThread(options.supabase, options.threadId, options.userMessage, finalContent, options.apiKey).catch(() => {});
 
-  queueContinuityTurnWrites({
-    supabase: options.supabase as any,
-    threadId: options.threadId,
-    agentId: options.agentId,
-    userId: options.userId,
-    userMessage: options.userMessage,
-    agentResponse: finalContent,
-    sourceMessageId: insertedMessage?.id ?? null,
-    apiKey: options.apiKey,
-    authHeader: options.authHeader,
-    pendingRevisions: options.pendingRevisions || [],
-    recentTurns: normalizeRecentTurns([...options.messages, ...toolMessages]),
-  });
+  if (!assistantWasDuplicate) {
+    queueContinuityTurnWrites({
+      supabase: options.supabase as any,
+      threadId: options.threadId,
+      agentId: options.agentId,
+      userId: options.userId,
+      userMessage: options.userMessage,
+      agentResponse: finalContent,
+      sourceMessageId: insertedMessage?.id ?? null,
+      apiKey: options.apiKey,
+      authHeader: options.authHeader,
+      pendingRevisions: options.pendingRevisions || [],
+      recentTurns: normalizeRecentTurns([...options.messages, ...toolMessages]),
+    });
+  }
 
   send({
     type: "done",

@@ -6,6 +6,15 @@ const DEFAULT_BATCH_SIZE = 10
 const DEFAULT_SEND_DELAY_MS = 200
 const DEFAULT_AUTH_TTL_MINUTES = 15
 const DEFAULT_TRANSACTIONAL_TTL_MINUTES = 60
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: jsonHeaders })
+}
 
 // Check if an error is a rate-limit (429) response.
 // Uses EmailAPIError.status when available (email-js >=0.x with structured errors),
@@ -79,24 +88,22 @@ async function moveToDlq(
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
   if (!apiKey || !supabaseUrl || !supabaseServiceKey) {
     console.error('Missing required environment variables')
-    return new Response(
-      JSON.stringify({ error: 'Server configuration error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse({ error: 'Server configuration error' }, 500)
   }
 
   const authHeader = req.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse({ error: 'Unauthorized' }, 401)
   }
 
   // Defense in depth: verify_jwt=true already requires a valid JWT at the
@@ -105,10 +112,7 @@ Deno.serve(async (req) => {
   const token = authHeader.slice('Bearer '.length).trim()
   const claims = parseJwtClaims(token)
   if (claims?.role !== 'service_role') {
-    return new Response(
-      JSON.stringify({ error: 'Forbidden' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse({ error: 'Forbidden' }, 403)
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -120,10 +124,7 @@ Deno.serve(async (req) => {
     .single()
 
   if (state?.retry_after_until && new Date(state.retry_after_until) > new Date()) {
-    return new Response(
-      JSON.stringify({ skipped: true, reason: 'rate_limited' }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse({ skipped: true, reason: 'rate_limited' })
   }
 
   const batchSize = state?.batch_size ?? DEFAULT_BATCH_SIZE
@@ -318,20 +319,14 @@ Deno.serve(async (req) => {
             .eq('id', 1)
 
           // Stop processing — remaining messages stay in queue (VT expires, retried next cycle)
-          return new Response(
-            JSON.stringify({ processed: totalProcessed, stopped: 'rate_limited' }),
-            { headers: { 'Content-Type': 'application/json' } }
-          )
+          return jsonResponse({ processed: totalProcessed, stopped: 'rate_limited' })
         }
 
         // 403s are permanent configuration or authorization failures for this
         // message, so move straight to DLQ and stop processing the rest of the batch.
         if (isForbidden(error)) {
           await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
-          return new Response(
-            JSON.stringify({ processed: totalProcessed, stopped: 'forbidden' }),
-            { headers: { 'Content-Type': 'application/json' } }
-          )
+          return jsonResponse({ processed: totalProcessed, stopped: 'forbidden' })
         }
 
         // Log non-429 failures to track real retry attempts.
@@ -356,8 +351,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ processed: totalProcessed }),
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  return jsonResponse({ processed: totalProcessed })
 })

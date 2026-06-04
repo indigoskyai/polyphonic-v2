@@ -6377,6 +6377,60 @@ html {
   gap: 22px;
 }
 
+.onb-connect {
+  display: grid;
+  gap: 18px;
+}
+
+.onb-connect-head {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.onb-connect-head > svg {
+  width: 32px;
+  height: 32px;
+  padding: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.onb-connect-head p,
+.onb-connect-note {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.onb-connect-note {
+  color: var(--text-soft);
+  max-width: 560px;
+}
+
+.onb-key-status {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-faint);
+  background: rgba(255, 255, 255, 0.014);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.onb-key-status.connected {
+  border-color: color-mix(in srgb, var(--green-accent, #9fc7aa) 26%, transparent);
+  background: color-mix(in srgb, var(--green-accent, #9fc7aa) 7%, transparent);
+  color: var(--text-primary);
+}
+
 .onb-handoff p {
   margin: 0;
   color: var(--text-body);
@@ -6557,6 +6611,30 @@ html {
   max-width: 540px;
 }
 
+.import-companion-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 176px;
+}
+
+.import-key-status {
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.import-key-status.connected {
+  color: var(--text-soft);
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
 .import-companion-card button {
   appearance: none;
   border: 1px solid var(--border-subtle);
@@ -6617,6 +6695,14 @@ html {
 
   .import-companion-card {
     grid-template-columns: 1fr;
+  }
+
+  .import-companion-actions {
+    align-items: flex-start;
+  }
+
+  .import-key-status {
+    text-align: left;
   }
 }
 

@@ -79,6 +79,7 @@ describe('notebook normalization', () => {
       thoughts: [
         { id: 't1', agent_id: 'jerry', type: 'wandering', content: 'blue room noticing', trigger: null, salience: 0.3, source: 'background', created_at: t0 },
         { id: 't2', agent_id: 'jerry', type: 'reflection', content: 'high salience thread', trigger: null, salience: 0.9, source: 'reflection', created_at: t0 },
+        { id: 't3', agent_id: 'jerry', type: 'question', content: 'what is being asked?', trigger: null, salience: 0.4, source: 'question', created_at: t0 },
       ],
       dreams: [],
       insights: [],
@@ -89,6 +90,7 @@ describe('notebook normalization', () => {
     });
 
     expect(filterNotebookItems(items, 'wandering', '')).toHaveLength(1);
+    expect(filterNotebookItems(items, 'thought', '').map((item) => item.kind)).toEqual(['question']);
     expect(filterNotebookItems(items, 'salient', '')).toHaveLength(1);
     expect(filterNotebookItems(items, 'all', 'blue room')).toHaveLength(1);
   });

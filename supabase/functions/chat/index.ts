@@ -18,7 +18,7 @@ import {
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
-import { AppError, AuthError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
+import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { resolveChatBackend } from "../_shared/model-backend.ts";
 import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
@@ -153,6 +153,12 @@ serve(async (req) => {
     const shouldRunLegacyToolPlanner = requestedLegacyToolPlanner && backend.allowTools;
     const apiKey = backend.apiKey;
     const model = backend.model;
+
+    if (backend.keySource !== "user") {
+      return fail(new MissingApiKeyError(
+        "Connect OpenRouter before chatting with Luca or custom agents. The free Polyphonic Guide can answer app/setup questions without a key.",
+      ));
+    }
 
     const { data: thread } = await supabase
       .from("threads")
@@ -402,10 +408,12 @@ serve(async (req) => {
           // Save assistant message to DB, unless a retry/replay already saved
           // the exact same assistant turn in the duplicate window.
           let insertedMessage: { id: string | null } | null = null;
+          let assistantWasDuplicate = false;
           const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, thread_id, userId, agentId, fullContent);
           if (duplicateMessageId) {
             console.warn("[chat] skipped duplicate assistant insert", { thread_id, agentId, duplicateMessageId });
             insertedMessage = { id: duplicateMessageId };
+            assistantWasDuplicate = true;
           } else {
             const { data: inserted, error: insertError } = await supabase.from("messages").insert({
               thread_id,
@@ -440,7 +448,7 @@ serve(async (req) => {
           autoTitleThread(supabase, thread_id, messageWithAttachments, fullContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
-          if (backend.allowMemoryWrites) {
+          if (backend.allowMemoryWrites && !assistantWasDuplicate) {
             queueContinuityTurnWrites({
               supabase,
               userId,

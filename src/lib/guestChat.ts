@@ -5,7 +5,7 @@ export const LANDING_AUTOSEND_KEY = 'polyphonic_landing_autosend';
 export const LANDING_CHAT_TRANSITION_KEY = 'polyphonic_landing_chat_transition';
 export const LANDING_HIDDEN_HANDOFF_KEY = 'polyphonic_landing_hidden_handoff';
 const GUEST_UNAVAILABLE_MESSAGE =
-  'Free Luca chat is temporarily unavailable. Please try again a little later.';
+  'The Polyphonic Guide is temporarily unavailable. Please try again a little later.';
 
 export function stashChatHandoff(prompt: string, options?: { hidden?: boolean }): void {
   sessionStorage.setItem(LANDING_PROMPT_KEY, prompt.trim());
@@ -47,6 +47,11 @@ async function ensureSessionUserId(): Promise<string> {
   const userId = data.user?.id || data.session?.user?.id;
   if (!userId) throw new Error(GUEST_UNAVAILABLE_MESSAGE);
   return userId;
+}
+
+export async function ensureGuideSession(): Promise<void> {
+  clearLandingHandoff();
+  await ensureSessionUserId();
 }
 
 export async function startGuestChat(prompt: string): Promise<string> {

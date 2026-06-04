@@ -10,6 +10,7 @@ import {
   formatConsolidationSummary,
   type ConsolidationCounts,
 } from "../_shared/mnemos/insight-surface.ts";
+import { logProcessRan } from "../_shared/activity-gate.ts";
 
 async function maybeSurfaceConsolidation(
   supabase: any,
@@ -99,19 +100,28 @@ serve(async (req) => {
         return { skipped: true, reason: "consolidation_disabled" };
       }
 
-      // Cadence gate (cron mode only — explicit calls with force bypass)
+      // Cadence gate (cron mode only — explicit calls with force bypass).
+      // Consolidation is an agent-substrate process, so cadence must be scoped
+      // by both user and agent. The older memory_settings timestamp is kept as
+      // a coarse UI/legacy stamp, but it must not suppress other agents.
       if (!force) {
-        const { data: lastRow } = await supabase
-          .from("memory_settings")
-          .select("last_consolidated_at")
+        const { data: lastRunLog } = await supabase
+          .from("activity_events")
+          .select("created_at")
           .eq("user_id", uid)
+          .eq("agent_id", agentId)
+          .eq("event_type", "process_ran")
+          .eq("metadata->>process", "mnemos-consolidate")
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
-        if (!isConsolidationDue(settings.dream_frequency, lastRow?.last_consolidated_at ?? null)) {
+        if (!isConsolidationDue(settings.dream_frequency, lastRunLog?.created_at ?? null)) {
           console.log("[mnemos-consolidate] skipped", {
             user_id: uid,
+            agent_id: agentId,
             reason: "not_due",
             dream_frequency: settings.dream_frequency,
-            last_consolidated_at: lastRow?.last_consolidated_at ?? null,
+            last_consolidated_at: lastRunLog?.created_at ?? null,
           });
           return { skipped: true, reason: "not_due", dream_frequency: settings.dream_frequency };
         }
@@ -132,8 +142,17 @@ serve(async (req) => {
         .update({ last_consolidated_at: new Date().toISOString() })
         .eq("user_id", uid);
 
+      await logProcessRan(supabase, uid, "mnemos-consolidate", {
+        candidates_found: userResult.candidates_found ?? 0,
+        promotions: userResult.promotions ?? 0,
+        new_connections: userResult.new_connections ?? 0,
+        beliefs_updated: userResult.beliefs_updated ?? 0,
+        duration_ms: userResult.duration_ms ?? 0,
+      }, agentId);
+
       console.log("[mnemos-consolidate] cycle result", {
         user_id: uid,
+        agent_id: agentId,
         force,
         candidates_found: userResult.candidates_found ?? 0,
         pairs_analyzed: userResult.pairs_analyzed ?? 0,
