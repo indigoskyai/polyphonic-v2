@@ -180,6 +180,7 @@ export default function GraphTab() {
   const animRef = useRef<number>(0);
   const alphaRef = useRef<number>(1);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tz: 1 });
+  const autoFitRef = useRef<{ done: boolean; settleFrames: number }>({ done: false, settleFrames: 0 });
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'node'; lastX: number; lastY: number; nodeId: string | null; vx: number; vy: number }>(
     { mode: 'none', lastX: 0, lastY: 0, nodeId: null, vx: 0, vy: 0 }
   );
