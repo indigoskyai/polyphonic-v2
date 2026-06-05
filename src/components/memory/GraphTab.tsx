@@ -273,6 +273,9 @@ export default function GraphTab() {
 
     // Reheat sim — mild for live updates, hot for first load
     alphaRef.current = prefersReducedMotion ? 0 : isFirst ? 1 : Math.max(alphaRef.current, 0.35);
+    // Re-fit camera whenever the visible set changes (filter switch, new load)
+    autoFitRef.current.done = false;
+    autoFitRef.current.settleFrames = 0;
     setHasSettled(false);
   }, [activeEngrams, connections, prefersReducedMotion]);
 
