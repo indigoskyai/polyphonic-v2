@@ -180,6 +180,7 @@ export default function GraphTab() {
   const animRef = useRef<number>(0);
   const alphaRef = useRef<number>(1);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tz: 1 });
+  const autoFitRef = useRef<{ done: boolean; settleFrames: number }>({ done: false, settleFrames: 0 });
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'node'; lastX: number; lastY: number; nodeId: string | null; vx: number; vy: number }>(
     { mode: 'none', lastX: 0, lastY: 0, nodeId: null, vx: 0, vy: 0 }
   );
@@ -272,6 +273,9 @@ export default function GraphTab() {
 
     // Reheat sim — mild for live updates, hot for first load
     alphaRef.current = prefersReducedMotion ? 0 : isFirst ? 1 : Math.max(alphaRef.current, 0.35);
+    // Re-fit camera whenever the visible set changes (filter switch, new load)
+    autoFitRef.current.done = false;
+    autoFitRef.current.settleFrames = 0;
     setHasSettled(false);
   }, [activeEngrams, connections, prefersReducedMotion]);
 
@@ -379,6 +383,35 @@ export default function GraphTab() {
     };
 
     const render = () => {
+      // Auto-fit: once the layout has begun settling, frame all nodes so the
+      // entire graph is visible regardless of size. Re-runs on filter / data
+      // changes (autoFitRef gets reset by the build effect).
+      if (!autoFitRef.current.done && nodesRef.current.size > 0 && w > 0 && h > 0) {
+        // Wait a few frames so the simulation has expanded the initial spiral.
+        autoFitRef.current.settleFrames += 1;
+        const ready = autoFitRef.current.settleFrames > 8 && alphaRef.current < 0.4;
+        if (ready || autoFitRef.current.settleFrames > 240) {
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const n of nodesRef.current.values()) {
+            if (n.x < minX) minX = n.x; if (n.y < minY) minY = n.y;
+            if (n.x > maxX) maxX = n.x; if (n.y > maxY) maxY = n.y;
+          }
+          const bw = Math.max(1, maxX - minX);
+          const bh = Math.max(1, maxY - minY);
+          const pad = 80;
+          const zx = (w - pad * 2) / bw;
+          const zy = (h - pad * 2) / bh;
+          const z = Math.max(0.05, Math.min(2, Math.min(zx, zy)));
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+          const camNow = cameraRef.current;
+          camNow.tz = z;
+          camNow.tx = -cx * z;
+          camNow.ty = -cy * z;
+          autoFitRef.current.done = true;
+        }
+      }
+
       // Camera easing
       const cam = cameraRef.current;
       if (prefersReducedMotion) {
@@ -634,10 +667,10 @@ export default function GraphTab() {
   }, []);
 
   const handleDoubleClick = useCallback(() => {
-    // Fit-to-view: reset camera + reheat
-    const cam = cameraRef.current;
-    cam.tx = 0; cam.ty = 0; cam.tz = 1;
-    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.4);
+    // Re-fit camera to all nodes
+    autoFitRef.current.done = false;
+    autoFitRef.current.settleFrames = 9; // skip warmup so fit happens immediately
+    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
   }, [prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
