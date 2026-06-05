@@ -667,10 +667,10 @@ export default function GraphTab() {
   }, []);
 
   const handleDoubleClick = useCallback(() => {
-    // Fit-to-view: reset camera + reheat
-    const cam = cameraRef.current;
-    cam.tx = 0; cam.ty = 0; cam.tz = 1;
-    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.4);
+    // Re-fit camera to all nodes
+    autoFitRef.current.done = false;
+    autoFitRef.current.settleFrames = 9; // skip warmup so fit happens immediately
+    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
   }, [prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
