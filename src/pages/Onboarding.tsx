@@ -144,10 +144,12 @@ export default function Onboarding() {
     }
     let canceled = false;
     setCheckingKey(true);
-    supabase
-      .from('user_api_keys')
-      .select('key_preview')
-      .maybeSingle()
+    Promise.resolve(
+      supabase
+        .from('user_api_keys')
+        .select('key_preview')
+        .maybeSingle()
+    )
       .then(({ data, error }) => {
         if (canceled) return;
         setKeyPreview(error ? null : data?.key_preview ?? null);
