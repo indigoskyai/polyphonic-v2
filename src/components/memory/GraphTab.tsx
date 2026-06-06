@@ -179,6 +179,7 @@ export default function GraphTab() {
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map());
   const animRef = useRef<number>(0);
   const alphaRef = useRef<number>(1);
+  const bgMulRef = useRef<number>(1);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tz: 1 });
   const autoFitRef = useRef<{ done: boolean; settleFrames: number }>({ done: false, settleFrames: 0 });
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'node'; lastX: number; lastY: number; nodeId: string | null; vx: number; vy: number }>(
