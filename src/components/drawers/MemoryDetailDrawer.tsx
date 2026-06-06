@@ -89,7 +89,7 @@ export default function MemoryDetailDrawer() {
             <span className="drawer-crumb-num">—</span>
           </span>
           <DrawerEscChip />
-          <DrawerCloseBtn onClick={close} />
+          <DrawerCloseBtn onClick={() => { setSelectedEngram(null); close(); }} />
         </DrawerHeader>
         <DrawerBody>
           <DrawerSection>
