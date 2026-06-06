@@ -150,6 +150,7 @@ export default function GraphTab() {
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
   const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
+  const closeDrawer = useDrawerStore((s) => s.close);
   const userId = useAuthStore((s) => s.user?.id);
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -179,6 +180,7 @@ export default function GraphTab() {
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map());
   const animRef = useRef<number>(0);
   const alphaRef = useRef<number>(1);
+  const bgMulRef = useRef<number>(1);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tz: 1 });
   const autoFitRef = useRef<{ done: boolean; settleFrames: number }>({ done: false, settleFrames: 0 });
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'node'; lastX: number; lastY: number; nodeId: string | null; vx: number; vy: number }>(
@@ -442,6 +444,14 @@ export default function GraphTab() {
       const focusNeighbors = focusId ? adjacencyRef.current.get(focusId) : null;
       const now = performance.now();
 
+      // Gentle background recession when something has focus. Eased so moving
+      // the cursor across nodes doesn't strobe — non-focused atoms simply
+      // breathe ~22% softer instead of going dark.
+      const targetBg = focusId ? 0.78 : 1;
+      const prevBg = bgMulRef.current;
+      const bgMul = prevBg + (targetBg - prevBg) * (prefersReducedMotion ? 1 : 0.12);
+      bgMulRef.current = bgMul;
+
       ctx.lineCap = 'round';
 
       // Edges
@@ -449,8 +459,7 @@ export default function GraphTab() {
         const a = nodesRef.current.get(e.source);
         const b = nodesRef.current.get(e.target);
         if (!a || !b) continue;
-        const isFocused = focusId && (e.source === focusId || e.target === focusId);
-        const isDimmed = focusId && !isFocused;
+        const isFocused = !!(focusId && (e.source === focusId || e.target === focusId));
         const ageA = Math.min(1, (now - a.spawnedAt) / 1400);
         const ageB = Math.min(1, (now - b.spawnedAt) / 1400);
         const fadeIn = prefersReducedMotion ? 1 : easeOutCubic(Math.min(ageA, ageB));
@@ -461,11 +470,8 @@ export default function GraphTab() {
         if (isFocused) {
           ctx.strokeStyle = EDGE_HIGHLIGHT;
           ctx.lineWidth = (0.9 / cam.zoom) * fadeIn;
-        } else if (isDimmed) {
-          ctx.strokeStyle = EDGE_DIM;
-          ctx.lineWidth = (0.45 / cam.zoom) * fadeIn;
         } else {
-          const baseAlpha = (DRAMATIC ? 0.10 + Math.min(0.30, e.weight * 0.22) : 0.05 + Math.min(0.18, e.weight * 0.13)) * fadeIn;
+          const baseAlpha = (DRAMATIC ? 0.10 + Math.min(0.30, e.weight * 0.22) : 0.05 + Math.min(0.18, e.weight * 0.13)) * fadeIn * bgMul;
           ctx.strokeStyle = `${EDGE_BASE} ${baseAlpha.toFixed(3)})`;
           ctx.lineWidth = (DRAMATIC ? 0.8 : 0.5) / cam.zoom;
         }
@@ -480,15 +486,18 @@ export default function GraphTab() {
         const isHovered = hoveredId === node.id;
         const isSelected = selectedId === node.id;
         const isNeighbor = focusNeighbors?.has(node.id);
-        const isDimmed = focusId && !isHovered && !isSelected && !isNeighbor;
+        // "Lit" = the hover/selection target or one of its direct neighbors.
+        // Everything else just recedes via bgMul, it never goes dark.
+        const isLit = isHovered || isSelected || isNeighbor;
         const age = Math.min(1, (now - node.spawnedAt) / 1400);
         const fadeIn = prefersReducedMotion ? 1 : easeOutCubic(age);
 
-        // Dramatic glow halo — a soft luminous bloom behind each disc so the
-        // constellation reads as points of light. Radial gradient, tint-hued.
-        if (DRAMATIC && !isDimmed) {
-          const glowR = r * (isHovered || isSelected ? 4.0 : 2.8);
-          const ga = (isHovered || isSelected ? 0.34 : isNeighbor ? 0.24 : 0.17) * fadeIn;
+        // Glow halo — always rendered. Lit nodes bloom larger/brighter; the
+        // rest follow the soft bg multiplier so the field stays alive.
+        if (DRAMATIC) {
+          const glowR = r * (isHovered || isSelected ? 4.2 : isNeighbor ? 3.2 : 2.8);
+          const baseGa = isHovered || isSelected ? 0.38 : isNeighbor ? 0.28 : 0.17;
+          const ga = baseGa * fadeIn * (isLit ? 1 : bgMul);
           const grad = ctx.createRadialGradient(node.x, node.y, r * 0.35, node.x, node.y, glowR);
           grad.addColorStop(0, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${ga})`);
           grad.addColorStop(1, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0)`);
@@ -502,25 +511,24 @@ export default function GraphTab() {
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         if (isSelected || isHovered) {
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.6 : 0.42) * fadeIn})`;
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.7 : 0.5) * fadeIn})`;
         } else if (isNeighbor) {
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.38 : 0.22) * fadeIn})`;
-        } else if (isDimmed) {
-          ctx.fillStyle = `rgba(220, 219, 216, ${0.04 * fadeIn})`;
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.45 : 0.28) * fadeIn})`;
         } else {
-          // At rest, a solid-ish hued core (the glow supplies the bloom).
-          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.30 : 0.14) * fadeIn})`;
+          // Base state — gently scaled by bgMul when something has focus.
+          ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.30 : 0.14) * fadeIn * bgMul})`;
         }
         ctx.fill();
 
-        // Crisp 1px ring (with type tint for non-focused)
+        // Crisp 1px ring
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.strokeStyle = isHovered
-          ? NODE_STROKE_HOVER
-          : isDimmed
-            ? NODE_STROKE_DIM
-            : `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(DRAMATIC ? 0.78 : 0.55) * fadeIn})`;
+        if (isHovered) {
+          ctx.strokeStyle = NODE_STROKE_HOVER;
+        } else {
+          const ringAlpha = (DRAMATIC ? 0.78 : 0.55) * fadeIn * (isLit ? 1 : bgMul);
+          ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${ringAlpha.toFixed(3)})`;
+        }
         ctx.lineWidth = (DRAMATIC ? 1.2 : 1) / cam.zoom;
         ctx.stroke();
 
@@ -666,12 +674,27 @@ export default function GraphTab() {
     cam.tz = newZoom;
   }, []);
 
-  const handleDoubleClick = useCallback(() => {
-    // Re-fit camera to all nodes
-    autoFitRef.current.done = false;
-    autoFitRef.current.settleFrames = 9; // skip warmup so fit happens immediately
-    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
-  }, [prefersReducedMotion]);
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    const node = getNodeAtClient(e.clientX, e.clientY);
+    const currentSelectedId = selectedIdRef.current;
+    if (!node) {
+      // Empty space → deselect + close drawer + re-fit camera
+      if (currentSelectedId) {
+        setSelectedEngram(null);
+        closeDrawer();
+      }
+      autoFitRef.current.done = false;
+      autoFitRef.current.settleFrames = 9;
+      if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
+      return;
+    }
+    if (node.id === currentSelectedId) {
+      // Double-click on the selected node → just deselect + close
+      setSelectedEngram(null);
+      closeDrawer();
+    }
+    // Double-click on another node: leave selection to the single-click handler.
+  }, [getNodeAtClient, setSelectedEngram, closeDrawer, prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
   const stats = useMemo(() => {

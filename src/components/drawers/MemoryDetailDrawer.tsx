@@ -7,7 +7,7 @@
  * memory-detail we render *without* a backdrop so the underlying graph stays
  * visible and uninterrupted.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   DrawerHeader,
   DrawerCrumb,
@@ -57,6 +57,13 @@ export default function MemoryDetailDrawer() {
   const engramId = payload?.engramId;
 
   const { engrams, connections, setSelectedEngram } = useMemoryStore();
+
+  // Closing via ESC / backdrop / route change unmounts this component — clear
+  // the graph selection so the node deselects too.
+  useEffect(() => {
+    return () => { setSelectedEngram(null); };
+  }, [setSelectedEngram]);
+
   const engram = useMemo<Engram | null>(
     () => engrams.find((e) => e.id === engramId) ?? null,
     [engrams, engramId],
@@ -82,7 +89,7 @@ export default function MemoryDetailDrawer() {
             <span className="drawer-crumb-num">—</span>
           </span>
           <DrawerEscChip />
-          <DrawerCloseBtn onClick={close} />
+          <DrawerCloseBtn onClick={() => { setSelectedEngram(null); close(); }} />
         </DrawerHeader>
         <DrawerBody>
           <DrawerSection>
