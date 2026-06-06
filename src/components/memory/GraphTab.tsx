@@ -150,6 +150,7 @@ export default function GraphTab() {
   const { engrams, connections, setSelectedEngram, selectedEngram } = useMemoryStore();
   const loadAll = useMemoryStore((s) => s.loadAll);
   const openDrawer = useDrawerStore((s) => s.open);
+  const closeDrawer = useDrawerStore((s) => s.close);
   const userId = useAuthStore((s) => s.user?.id);
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const prefersReducedMotion = usePrefersReducedMotion();
