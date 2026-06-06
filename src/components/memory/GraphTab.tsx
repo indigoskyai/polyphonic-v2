@@ -694,7 +694,7 @@ export default function GraphTab() {
       closeDrawer();
     }
     // Double-click on another node: leave selection to the single-click handler.
-  }, [getNodeAtClient, setSelectedEngram, prefersReducedMotion]);
+  }, [getNodeAtClient, setSelectedEngram, closeDrawer, prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
