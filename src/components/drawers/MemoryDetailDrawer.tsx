@@ -57,6 +57,13 @@ export default function MemoryDetailDrawer() {
   const engramId = payload?.engramId;
 
   const { engrams, connections, setSelectedEngram } = useMemoryStore();
+
+  // Closing via ESC / backdrop / route change unmounts this component — clear
+  // the graph selection so the node deselects too.
+  useEffect(() => {
+    return () => { setSelectedEngram(null); };
+  }, [setSelectedEngram]);
+
   const engram = useMemo<Engram | null>(
     () => engrams.find((e) => e.id === engramId) ?? null,
     [engrams, engramId],
