@@ -7,7 +7,7 @@
  * memory-detail we render *without* a backdrop so the underlying graph stays
  * visible and uninterrupted.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   DrawerHeader,
   DrawerCrumb,
