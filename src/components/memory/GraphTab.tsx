@@ -673,12 +673,27 @@ export default function GraphTab() {
     cam.tz = newZoom;
   }, []);
 
-  const handleDoubleClick = useCallback(() => {
-    // Re-fit camera to all nodes
-    autoFitRef.current.done = false;
-    autoFitRef.current.settleFrames = 9; // skip warmup so fit happens immediately
-    if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
-  }, [prefersReducedMotion]);
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    const node = getNodeAtClient(e.clientX, e.clientY);
+    const currentSelectedId = selectedIdRef.current;
+    if (!node) {
+      // Empty space → deselect + close drawer + re-fit camera
+      if (currentSelectedId) {
+        setSelectedEngram(null);
+        closeDrawer();
+      }
+      autoFitRef.current.done = false;
+      autoFitRef.current.settleFrames = 9;
+      if (!prefersReducedMotion) alphaRef.current = Math.max(alphaRef.current, 0.15);
+      return;
+    }
+    if (node.id === currentSelectedId) {
+      // Double-click on the selected node → just deselect + close
+      setSelectedEngram(null);
+      closeDrawer();
+    }
+    // Double-click on another node: leave selection to the single-click handler.
+  }, [getNodeAtClient, setSelectedEngram, prefersReducedMotion]);
 
   // ── Stats ───────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
