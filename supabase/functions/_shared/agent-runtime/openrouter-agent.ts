@@ -668,6 +668,7 @@ async function autoTitleThread(
       ],
       max_tokens: 20,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) return;

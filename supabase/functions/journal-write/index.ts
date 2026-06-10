@@ -321,6 +321,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         temperature: 0.85,
         max_tokens: 1024,
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

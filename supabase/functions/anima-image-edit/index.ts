@@ -97,6 +97,7 @@ serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${openaiKey}` },
       body: form,
+      signal: AbortSignal.timeout(60000),
     });
     console.log("[anima-image-edit] openai responded", { ms: Date.now() - t0, status: response.status });
 

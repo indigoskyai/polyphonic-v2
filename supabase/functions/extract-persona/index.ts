@@ -109,6 +109,7 @@ async function callAI(
       "X-Title": "Polyphonic - Persona Extraction",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {

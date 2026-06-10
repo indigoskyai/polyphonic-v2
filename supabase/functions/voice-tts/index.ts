@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
           model_id: modelId,
           voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true },
         }),
+        signal: AbortSignal.timeout(120000),
       },
     );
 

@@ -158,6 +158,7 @@ serve(async (req) => {
         temperature: 0.4,
         response_format: { type: "json_object" },
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!orResponse.ok) {

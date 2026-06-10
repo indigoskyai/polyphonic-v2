@@ -224,6 +224,7 @@ Rules:
         ],
         tool_choice: { type: "function", function: { name: "reflect_memories" } },
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!aiResponse.ok) {
@@ -343,6 +344,7 @@ Rules:
                 temperature: 0.3,
                 max_tokens: 300,
               }),
+              signal: AbortSignal.timeout(60000),
             });
 
             if (softenResponse.ok) {

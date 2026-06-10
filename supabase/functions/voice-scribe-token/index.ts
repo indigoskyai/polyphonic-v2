@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
 
     const upstream = await fetch(
       "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
-      { method: "POST", headers: { "xi-api-key": apiKey } },
+      { method: "POST", headers: { "xi-api-key": apiKey }, signal: AbortSignal.timeout(15000) },
     );
     const data = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {

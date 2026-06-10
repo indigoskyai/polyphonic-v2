@@ -162,6 +162,7 @@ async function rawFetchAndExtract(url: string): Promise<RawFetchSuccess | RawFet
         "User-Agent": "Polyphonic/1.0",
         "Accept": "text/html,application/xhtml+xml",
       },
+      signal: AbortSignal.timeout(20000),
     });
     if (!response.ok) {
       return { ok: false, status: 502, error: `Failed to fetch URL: ${response.status}` };

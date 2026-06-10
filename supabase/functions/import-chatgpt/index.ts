@@ -398,6 +398,7 @@ ${batchText}`;
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!aiResponse.ok) {

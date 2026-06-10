@@ -101,6 +101,7 @@ async function generateDreamNarrative(
       max_tokens: 300,
       temperature: 0.8,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {

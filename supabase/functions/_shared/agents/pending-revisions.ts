@@ -116,6 +116,7 @@ Return strict JSON only: {"addressed_ids":["id"]}.`,
         max_tokens: 300,
         response_format: { type: "json_object" },
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) return new Set();

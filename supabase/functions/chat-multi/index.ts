@@ -1088,6 +1088,7 @@ serve(async (req) => {
               stream: true,
               max_tokens: 4096,
             }),
+            signal: AbortSignal.timeout(120000),
           });
 
           if (!orResponse.ok) {
@@ -1811,6 +1812,7 @@ async function callModelNonStreaming(
       max_tokens: 4096,
       ...reasoningParams,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {
@@ -2220,6 +2222,7 @@ async function singleModelStream(
             max_tokens: options.maxTokens ?? 4096,
             ...reasoningParams,
           }),
+          signal: AbortSignal.timeout(120000),
         });
 
         if (!orResponse.ok) {
@@ -2492,6 +2495,7 @@ async function autoTitleThread(
       ],
       max_tokens: 20,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (resp.ok) {

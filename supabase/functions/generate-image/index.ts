@@ -100,6 +100,7 @@ serve(async (req) => {
         ],
         modalities: ["image", "text"],
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

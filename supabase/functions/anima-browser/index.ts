@@ -42,6 +42,7 @@ serve(async (req) => {
         keepAlive: false,
         userMetadata: { user_id: userId, goal: goal.slice(0, 120) },
       }),
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!sessionResponse.ok) {
@@ -156,6 +157,7 @@ async function releaseSession(apiKey: string, sessionId: string, projectId?: str
     method: "POST",
     headers: { "Content-Type": "application/json", "X-BB-API-Key": apiKey },
     body: JSON.stringify({ status: "REQUEST_RELEASE", ...(projectId ? { projectId } : {}) }),
+    signal: AbortSignal.timeout(20000),
   });
 }
 

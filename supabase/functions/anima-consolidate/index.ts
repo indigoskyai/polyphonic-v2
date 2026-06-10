@@ -157,6 +157,7 @@ serve(async (req) => {
         temperature: 0.6,
         max_tokens: 1500,
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

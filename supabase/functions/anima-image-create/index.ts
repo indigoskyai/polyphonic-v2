@@ -110,6 +110,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(60000),
     });
     console.log("[anima-image-create] openai responded", { ms: Date.now() - t0, status: response.status });
 

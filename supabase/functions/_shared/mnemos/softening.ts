@@ -128,6 +128,7 @@ async function compressContent(
       max_tokens: 200,
       temperature: 0.3,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {

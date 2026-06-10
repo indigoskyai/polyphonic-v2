@@ -672,6 +672,7 @@ serve(async (req) => {
             temperature: 0.4,
             max_tokens: 5000,
           }),
+          signal: AbortSignal.timeout(60000),
         },
       );
 
@@ -803,6 +804,7 @@ ${pass5}`;
             function: { name: "save_psychological_profile" },
           },
         }),
+        signal: AbortSignal.timeout(60000),
       },
     );
 

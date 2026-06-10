@@ -156,6 +156,7 @@ serve(async (req) => {
         max_tokens: 900,
         response_format: { type: "json_object" },
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

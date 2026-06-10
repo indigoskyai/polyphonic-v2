@@ -189,6 +189,7 @@ Revision count: ${(belief.revision_history || []).length}`;
             temperature: 0.5,
             max_tokens: 500,
           }),
+          signal: AbortSignal.timeout(60000),
         });
 
         if (!response.ok) continue;

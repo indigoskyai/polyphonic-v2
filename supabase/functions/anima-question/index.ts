@@ -160,6 +160,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
         temperature: 0.7,
         max_tokens: 512,
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

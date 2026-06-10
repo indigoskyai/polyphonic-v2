@@ -195,6 +195,7 @@ async function callAgent(
       temperature: 0.5,
       max_tokens: 1800,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) throw new Error(`OpenRouter ${response.status}`);

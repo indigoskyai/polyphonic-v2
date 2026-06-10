@@ -186,6 +186,7 @@ Deno.serve(async (req) => {
           temperature: 0.6,
           max_tokens: 2500,
         }),
+        signal: AbortSignal.timeout(60000),
       });
 
       if (!aiRes.ok) {

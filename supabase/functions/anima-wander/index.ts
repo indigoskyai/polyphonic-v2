@@ -210,6 +210,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
       temperature: 0.95, // higher than think — we want drift
       max_tokens: 1024,
     }),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {

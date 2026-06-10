@@ -67,6 +67,7 @@ serve(async (req) => {
           name: name.slice(0, 100),
           description: (description || "").slice(0, 500),
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!registerResp.ok) {
@@ -156,6 +157,7 @@ serve(async (req) => {
           content: content.slice(0, 5000),
           submolt: submolt || undefined,
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!postResp.ok) {
@@ -202,6 +204,7 @@ serve(async (req) => {
 
       const feedResp = await fetch(`${MOLTBOOK_API_BASE}/feed?limit=${params.limit || 20}`, {
         headers: { Authorization: `Bearer ${account.access_token}` },
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!feedResp.ok) {
