@@ -27,7 +27,7 @@ function autoCloseFence(src: string): { text: string; openBlockIndex: number | n
   return { text: src, openBlockIndex: null };
 }
 
-export default function RichBody({ source, className, streaming = false }: RichBodyProps) {
+function RichBody({ source, className, streaming = false }: RichBodyProps) {
   const navigate = useNavigate();
   const { text, openBlockIndex } = streaming
     ? autoCloseFence(source)
@@ -100,4 +100,10 @@ export default function RichBody({ source, className, streaming = false }: RichB
   );
 }
 
-export { RichBody };
+// Memoized: markdown parsing (remark/micromark) is the costly part of the
+// streaming render path. All props are primitives, so a shallow memo lets the
+// parent's per-token re-render skip the reparse whenever the throttled source
+// string is unchanged (see StreamingText's treeSourceLen throttle in ChatView).
+const MemoRichBody = React.memo(RichBody);
+export default MemoRichBody;
+export { MemoRichBody as RichBody };

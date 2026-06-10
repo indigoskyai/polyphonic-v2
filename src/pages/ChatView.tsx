@@ -243,6 +243,32 @@ function MessageContent({ content }: { content: string }) {
   return <RichBody source={content} />;
 }
 
+/* ─── Live artifacts extracted from the in-progress stream ───
+   Memoized + isolated so the per-render scan only re-runs when the stream
+   content (or thread/user) actually changes — not on every unrelated ChatView
+   re-render (input keystrokes, scroll, focus, drag state, etc.). */
+const StreamingArtifacts = React.memo(function StreamingArtifacts({
+  content,
+  threadId,
+  userId,
+}: {
+  content: string;
+  threadId: string;
+  userId: string;
+}) {
+  const artifacts = useMemo(
+    () => extractStreamingArtifacts(content, { threadId, userId }),
+    [content, threadId, userId],
+  );
+  return (
+    <>
+      {artifacts.map((art) => (
+        <ArtifactCard key={art.id} artifact={art} />
+      ))}
+    </>
+  );
+});
+
 function getAgentDisplayName(agentId: string | null | undefined, names: Map<string, string>) {
   if (!agentId) return 'Luca';
   const fromStore = names.get(agentId);
@@ -2941,10 +2967,13 @@ export default function ChatView() {
                 />
               )}
               {/* Live artifacts extracted from in-progress stream */}
-              {(streamingContent || lingeringStream) && currentThreadId && user &&
-                extractStreamingArtifacts(streamingContent || lingeringStream || '', { threadId: currentThreadId, userId: user.id }).map((art) => (
-                  <ArtifactCard key={art.id} artifact={art} />
-                ))}
+              {(streamingContent || lingeringStream) && currentThreadId && user && (
+                <StreamingArtifacts
+                  content={streamingContent || lingeringStream || ''}
+                  threadId={currentThreadId}
+                  userId={user.id}
+                />
+              )}
               </div>
             </div>
           )}
