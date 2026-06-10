@@ -9,6 +9,7 @@
  */
 
 import type { Engram } from "./types.ts";
+import { withModelRetry } from "../modelRetry.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -113,7 +114,7 @@ async function compressContent(
   content: string,
   openrouterApiKey: string
 ): Promise<string> {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${openrouterApiKey}`,
@@ -129,7 +130,7 @@ async function compressContent(
       temperature: 0.3,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) {
     throw new Error(`Softening LLM call failed: ${response.status} ${response.statusText}`);

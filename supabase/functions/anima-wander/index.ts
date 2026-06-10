@@ -18,6 +18,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -195,7 +196,7 @@ ${activityText}
 ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
 
   // Call LLM
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${userApiKey}`,
@@ -211,7 +212,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
       max_tokens: 1024,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) {
     const errText = await response.text();

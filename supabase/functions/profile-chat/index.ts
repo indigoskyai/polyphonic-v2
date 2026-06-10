@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { AppError, AuthError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const MODEL = "google/gemini-2.5-pro";
 
@@ -173,7 +174,7 @@ Deno.serve(async (req) => {
     let memoryCounter = 0;
 
     for (let round = 0; round < 4; round++) {
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await withModelRetry(() => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${lovableKey}`,
@@ -187,7 +188,7 @@ Deno.serve(async (req) => {
           max_tokens: 2500,
         }),
         signal: AbortSignal.timeout(60000),
-      });
+      }));
 
       if (!aiRes.ok) {
         const errText = await aiRes.text();

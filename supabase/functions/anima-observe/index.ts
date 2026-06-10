@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -213,7 +214,7 @@ serve(async (req) => {
       const modelName = model.split("/").pop() || model;
 
       try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -226,7 +227,7 @@ serve(async (req) => {
             max_tokens: 1500,
           }),
           signal: AbortSignal.timeout(60000),
-        });
+        }));
 
         if (!response.ok) {
           allObservations[modelName] = [];
@@ -309,7 +310,7 @@ serve(async (req) => {
       synthLines.push(`Synthesize briefly: What did multiple observers notice? Where do they disagree? What emerges only from seeing all together? 3-5 sentences.`);
 
       try {
-        const synthResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const synthResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -322,7 +323,7 @@ serve(async (req) => {
             max_tokens: 500,
           }),
           signal: AbortSignal.timeout(60000),
-        });
+        }));
 
         if (synthResponse.ok) {
           const synthData = await synthResponse.json();

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const SYNTHESIS_PROMPT = `You are a Narrative Synthesis Agent. You analyze ALL extracted memories from a user's conversation history to create a deep, unified understanding of who this person is.
 
@@ -210,7 +211,7 @@ ${memoryDump}`;
     // Background synthesis stays on a cheap model; user-facing chat owns the Opus budget.
     const synthesisModel = "google/gemini-2.5-flash";
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await withModelRetry(() => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${lovableApiKey}`,
@@ -223,7 +224,7 @@ ${memoryDump}`;
         tool_choice: { type: "function", function: { name: "synthesize_memories" } },
       }),
       signal: AbortSignal.timeout(60000),
-    });
+    }));
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();

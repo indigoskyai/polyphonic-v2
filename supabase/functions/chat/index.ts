@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import {
@@ -546,7 +547,7 @@ async function autoTitleThread(
   if (thread?.title) return;
 
   // Generate title via OpenRouter (non-streaming, fast model)
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const resp = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -565,7 +566,7 @@ async function autoTitleThread(
       max_tokens: 20,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (resp.ok) {
     const data = await resp.json();

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -150,7 +151,7 @@ Rules:
 - Flag contradictions rather than silently resolving them
 - Watchlist items (🔍) need special attention — they were below confidence threshold but emotionally significant`;
 
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const aiResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openrouterKey}`,
@@ -225,7 +226,7 @@ Rules:
         tool_choice: { type: "function", function: { name: "reflect_memories" } },
       }),
       signal: AbortSignal.timeout(60000),
-    });
+    }));
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
@@ -332,7 +333,7 @@ Rules:
               ? `Reduce this memory to its emotional essence. One or two phrases maximum. What feeling remains when all detail is gone?\n\nThis is not a summary. It's an impression — like catching a scent that reminds you of something you can't quite place.\n\nMemory:\n${currentMem.content}\n\nWrite ONLY the impression. One or two phrases. Nothing else.`
               : `You are a memory softener. Given a sharp memory, rewrite it at lower resolution.\n\nKeep the emotional tone and core meaning. Remove specific timestamps, exact quotes, and precise details. Replace them with impressions and feelings. The result should feel like a memory that's naturally fading.\n\nCurrent sharpness: ${currentSharpness.toFixed(2)}\nTarget sharpness: ${newSharpness.toFixed(2)}\n\nMemory:\n${currentMem.content}\n\nWrite ONLY the softened version. Nothing else.`;
 
-            const softenResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            const softenResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${openrouterKey}`,
@@ -345,7 +346,7 @@ Rules:
                 max_tokens: 300,
               }),
               signal: AbortSignal.timeout(60000),
-            });
+            }));
 
             if (softenResponse.ok) {
               const softenData = await softenResponse.json();

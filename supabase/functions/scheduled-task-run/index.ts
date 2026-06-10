@@ -10,8 +10,13 @@ import {
   logContinuityDiagnostics,
 } from "../_shared/continuity/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
-const SCHEDULED_MODEL = "anthropic/claude-opus-4-7";
+// Fallback model when the scheduled agent has no explicit model configured.
+// Sonnet 4.6 (was Opus 4.7): scheduled-task execution is a background batch job,
+// so Sonnet handles it at a fraction of the cost with no user-perceptible drop.
+// An agent with its own configured model still uses that (see `model` below).
+const SCHEDULED_MODEL = "anthropic/claude-sonnet-4.6";
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -181,7 +186,7 @@ async function callAgent(
   ];
 
   const model = agentConfig?.model || SCHEDULED_MODEL;
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -196,7 +201,7 @@ async function callAgent(
       max_tokens: 1800,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
   const data = await response.json();

@@ -5,6 +5,7 @@ import type { PendingRevision } from "../agents/pending-revisions.ts";
 import type { ContinuityPacket } from "../continuity/index.ts";
 import { queueContinuityTurnWrites } from "../continuity/index.ts";
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
+import { withModelRetry } from "../modelRetry.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -650,7 +651,7 @@ async function autoTitleThread(
   const { data: thread } = await supabase.from("threads").select("title").eq("id", threadId).single();
   if (thread?.title) return;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -669,7 +670,7 @@ async function autoTitleThread(
       max_tokens: 20,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) return;
   const data = await response.json();

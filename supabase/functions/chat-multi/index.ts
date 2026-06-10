@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
@@ -1797,7 +1798,7 @@ async function callModelNonStreaming(
 ): Promise<{ content: string; thinking: string | null }> {
   const reasoningParams = reasoningParamsOverride ?? buildReasoningParams(model, effort);
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1813,7 +1814,7 @@ async function callModelNonStreaming(
       ...reasoningParams,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) {
     const errText = await response.text();
@@ -2483,7 +2484,7 @@ async function autoTitleThread(
   const { data: thread } = await supabase.from("threads").select("title").eq("id", threadId).single();
   if (thread?.title) return;
 
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const resp = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -2496,7 +2497,7 @@ async function autoTitleThread(
       max_tokens: 20,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (resp.ok) {
     const data = await resp.json();

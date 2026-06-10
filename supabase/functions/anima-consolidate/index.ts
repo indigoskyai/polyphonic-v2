@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { logProcessRan } from "../_shared/activity-gate.ts";
@@ -142,7 +143,7 @@ serve(async (req) => {
       .replace("{emotions}", emotionsText);
 
     // Call LLM
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -158,7 +159,7 @@ serve(async (req) => {
         max_tokens: 1500,
       }),
       signal: AbortSignal.timeout(60000),
-    });
+    }));
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: "LLM call failed" }), {

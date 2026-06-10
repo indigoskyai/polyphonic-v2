@@ -2,6 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { isDialecticEnabled } from "../_shared/config.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
@@ -157,7 +158,7 @@ serve(async (req) => {
     // not a cheaper off-family one.
     const dialecticModel = await resolvePrimaryModel(supabase, user.id);
 
-    const modelResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const modelResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -173,7 +174,7 @@ serve(async (req) => {
         response_format: { type: "json_object" },
       }),
       signal: AbortSignal.timeout(60000),
-    });
+    }));
 
     if (!modelResponse.ok) {
       const errText = await modelResponse.text().catch(() => "");

@@ -13,6 +13,7 @@
  */
 
 import type { ConsolidationReport } from "./consolidation.ts";
+import { withModelRetry } from "../modelRetry.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -86,7 +87,7 @@ async function generateDreamNarrative(
 ): Promise<string> {
   const prompt = buildDreamPrompt(report);
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${openrouterApiKey}`,
@@ -102,7 +103,7 @@ async function generateDreamNarrative(
       temperature: 0.8,
     }),
     signal: AbortSignal.timeout(60000),
-  });
+  }));
 
   if (!response.ok) {
     throw new Error(`Dream generation failed: ${response.status} ${response.statusText}`);
