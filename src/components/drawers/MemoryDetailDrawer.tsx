@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/luca';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 interface MemoryDetailPayload {
   engramId?: string;
