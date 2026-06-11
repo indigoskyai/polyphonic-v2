@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/luca';
 import { useDrawerStore } from '@/stores/drawerStore';
 import { useMemoryStore, type Engram } from '@/stores/memoryStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 interface MemoryDetailPayload {
   engramId?: string;
@@ -103,7 +104,11 @@ export default function MemoryDetailDrawer() {
   const id6 = shortId(engram.id);
   const ctx = (engram.source_context || {}) as Record<string, unknown>;
   const sourceThread = (ctx.thread_id as string | undefined) ?? (ctx.source_thread as string | undefined) ?? null;
-  const agent = (ctx.agent as string | undefined) ?? 'luca';
+  // Engrams are stored with a top-level agent_id; resolve to the human-readable
+  // name via availableAgents so custom agents don't get mislabeled as "Luca".
+  const availableAgents = useAgentScopeStore.getState().availableAgents;
+  const agentId = engram.agent_id || (ctx.agent as string | undefined) || 'luca';
+  const agent = availableAgents.find((a) => a.id === agentId)?.name || agentId;
   const titleText = engram.content.length > 140
     ? engram.content.slice(0, 140).trimEnd() + '…'
     : engram.content;

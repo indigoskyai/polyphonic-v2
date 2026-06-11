@@ -352,7 +352,10 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
       content = lines.slice(0, -1).join("\n").trim();
     }
 
-    // Save the journal entry using service role (bypasses RLS)
+    // Save the journal entry using service role (bypasses RLS).
+    // Note: journal_entries CHECK constraint accepts "post-conversation" (hyphen),
+    // but callers (and historic code) used "post_conversation" (underscore). Normalize.
+    const normalizedTrigger = trigger_type === "post_conversation" ? "post-conversation" : trigger_type;
     const { data: entry, error: insertError } = await supabase
       .from("journal_entries")
       .insert({
@@ -360,8 +363,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         agent_id: agentId,
         content,
         mood,
-        trigger_type,
-        source_conversation_id: validConversationId,
+        trigger_type: normalizedTrigger,
       })
       .select("id, created_at")
       .single();
