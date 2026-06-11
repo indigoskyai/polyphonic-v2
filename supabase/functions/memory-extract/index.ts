@@ -582,7 +582,6 @@ serve(async (req) => {
         narrative_thread: m.narrative_thread || null,
         tags: m.tags || [],
         summary: m.summary || null,
-        source_conversation_id: conversation_id,
         is_watchlist: m.is_watchlist || false,
         provenance: {
           source: "live_extraction",
@@ -709,7 +708,6 @@ serve(async (req) => {
             question: q.question,
             context: q.context || null,
             curiosity_score: q.curiosity_score ?? 0.5,
-            source_conversation_id: conversation_id,
           }));
 
           const { error: qError } = await supabase.from("curiosity_questions").insert(questionRows);
@@ -767,7 +765,7 @@ serve(async (req) => {
         .select("id, content, memory_type, tags")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
-        .eq("source_conversation_id", conversation_id)
+        .filter("provenance->>conversation_id", "eq", conversation_id)
         .eq("is_deleted", false)
         .in("memory_type", ["principle", "preference"]);
 
@@ -822,7 +820,7 @@ serve(async (req) => {
           .select("id, content, memory_type, confidence, tags")
           .eq("user_id", user_id)
           .eq("agent_id", agent_id)
-          .eq("source_conversation_id", conversation_id)
+          .filter("provenance->>conversation_id", "eq", conversation_id)
           .eq("is_deleted", false)
           .in("memory_type", ["principle", "preference"]);
 
