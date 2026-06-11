@@ -294,6 +294,15 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   createAgent: async (userId, input) => {
     void userId;
     const baseId = slugify(input.name) || 'agent';
+    // Reject placeholder slugs so we never permanently brand an agent as
+    // "draft-agent" / "new-agent" / etc. when the user later renames it.
+    const RESERVED_OR_PLACEHOLDER = new Set([
+      'agent', 'new-agent', 'draft', 'draft-agent', 'untitled',
+      'mnemos-companion', 'companion', 'luca', 'observer', 'anima', 'vektor',
+    ]);
+    if (RESERVED_OR_PLACEHOLDER.has(baseId)) {
+      return { ok: false, error: `"${input.name}" isn't a usable agent name — pick something more specific.` };
+    }
     // Try base id, then base-2, base-3 if collisions exist locally
     const existing = new Set(get().agents.map((a) => a.id));
     let id = baseId;
@@ -302,10 +311,13 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       id = `${baseId}-${n++}`;
     }
 
-    const personality: Personality = {
+    const personality = {
       ...DEFAULT_PERSONALITY,
       ...(input.personality ?? {}),
-    };
+      // Custom agents opt into proactive autonomy by default so the heartbeat,
+      // reflection, and pulse jobs treat them like Luca.
+      autonomy: { proactive: true },
+    } as Personality;
 
     const { data, error } = await supabase.functions.invoke('agent-config-save', {
       body: {

@@ -456,6 +456,8 @@ Deno.serve(async (req): Promise<Response> => {
       inner_life: true,
       thought_verbosity: 1,
       voice_description: blueprint.voice_description,
+      // Custom agents minted via Forge participate in proactive jobs by default.
+      autonomy: { proactive: true },
     };
 
     const configPayload = {
