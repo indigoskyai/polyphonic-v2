@@ -582,7 +582,6 @@ serve(async (req) => {
         narrative_thread: m.narrative_thread || null,
         tags: m.tags || [],
         summary: m.summary || null,
-        source_conversation_id: conversation_id,
         is_watchlist: m.is_watchlist || false,
         provenance: {
           source: "live_extraction",
