@@ -134,10 +134,25 @@ export async function allowsProactiveAutonomy(
     .maybeSingle();
 
   const personality = (data?.personality || {}) as Record<string, unknown>;
-  const autonomy = (personality.autonomy || {}) as Record<string, unknown>;
-  const innerLife = (personality.inner_life || {}) as Record<string, unknown>;
+  const autonomyRaw = personality.autonomy;
+  const autonomy = (autonomyRaw && typeof autonomyRaw === "object" ? autonomyRaw : {}) as Record<string, unknown>;
+  const innerLifeRaw = personality.inner_life;
+  const innerLifeObj = (innerLifeRaw && typeof innerLifeRaw === "object" ? innerLifeRaw : {}) as Record<string, unknown>;
 
-  return autonomy.proactive === true
-    || personality.proactive_autonomy === true
-    || innerLife.proactive === true;
+  // Explicit opt-out always wins.
+  if (autonomy.proactive === false) return false;
+  if (innerLifeObj.proactive === false) return false;
+  if (personality.proactive_autonomy === false) return false;
+
+  // Explicit opt-in.
+  if (autonomy.proactive === true) return true;
+  if (innerLifeObj.proactive === true) return true;
+  if (personality.proactive_autonomy === true) return true;
+
+  // Default: any substrate agent with inner_life enabled (the CreateAgent default)
+  // participates in proactive jobs unless explicitly opted out above.
+  if (innerLifeRaw === true) return true;
+  if (innerLifeObj && Object.keys(innerLifeObj).length > 0) return true;
+
+  return false;
 }
