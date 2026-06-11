@@ -765,7 +765,7 @@ serve(async (req) => {
         .select("id, content, memory_type, tags")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
-        .eq("source_conversation_id", conversation_id)
+        .filter("provenance->>conversation_id", "eq", conversation_id)
         .eq("is_deleted", false)
         .in("memory_type", ["principle", "preference"]);
 
