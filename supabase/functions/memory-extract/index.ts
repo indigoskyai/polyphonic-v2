@@ -708,7 +708,6 @@ serve(async (req) => {
             question: q.question,
             context: q.context || null,
             curiosity_score: q.curiosity_score ?? 0.5,
-            source_conversation_id: conversation_id,
           }));
 
           const { error: qError } = await supabase.from("curiosity_questions").insert(questionRows);
