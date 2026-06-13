@@ -1589,6 +1589,8 @@ export type Database = {
           created_at: string
           id: string
           mood: string | null
+          source_context: Json
+          source_conversation_id: string | null
           trigger_type: string | null
           user_id: string
         }
@@ -1598,6 +1600,8 @@ export type Database = {
           created_at?: string
           id?: string
           mood?: string | null
+          source_context?: Json
+          source_conversation_id?: string | null
           trigger_type?: string | null
           user_id: string
         }
@@ -1607,6 +1611,8 @@ export type Database = {
           created_at?: string
           id?: string
           mood?: string | null
+          source_context?: Json
+          source_conversation_id?: string | null
           trigger_type?: string | null
           user_id?: string
         }
