@@ -63,7 +63,7 @@ vi.mock('@/integrations/supabase/client', () => {
               };
             },
             update: (patch: unknown) => {
-              mocks.updates.push(patch);
+              mocks.updates.push(patch as Record<string, unknown>);
               return makeUpdateChain();
             },
             select: () => makeMaybeSingleChain(() => mocks.importStatusRow),
