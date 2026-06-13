@@ -115,6 +115,39 @@ export async function isValidAgentScope(
   return filtered.length > 0;
 }
 
+async function loadAgentPersonality(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<Record<string, unknown>> {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  if (normalizedAgentId === "luca") return { inner_life: true, proactive_autonomy: true };
+
+  const { data } = await supabase
+    .from("agent_configs")
+    .select("personality")
+    .eq("user_id", userId)
+    .eq("id", normalizedAgentId)
+    .maybeSingle();
+
+  return (data?.personality || {}) as Record<string, unknown>;
+}
+
+export async function allowsInnerLifeAutonomy(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<boolean> {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  if (!isSubstrateAgentId(normalizedAgentId)) return false;
+  if (normalizedAgentId === "luca") return true;
+
+  if (!(await isValidAgentScope(supabase, userId, normalizedAgentId))) return false;
+
+  const personality = await loadAgentPersonality(supabase, userId, normalizedAgentId);
+  return personality.inner_life !== false;
+}
+
 export async function allowsProactiveAutonomy(
   supabase: any,
   userId: string,
@@ -126,14 +159,7 @@ export async function allowsProactiveAutonomy(
 
   if (!(await isValidAgentScope(supabase, userId, normalizedAgentId))) return false;
 
-  const { data } = await supabase
-    .from("agent_configs")
-    .select("personality")
-    .eq("user_id", userId)
-    .eq("id", normalizedAgentId)
-    .maybeSingle();
-
-  const personality = (data?.personality || {}) as Record<string, unknown>;
+  const personality = await loadAgentPersonality(supabase, userId, normalizedAgentId);
   const autonomy = (personality.autonomy || {}) as Record<string, unknown>;
   const innerLife = (personality.inner_life || {}) as Record<string, unknown>;
 

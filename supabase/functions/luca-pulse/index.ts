@@ -21,6 +21,10 @@ import { logActivity } from "../_shared/activity-log.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { allowsProactiveAutonomy, normalizeAgentId } from "../_shared/agent-scope.ts";
 
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
@@ -82,6 +86,9 @@ serve(async (req) => {
       if (!task) continue;
 
       try {
+        const metadata = metadataRecord(task.metadata);
+        const agentId = normalizeAgentId(metadata.agent_id);
+
         await supabase
           .from("entity_task_queue")
           .update({ status: "running", started_at: new Date().toISOString() })
@@ -93,11 +100,12 @@ serve(async (req) => {
         let payload: Record<string, unknown> = {
           query: task.description,
           user_id: userId,
+          agent_id: agentId,
         };
         const urlMatch = (task.description ?? "").match(/https?:\/\/[^\s]+/);
         if (urlMatch && (desc.includes("read") || desc.includes("http"))) {
           fn = "anima-web-read";
-          payload = { url: urlMatch[0], user_id: userId };
+          payload = { url: urlMatch[0], user_id: userId, agent_id: agentId };
         }
 
         const resp = await fetch(`${url}/functions/v1/${fn}`, {
@@ -121,6 +129,7 @@ serve(async (req) => {
         if (resp.ok) {
           summary.tasks_processed += 1;
           await logActivity(supabase, userId, {
+            agentId,
             type: "task_completed",
             title: "Pulse: Task completed",
             summary: (task.description ?? "").slice(0, 120),
@@ -130,6 +139,7 @@ serve(async (req) => {
           });
         } else {
           await logActivity(supabase, userId, {
+            agentId,
             type: "task_failed",
             title: "Pulse: Task failed",
             summary: (task.description ?? "").slice(0, 120),

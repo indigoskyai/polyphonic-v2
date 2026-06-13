@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import { useImportStore, type PipelineStage } from '@/stores/importStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -13,8 +16,20 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
 };
 
 export default function ImportProgressBanner() {
-  const { stage, processedChunks, totalChunks, memoriesCreated, pipelineDetail, error, dismissed, dismiss, reset } = useImportStore();
+  const { stage, processedChunks, totalChunks, memoriesCreated, pipelineDetail, error, importId, dismissed, dismiss, reset, syncImportStatus } = useImportStore();
+  const user = useAuthStore((s) => s.user);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user || !importId || stage !== 'profiling') return;
+    const refresh = () => {
+      void syncImportStatus(user.id, activeAgentId);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(interval);
+  }, [activeAgentId, importId, stage, syncImportStatus, user]);
 
   if (stage === 'idle' || stage === 'filtering' || dismissed) return null;
 

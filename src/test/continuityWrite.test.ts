@@ -6,7 +6,14 @@ import {
   type ContinuityWriteDeps,
 } from '../../supabase/functions/_shared/continuity/write';
 
-const supabaseStub = {} as any;
+type SupabaseStub = Parameters<typeof buildHypomnemaGatePayload>[0]['supabase'];
+type FetchCall = { url: string; body: Record<string, unknown>; auth: string };
+
+const supabaseStub = {} as SupabaseStub;
+
+function parseBody(value: unknown): Record<string, unknown> {
+  return JSON.parse(String(value || '{}')) as Record<string, unknown>;
+}
 
 describe('Continuity Kernel write path', () => {
   it('builds one hypomnema gate payload with primary and observer provenance', () => {
@@ -71,7 +78,7 @@ describe('Continuity Kernel write path', () => {
   });
 
   it('queues all post-turn memory operations through the same reportable path', () => {
-    const fetchCalls: Array<{ url: string; body: any; auth: string }> = [];
+    const fetchCalls: FetchCall[] = [];
     const finalized: string[] = [];
     const encoded: string[] = [];
     const metadata: string[][] = [];
@@ -86,7 +93,7 @@ describe('Continuity Kernel write path', () => {
       fetch: async (url, init) => {
         fetchCalls.push({
           url: String(url),
-          body: JSON.parse(String(init?.body || '{}')),
+          body: parseBody(init?.body),
           auth: String((init?.headers as Record<string, string>)?.Authorization || ''),
         });
         return new Response('{}', { status: 200 });
@@ -138,6 +145,58 @@ describe('Continuity Kernel write path', () => {
     ]);
     expect(fetchCalls.at(-1)?.auth).toBe('Bearer service-role');
     expect(fetchCalls.at(-1)?.body.chain_write).toHaveLength(2);
+  });
+
+  it('runs dialectic and identity work for custom agents, not just Luca', () => {
+    const fetchCalls: Array<Omit<FetchCall, 'auth'>> = [];
+    const deps: ContinuityWriteDeps = {
+      env: (name) => {
+        if (name === 'DIALECTIC_ENABLED') return 'true';
+        if (name === 'SUPABASE_URL') return 'https://example.supabase.co';
+        if (name === 'SUPABASE_SERVICE_ROLE_KEY') return 'service-role';
+        return undefined;
+      },
+      fetch: async (url, init) => {
+        fetchCalls.push({
+          url: String(url),
+          body: parseBody(init?.body),
+        });
+        return new Response('{}', { status: 200 });
+      },
+      finalizePendingRevisions: async () => {},
+      encodeMnemosExchange: async () => {},
+      updateThreadAgentMetadata: async () => {},
+      log: () => {},
+      warn: () => {},
+    };
+
+    const report = queueContinuityTurnWrites({
+      supabase: supabaseStub,
+      userId: 'u1',
+      threadId: 't1',
+      agentId: 'quill',
+      userMessage: 'remember this for quill',
+      agentResponse: 'i will keep it as myself.',
+      sourceMessageId: 'a2',
+      apiKey: 'openrouter-key',
+      authHeader: 'Bearer user-jwt',
+      pendingRevisions: [],
+    }, deps);
+
+    expect(report.operations).toContainEqual(expect.objectContaining({
+      name: 'mnemos_dialectic',
+      status: 'queued',
+    }));
+    expect(fetchCalls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        url: 'https://example.supabase.co/functions/v1/mnemos-dialectic',
+        body: expect.objectContaining({ thread_id: 't1', agent_id: 'quill' }),
+      }),
+      expect.objectContaining({
+        url: 'https://example.supabase.co/functions/v1/skills-distill',
+        body: expect.objectContaining({ thread_id: 't1', agent_id: 'quill' }),
+      }),
+    ]));
   });
 
   it('makes skipped write work explicit when auth or service env is unavailable', () => {

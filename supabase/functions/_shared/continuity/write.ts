@@ -138,8 +138,8 @@ export function queueContinuityTurnWrites(
 
   queue(
     "mnemos_dialectic",
-    dialecticEnabled && hasTurn && agentId === "luca" && Boolean(opts.authHeader),
-    !dialecticEnabled ? "dialectic disabled" : agentId !== "luca" ? "non-luca agent" : opts.authHeader ? "empty turn" : "no auth header",
+    dialecticEnabled && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
+    !dialecticEnabled ? "dialectic disabled" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("mnemos-dialectic", {
       thread_id: opts.threadId,
       agent_id: agentId,

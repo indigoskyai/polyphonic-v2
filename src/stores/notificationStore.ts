@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ThoughtInitiation {
   id: string;
   user_id: string;
+  agent_id: string;
   message: string;
   status: string;
   trigger_reason: string | null;
@@ -12,6 +13,7 @@ export interface ThoughtInitiation {
 
 export interface ActivityEntry {
   id: string;
+  agent_id: string;
   activity_type: string;
   title: string | null;
   summary: string | null;
@@ -23,6 +25,25 @@ export interface ActivityEntry {
 }
 
 export type NotificationFilter = 'all' | 'unread' | 'agents' | 'permissions' | 'memory';
+
+type AgentScopedRow = { agent_id?: string | null };
+
+export function normalizeNotificationAgentId(agentId: string | null | undefined): string {
+  const trimmed = agentId?.trim();
+  return trimmed ? trimmed : 'luca';
+}
+
+export function notificationMatchesAgent(row: AgentScopedRow | null | undefined, agentId: string): boolean {
+  return normalizeNotificationAgentId(row?.agent_id) === normalizeNotificationAgentId(agentId);
+}
+
+export function filterActivityForAgent(activity: ActivityEntry[], agentId: string): ActivityEntry[] {
+  return activity.filter((entry) => notificationMatchesAgent(entry, agentId));
+}
+
+export function filterInitiationsForAgent(initiations: ThoughtInitiation[], agentId: string): ThoughtInitiation[] {
+  return initiations.filter((initiation) => notificationMatchesAgent(initiation, agentId));
+}
 
 const activeNotificationSubscriptions = new Map<
   string,
@@ -57,13 +78,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const settled = await Promise.allSettled([
       supabase
         .from('thought_initiations')
-        .select('id, user_id, message, status, trigger_reason, created_at')
+        .select('id, user_id, agent_id, message, status, trigger_reason, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50),
       supabase
         .from('entity_activity_log')
-        .select('id, activity_type, title, summary, content, source, severity, surface_to_user, created_at')
+        .select('id, agent_id, activity_type, title, summary, content, source, severity, surface_to_user, created_at')
         .eq('user_id', userId)
         .eq('surface_to_user', true)
         .order('created_at', { ascending: false })
@@ -76,11 +97,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     ]);
     const initRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: [] };
     const actRes = settled[1].status === 'fulfilled' ? settled[1].value : { data: [] };
-    const profRes = settled[2].status === 'fulfilled' ? settled[2].value : { data: null };
+    const profRes = (settled[2].status === 'fulfilled' ? settled[2].value : { data: null }) as {
+      data: { last_seen_activity_at: string | null } | null;
+    };
     set({
       initiations: (initRes.data ?? []) as ThoughtInitiation[],
       activity: (actRes.data ?? []) as ActivityEntry[],
-      lastSeenAt: ((profRes as any)?.data?.last_seen_activity_at as string | null) ?? null,
+      lastSeenAt: profRes.data?.last_seen_activity_at ?? null,
     });
   },
 
@@ -184,6 +207,25 @@ export function selectUnreadCount(s: NotificationState): number {
   ).length;
   const unreadInits = s.initiations.filter(
     (i) =>
+      i.status !== 'delivered' &&
+      i.status !== 'dismissed' &&
+      new Date(i.created_at).getTime() > seenMs,
+  ).length;
+  return unreadActivity + unreadInits;
+}
+
+/** Agent-scoped unread count for drawers where the active agent is the visible context. */
+export function selectUnreadCountForAgent(s: NotificationState, agentId: string): number {
+  const seenMs = s.lastSeenAt ? new Date(s.lastSeenAt).getTime() : 0;
+  const unreadActivity = s.activity.filter(
+    (a) =>
+      notificationMatchesAgent(a, agentId) &&
+      new Date(a.created_at).getTime() > seenMs &&
+      !s.readIds.has(a.id),
+  ).length;
+  const unreadInits = s.initiations.filter(
+    (i) =>
+      notificationMatchesAgent(i, agentId) &&
       i.status !== 'delivered' &&
       i.status !== 'dismissed' &&
       new Date(i.created_at).getTime() > seenMs,

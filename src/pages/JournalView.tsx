@@ -5,12 +5,14 @@
  * chronological feed across journals, thoughts, dreams, insights, beliefs,
  * and selected activity.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import MindStreamShell from '@/components/mind/MindStreamShell';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import {
   buildNotebookItems,
   filterNotebookItems,
@@ -40,9 +42,17 @@ function timeLabel(date: string): string {
   return new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function fullTimeLabel(date: string): string {
+  return new Date(date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 function confidenceLabel(score?: number): string | null {
   if (typeof score !== 'number') return null;
   return score.toFixed(2);
+}
+
+function sourceLabel(source: NotebookItem['source']): string {
+  return source.replace(/_/g, ' ');
 }
 
 export default function JournalView() {
@@ -73,6 +83,9 @@ export default function JournalView() {
   const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const filter: NotebookFilter = isNotebookFilter(requestedFilter) ? requestedFilter : 'all';
   const [query, setQuery] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const setNotebookFilter = useCallback(
     (value: NotebookFilter) => {
@@ -113,6 +126,24 @@ export default function JournalView() {
   );
 
   const grouped = useMemo(() => groupNotebookItemsByDay(visible), [visible]);
+  const selectedItem = useMemo(
+    () => notebookItems.find((item) => item.id === selectedItemId) ?? null,
+    [notebookItems, selectedItemId],
+  );
+  const closeDetail = useCallback(() => setSelectedItemId(null), []);
+
+  useDialogFocus({
+    active: !!selectedItem,
+    containerRef: detailRef,
+    initialFocusRef: closeButtonRef,
+    onEscape: closeDetail,
+  });
+
+  useEffect(() => {
+    if (selectedItemId && !selectedItem) {
+      setSelectedItemId(null);
+    }
+  }, [selectedItem, selectedItemId]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
@@ -181,134 +212,73 @@ export default function JournalView() {
                     {entries.map((item) => {
                       const tone = KIND_TONE[item.kind];
                       const score = confidenceLabel(item.salience);
+                      const safeItemId = item.id.replace(/[^a-zA-Z0-9_-]/g, '-');
+                      const detailDialogId = `journal-detail-dialog-${safeItemId}`;
                       return (
-                        <article
+                        <button
                           key={item.id}
-                          style={{
-                            background: 'var(--surface-1)',
-                            border: '1px solid var(--border-faint)',
-                            borderRadius: 'var(--radius-lg)',
-                            padding: '18px 22px 20px',
-                            boxShadow: 'var(--shadow-inset-highlight)',
+                          type="button"
+                          className="journal-entry-card"
+                          aria-haspopup="dialog"
+                          aria-controls={selectedItemId === item.id ? detailDialogId : undefined}
+                          aria-label={`Open ${item.title} ${item.label} entry from ${fullTimeLabel(item.created_at)}`}
+                          onClick={() => setSelectedItemId(item.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setSelectedItemId(item.id);
+                            }
                           }}
                         >
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(0, 1fr) auto',
-                              alignItems: 'start',
-                              gap: 14,
-                              paddingBottom: 12,
-                              marginBottom: 14,
-                              borderBottom: '1px solid var(--border-faint)',
-                            }}
-                          >
-                            <div style={{ minWidth: 0 }}>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 9,
-                                  marginBottom: 7,
-                                  minWidth: 0,
-                                }}
-                              >
+                          <span className="journal-card-head">
+                            <span style={{ minWidth: 0 }}>
+                              <span className="journal-card-kind-line">
                                 <span
+                                  className="journal-kind-dot"
                                   style={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: 999,
                                     background: tone,
                                     boxShadow: `0 0 18px color-mix(in srgb, ${tone} 33%, transparent)`,
-                                    flexShrink: 0,
                                   }}
                                 />
                                 <span
+                                  className="journal-card-kind"
                                   style={{
-                                    fontFamily: 'var(--font-mono)',
-                                    fontSize: 9.5,
-                                    fontWeight: 600,
-                                    letterSpacing: 'var(--track-folio)',
                                     color: tone,
-                                    textTransform: 'uppercase',
-                                    whiteSpace: 'nowrap',
                                   }}
                                 >
                                   {item.label}
                                 </span>
                                 {item.meta && (
-                                  <span
-                                    style={{
-                                      fontFamily: 'var(--font-mono)',
-                                      fontSize: 9.5,
-                                      color: 'var(--text-whisper)',
-                                      letterSpacing: 'var(--track-folio)',
-                                      textTransform: 'uppercase',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
+                                  <span className="journal-card-chip">
                                     {item.meta}
                                   </span>
                                 )}
-                              </div>
-                              <h2
-                                style={{
-                                  margin: 0,
-                                  color: 'var(--text-primary)',
-                                  fontSize: 15,
-                                  lineHeight: 1.35,
-                                  fontWeight: 520,
-                                  letterSpacing: 0,
-                                }}
-                              >
+                                <span className="journal-card-chip">{sourceLabel(item.source)}</span>
+                              </span>
+                              <span className="journal-card-title">
                                 {item.title}
-                              </h2>
-                            </div>
+                              </span>
+                            </span>
 
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 10,
-                                color: 'var(--text-tertiary)',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: 10,
-                                letterSpacing: 'var(--track-folio)',
-                                textTransform: 'uppercase',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
+                            <span className="journal-card-stamp">
                               {score && <span>{score}</span>}
                               <span>{timeLabel(item.created_at)}</span>
-                            </div>
-                          </div>
+                            </span>
+                          </span>
 
-                          <div
-                            style={{
-                              color: 'var(--text-body)',
-                              fontSize: 14.5,
-                              lineHeight: 1.7,
-                              letterSpacing: 'var(--track-body)',
-                            }}
-                          >
-                            {item.body.split('\n').map((line, i) => (
-                              <p key={i} style={{ margin: 0, marginBottom: line.trim() ? 12 : 5 }}>
-                                {line}
-                              </p>
-                            ))}
-                          </div>
+                          <span className="journal-card-body">
+                            {item.body}
+                          </span>
 
                           {item.tags && item.tags.length > 0 && (
-                            <div className="s-row-tags" style={{ marginTop: 16 }}>
+                            <span className="s-row-tags" style={{ marginTop: 16 }}>
                               {item.tags
                                 .filter((t) => !['inner-life', 'consolidation'].includes(t))
                                 .slice(0, 7)
                                 .map((tag, index) => <span key={`${tag}:${index}`} className="s-row-tag">{tag}</span>)}
-                            </div>
+                            </span>
                           )}
-                        </article>
+                        </button>
                       );
                     })}
                   </div>
@@ -318,6 +288,92 @@ export default function JournalView() {
           )}
         </MindStreamShell>
       </div>
+      {selectedItem && (
+        <div className="journal-detail-backdrop" onMouseDown={closeDetail}>
+          <div
+            id={`journal-detail-dialog-${selectedItem.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+            ref={detailRef}
+            className="journal-detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`journal-detail-title-${selectedItem.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+            tabIndex={-1}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="journal-detail-header">
+              <div style={{ minWidth: 0 }}>
+                <div className="journal-detail-kicker">
+                  <span
+                    className="journal-kind-dot"
+                    style={{
+                      background: KIND_TONE[selectedItem.kind],
+                      boxShadow: `0 0 18px color-mix(in srgb, ${KIND_TONE[selectedItem.kind]} 33%, transparent)`,
+                    }}
+                  />
+                  <span>{selectedItem.label}</span>
+                </div>
+                <h2
+                  id={`journal-detail-title-${selectedItem.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                  className="journal-detail-title"
+                >
+                  {selectedItem.title}
+                </h2>
+              </div>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                className="journal-detail-close"
+                onClick={closeDetail}
+                aria-label="Close entry detail"
+                title="Close entry detail"
+              >
+                <X size={15} aria-hidden="true" />
+              </button>
+            </header>
+
+            <dl className="journal-detail-meta">
+              <div>
+                <dt>Source</dt>
+                <dd>{sourceLabel(selectedItem.source)}</dd>
+              </div>
+              <div>
+                <dt>Type</dt>
+                <dd>{selectedItem.kind}</dd>
+              </div>
+              <div>
+                <dt>Time</dt>
+                <dd>{fullTimeLabel(selectedItem.created_at)}</dd>
+              </div>
+              {confidenceLabel(selectedItem.salience) && (
+                <div>
+                  <dt>Salience</dt>
+                  <dd>{confidenceLabel(selectedItem.salience)}</dd>
+                </div>
+              )}
+              {selectedItem.meta && (
+                <div>
+                  <dt>Meta</dt>
+                  <dd>{selectedItem.meta}</dd>
+                </div>
+              )}
+            </dl>
+
+            <div className="journal-detail-body">
+              {selectedItem.body.split('\n').map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+
+            {selectedItem.tags && selectedItem.tags.length > 0 && (
+              <div className="s-row-tags journal-detail-tags">
+                {selectedItem.tags
+                  .filter((t) => !['inner-life', 'consolidation'].includes(t))
+                  .map((tag, index) => <span key={`${tag}:${index}`} className="s-row-tag">{tag}</span>)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

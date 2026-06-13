@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
-import { isSubstrateAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
+import { allowsInnerLifeAutonomy, allowsProactiveAutonomy, isSubstrateAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -43,6 +43,11 @@ serve(async (req) => {
     const results: any[] = [];
 
     for (const scope of scopes) {
+      if (!(await allowsInnerLifeAutonomy(supabase, scope.userId, scope.agentId))) {
+        results.push({ user_id: scope.userId, agent_id: scope.agentId, skipped: true, reason: "inner_life_disabled" });
+        continue;
+      }
+
       const { data: recentEntry } = await supabase
         .from("journal_entries")
         .select("id")
@@ -80,7 +85,11 @@ serve(async (req) => {
 
     const dreamResults: any[] = [];
     if (isQuietHours) {
-      for (const scope of scopes.filter((s: any) => s.agentId === "luca")) {
+      for (const scope of scopes) {
+        if (!(await allowsInnerLifeAutonomy(supabase, scope.userId, scope.agentId))) {
+          dreamResults.push({ user_id: scope.userId, agent_id: scope.agentId, skipped: true, reason: "inner_life_disabled" });
+          continue;
+        }
         try {
           const resp = await fetch(`${supabaseUrl}/functions/v1/anima-dream`, {
             method: "POST",
@@ -119,7 +128,11 @@ serve(async (req) => {
 
     // ─── Anima: Check thought initiation for all active users ───
     const initiationResults: any[] = [];
-    for (const scope of scopes.filter((s: any) => s.agentId === "luca")) {
+    for (const scope of scopes) {
+      if (!(await allowsProactiveAutonomy(supabase, scope.userId, scope.agentId))) {
+        initiationResults.push({ user_id: scope.userId, agent_id: scope.agentId, skipped: true, reason: "proactive_autonomy_disabled" });
+        continue;
+      }
       try {
         const resp = await fetch(`${supabaseUrl}/functions/v1/anima-initiate`, {
           method: "POST",

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  allowsInnerLifeAutonomy,
+  allowsProactiveAutonomy,
   filterValidAgentScopes,
   isValidAgentScope,
   loadActiveAgentScopes,
@@ -64,5 +66,30 @@ describe('agent scope validation', () => {
       { userId: 'user-a', agentId: 'luca' },
       { userId: 'user-a', agentId: 'sophia' },
     ]);
+  });
+
+  it('separates custom-agent inner life from proactive outreach', async () => {
+    const ownershipQuery = queryResult([{ user_id: 'user-a', id: 'sophia' }]).query;
+    type PersonalityQuery = {
+      select: ReturnType<typeof vi.fn>;
+      eq: ReturnType<typeof vi.fn>;
+      maybeSingle: ReturnType<typeof vi.fn>;
+    };
+    const personalityQuery = {} as PersonalityQuery;
+    Object.assign(personalityQuery, {
+      select: vi.fn(() => personalityQuery),
+      eq: vi.fn(() => personalityQuery),
+      maybeSingle: vi.fn(() => Promise.resolve({
+        data: { personality: { inner_life: true, proactive_autonomy: false } },
+      })),
+    });
+    const queries = [ownershipQuery, personalityQuery, ownershipQuery, personalityQuery];
+    let calls = 0;
+    const supabase = {
+      from: vi.fn(() => queries[calls++] ?? personalityQuery),
+    };
+
+    await expect(allowsInnerLifeAutonomy(supabase, 'user-a', 'sophia')).resolves.toBe(true);
+    await expect(allowsProactiveAutonomy(supabase, 'user-a', 'sophia')).resolves.toBe(false);
   });
 });

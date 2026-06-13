@@ -120,6 +120,16 @@ serve(async (req) => {
         .maybeSingle();
       validConversationId = convCheck ? conversation_id : null;
     }
+    const sourceContext = {
+      type: "journal_write",
+      agent_id: agentId,
+      agent_name: agentName,
+      requested_agent_id: requestedAgentId,
+      trigger_type,
+      source_conversation_id: validConversationId,
+      requested_conversation_id: conversation_id ?? null,
+      source_conversation_valid: Boolean(validConversationId),
+    };
 
     // Decrypt user's API key from encrypted storage
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
@@ -364,6 +374,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         mood,
         trigger_type,
         source_conversation_id: validConversationId,
+        source_context: sourceContext,
       })
       .select("id, created_at")
       .single();
