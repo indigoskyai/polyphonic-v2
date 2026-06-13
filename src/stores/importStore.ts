@@ -484,7 +484,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
 
       set({ pipelineDetail: 'background profiling' });
 
-      let profileData: unknown = null;
+      let profileData: ProfileData | null = null;
       try {
         profileData = await waitForProfile(userId, { baselineUpdatedAt });
       } catch (err) {
