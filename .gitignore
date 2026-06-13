@@ -15,6 +15,12 @@ output/
 *.local
 .claude/
 
+# Env files. Real secrets belong in *.local (ignored above). The tracked .env
+# currently holds only public VITE_ vars, but ignore .env defensively so any
+# future secret-bearing env file isn't auto-added. Keep the committed template.
+.env
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

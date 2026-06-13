@@ -138,6 +138,7 @@ async function fetchMnemosBalance(owner: string): Promise<number> {
           { encoding: 'jsonParsed', commitment: 'confirmed' },
         ],
       }),
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) continue;
     const data = await res.json();
@@ -161,7 +162,7 @@ async function fetchMnemosPrice(): Promise<number> {
   }
   // Jupiter Price API v3
   const url = `https://lite-api.jup.ag/price/v3?ids=${MNEMOS_MINT}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Jupiter price fetch failed: ${res.status}`);
   const data = await res.json();
   const entry = data?.[MNEMOS_MINT] ?? data?.data?.[MNEMOS_MINT];

@@ -304,6 +304,19 @@ export default function GraphTab() {
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
+    // Pause the simulation + canvas redraw when the tab is backgrounded. The
+    // Barnes-Hut N-body sim and full per-frame redraw otherwise keep running
+    // at 60fps even when the graph isn't visible. Mirrors LandingParticleField.
+    let paused = document.hidden;
+    const onVisibility = () => {
+      const wasPaused = paused;
+      paused = document.hidden;
+      if (wasPaused && !paused && !animRef.current) {
+        animRef.current = requestAnimationFrame(render);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     // Simulation tunables
     const REPULSE_K = 220;     // strength of inverse-square repulsion
     const SPRING_K = 0.025;    // stiffness coefficient
@@ -385,6 +398,12 @@ export default function GraphTab() {
     };
 
     const render = () => {
+      // Skip the whole frame (draw + physics) while backgrounded; resume is
+      // re-armed by the visibilitychange handler above.
+      if (paused) {
+        animRef.current = 0;
+        return;
+      }
       // Auto-fit: once the layout has begun settling, frame all nodes so the
       // entire graph is visible regardless of size. Re-runs on filter / data
       // changes (autoFitRef gets reset by the build effect).
@@ -565,6 +584,7 @@ export default function GraphTab() {
     return () => {
       cancelAnimationFrame(animRef.current);
       ro.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefersReducedMotion, hasSettled]);

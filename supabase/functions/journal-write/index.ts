@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
@@ -119,6 +120,16 @@ serve(async (req) => {
         .maybeSingle();
       validConversationId = convCheck ? conversation_id : null;
     }
+    const sourceContext = {
+      type: "journal_write",
+      agent_id: agentId,
+      agent_name: agentName,
+      requested_agent_id: requestedAgentId,
+      trigger_type,
+      source_conversation_id: validConversationId,
+      requested_conversation_id: conversation_id ?? null,
+      source_conversation_valid: Boolean(validConversationId),
+    };
 
     // Decrypt user's API key from encrypted storage
     const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
@@ -301,7 +312,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
     }
 
     // Generate the journal entry
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -321,7 +332,8 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         temperature: 0.85,
         max_tokens: 1024,
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!response.ok) {
       const errText = await response.text();
@@ -364,6 +376,8 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         content,
         mood,
         trigger_type: normalizedTrigger,
+        source_conversation_id: validConversationId,
+        source_context: sourceContext,
       })
       .select("id, created_at")
       .single();

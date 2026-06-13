@@ -3,6 +3,7 @@
 // image, uploads it to the `generated-images` bucket, and returns a signed URL.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
@@ -103,14 +104,15 @@ serve(async (req) => {
 
     console.log("[anima-image-create] requesting", { model: requestBody.model, size: requestBody.size, transparent });
     const t0 = Date.now();
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
+    const response = await withModelRetry(() => fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
     console.log("[anima-image-create] openai responded", { ms: Date.now() - t0, status: response.status });
 
     if (!response.ok) {

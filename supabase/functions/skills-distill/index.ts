@@ -4,6 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import {
   deriveTriggerKeywords,
@@ -132,7 +133,7 @@ serve(async (req) => {
       .join("\n\n")
       .slice(-12000);
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -156,7 +157,8 @@ serve(async (req) => {
         max_tokens: 900,
         response_format: { type: "json_object" },
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!response.ok) {
       console.warn("[skills-distill] model failed:", response.status, await response.text());

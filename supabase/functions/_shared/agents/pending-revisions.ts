@@ -1,3 +1,5 @@
+import { withModelRetry } from "../modelRetry.ts";
+
 export type PendingRevision = {
   id: string;
   revision_type: string;
@@ -88,7 +90,7 @@ async function classifyAddressedRevisions(
   assistantResponse: string,
 ): Promise<Set<string>> {
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -116,7 +118,8 @@ Return strict JSON only: {"addressed_ids":["id"]}.`,
         max_tokens: 300,
         response_format: { type: "json_object" },
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!response.ok) return new Set();
     const data = await response.json();

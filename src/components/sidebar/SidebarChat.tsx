@@ -27,7 +27,14 @@ export default function SidebarChat() {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [archived, setArchived] = useState<Thread[]>([]);
-  const { threads, currentThreadId, loadThreads, createThread } = useThreadStore();
+  // Narrow selectors — subscribe only to the fields this component renders.
+  // threadStore also holds isStreaming/streamingContent (updated on every
+  // streamed token); a whole-store destructure re-rendered the entire sidebar
+  // on each token. Per-field selectors decouple the sidebar from stream churn.
+  const threads = useThreadStore((s) => s.threads);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const loadThreads = useThreadStore((s) => s.loadThreads);
+  const createThread = useThreadStore((s) => s.createThread);
 
   const handleNewThread = async () => {
     if (!user) return;
@@ -59,11 +66,14 @@ export default function SidebarChat() {
         .from('threads')
         .select('*')
         .eq('archived', true)
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(200);
       if (!cancelled && data) setArchived(data as Thread[]);
     })();
     return () => { cancelled = true; };
-  }, [showArchived, threads]);
+    // Intentionally NOT depending on `threads`: this fetch only reads archived
+    // rows and was previously re-running on every active-thread mutation.
+  }, [showArchived]);
 
   const q = search.trim().toLowerCase();
   const matches = (t: Thread) => !q || (t.title?.toLowerCase().includes(q) ?? false);

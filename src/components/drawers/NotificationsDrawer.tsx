@@ -16,12 +16,16 @@ import {
 } from '@/components/ui/luca';
 import {
   useNotificationStore,
-  selectUnreadCount,
+  filterActivityForAgent,
+  filterInitiationsForAgent,
+  normalizeNotificationAgentId,
+  selectUnreadCountForAgent,
   type NotificationFilter,
   type ThoughtInitiation,
   type ActivityEntry,
 } from '@/stores/notificationStore';
 import { useDrawerStore } from '@/stores/drawerStore';
+import { useAgentScopeStore } from '@/stores/agentScopeStore';
 
 type Category = 'agents' | 'permissions' | 'memory' | 'other';
 
@@ -30,6 +34,7 @@ interface NormalItem {
   kind: 'initiation' | 'activity';
   category: Category;
   source: string | null;
+  agentId: string;
   actor: string;
   verb: string;
   target: string | null;
@@ -43,18 +48,25 @@ interface NormalItem {
 function classifyActivity(a: ActivityEntry): Category {
   const t = (a.activity_type || '').toLowerCase();
   const s = (a.source || '').toLowerCase();
+  const agentId = normalizeNotificationAgentId(a.agent_id);
   if (t.includes('permission') || t.includes('approval')) return 'permissions';
   if (t.includes('memory') || t.includes('engram') || t.includes('consolidat')) return 'memory';
-  if (['luca', 'vektor', 'anima', 'observer', 'guardian'].includes(s)) return 'agents';
+  if (agentId !== 'luca' || ['luca', 'vektor', 'anima', 'observer', 'guardian'].includes(s)) return 'agents';
   return 'other';
 }
 
-function agentFromSource(source: string | null): string {
-  const s = (source || '').toLowerCase();
-  if (s.includes('vektor')) return 'vektor';
-  if (s.includes('anima')) return 'anima';
-  if (s.includes('observer') || s.includes('guardian')) return 'observer';
-  return 'luca';
+function labelForAgent(agentId: string, names: Map<string, string>): string {
+  const fromStore = names.get(agentId);
+  if (fromStore) return fromStore;
+  if (agentId === 'guardian' || agentId === 'observer') return 'Observer';
+  return agentId.charAt(0).toUpperCase() + agentId.slice(1);
+}
+
+function glyphClassForAgent(agentId: string): string {
+  if (agentId === 'vektor' || agentId === 'anima' || agentId === 'observer') return agentId;
+  if (agentId === 'guardian') return 'observer';
+  if (agentId === 'luca') return 'luca';
+  return 'custom';
 }
 
 function formatRelativeTime(iso: string): string {
@@ -137,7 +149,7 @@ function RationaleToggle({ rationale }: { rationale: string }) {
   );
 }
 
-function NotifGlyph({ agent, permission }: { agent: string; permission: boolean }) {
+function NotifGlyph({ agent, label, permission }: { agent: string; label: string; permission: boolean }) {
   if (permission) {
     return (
       <div className="notif-glyph notif-glyph--permission" aria-hidden="true">
@@ -149,8 +161,8 @@ function NotifGlyph({ agent, permission }: { agent: string; permission: boolean 
       </div>
     );
   }
-  const dotClass = `notif-glyph notif-glyph--${agent}`;
-  const initial = agent === 'luca' ? 'L' : agent === 'vektor' ? 'V' : agent === 'anima' ? 'A' : 'O';
+  const dotClass = `notif-glyph notif-glyph--${glyphClassForAgent(agent)}`;
+  const initial = label.trim().charAt(0).toUpperCase() || 'A';
   return (
     <div className={dotClass} aria-hidden="true">
       <span>{initial}</span>
@@ -167,22 +179,39 @@ export default function NotificationsDrawer() {
   const setFilter = useNotificationStore((s) => s.setFilter);
   const readIds = useNotificationStore((s) => s.readIds);
   const markRead = useNotificationStore((s) => s.markRead);
-  const markAllSeen = useNotificationStore((s) => s.markAllSeen);
   const updateInitiationStatus = useNotificationStore((s) => s.updateInitiationStatus);
-  const unreadCount = useNotificationStore(selectUnreadCount);
+  const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
+  const unreadCount = useNotificationStore((s) => selectUnreadCountForAgent(s, activeAgentId));
+
+  const agentNameById = useMemo(
+    () => new Map(availableAgents.map((agent) => [agent.id, agent.name])),
+    [availableAgents],
+  );
+  const activeAgentName = labelForAgent(activeAgentId, agentNameById);
+  const scopedInitiations = useMemo(
+    () => filterInitiationsForAgent(initiations, activeAgentId),
+    [initiations, activeAgentId],
+  );
+  const scopedActivity = useMemo(
+    () => filterActivityForAgent(activity, activeAgentId),
+    [activity, activeAgentId],
+  );
 
   const items = useMemo<NormalItem[]>(() => {
     const out: NormalItem[] = [];
 
-    initiations
+    scopedInitiations
       .filter((i) => i.status !== 'dismissed')
       .forEach((i) => {
+        const agentId = normalizeNotificationAgentId(i.agent_id);
         out.push({
           id: i.id,
           kind: 'initiation',
           category: 'agents',
-          source: 'luca',
-          actor: 'Luca',
+          source: agentId,
+          agentId,
+          actor: labelForAgent(agentId, agentNameById),
           verb: 'reached out',
           target: null,
           snippet: i.message,
@@ -193,16 +222,17 @@ export default function NotificationsDrawer() {
         });
       });
 
-    activity.forEach((a) => {
+    scopedActivity.forEach((a) => {
       const category = classifyActivity(a);
-      const agent = agentFromSource(a.source);
-      const actor = agent.charAt(0).toUpperCase() + agent.slice(1);
+      const agentId = normalizeNotificationAgentId(a.agent_id);
+      const actor = labelForAgent(agentId, agentNameById);
       const verb = (a.activity_type || '').replace(/_/g, ' ');
       out.push({
         id: a.id,
         kind: 'activity',
         category,
         source: a.source,
+        agentId,
         actor,
         verb,
         target: a.title,
@@ -214,7 +244,7 @@ export default function NotificationsDrawer() {
     });
 
     return out.sort((x, y) => (y.time > x.time ? 1 : -1));
-  }, [initiations, activity]);
+  }, [scopedInitiations, scopedActivity, agentNameById]);
 
   const counts = useMemo(() => {
     const all = items.length;
@@ -247,16 +277,6 @@ export default function NotificationsDrawer() {
     return buckets;
   }, [filtered]);
 
-  // Mark initiations as read when displayed so the unread dot clears
-  useEffect(() => {
-    filtered.forEach((i) => {
-      if (!readIds.has(i.id)) {
-        // Read on mount only — don't mark on every re-render
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleOpenThread = (item: NormalItem) => {
     markRead(item.id);
     if (item.kind === 'initiation') {
@@ -273,6 +293,15 @@ export default function NotificationsDrawer() {
     markRead(item.id);
   };
 
+  const handleMarkScopedRead = () => {
+    items.forEach((item) => {
+      markRead(item.id);
+      if (item.kind === 'initiation' && item.status !== 'delivered') {
+        void updateInitiationStatus(item.id, 'delivered');
+      }
+    });
+  };
+
   const filterChips: { value: NotificationFilter; label: string; count: number }[] = [
     { value: 'all', label: 'All', count: counts.all },
     { value: 'unread', label: 'Unread', count: counts.unread },
@@ -283,7 +312,6 @@ export default function NotificationsDrawer() {
 
   const renderCard = (item: NormalItem) => {
     const isPermission = item.category === 'permissions';
-    const agent = agentFromSource(item.source);
     const isRead = readIds.has(item.id) || item.status === 'delivered';
     const rationale = extractRationale(item);
 
@@ -293,7 +321,7 @@ export default function NotificationsDrawer() {
         className={`notif-card${isRead ? ' notif-card--read' : ''}`}
         onClick={() => markRead(item.id)}
       >
-        <NotifGlyph agent={agent} permission={isPermission} />
+        <NotifGlyph agent={item.agentId} label={item.actor} permission={isPermission} />
         <div className="notif-main">
           <div className="notif-headline">
             <span className="notif-actor">{item.actor}</span>
@@ -327,8 +355,8 @@ export default function NotificationsDrawer() {
     <>
       <DrawerHeader>
         <div className="drawer-header-col">
-          <DrawerCrumb num={unreadCount || '—'} label={unreadCount ? 'new' : 'all caught up'} />
-          <DrawerTitle>Activity</DrawerTitle>
+          <DrawerCrumb num={unreadCount || '—'} label={unreadCount ? `new for ${activeAgentName}` : `${activeAgentName} caught up`} />
+          <DrawerTitle>{activeAgentName} activity</DrawerTitle>
         </div>
         <DrawerEscChip />
         <DrawerCloseBtn onClick={close} />
@@ -352,7 +380,7 @@ export default function NotificationsDrawer() {
           <DrawerSection>
             <EmptyState
               text="Nothing new."
-              hint="Luca will reach out when something is on its mind."
+              hint={`${activeAgentName} will reach out when something is on its mind.`}
             />
           </DrawerSection>
         )}
@@ -370,7 +398,7 @@ export default function NotificationsDrawer() {
         })}
       </DrawerBody>
       <DrawerFooter>
-        <Pill variant="ghost" size="xs" onClick={markAllSeen}>Mark all read</Pill>
+        <Pill variant="ghost" size="xs" onClick={handleMarkScopedRead}>Mark {activeAgentName} read</Pill>
         <DrawerFooterSep />
         <Pill
           variant="ghost"

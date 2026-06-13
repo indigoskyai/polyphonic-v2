@@ -209,6 +209,7 @@ serve(async (req) => {
               stream: true,
               max_tokens: 2048,
             }),
+            signal: AbortSignal.timeout(120000),
           });
 
           if (!orResponse.ok) {

@@ -60,6 +60,8 @@ describe('agent-scoped autonomy runtime', () => {
     const initiate = readRepoFile('supabase/functions/anima-initiate/index.ts');
     const heartbeat = readRepoFile('supabase/functions/anima-heartbeat/index.ts');
     const pulse = readRepoFile('supabase/functions/luca-pulse/index.ts');
+    const journalCron = readRepoFile('supabase/functions/journal-cron/index.ts');
+    const continuityWrite = readRepoFile('supabase/functions/_shared/continuity/write.ts');
 
     expect(initiate).toContain('allowsProactiveAutonomy');
     expect(initiate).toContain('reason: "proactive_autonomy_disabled"');
@@ -71,6 +73,18 @@ describe('agent-scoped autonomy runtime', () => {
 
     expect(pulse).toContain('allowsProactiveAutonomy');
     expect(pulse).toContain('agent_id: agentId');
+    expect(pulse).toContain('const agentId = normalizeAgentId(metadata.agent_id)');
+    expect(pulse).toContain('agentId,');
+    expect(pulse).toContain('payload = { url: urlMatch[0], user_id: userId, agent_id: agentId }');
+
+    expect(journalCron).toContain('allowsInnerLifeAutonomy');
+    expect(journalCron).toContain('allowsProactiveAutonomy');
+    expect(journalCron).toContain('reason: "inner_life_disabled"');
+    expect(journalCron).toContain('reason: "proactive_autonomy_disabled"');
+    expect(journalCron).not.toContain('scope.agentId === "luca"');
+
+    expect(continuityWrite).toContain('agentId !== "observer"');
+    expect(continuityWrite).not.toContain('agentId === "luca" && Boolean(opts.authHeader)');
   });
 
   it('scopes the activity gate and process logs by agent', () => {
@@ -243,5 +257,21 @@ describe('agent-scoped autonomy runtime', () => {
     expect(graduate).toContain('p_agent_id: row.agent_id');
     expect(migration).toContain("e.source_context->>'type' = 'hypomnema_graduation'");
     expect(migration).toContain("SET agent_id = e.source_context->>'agent_id'");
+  });
+
+  it('keeps journal provenance schema aligned with journal-write inserts', () => {
+    const journal = readRepoFile('supabase/functions/journal-write/index.ts');
+    const migration = readRepoFile('supabase/migrations/20260613000000_journal_entry_provenance.sql');
+    const handoff = readRepoFile('docs/lovable-supabase-handoff.md');
+
+    expect(journal).toContain('source_conversation_id: validConversationId');
+    expect(journal).toContain('source_context: sourceContext');
+    expect(journal).toContain('source_conversation_valid: Boolean(validConversationId)');
+
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS source_conversation_id uuid');
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS source_context jsonb NOT NULL DEFAULT '{}'::jsonb");
+    expect(migration).toContain("CHECK (trigger_type IN ('periodic', 'post_conversation', 'post-conversation', 'spontaneous'))");
+    expect(handoff).toContain('trigger_type constraint failures for post_conversation');
+    expect(handoff).toContain('supabase/migrations/20260613000000_journal_entry_provenance.sql');
   });
 });

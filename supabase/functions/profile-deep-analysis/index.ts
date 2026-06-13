@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import {
   getCorsHeaders,
   handleCorsPreflightIfNeeded,
@@ -655,7 +656,7 @@ serve(async (req) => {
       systemPrompt: string,
       userContent: string,
     ): Promise<string> {
-      const response = await fetch(
+      const response = await withModelRetry(() => fetch(
         "https://ai.gateway.lovable.dev/v1/chat/completions",
         {
           method: "POST",
@@ -672,8 +673,9 @@ serve(async (req) => {
             temperature: 0.4,
             max_tokens: 5000,
           }),
+          signal: AbortSignal.timeout(60000),
         },
-      );
+      ));
 
       if (!response.ok) {
         const errText = await response.text();
@@ -784,7 +786,7 @@ ${pass4}
 --- PASS 5 (Shadow Analysis) ---
 ${pass5}`;
 
-    const finalResponse = await fetch(
+    const finalResponse = await withModelRetry(() => fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
@@ -803,8 +805,9 @@ ${pass5}`;
             function: { name: "save_psychological_profile" },
           },
         }),
+        signal: AbortSignal.timeout(60000),
       },
-    );
+    ));
 
     if (!finalResponse.ok) {
       const errText = await finalResponse.text();

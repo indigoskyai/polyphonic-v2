@@ -263,7 +263,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
       .select('*')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
-      .order('confidence', { ascending: false });
+      .order('confidence', { ascending: false })
+      .limit(1000);
     if (error) {
       setLoadError('beliefs', error);
       return;

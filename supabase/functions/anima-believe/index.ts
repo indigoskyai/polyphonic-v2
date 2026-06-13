@@ -4,6 +4,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { logActivity } from "../_shared/activity-log.ts";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 
@@ -174,7 +175,7 @@ Last challenged: ${belief.last_challenged?.slice(0, 10)} (${daysSinceChallenge} 
 Revision count: ${(belief.revision_history || []).length}`;
 
       try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -189,7 +190,8 @@ Revision count: ${(belief.revision_history || []).length}`;
             temperature: 0.5,
             max_tokens: 500,
           }),
-        });
+          signal: AbortSignal.timeout(60000),
+        }));
 
         if (!response.ok) continue;
 

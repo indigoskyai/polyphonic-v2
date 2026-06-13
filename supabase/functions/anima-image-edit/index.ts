@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const ALLOWED_BUCKETS = ["generated-images", "chat-attachments"];
 
@@ -93,11 +94,12 @@ serve(async (req) => {
 
     console.log("[anima-image-edit] requesting gpt-image-1");
     const t0 = Date.now();
-    const response = await fetch("https://api.openai.com/v1/images/edits", {
+    const response = await withModelRetry(() => fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: { Authorization: `Bearer ${openaiKey}` },
       body: form,
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
     console.log("[anima-image-edit] openai responded", { ms: Date.now() - t0, status: response.status });
 
     if (!response.ok) {

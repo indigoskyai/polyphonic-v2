@@ -87,6 +87,7 @@ serve(async (req) => {
           Authorization: `Bearer ${account.access_token}`,
         },
         body: JSON.stringify({ text: text.slice(0, 280) }),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!postResp.ok) {
@@ -135,7 +136,7 @@ serve(async (req) => {
 
       const mentionsResp = await fetch(
         `${X_API_BASE}/users/${xUserId}/mentions?max_results=${params.limit || 10}`,
-        { headers: { Authorization: `Bearer ${account.access_token}` } }
+        { headers: { Authorization: `Bearer ${account.access_token}` }, signal: AbortSignal.timeout(15000) }
       );
 
       if (!mentionsResp.ok) {
@@ -192,6 +193,7 @@ serve(async (req) => {
           text: text.slice(0, 280),
           reply: { in_reply_to_tweet_id: tweet_id },
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!replyResp.ok) {

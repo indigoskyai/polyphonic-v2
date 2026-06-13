@@ -4,6 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { isDialecticEnabled } from "../_shared/config.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
@@ -140,7 +141,7 @@ serve(async (req) => {
       `\n\n${OBSERVER_WATCH_INSTRUCTIONS}`,
     ].filter(Boolean).join("\n");
 
-    const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const orResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -158,7 +159,8 @@ serve(async (req) => {
         temperature: 0.4,
         response_format: { type: "json_object" },
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!orResponse.ok) {
       const errText = await orResponse.text().catch(() => "");

@@ -68,7 +68,7 @@ const SEED_TOOLS = [
   { id: "web_search", name: "web.search", on: true },
   { id: "read_url", name: "read.url", on: true },
   { id: "memory_read", name: "memory.read", on: true },
-  { id: "memory_write", name: "memory.write", on: false },
+  { id: "memory_write", name: "memory.write", on: true },
   { id: "update_soul", name: "soul.update", on: false, gated: true },
   { id: "update_self_model", name: "self-model.update", on: false, gated: true },
 ];
@@ -456,8 +456,7 @@ Deno.serve(async (req): Promise<Response> => {
       inner_life: true,
       thought_verbosity: 1,
       voice_description: blueprint.voice_description,
-      // Custom agents minted via Forge participate in proactive jobs by default.
-      autonomy: { proactive: true },
+      proactive_autonomy: false,
     };
 
     const configPayload = {

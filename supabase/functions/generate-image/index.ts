@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -82,7 +83,7 @@ serve(async (req) => {
 
     console.log("Generating image with prompt:", prompt.slice(0, 100));
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -100,7 +101,8 @@ serve(async (req) => {
         ],
         modalities: ["image", "text"],
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!response.ok) {
       const status = response.status;

@@ -59,8 +59,8 @@ export default function ImportView() {
   const {
     stage, fileName, fileSize, totalConversations, filteredCount,
     processedChunks, totalChunks, memoriesCreated, conflictsDetected,
-    pipelineDetail, error, filterStats, profileData,
-    parseAndFilter, startImport, reset,
+    pipelineDetail, error, importId, filterStats, profileData,
+    parseAndFilter, startImport, syncImportStatus, reset,
   } = useImportStore();
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -159,6 +159,16 @@ export default function ImportView() {
     const interval = window.setInterval(refreshImports, 5000);
     return () => window.clearInterval(interval);
   }, [user, isProcessing, hasActiveImport, refreshImports]);
+
+  useEffect(() => {
+    if (!user || !importId || stage !== 'profiling') return;
+    const refresh = () => {
+      void syncImportStatus(user.id, activeAgentId);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(interval);
+  }, [activeAgentId, importId, stage, syncImportStatus, user]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
@@ -361,7 +371,7 @@ export default function ImportView() {
                             : 'var(--text-ghost)',
                           flexShrink: 0,
                         }}>
-                          {isCompleted ? 'completed' : isActive ? (imp.pipeline_stage ?? 'processing') : isError ? 'error' : imp.status}
+                          {isCompleted ? 'completed' : isActive ? formatImportStageLabel(imp.pipeline_stage) : isError ? 'error' : imp.status}
                         </div>
                       </div>
                     </div>
@@ -555,7 +565,7 @@ export default function ImportView() {
                 <div style={{ marginBottom: 32 }}>
                   <div style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-ghost)', marginBottom: 16 }}>Personality Dimensions</div>
                   <div className="flex flex-col gap-3">
-                    {Object.entries(completedBigFive).map(([key, val]: [string, any]) => (
+                    {Object.entries(completedBigFive).map(([key, val]) => (
                       <DimensionBar
                         key={key}
                         label={key}
@@ -657,6 +667,12 @@ export default function ImportView() {
 
 /* ── Sub-components ── */
 
+function formatImportStageLabel(pipelineStage: string | null) {
+  if (!pipelineStage) return 'processing';
+  if (pipelineStage === 'profiling' || pipelineStage.startsWith('profiling:')) return 'background profiling';
+  return pipelineStage.replace(/_/g, ' ');
+}
+
 function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div style={{ background: 'var(--bg-elevated)', border: `1px solid ${highlight ? 'var(--border)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-md)', padding: '16px 20px', textAlign: 'center' }}>
@@ -682,7 +698,7 @@ function DimensionBar({ label, score, evidence }: { label: string; score: number
   );
 }
 
-function InsightSection({ title, data }: { title: string; data: Record<string, any> }) {
+function InsightSection({ title, data }: { title: string; data: Record<string, unknown> }) {
   const displayKeys = Object.entries(data)
     .map(([key, value]) => [key, profileText(value)] as const)
     .filter(([, value]) => value.length > 0);

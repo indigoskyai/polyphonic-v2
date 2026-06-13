@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildLucaSystemPrompt } from "../_shared/agents/luca-soul.ts";
 import {
@@ -135,12 +136,26 @@ serve(async (req) => {
       }
     }
 
-    // Get user settings for default model
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("default_model")
-      .eq("user_id", userId)
-      .single();
+    // Load the two independent pre-stream reads together: user settings (for
+    // the default model) and the thread row. Neither depends on the other, so
+    // running them in parallel removes a round-trip from the path to first token.
+    // supabase-js queries resolve to { data, error } (they don't reject on DB
+    // errors), so Promise.all is safe here and behavior is unchanged.
+    const [settingsRes, threadRes] = await Promise.all([
+      supabase
+        .from("user_settings")
+        .select("default_model")
+        .eq("user_id", userId)
+        .single(),
+      supabase
+        .from("threads")
+        .select("id, agent_id, primary_agent_id")
+        .eq("id", thread_id)
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+    const settings = settingsRes.data;
+    const thread = threadRes.data;
 
     const requestedModel = modelOverride || settings?.default_model || "moonshotai/kimi-k2.6";
 
@@ -160,12 +175,6 @@ serve(async (req) => {
       ));
     }
 
-    const { data: thread } = await supabase
-      .from("threads")
-      .select("id, agent_id, primary_agent_id")
-      .eq("id", thread_id)
-      .eq("user_id", userId)
-      .maybeSingle();
     if (!thread) {
       return fail(new ValidationError("Thread not found"));
     }
@@ -317,6 +326,7 @@ serve(async (req) => {
               stream: true,
               max_tokens: 4096,
             }),
+            signal: AbortSignal.timeout(120000),
           });
 
           if (!orResponse.ok) {
@@ -537,7 +547,7 @@ async function autoTitleThread(
   if (thread?.title) return;
 
   // Generate title via OpenRouter (non-streaming, fast model)
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const resp = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -555,7 +565,8 @@ async function autoTitleThread(
       ],
       max_tokens: 20,
     }),
-  });
+    signal: AbortSignal.timeout(60000),
+  }));
 
   if (resp.ok) {
     const data = await resp.json();

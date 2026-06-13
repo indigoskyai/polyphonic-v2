@@ -75,6 +75,12 @@ describe('custom agent creation flow', () => {
     expect(mocks.invoke.mock.calls[0][1].body).not.toHaveProperty('is_system');
     expect(mocks.invoke.mock.calls[0][1].body).not.toHaveProperty('locked');
     expect(mocks.invoke.mock.calls[0][1].body).not.toHaveProperty('created_by');
+    expect(mocks.invoke.mock.calls[0][1].body.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'memory_read', on: true }),
+        expect.objectContaining({ id: 'memory_write', on: true }),
+      ]),
+    );
     expect(useAgentSettingsStore.getState().agents[0]).toMatchObject({
       id: 'sophia',
       name: 'Sophia',
@@ -82,6 +88,11 @@ describe('custom agent creation flow', () => {
       is_system: false,
       locked: false,
     });
+    expect(useAgentSettingsStore.getState().agents[0].tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'memory_write', on: true }),
+      ]),
+    );
   });
 
   it('saves editable agent configs through the same guarded function', async () => {
@@ -160,6 +171,7 @@ describe('custom agent creation flow', () => {
 
   it('keeps agent-config-save responsible for safe custom-agent creation', () => {
     const source = readRepoFile('supabase/functions/agent-config-save/index.ts');
+    const store = readRepoFile('src/stores/agentSettingsStore.ts');
 
     expect(source).toContain('RESERVED_AGENT_IDS');
     expect(source).toContain('Name and role are required when creating an agent');
@@ -168,5 +180,14 @@ describe('custom agent creation flow', () => {
     expect(source).toContain('created_by: "user"');
     expect(source).toContain('Resident and system agents are platform-controlled');
     expect(source).toContain('ensureCanCreateCustomAgent');
+    expect(store).toContain("if (seed.id === 'memory_read' || seed.id === 'memory_write')");
+  });
+
+  it('keeps Forge-created agents on the same continuity substrate defaults', () => {
+    const source = readRepoFile('supabase/functions/agent-forge/index.ts');
+
+    expect(source).toContain('{ id: "memory_read", name: "memory.read", on: true }');
+    expect(source).toContain('{ id: "memory_write", name: "memory.write", on: true }');
+    expect(source).toContain('proactive_autonomy: false');
   });
 });

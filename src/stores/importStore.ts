@@ -3,6 +3,30 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type PipelineStage = 'idle' | 'filtering' | 'parsing' | 'extracting' | 'synthesizing' | 'profiling' | 'complete' | 'error';
 
+const PROFILE_STILL_RUNNING_MESSAGE = 'Deep analysis is still running in the background. Progress will keep updating here.';
+
+type UnknownRecord = Record<string, unknown>;
+type ConversationNode = {
+  message?: {
+    author?: { role?: unknown };
+    content?: { parts?: unknown };
+    create_time?: unknown;
+  };
+};
+type PreparedConversation = {
+  title?: string;
+  create_time?: number;
+  mapping?: Record<string, ConversationNode>;
+};
+type ProfileData = UnknownRecord;
+
+export class ProfileStillRunningError extends Error {
+  constructor(message = PROFILE_STILL_RUNNING_MESSAGE) {
+    super(message);
+    this.name = 'ProfileStillRunningError';
+  }
+}
+
 interface FilterStats {
   rawCount: number;
   filteredCount: number;
@@ -27,71 +51,110 @@ interface ImportState {
   error: string | null;
   importId: string | null;
   filterStats: FilterStats | null;
-  preparedConversations: any[] | null;
+  preparedConversations: PreparedConversation[] | null;
   platform: string | null;
   dismissed: boolean;
-  profileData: any | null;
+  profileData: ProfileData | null;
 
   // Actions
   parseAndFilter: (file: File) => Promise<void>;
   startImport: (userId: string, agentId?: string) => Promise<void>;
+  syncImportStatus: (userId: string, agentId?: string) => Promise<void>;
   reset: () => void;
   dismiss: () => void;
 }
+
+type ImportStatusRow = {
+  status: string;
+  pipeline_stage: string | null;
+  memories_created: number | null;
+  questions_generated: number | null;
+  conflicts_detected: number | null;
+};
 
 const CHUNK_SIZE = 5;
 const MAX_CONVERSATIONS = 500;
 
 const PERSONAL_PATTERN = /\b(I am|I'm|I was|I feel|I felt|I think|I've been|I have been|my family|my wife|my husband|my partner|my kid|my child|my son|my daughter|my mom|my dad|my mother|my father|my friend|my job|my work|my career|I love|I hate|I want|I need|I wish|I believe|I struggle|I learned)\b/i;
 
-function detectPlatform(data: any): string {
-  if (Array.isArray(data) && data[0]?.mapping) return 'chatgpt';
-  if (Array.isArray(data) && data[0]?.uuid && data[0]?.chat_messages) return 'claude';
+function isRecord(value: unknown): value is UnknownRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === 'number' ? value : 0;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function objectRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function detectPlatform(data: unknown): string {
+  if (Array.isArray(data) && isRecord(data[0]) && isRecord(data[0].mapping)) return 'chatgpt';
+  if (Array.isArray(data) && isRecord(data[0]) && data[0].uuid && Array.isArray(data[0].chat_messages)) return 'claude';
   return 'unknown';
 }
 
-function convertClaudeToMapping(conversations: any[]): any[] {
+function convertClaudeToMapping(conversations: unknown[]): PreparedConversation[] {
   return conversations
-    .filter((c: any) => c.chat_messages?.length >= 2)
-    .map((conv: any) => {
-      const mapping: Record<string, any> = {};
-      conv.chat_messages.forEach((msg: any, i: number) => {
-        const role = msg.sender === 'human' ? 'user' : msg.sender === 'assistant' ? 'assistant' : null;
-        if (!role || !msg.text?.trim()) return;
+    .filter((c) => isRecord(c) && Array.isArray(c.chat_messages) && c.chat_messages.length >= 2)
+    .map((conv) => {
+      const row = conv as UnknownRecord & { chat_messages: unknown[] };
+      const mapping: Record<string, ConversationNode> = {};
+      row.chat_messages.forEach((rawMsg, i: number) => {
+        if (!isRecord(rawMsg)) return;
+        const role = rawMsg.sender === 'human' ? 'user' : rawMsg.sender === 'assistant' ? 'assistant' : null;
+        const text = stringValue(rawMsg.text).trim();
+        if (!role || !text) return;
+        const createdAtUtc = stringValue(rawMsg.created_at_utc);
+        const createdAt = stringValue(row.created_at);
         mapping[`node-${i}`] = {
           message: {
             author: { role },
-            content: { parts: [msg.text] },
-            create_time: msg.created_at_utc ? new Date(msg.created_at_utc).getTime() / 1000 : (conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0) + i,
+            content: { parts: [text] },
+            create_time: createdAtUtc ? new Date(createdAtUtc).getTime() / 1000 : (createdAt ? new Date(createdAt).getTime() / 1000 : 0) + i,
           },
         };
       });
       return {
-        title: conv.name || 'Untitled',
-        create_time: conv.created_at ? new Date(conv.created_at).getTime() / 1000 : 0,
+        title: stringValue(row.name) || 'Untitled',
+        create_time: stringValue(row.created_at) ? new Date(stringValue(row.created_at)).getTime() / 1000 : 0,
         mapping,
       };
     });
 }
 
-function extractMessages(conv: any): { role: string; content: string; create_time: number }[] {
+function isChatGptConversation(value: unknown): value is PreparedConversation {
+  return isRecord(value) && isRecord(value.mapping);
+}
+
+function extractMessages(conv: PreparedConversation): { role: string; content: string; create_time: number }[] {
   const msgs: { role: string; content: string; create_time: number }[] = [];
   if (!conv.mapping) return msgs;
   for (const nodeId of Object.keys(conv.mapping)) {
     const node = conv.mapping[nodeId];
     const msg = node?.message;
-    if (!msg?.content?.parts?.length) continue;
-    const role = msg.author?.role;
+    const parts = Array.isArray(msg?.content?.parts) ? msg.content.parts : [];
+    if (parts.length === 0) continue;
+    const role = stringValue(msg?.author?.role);
     if (!role || role === 'system' || role === 'tool') continue;
-    const text = msg.content.parts.filter((p: any) => typeof p === 'string').join('\n').trim();
+    const text = parts.filter((p): p is string => typeof p === 'string').join('\n').trim();
     if (!text) continue;
-    msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text, create_time: msg.create_time || 0 });
+    msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text, create_time: numberValue(msg?.create_time) });
   }
   msgs.sort((a, b) => a.create_time - b.create_time);
   return msgs;
 }
 
-function scoreConversation(conv: any): number {
+function scoreConversation(conv: PreparedConversation): number {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   if (userMsgs.length === 0) return 0;
@@ -102,7 +165,7 @@ function scoreConversation(conv: any): number {
   return userMsgs.length * avgLen * personalBoost;
 }
 
-function getConversationMeta(conv: any) {
+function getConversationMeta(conv: PreparedConversation) {
   const msgs = extractMessages(conv);
   const userMsgs = msgs.filter(m => m.role === 'user');
   const totalUserChars = userMsgs.reduce((sum, m) => sum + m.content.length, 0);
@@ -141,6 +204,35 @@ function normalizeAgentId(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value.trim() : 'luca';
 }
 
+function stageFromImportPipeline(status?: string | null, pipelineStage?: string | null): PipelineStage | null {
+  if (status === 'completed' || pipelineStage === 'complete') return 'complete';
+  if (status === 'failed' || status === 'error' || pipelineStage === 'error') return 'error';
+  if (!pipelineStage) return null;
+  if (pipelineStage.startsWith('profiling')) return 'profiling';
+  if (pipelineStage === 'synthesizing') return 'synthesizing';
+  if (pipelineStage === 'extracting') return 'extracting';
+  if (pipelineStage === 'parsing') return 'parsing';
+  return null;
+}
+
+function detailFromImportPipeline(pipelineStage?: string | null): string {
+  if (!pipelineStage || pipelineStage === 'profiling') return 'background profiling';
+  if (pipelineStage.startsWith('profiling:')) {
+    return `background profiling - ${pipelineStage.slice('profiling:'.length)}`;
+  }
+  return '';
+}
+
+async function loadCompletedProfile(userId: string) {
+  const { data } = await supabase
+    .from('psychological_profile')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return data ?? null;
+}
+
 export async function waitForProfile(
   userId: string,
   options: { baselineUpdatedAt?: string | null; timeoutMs?: number; intervalMs?: number } = {},
@@ -163,7 +255,7 @@ export async function waitForProfile(
     }
   }
 
-  throw new Error('Deep analysis is still running in the background. Please check back in a few minutes.');
+  throw new ProfileStillRunningError();
 }
 
 const initialState = {
@@ -181,10 +273,10 @@ const initialState = {
   error: null as string | null,
   importId: null as string | null,
   filterStats: null as FilterStats | null,
-  preparedConversations: null as any[] | null,
+  preparedConversations: null as PreparedConversation[] | null,
   platform: null as string | null,
   dismissed: false,
-  profileData: null as any | null,
+  profileData: null as ProfileData | null,
 };
 
 export const useImportStore = create<ImportState>((set, get) => ({
@@ -203,11 +295,11 @@ export const useImportStore = create<ImportState>((set, get) => ({
         return;
       }
 
-      let normalized: any[];
+      let normalized: PreparedConversation[];
       if (platform === 'claude') {
         normalized = convertClaudeToMapping(Array.isArray(data) ? data : []);
       } else {
-        normalized = (Array.isArray(data) ? data : []).filter((c: any) => c.mapping && typeof c.mapping === 'object');
+        normalized = (Array.isArray(data) ? data : []).filter(isChatGptConversation);
       }
 
       const rawCount = normalized.length;
@@ -253,8 +345,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
           estimatedMinutes,
         },
       });
-    } catch (err: any) {
-      set({ stage: 'error', error: err.message || 'Failed to parse file' });
+    } catch (err: unknown) {
+      set({ stage: 'error', error: errorMessage(err, 'Failed to parse file') });
     }
   },
 
@@ -332,12 +424,15 @@ export const useImportStore = create<ImportState>((set, get) => ({
             continue;
           }
 
-          const result = await response.json();
-          totalMemories += result.memories_created || 0;
-          totalQuestions += result.questions_generated || 0;
-          totalConflicts += result.conflicts_detected || 0;
-          if (result.created_contents) {
-            accumulatedMemories = [...accumulatedMemories, ...result.created_contents];
+          const result = objectRecord(await response.json());
+          totalMemories += numberValue(result.memories_created);
+          totalQuestions += numberValue(result.questions_generated);
+          totalConflicts += numberValue(result.conflicts_detected);
+          const createdContents = Array.isArray(result.created_contents)
+            ? result.created_contents.filter((item): item is string => typeof item === 'string')
+            : [];
+          if (createdContents.length > 0) {
+            accumulatedMemories = [...accumulatedMemories, ...createdContents];
           }
 
           set({
@@ -346,8 +441,8 @@ export const useImportStore = create<ImportState>((set, get) => ({
             questionsGenerated: totalQuestions,
             conflictsDetected: totalConflicts,
           });
-        } catch (chunkErr: any) {
-          console.error(`Chunk ${i + 1} error after retries:`, chunkErr.message);
+        } catch (chunkErr: unknown) {
+          console.error(`Chunk ${i + 1} error after retries:`, errorMessage(chunkErr, 'Unknown chunk error'));
           // Continue to next chunk
         }
       }
@@ -387,9 +482,27 @@ export const useImportStore = create<ImportState>((set, get) => ({
         throw new Error(err.error || `Failed (${profileResponse.status})`);
       }
 
-      set({ pipelineDetail: 'running in background' });
+      set({ pipelineDetail: 'background profiling' });
 
-      const profileData = await waitForProfile(userId, { baselineUpdatedAt });
+      let profileData: unknown = null;
+      try {
+        profileData = await waitForProfile(userId, { baselineUpdatedAt });
+      } catch (err) {
+        if (err instanceof ProfileStillRunningError) {
+          await get().syncImportStatus(userId, agentId);
+          const current = get();
+          if (current.stage === 'profiling') {
+            set({
+              stage: 'profiling',
+              pipelineDetail: current.pipelineDetail || 'background profiling',
+              error: null,
+              preparedConversations: null,
+            });
+          }
+          return;
+        }
+        throw err;
+      }
 
       // Update import record
       await supabase
@@ -398,9 +511,9 @@ export const useImportStore = create<ImportState>((set, get) => ({
         .eq('id', importId);
 
       set({ stage: 'complete', pipelineDetail: '', profileData, preparedConversations: null });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Import error:', err);
-      const message = err.message || 'An unexpected error occurred';
+      const message = errorMessage(err, 'An unexpected error occurred');
       const importId = get().importId;
       if (importId) {
         await supabase
@@ -409,6 +522,64 @@ export const useImportStore = create<ImportState>((set, get) => ({
           .eq('id', importId);
       }
       set({ stage: 'error', error: message });
+    }
+  },
+
+  syncImportStatus: async (userId: string, requestedAgentId?: string) => {
+    const { importId, stage } = get();
+    if (!importId || !userId || stage === 'idle' || stage === 'filtering') return;
+
+    const agentId = normalizeAgentId(requestedAgentId);
+    const { data } = await supabase
+      .from('chat_imports')
+      .select('status, pipeline_stage, memories_created, questions_generated, conflicts_detected')
+      .eq('id', importId)
+      .eq('user_id', userId)
+      .eq('agent_id', agentId)
+      .maybeSingle();
+
+    const row = data as ImportStatusRow | null;
+    if (!row) return;
+
+    const nextStage = stageFromImportPipeline(row.status, row.pipeline_stage);
+    const counts = {
+      memoriesCreated: row.memories_created ?? get().memoriesCreated,
+      questionsGenerated: row.questions_generated ?? get().questionsGenerated,
+      conflictsDetected: row.conflicts_detected ?? get().conflictsDetected,
+    };
+
+    if (nextStage === 'complete') {
+      const profileData = await loadCompletedProfile(userId);
+      set({
+        ...counts,
+        stage: 'complete',
+        pipelineDetail: '',
+        error: null,
+        profileData,
+        preparedConversations: null,
+      });
+      return;
+    }
+
+    if (nextStage === 'error') {
+      set({
+        ...counts,
+        stage: 'error',
+        pipelineDetail: '',
+        error: 'Import failed during background profiling.',
+        preparedConversations: null,
+      });
+      return;
+    }
+
+    if (nextStage) {
+      set({
+        ...counts,
+        stage: nextStage,
+        pipelineDetail: detailFromImportPipeline(row.pipeline_stage),
+        error: null,
+        preparedConversations: nextStage === 'profiling' ? null : get().preparedConversations,
+      });
     }
   },
 

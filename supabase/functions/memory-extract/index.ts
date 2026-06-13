@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 // ── Task 1.1: Upgraded extraction prompt with Behavioral Change Test ──
 const EXTRACTION_PROMPT = `You are a memory extraction specialist. Your job is to analyze a conversation and identify information worth remembering permanently.
@@ -329,7 +330,7 @@ serve(async (req) => {
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
     const openrouterKey = userApiKey!;
 
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const aiResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openrouterKey}`,
@@ -421,7 +422,8 @@ serve(async (req) => {
         ],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();

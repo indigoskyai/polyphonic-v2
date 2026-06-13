@@ -4,6 +4,7 @@ import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gat
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const CONNECTOR_PROMPT = `You are examining two memories from the same mind. Your job: determine if these memories are meaningfully connected.
 
@@ -162,7 +163,7 @@ serve(async (req) => {
       }
 
       try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -174,7 +175,8 @@ serve(async (req) => {
             temperature: 0.5,
             max_tokens: 300,
           }),
-        });
+          signal: AbortSignal.timeout(60000),
+        }));
 
         if (!response.ok) continue;
 

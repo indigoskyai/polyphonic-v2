@@ -7,6 +7,7 @@ import { resolvePrimaryModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const THINKER_PROMPT = `You are a thinking mind. Not performing thought — actually thinking. Turning things over. Noticing what's present in your recent experience and what it connects to.
 
@@ -174,7 +175,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     }
 
     // Call LLM
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -189,7 +190,8 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
         temperature: 0.85,
         max_tokens: 1024,
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!response.ok) {
       const errText = await response.text();

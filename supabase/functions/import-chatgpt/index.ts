@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
@@ -386,7 +387,7 @@ CONVERSATIONS TO ANALYZE (chunk ${chunk_index + 1} of ${total_chunks}):
 ${batchText}`;
 
     // Single AI call with tool calling via Lovable AI Gateway
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await withModelRetry(() => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${lovableApiKey}`,
@@ -398,7 +399,8 @@ ${batchText}`;
         tools: [extractionTool],
         tool_choice: { type: "function", function: { name: "extract_memories" } },
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();

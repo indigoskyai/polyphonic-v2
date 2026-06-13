@@ -115,6 +115,39 @@ export async function isValidAgentScope(
   return filtered.length > 0;
 }
 
+async function loadAgentPersonality(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<Record<string, unknown>> {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  if (normalizedAgentId === "luca") return { inner_life: true, proactive_autonomy: true };
+
+  const { data } = await supabase
+    .from("agent_configs")
+    .select("personality")
+    .eq("user_id", userId)
+    .eq("id", normalizedAgentId)
+    .maybeSingle();
+
+  return (data?.personality || {}) as Record<string, unknown>;
+}
+
+export async function allowsInnerLifeAutonomy(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<boolean> {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  if (!isSubstrateAgentId(normalizedAgentId)) return false;
+  if (normalizedAgentId === "luca") return true;
+
+  if (!(await isValidAgentScope(supabase, userId, normalizedAgentId))) return false;
+
+  const personality = await loadAgentPersonality(supabase, userId, normalizedAgentId);
+  return personality.inner_life !== false;
+}
+
 export async function allowsProactiveAutonomy(
   supabase: any,
   userId: string,
@@ -126,14 +159,7 @@ export async function allowsProactiveAutonomy(
 
   if (!(await isValidAgentScope(supabase, userId, normalizedAgentId))) return false;
 
-  const { data } = await supabase
-    .from("agent_configs")
-    .select("personality")
-    .eq("user_id", userId)
-    .eq("id", normalizedAgentId)
-    .maybeSingle();
-
-  const personality = (data?.personality || {}) as Record<string, unknown>;
+  const personality = await loadAgentPersonality(supabase, userId, normalizedAgentId);
   const autonomyRaw = personality.autonomy;
   const autonomy = (autonomyRaw && typeof autonomyRaw === "object" ? autonomyRaw : {}) as Record<string, unknown>;
   const innerLifeRaw = personality.inner_life;
@@ -148,11 +174,6 @@ export async function allowsProactiveAutonomy(
   if (autonomy.proactive === true) return true;
   if (innerLifeObj.proactive === true) return true;
   if (personality.proactive_autonomy === true) return true;
-
-  // Default: any substrate agent with inner_life enabled (the CreateAgent default)
-  // participates in proactive jobs unless explicitly opted out above.
-  if (innerLifeRaw === true) return true;
-  if (innerLifeObj && Object.keys(innerLifeObj).length > 0) return true;
 
   return false;
 }

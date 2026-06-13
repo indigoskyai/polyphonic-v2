@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { OBSERVER_SOUL, OBSERVER_CHAT_INSTRUCTIONS } from "../_shared/agents/observer-soul.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
@@ -136,7 +137,7 @@ serve(async (req) => {
     }
     chatMessages.push({ role: "user", content: message });
 
-    const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const orResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -150,7 +151,8 @@ serve(async (req) => {
         max_tokens: 800,
         temperature: 0.5,
       }),
-    });
+      signal: AbortSignal.timeout(60000),
+    }));
 
     if (!orResponse.ok) {
       const errText = await orResponse.text().catch(() => "");

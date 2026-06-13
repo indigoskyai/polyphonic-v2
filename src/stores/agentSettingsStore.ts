@@ -15,6 +15,7 @@ export interface Personality {
   inner_life: boolean;
   thought_verbosity: number;
   voice_description: string;
+  proactive_autonomy?: boolean;
 }
 
 export interface AgentConfig {
@@ -54,7 +55,7 @@ const SEED_TOOLS: ToolDef[] = [
   { id: 'web_search', name: 'web.search', on: true },
   { id: 'read_url', name: 'read.url', on: true },
   { id: 'memory_read', name: 'memory.read', on: true },
-  { id: 'memory_write', name: 'memory.write', on: false },
+  { id: 'memory_write', name: 'memory.write', on: true },
   { id: 'update_soul', name: 'soul.update', on: false, gated: true },
   { id: 'update_self_model', name: 'self-model.update', on: false, gated: true },
 ];
@@ -63,6 +64,7 @@ const DEFAULT_PERSONALITY: Personality = {
   inner_life: true,
   thought_verbosity: 1,
   voice_description: '',
+  proactive_autonomy: false,
 };
 
 interface AgentSettingsState {
@@ -111,6 +113,23 @@ function getCachedResolvedConfig(
   return value;
 }
 
+function normalizeTools(tools: unknown): ToolDef[] {
+  const rawTools = Array.isArray(tools) ? tools as ToolDef[] : [];
+  const byId = new Map(rawTools.map((tool) => [tool.id, tool]));
+  const merged = SEED_TOOLS.map((seed) => {
+    const existing = byId.get(seed.id);
+    const next = existing ? { ...seed, ...existing } : seed;
+    if (seed.id === 'memory_read' || seed.id === 'memory_write') {
+      return { ...next, on: true };
+    }
+    return next;
+  });
+
+  const seedIds = new Set(SEED_TOOLS.map((tool) => tool.id));
+  const custom = rawTools.filter((tool) => tool?.id && !seedIds.has(tool.id));
+  return [...merged, ...custom];
+}
+
 function rowToConfig(
   row: Record<string, unknown>,
   mcp: Array<Record<string, unknown>>,
@@ -138,8 +157,9 @@ function rowToConfig(
         typeof personalityRaw.thought_verbosity === 'number' ? personalityRaw.thought_verbosity : 1,
       voice_description:
         typeof personalityRaw.voice_description === 'string' ? personalityRaw.voice_description : '',
+      proactive_autonomy: personalityRaw.proactive_autonomy === true,
     },
-    tools: (row.tools as ToolDef[] | null)?.length ? (row.tools as ToolDef[]) : SEED_TOOLS,
+    tools: normalizeTools(row.tools),
     mcp: mcp
       .filter((m) => m.agent_id === id)
       .map((m): McpServer => ({
@@ -314,9 +334,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
     const personality = {
       ...DEFAULT_PERSONALITY,
       ...(input.personality ?? {}),
-      // Custom agents opt into proactive autonomy by default so the heartbeat,
-      // reflection, and pulse jobs treat them like Luca.
-      autonomy: { proactive: true },
+      proactive_autonomy: false,
     } as Personality;
 
     const { data, error } = await supabase.functions.invoke('agent-config-save', {

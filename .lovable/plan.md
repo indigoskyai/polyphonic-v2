@@ -13,11 +13,12 @@ Pre-flight: verify the new slugs don't collide with anything else Karen owns. If
 
 ## Part 2 — Fix the silent autonomy gate (affects ALL users with custom agents)
 
-Root cause: `allowsProactiveAutonomy()` in `supabase/functions/_shared/agent-scope.ts` returns `true` for `luca` automatically but requires custom agents to opt in via `personality.autonomy.proactive === true` (or two equivalent flags). `CreateAgentModal` and `agent-forge` never write that flag, so no custom agent ever passes the gate.
+Root cause: custom-agent autonomy has two separate lanes. Inner-life work should be allowed when `personality.inner_life` is enabled, while user-facing proactive outreach should stay behind an explicit proactive flag. Older drafts mixed those lanes together, which made fixes easy to over-apply.
 
 Fix:
-- Default `inner_life: true` to mean "proactive allowed" for custom agents. Update `allowsProactiveAutonomy()` so a substrate agent with `personality.inner_life === true` (boolean) or `personality.inner_life.proactive !== false` (object) is allowed by default. Explicit `proactive: false` still opts out.
-- Backfill Karen's two agents so the new logic immediately covers existing data (no-op once the function changes, but a safety net).
+- Keep `inner_life: true` scoped to private journal/dream/reflection work.
+- Keep user-facing proactive outreach gated by `personality.autonomy.proactive === true`, `personality.proactive_autonomy === true`, or `personality.inner_life.proactive === true`.
+- Backfill Karen's two agents only after checking which lane each agent should use.
 
 ## Part 3 — Harden agent labels across the UI
 
@@ -34,7 +35,7 @@ For each, resolve via `useAgentScopeStore().availableAgents` (or pass agent name
 
 - Require the user to type a real name before the create call (already enforced).
 - Add a guard: reject names that slugify to common placeholder slugs (`agent`, `draft`, `draft-agent`, `new-agent`, `mnemos-companion`, `untitled`).
-- Seed `personality.autonomy = { proactive: true }` on new custom agents so the autonomy gate works even if Part 2's defaulting is later reverted.
+- Seed `proactive_autonomy: false` on new custom agents so inner-life work is enabled without automatically starting user-facing outreach.
 - Tighten `agent-forge/index.ts` seed personality the same way.
 
 ## Part 5 — Verification

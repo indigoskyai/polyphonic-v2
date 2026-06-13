@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { normalizeAgentId } from "../_shared/agent-scope.ts";
+import { withModelRetry } from "../_shared/modelRetry.ts";
 
 // ============================================================================
 // EXTRACT-PERSONA: Reconstruct AI companion personality from ChatGPT history
@@ -100,7 +101,7 @@ async function callAI(
     body.response_format = { type: "json_object" };
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -109,7 +110,8 @@ async function callAI(
       "X-Title": "Polyphonic - Persona Extraction",
     },
     body: JSON.stringify(body),
-  });
+    signal: AbortSignal.timeout(60000),
+  }));
 
   if (!response.ok) {
     const errorText = await response.text();
