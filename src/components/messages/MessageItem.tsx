@@ -12,6 +12,7 @@ import SearchCitationsCard, { type Citation } from '@/components/messages/Search
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useFirstMount } from '@/lib/useFirstMount';
+import { getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 
 /* ─── Multi-model thinking helpers (kept here so MessageItem stays self-contained) ─── */
 function isMultiModelThinking(thinkingContent: string): boolean {
@@ -106,6 +107,9 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const agents = useAgentSettingsStore((s) => s.agents);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const currentThread = useThreadStore((s) =>
+    s.currentThreadId ? s.threads.find((t) => t.id === s.currentThreadId) : null,
+  );
   const threadArtifacts = useArtifactStore(
     (s) => (currentThreadId ? s.byThread[currentThreadId] ?? EMPTY_ARTIFACTS : EMPTY_ARTIFACTS),
   );
@@ -118,6 +122,15 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
   );
 
   if (!msg) return null;
+
+  const threadRuntimeMode = normalizeThreadRuntimeMode(currentThread?.runtime_mode, 'agent');
+  const isClassicAssistant =
+    msg.role === 'assistant' && threadRuntimeMode === 'classic' && !msg.agent;
+  const assistantLabel = isClassicAssistant
+    ? getChatModelLabel((msg.model as string | null) || currentThread?.selected_model || null)
+    : msg.agent === 'guardian'
+      ? 'Observer'
+      : getAgentDisplayName(msg.agent, agentNameById);
 
   const attachedArtifacts = threadArtifacts.filter((artifact) => {
     if (artifact.source_message_id === msg.id) return true;
@@ -141,11 +154,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
           </div>
         )}
         <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-          {msg.role === 'user'
-            ? 'You'
-            : msg.agent === 'guardian'
-              ? 'Observer'
-              : getAgentDisplayName(msg.agent, agentNameById)}
+          {msg.role === 'user' ? 'You' : assistantLabel}
         </div>
       </div>
 

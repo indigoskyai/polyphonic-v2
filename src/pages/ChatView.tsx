@@ -1134,7 +1134,7 @@ export default function ChatView() {
       addMessage({
         thread_id: currentThreadId, user_id: user.id, role: 'assistant',
         content: snap.content,
-        model: null, agent: snap.agent || 'luca',
+        model: null, agent: snap.agent ?? activeMessageAgent,
         thinking_content: snap.thinking || null,
         tokens_used: null, bookmarked: false,
         metadata: { recovered: true } as any,
@@ -2769,7 +2769,7 @@ export default function ChatView() {
               (isStreaming || lingeringStream != null) &&
               i === messages.length - 1 &&
               msg.role === 'assistant' &&
-              (msg.agent ?? null) === (activeAgentId ?? null) &&
+              (msg.agent ?? null) === (activeMessageAgent ?? null) &&
               Date.now() - new Date(msg.created_at).getTime() < 60_000;
             if (isLastAssistant) return null;
 
