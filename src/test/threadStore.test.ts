@@ -4,6 +4,7 @@ const supabaseMock = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   nextInsertedThread: null as any,
+  nextInsertError: null as { message?: string } | null,
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -17,7 +18,10 @@ vi.mock('@/integrations/supabase/client', () => ({
         supabaseMock.insert(payload);
         return {
           select: () => ({
-            single: () => Promise.resolve({ data: supabaseMock.nextInsertedThread }),
+            single: () => Promise.resolve({
+              data: supabaseMock.nextInsertError ? null : supabaseMock.nextInsertedThread,
+              error: supabaseMock.nextInsertError,
+            }),
           }),
         };
       },
@@ -92,6 +96,7 @@ describe('threadStore.createThread project scoping', () => {
   beforeEach(() => {
     supabaseMock.insert.mockClear();
     supabaseMock.nextInsertedThread = makeThread();
+    supabaseMock.nextInsertError = null;
     useThreadStore.setState({ threads: [], currentThreadId: null, messages: [] });
   });
 
@@ -172,6 +177,18 @@ describe('threadStore.createThread project scoping', () => {
 	      memory_enabled: true,
 	    });
 	  });
+
+  it('surfaces Supabase insert errors for preview migration diagnostics', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseMock.nextInsertError = {
+      message: 'column "runtime_mode" of relation "threads" does not exist',
+    };
+
+    await expect(useThreadStore.getState().createThread('u1', 'luca')).rejects.toThrow(
+      'Failed to create thread: column "runtime_mode" of relation "threads" does not exist',
+    );
+    consoleSpy.mockRestore();
+  });
 
 	  it('keeps empty-thread agent switches scoped across all thread identity fields', async () => {
 	    supabaseMock.update.mockClear();

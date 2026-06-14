@@ -266,11 +266,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       insertPayload.project_id = projectId;
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('threads')
       .insert(insertPayload)
       .select()
       .single();
+    if (error) {
+      console.error('[threadStore] Failed to create thread', error);
+      throw new Error(`Failed to create thread: ${error.message || 'Unknown Supabase error'}`);
+    }
     if (data) {
       const thread = data as Thread;
       set((s) => ({
@@ -280,7 +284,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       }));
       return thread.id;
     }
-    throw new Error('Failed to create thread');
+    throw new Error('Failed to create thread: Supabase returned no thread');
   },
 
   addMessage: (msg) => {
