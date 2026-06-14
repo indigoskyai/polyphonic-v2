@@ -12,6 +12,7 @@ import SearchCitationsCard, { type Citation } from '@/components/messages/Search
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
 import ArtifactCard from '@/components/canvas/ArtifactCard';
 import { useFirstMount } from '@/lib/useFirstMount';
+import { getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 
 /* ─── Multi-model thinking helpers (kept here so MessageItem stays self-contained) ─── */
 function isMultiModelThinking(thinkingContent: string): boolean {
