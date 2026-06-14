@@ -10,8 +10,18 @@ const corsHeaders = {
 };
 
 function generateCode(): string {
-  const n = Math.floor(Math.random() * 1_000_000);
-  return n.toString().padStart(6, "0");
+  // 6-digit code (0..999_999). Use crypto.getRandomValues + rejection sampling
+  // against the largest multiple of RANGE that fits in a Uint32 to eliminate
+  // modulo bias.
+  const RANGE = 1_000_000;
+  const MAX = Math.floor(0x1_0000_0000 / RANGE) * RANGE;
+  const buf = new Uint32Array(1);
+  let n: number;
+  do {
+    crypto.getRandomValues(buf);
+    n = buf[0];
+  } while (n >= MAX);
+  return (n % RANGE).toString().padStart(6, "0");
 }
 
 function generateDeviceToken(): string {
