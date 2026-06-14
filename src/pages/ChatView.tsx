@@ -284,6 +284,10 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
 }
 
+function normalizeStreamComparableContent(value: string | null | undefined) {
+  return (value || '').trim().replace(/\s+/g, ' ');
+}
+
 function LucaOnlyPill({
   label = 'luca',
   title = 'Talking to Luca',
@@ -2435,6 +2439,8 @@ export default function ChatView() {
   const isFirstTurnHandoff = !!displayFirstTurnHandoff && messages.length === 0 && !isStreaming;
   const landingHandoffPending = landingThreadEnter && messages.length === 0 && !isStreaming;
   const isEmpty = !threadId && messages.length === 0 && !isStreaming && !displayFirstTurnHandoff && !landingHandoffPending;
+  const activeStreamBody = streamingContent || lingeringStream || '';
+  const activeStreamNorm = normalizeStreamComparableContent(activeStreamBody);
 
   return isEmpty ? (
       /* ═══ LANDING STATE — centered, minimal, alive ═══ */
@@ -2761,17 +2767,23 @@ export default function ChatView() {
           {/* Message list — while a streaming bubble is settling, hide the freshly-persisted
               assistant message that mirrors it, to avoid a duplicate flash. */}
           {messages.map((msg, i) => {
-            // Hide the persisted last assistant message while the streaming
-            // bubble is still mounted, regardless of exact content match.
-            // Recency + role + agent is the dedupe key — content can drift
-            // when the chairman emits a revised body after the stub queued.
-            const isLastAssistant =
-              (isStreaming || lingeringStream != null) &&
-              i === messages.length - 1 &&
+            // Hide a fresh persisted assistant message while the streaming
+            // bubble is still mounted. The canonical row can land before
+            // the typewriter clears, and its position may race with other
+            // local rows, so content/local-stub matching closes that gap.
+            const streamingAssistantActive = isStreaming || lingeringStream != null;
+            const messageMatchesActiveStream =
+              activeStreamNorm.length > 0 &&
+              normalizeStreamComparableContent(msg.content) === activeStreamNorm;
+            const isRecentSameAssistant =
+              Date.now() - new Date(msg.created_at).getTime() < 60_000 &&
               msg.role === 'assistant' &&
-              (msg.agent ?? null) === (activeMessageAgent ?? null) &&
-              Date.now() - new Date(msg.created_at).getTime() < 60_000;
-            if (isLastAssistant) return null;
+              (msg.agent ?? null) === (activeMessageAgent ?? null);
+            const shouldHideStreamingMirror =
+              streamingAssistantActive &&
+              isRecentSameAssistant &&
+              (i === messages.length - 1 || messageMatchesActiveStream || msg.metadata?.local_stream_stub === true);
+            if (shouldHideStreamingMirror) return null;
 
             const forgeProposal = getForgeProposalMetadata(msg);
             if (forgeProposal) {
