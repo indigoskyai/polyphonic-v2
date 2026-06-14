@@ -47,6 +47,13 @@ interface CritiqueOutput {
   retire_reason: string | null;
 }
 
+interface RevisionRecord {
+  old_confidence?: unknown;
+  new_confidence?: unknown;
+  reason?: unknown;
+  timestamp?: unknown;
+}
+
 export interface ChallengeResult {
   scanned: number;
   challenged: number;
@@ -55,9 +62,11 @@ export interface ChallengeResult {
   retired: number;
   held: number;
   errors: number;
+  skipped_no_api_key?: number;
+  skipped_no_prompt?: number;
 }
 
-function parseJsonish(text: string): unknown {
+export function parseJsonish(text: string): unknown {
   if (!text) return null;
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   const candidate = fence ? fence[1] : text;
@@ -75,6 +84,41 @@ function parseJsonish(text: string): unknown {
     }
   }
   return null;
+}
+
+export function extractOpenRouterMessageText(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((block) => {
+        if (typeof block === "string") return block;
+        if (!block || typeof block !== "object") return "";
+        const b = block as Record<string, unknown>;
+        const type = typeof b.type === "string" ? b.type : "";
+        if (type && type !== "text" && type !== "output_text") return "";
+        if (typeof b.text === "string") return b.text;
+        if (typeof b.content === "string") return b.content;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (raw && typeof raw === "object") {
+    const b = raw as Record<string, unknown>;
+    if (typeof b.text === "string") return b.text;
+    if (typeof b.content === "string") return b.content;
+  }
+
+  return "";
+}
+
+function formatRevisionValue(value: unknown, fallback = "?"): string {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return fallback;
 }
 
 async function loadAgentContext(
@@ -116,11 +160,13 @@ async function callCritic(
   row: EntryRow,
   ctx: { soulSummary: string; userModelSummary: string; agentName: string },
 ): Promise<CritiqueOutput | null> {
-  const revisionsArr = Array.isArray(row.revisions) ? row.revisions : [];
+  const revisionsArr: RevisionRecord[] = Array.isArray(row.revisions)
+    ? row.revisions.filter((r): r is RevisionRecord => Boolean(r) && typeof r === "object" && !Array.isArray(r))
+    : [];
   const revisionsText = revisionsArr.length === 0
     ? "(no revisions)"
-    : revisionsArr.map((r: any, i: number) =>
-        `${i + 1}. [conf ${r.old_confidence}→${r.new_confidence}] ${r.reason || "(no reason)"} @ ${r.timestamp || "?"}`,
+    : revisionsArr.map((r, i) =>
+        `${i + 1}. [conf ${formatRevisionValue(r.old_confidence)}→${formatRevisionValue(r.new_confidence)}] ${formatRevisionValue(r.reason, "(no reason)")} @ ${formatRevisionValue(r.timestamp)}`,
       ).join("\n");
 
   const filled = promptTemplate
@@ -152,17 +198,38 @@ async function callCritic(
           { role: "user", content: "Challenge this entry. JSON only." },
         ],
         temperature: 0.4,
-        max_tokens: 500,
+        max_tokens: 1500,
+        reasoning: {
+          effort: "none",
+          exclude: true,
+        },
       }),
       signal: ctrl.signal,
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      console.warn(`[challenge] critic HTTP ${resp.status} for ${row.id}: ${body.slice(0, 240)}`);
+      return null;
+    }
     const data = await resp.json();
-    const text: string = data?.choices?.[0]?.message?.content || "";
+    const raw = data?.choices?.[0]?.message?.content;
+    const text = extractOpenRouterMessageText(raw);
+    if (!text) {
+      console.warn(`[challenge] critic empty text for ${row.id}; content_shape=${Array.isArray(raw) ? "array" : typeof raw}`);
+      return null;
+    }
     const parsed = parseJsonish(text) as CritiqueOutput | null;
-    if (!parsed || typeof parsed.suggested_confidence !== "number") return null;
+    if (!parsed) {
+      console.warn(`[challenge] critic JSON parse failed for ${row.id}: ${text.slice(0, 240)}`);
+      return null;
+    }
+    if (typeof parsed.suggested_confidence !== "number") {
+      console.warn(`[challenge] critic invalid schema for ${row.id}: ${JSON.stringify(parsed).slice(0, 240)}`);
+      return null;
+    }
     return parsed;
-  } catch {
+  } catch (err) {
+    console.warn(`[challenge] critic request failed for ${row.id}:`, err instanceof Error ? err.message : String(err));
     return null;
   } finally {
     clearTimeout(t);
@@ -176,6 +243,8 @@ function agentNameFor(id: string): string {
 export async function challengeAllStaleEntries(supabase: SupabaseClient): Promise<ChallengeResult> {
   const result: ChallengeResult = {
     scanned: 0, challenged: 0, revised_down: 0, revised_up: 0, retired: 0, held: 0, errors: 0,
+    skipped_no_api_key: 0,
+    skipped_no_prompt: 0,
   };
 
   const cutoff = new Date(Date.now() - CHALLENGE_AGE_DAYS * 86_400_000).toISOString();
@@ -207,12 +276,22 @@ export async function challengeAllStaleEntries(supabase: SupabaseClient): Promis
       apiKey = (typeof keyData === "string" ? keyData.trim() : "") || null;
       apiKeyCache.set(row.user_id, apiKey);
     }
-    if (!apiKey) continue;
+    if (!apiKey) {
+      result.skipped_no_api_key = (result.skipped_no_api_key || 0) + 1;
+      console.info(`[challenge] skipped ${row.id}: no user OpenRouter key`, { user_id: row.user_id, agent_id: row.agent_id });
+      continue;
+    }
     if (!promptCache) {
       try { promptCache = await loadPrompt("challenge"); }
-      catch { /* best effort */ }
+      catch (err) {
+        console.warn("[challenge] prompt load failed:", err instanceof Error ? err.message : String(err));
+      }
     }
-    if (!promptCache) continue;
+    if (!promptCache) {
+      result.skipped_no_prompt = (result.skipped_no_prompt || 0) + 1;
+      console.warn(`[challenge] skipped ${row.id}: challenge prompt unavailable`);
+      continue;
+    }
 
     const ctx = await loadAgentContext(supabase, row.user_id, row.agent_id);
     const critique = await callCritic(apiKey, promptCache, row, {
