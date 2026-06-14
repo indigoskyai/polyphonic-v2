@@ -2262,17 +2262,28 @@ export default function ChatView() {
     }, 80);
   }, [landingAutosend, landingHiddenHandoff, user?.id, isStreaming, firstTurnHandoff, threadId, currentThreadId, input]);
 
-  // Auto-disarm ensemble after a successful send (locked stays on)
+  // Auto-disarm one-shot ensemble after a successful send (locked stays on).
+  // Agent Mode is sticky within the current thread until the user toggles it
+  // off or opens a fresh conversation.
   const prevStreamingRef = useRef(isStreaming);
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming && ensembleArmed) {
       setEnsembleArmed(false);
     }
-    if (prevStreamingRef.current && !isStreaming && agentModeArmed) {
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, ensembleArmed]);
+
+  const previousThreadForAgentModeRef = useRef<string | null>(currentThreadId ?? null);
+  useEffect(() => {
+    const nextThreadId = currentThreadId ?? null;
+    if (previousThreadForAgentModeRef.current === nextThreadId) return;
+    previousThreadForAgentModeRef.current = nextThreadId;
+
+    const enteredFreshChat = !nextThreadId || (messages.length === 0 && !isStreaming && !firstTurnHandoff);
+    if (agentModeArmed && enteredFreshChat) {
       setAgentModeArmed(false);
     }
-    prevStreamingRef.current = isStreaming;
-  }, [isStreaming, ensembleArmed, agentModeArmed]);
+  }, [currentThreadId, messages.length, isStreaming, firstTurnHandoff, agentModeArmed]);
 
   useEffect(() => {
     if (activeAgentId !== 'luca' && agentModeArmed) {

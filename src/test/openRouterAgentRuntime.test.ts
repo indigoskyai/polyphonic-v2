@@ -69,6 +69,9 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('onToggleAgentMode={() => setAgentModeArmed');
     expect(modesDropdown).toContain('Agent runtime');
     expect(source).toContain("Message Luca (agent)");
+    expect(source).toContain('previousThreadForAgentModeRef');
+    expect(source).toContain('enteredFreshChat');
+    expect(source).not.toContain('prevStreamingRef.current && !isStreaming && agentModeArmed');
   });
 
   it('surfaces agent runtime tool events and parses SSE blocks robustly', () => {
