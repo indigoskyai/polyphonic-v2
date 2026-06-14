@@ -47,8 +47,18 @@ export function defaultRuntimeForAgent(agentId: string | null | undefined): Thre
   return agentId && agentId !== 'luca' ? 'agent' : 'classic';
 }
 
-export function getChatModelLabel(modelId: string | null | undefined): string {
+const MODEL_ID_ALIASES: Record<string, string> = {
+  'anthropic/claude-opus-4.7': 'anthropic/claude-opus-4-7',
+  'anthropic/claude-4.7-opus-20260416': 'anthropic/claude-opus-4-7',
+};
+
+export function normalizeChatModelId(modelId: string | null | undefined): string {
   const id = modelId || DEFAULT_CHAT_MODEL;
+  return MODEL_ID_ALIASES[id] || id;
+}
+
+export function getChatModelLabel(modelId: string | null | undefined): string {
+  const id = normalizeChatModelId(modelId);
   return CHAT_MODEL_OPTIONS.find((model) => model.id === id)?.name || id.split('/').pop() || id;
 }
 
