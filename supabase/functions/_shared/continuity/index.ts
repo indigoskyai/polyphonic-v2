@@ -1,6 +1,7 @@
 export {
   buildLucaPromptPartsFromContinuity,
   buildThreadContinuityNote,
+  buildContinuityBridge,
   emptyHypomnema,
   formatBeliefsBlock,
   formatFunctionalMemoryBlock,
@@ -8,6 +9,7 @@ export {
   loadContinuityPacket,
   loadFunctionalMemories,
   logContinuityDiagnostics,
+  summarizeContinuityPacket,
   type ContinuityDiagnostic,
   type ContinuityHistoryMessage,
   type ContinuityLayer,

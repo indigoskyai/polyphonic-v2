@@ -604,6 +604,7 @@ serve(async (req) => {
         includeSkills: !classicRuntime && agentIsSystemLuca && backend.billingTier !== "guest",
         includeEmotionalState: !classicRuntime && backend.billingTier !== "guest",
         includeBeliefs: !classicRuntime && backend.billingTier !== "guest",
+        continuityBridgeMode: classicRuntime ? "classic" : "agent",
       });
       logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
@@ -670,6 +671,7 @@ serve(async (req) => {
       const enrichedSystemPrompt = classicRuntime
         ? buildClassicChatSystemPrompt({
             selectedModel: selectedClassicModel,
+            continuityBridge: continuity.continuityBridge,
             continuityNote,
             functionalMemoryBlock: continuity.functionalMemoryBlock,
             mnemosBlock: continuity.mnemosBlock,
@@ -689,6 +691,7 @@ serve(async (req) => {
               agentPrompt,
               identityDocs: continuity.identityDocs,
               projectContextBlock,
+              continuityBridge: continuity.continuityBridge,
               hypomnemaBlock: continuity.hypomnema.block,
               continuityNote,
             });

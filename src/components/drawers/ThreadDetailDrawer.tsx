@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DrawerHeader,
   DrawerCrumb,
@@ -18,6 +18,7 @@ import { useThreadStore } from '@/stores/threadStore';
 import { supabase } from '@/integrations/supabase/client';
 import ActivityTimeline, { activityLogToTimeline } from '@/components/timeline/ActivityTimeline';
 import { activityReferencesThread } from '@/lib/threadActivity';
+import { getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 
 interface ThreadDetailPayload {
   threadId?: string;
@@ -49,6 +50,41 @@ interface ParticipantSummary {
   turns: number;
   tokens: number;
   model: string | null;
+}
+
+interface ContinuityDiagnosticRow {
+  layer: string;
+  status: 'ok' | 'empty' | 'skipped' | 'error';
+  count: number | null;
+  rendered: number | null;
+  message: string | null;
+}
+
+interface ContinuityInspectPayload {
+  ok: boolean;
+  generated_at?: string;
+  runtime_mode?: string;
+  selected_model?: string | null;
+  memory_enabled?: boolean;
+  bridge?: string;
+  hypomnema?: { count: number; rendered: number; items: string[] };
+  functional_memory?: Array<{
+    id: string;
+    type: string;
+    confidence: number;
+    source?: string;
+    content: string;
+    tags: string[];
+  }>;
+  mnemos?: Array<{
+    id: string | null;
+    activation: number | null;
+    path: string | null;
+    type: string | null;
+    content: string;
+    tags: string[];
+  }>;
+  diagnostics?: ContinuityDiagnosticRow[];
 }
 
 function relativeTime(iso: string): string {
@@ -83,10 +119,6 @@ function agentLabel(agent: string): string {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-function agentInitial(agent: string): string {
-  return agentLabel(agent).charAt(0) || 'L';
-}
-
 function agentAvatarClass(agent: string): string {
   const normalized = agent.toLowerCase();
   if (['luca', 'anima', 'vektor'].includes(normalized)) return ` participant__avatar--${normalized}`;
@@ -101,27 +133,36 @@ function agentRole(agent: string, model: string | null): string {
   return `AGENT · ${modelLabel}`;
 }
 
+function modelParticipantRole(model: string | null): string {
+  return `MODEL · ${model ? model.toUpperCase() : 'MODEL UNRECORDED'}`;
+}
+
 function formatCount(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function summarizeParticipants(messages: MessageRow[], fallbackAgent: string): ParticipantSummary[] {
+function summarizeParticipants(
+  messages: MessageRow[],
+  options: { fallbackAgent: string; runtimeMode: string; selectedModel?: string | null },
+): ParticipantSummary[] {
   const map = new Map<string, ParticipantSummary>();
   messages.forEach((message) => {
     if (message.role === 'user') return;
-    const agent = (message.agent || fallbackAgent || 'luca').toLowerCase();
-    const existing = map.get(agent);
+    const isClassicModelTurn = options.runtimeMode === 'classic' && !message.agent;
+    const model = message.model || options.selectedModel || null;
+    const id = isClassicModelTurn ? `model:${model || 'unknown'}` : (message.agent || options.fallbackAgent || 'luca').toLowerCase();
+    const existing = map.get(id);
     if (existing) {
       existing.turns += 1;
       existing.tokens += message.tokens_used ?? 0;
       if (message.model) existing.model = message.model;
-      existing.role = agentRole(agent, existing.model);
+      existing.role = isClassicModelTurn ? modelParticipantRole(existing.model || model) : agentRole(id, existing.model);
       return;
     }
-    map.set(agent, {
-      id: agent,
-      label: agentLabel(agent),
-      role: agentRole(agent, message.model),
+    map.set(id, {
+      id,
+      label: isClassicModelTurn ? getChatModelLabel(model) : agentLabel(id),
+      role: isClassicModelTurn ? modelParticipantRole(model) : agentRole(id, message.model),
       turns: 1,
       tokens: message.tokens_used ?? 0,
       model: message.model,
@@ -129,18 +170,68 @@ function summarizeParticipants(messages: MessageRow[], fallbackAgent: string): P
   });
 
   if (map.size === 0) {
-    const agent = (fallbackAgent || 'luca').toLowerCase();
-    map.set(agent, {
-      id: agent,
-      label: agentLabel(agent),
-      role: agentRole(agent, null),
+    const isClassic = options.runtimeMode === 'classic';
+    const id = isClassic ? `model:${options.selectedModel || 'unknown'}` : (options.fallbackAgent || 'luca').toLowerCase();
+    map.set(id, {
+      id,
+      label: isClassic ? getChatModelLabel(options.selectedModel) : agentLabel(id),
+      role: isClassic ? modelParticipantRole(options.selectedModel || null) : agentRole(id, null),
       turns: 0,
       tokens: 0,
-      model: null,
+      model: isClassic ? options.selectedModel || null : null,
     });
   }
 
   return Array.from(map.values()).sort((a, b) => b.turns - a.turns);
+}
+
+function participantInitial(participant: ParticipantSummary): string {
+  return participant.label.charAt(0).toUpperCase() || 'M';
+}
+
+function layerLabel(layer: string): string {
+  return layer.replace(/_/g, ' ');
+}
+
+function continuityStatusColor(status: ContinuityDiagnosticRow['status']): string {
+  if (status === 'ok') return 'var(--success, #7bd88f)';
+  if (status === 'error') return 'var(--danger, #ff6b6b)';
+  if (status === 'skipped') return 'var(--text-ghost)';
+  return 'var(--text-tertiary)';
+}
+
+function compactBridge(value: string | undefined): string {
+  return (value || '')
+    .replace(/^## .+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function ContinuityList({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: string[];
+  empty: string;
+}) {
+  return (
+    <div style={{ display: 'grid', gap: 7 }}>
+      <div style={{ color: 'var(--text-ghost)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{title}</div>
+      {items.length > 0 ? (
+        <div style={{ display: 'grid', gap: 7 }}>
+          {items.slice(0, 4).map((item, index) => (
+            <div key={`${title}-${index}`} style={{ color: 'var(--text-soft)', fontSize: 12, lineHeight: 1.45 }}>
+              {item}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ color: 'var(--text-ghost)', fontSize: 12 }}>{empty}</div>
+      )}
+    </div>
+  );
 }
 
 export default function ThreadDetailDrawer() {
@@ -159,6 +250,27 @@ export default function ThreadDetailDrawer() {
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const [continuity, setContinuity] = useState<ContinuityInspectPayload | null>(null);
+  const [continuityLoading, setContinuityLoading] = useState(false);
+  const [continuityError, setContinuityError] = useState<string | null>(null);
+
+  const loadContinuity = useCallback(async () => {
+    if (!threadId) return;
+    setContinuityLoading(true);
+    setContinuityError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('continuity-inspect', {
+        body: { thread_id: threadId },
+      });
+      if (error) throw error;
+      setContinuity(data as ContinuityInspectPayload);
+    } catch (err) {
+      setContinuity(null);
+      setContinuityError(err instanceof Error ? err.message : 'Could not load continuity');
+    } finally {
+      setContinuityLoading(false);
+    }
+  }, [threadId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +309,10 @@ export default function ThreadDetailDrawer() {
     load();
     return () => { cancelled = true; };
   }, [threadId, thread?.user_id]);
+
+  useEffect(() => {
+    void loadContinuity();
+  }, [loadContinuity]);
 
   useEffect(() => {
     if (!threadId || !thread?.user_id) return;
@@ -261,7 +377,21 @@ export default function ThreadDetailDrawer() {
   const turns = messageRows.length;
   const tokens = messageRows.reduce((sum, message) => sum + (message.tokens_used ?? 0), 0);
   const primaryModel = [...messageRows].reverse().find((message) => message.model)?.model ?? null;
-  const participants = summarizeParticipants(messageRows, thread.agent_id || 'luca');
+  const runtimeMode = normalizeThreadRuntimeMode(thread.runtime_mode, 'agent');
+  const participants = summarizeParticipants(messageRows, {
+    fallbackAgent: thread.agent_id || 'luca',
+    runtimeMode,
+    selectedModel: thread.selected_model || primaryModel,
+  });
+  const bridgeText = compactBridge(continuity?.bridge);
+  const degradedLayers = continuity?.diagnostics?.filter((diagnostic) => diagnostic.status === 'error') ?? [];
+  const continuityHasSignal = Boolean(
+    bridgeText ||
+    continuity?.hypomnema?.items?.length ||
+    continuity?.functional_memory?.length ||
+    continuity?.mnemos?.length ||
+    degradedLayers.length,
+  );
 
   const commitRename = async () => {
     const v = renameDraft.trim();
@@ -344,7 +474,7 @@ export default function ThreadDetailDrawer() {
           <div className="participant-list">
             {participants.map((participant) => (
               <div key={participant.id} className="participant">
-                <div className={`participant__avatar${agentAvatarClass(participant.id)}`}>{agentInitial(participant.id)}</div>
+                <div className={`participant__avatar${agentAvatarClass(participant.id)}`}>{participantInitial(participant)}</div>
                 <div className="participant__body">
                   <div className="participant__name">{participant.label}</div>
                   <div className="participant__role">{participant.role}</div>
@@ -356,6 +486,77 @@ export default function ThreadDetailDrawer() {
               </div>
             ))}
           </div>
+        </DrawerSection>
+
+        <DrawerSection>
+          <DrawerSectionLabel>CONTINUITY</DrawerSectionLabel>
+          {continuityLoading ? (
+            <EmptyState text="Loading continuity..." />
+          ) : continuityError ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              <p style={{ color: 'var(--danger, #ff6b6b)', fontSize: 12, margin: 0 }}>{continuityError}</p>
+              <Pill variant="ghost" size="xs" onClick={() => { void loadContinuity(); }}>Retry</Pill>
+            </div>
+          ) : !continuityHasSignal ? (
+            <EmptyState text="No continuity signal loaded for this thread yet." />
+          ) : (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div className="meta-kv">
+                <div className="meta-kv__row"><span className="meta-kv__k">mode</span><span className="meta-kv__v">{continuity?.runtime_mode || '—'}</span></div>
+                <div className="meta-kv__row"><span className="meta-kv__k">memory</span><span className="meta-kv__v">{continuity?.memory_enabled === false ? 'off' : 'on'}</span></div>
+                <div className="meta-kv__row"><span className="meta-kv__k">updated</span><span className="meta-kv__v">{continuity?.generated_at ? absTime(continuity.generated_at) : '—'}</span></div>
+              </div>
+
+              {bridgeText && (
+                <div style={{ color: 'var(--text-soft)', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {bridgeText}
+                </div>
+              )}
+
+              {degradedLayers.length > 0 && (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: 'var(--danger, #ff6b6b)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Degraded</div>
+                  {degradedLayers.map((diagnostic) => (
+                    <div key={diagnostic.layer} style={{ color: 'var(--text-soft)', fontSize: 12 }}>
+                      {layerLabel(diagnostic.layer)}{diagnostic.message ? ` · ${diagnostic.message}` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <ContinuityList
+                title={`Hypomnema · ${continuity?.hypomnema?.rendered ?? 0}`}
+                items={continuity?.hypomnema?.items ?? []}
+                empty="No interior thread loaded."
+              />
+              <ContinuityList
+                title={`Reliable memory · ${continuity?.functional_memory?.length ?? 0}`}
+                items={(continuity?.functional_memory ?? []).map((memory) => memory.content)}
+                empty="No reliable memories matched this thread."
+              />
+              <ContinuityList
+                title={`Mnemos · ${continuity?.mnemos?.length ?? 0}`}
+                items={(continuity?.mnemos ?? []).map((item) => item.content)}
+                empty="No associative traces matched this focus."
+              />
+
+              {continuity?.diagnostics && continuity.diagnostics.length > 0 && (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: 'var(--text-ghost)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Layer health</div>
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    {continuity.diagnostics.map((diagnostic) => (
+                      <div key={diagnostic.layer} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                        <span style={{ color: 'var(--text-soft)' }}>{layerLabel(diagnostic.layer)}</span>
+                        <span style={{ color: continuityStatusColor(diagnostic.status) }}>
+                          {diagnostic.status}{diagnostic.rendered != null ? ` · ${diagnostic.rendered}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DrawerSection>
 
         <DrawerSection>
@@ -373,6 +574,7 @@ export default function ThreadDetailDrawer() {
           {thread.pinned ? 'Unpin' : 'Pin'}
         </Pill>
         <Pill variant="ghost" size="xs" onClick={exportJSON}>Export</Pill>
+        <Pill variant="ghost" size="xs" onClick={() => { void loadContinuity(); }}>Refresh continuity</Pill>
         <DrawerFooterSep />
         <Pill variant="ghost" size="xs" onClick={close}>Close</Pill>
       </DrawerFooter>

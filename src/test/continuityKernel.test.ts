@@ -7,6 +7,7 @@ import {
   loadFunctionalMemories,
   loadContinuityPacket,
   removeCurrentUserMessageFromHistory,
+  summarizeContinuityPacket,
   type ContinuityLoaders,
   type FunctionalMemory,
 } from '../../supabase/functions/_shared/continuity/kernel';
@@ -16,7 +17,11 @@ import { loadOrCreateLucaIdentity } from '../../supabase/functions/_shared/agent
 import { sanitizeContinuityBoundaryText } from '../../supabase/functions/_shared/continuity/exclusions';
 import type { ActivationResult, Engram } from '../../supabase/functions/_shared/mnemos/types';
 
-const supabaseStub = {} as any;
+type ContinuitySupabaseStub = Parameters<typeof loadContinuityPacket>[0];
+type LucaIdentitySupabaseStub = Parameters<typeof loadOrCreateLucaIdentity>[0];
+type MemoryRowStub = Partial<FunctionalMemory> & Record<string, unknown>;
+
+const supabaseStub = {} as ContinuitySupabaseStub;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -61,8 +66,8 @@ function functionalMemorySupabaseStub({
   matched = [],
   durable = [],
 }: {
-  matched?: any[];
-  durable?: any[];
+  matched?: MemoryRowStub[];
+  durable?: MemoryRowStub[];
 }) {
   return {
     rpc: async () => ({ data: matched, error: null }),
@@ -72,7 +77,7 @@ function functionalMemorySupabaseStub({
       order() { return this; },
       limit() { return Promise.resolve({ data: durable, error: null }); },
     }),
-  } as any;
+  } as unknown as ContinuitySupabaseStub;
 }
 
 describe('Continuity Kernel read path', () => {
@@ -167,16 +172,25 @@ describe('Continuity Kernel read path', () => {
     expect(packet.skillsBlock).toContain('polish-pass');
     expect(packet.beliefsBlock).toContain('continuity should be carried');
     expect(packet.continuityNote).toContain('idle for 4 days');
+    expect(packet.continuityBridge).toContain('## continuity bridge');
+    expect(packet.continuityBridge).toContain('Let this settle before answering');
+    expect(packet.continuityBridge).toContain('Already sitting with');
+    expect(packet.continuityBridge).toContain('Reliable recall');
+    expect(packet.continuityBridge).toContain('Mnemos pull');
+    expect(packet.continuityBridge).not.toContain('dossier');
     expect(packet.diagnostics.filter((d) => d.status === 'error')).toHaveLength(0);
 
     const prompt = buildLucaSystemPrompt(buildLucaPromptPartsFromContinuity(packet));
     const pendingIndex = prompt.indexOf('## Pending revisions');
+    const bridgeIndex = prompt.indexOf('## continuity bridge');
     const hypomnemaIndex = prompt.indexOf("## what i'm sitting with");
     const functionalIndex = prompt.indexOf('## what i reliably remember');
     const mnemosIndex = prompt.indexOf('## associations moving underneath');
     const skillsIndex = prompt.indexOf("## Relevant skills you've developed");
 
     expect(pendingIndex).toBeLessThan(hypomnemaIndex);
+    expect(pendingIndex).toBeLessThan(bridgeIndex);
+    expect(bridgeIndex).toBeLessThan(hypomnemaIndex);
     expect(hypomnemaIndex).toBeLessThan(functionalIndex);
 	  expect(functionalIndex).toBeLessThan(mnemosIndex);
 	  expect(mnemosIndex).toBeLessThan(skillsIndex);
@@ -218,8 +232,12 @@ describe('Continuity Kernel read path', () => {
 	    includeSkills: false,
 	    includeEmotionalState: false,
 	    includeBeliefs: false,
+	    continuityBridgeMode: 'classic',
 	  }, loaders);
 
+	  expect(packet.continuityBridge).toContain('## quiet continuity bridge');
+	  expect(packet.continuityBridge).toContain('Use this only as background continuity for direct chat');
+	  expect(packet.continuityBridge).not.toContain('Already sitting with');
 	  expect(memoryCalls).toEqual(['classic:shared', 'classic:family:openai']);
 	  expect(mnemosCalls).toEqual(['classic:shared', 'classic:family:openai']);
 	  expect(packet.functionalMemories.map((memory) => memory.id)).toEqual([
@@ -294,11 +312,53 @@ describe('Continuity Kernel read path', () => {
     expect(packet.functionalMemoryBlock).toBe('');
     expect(packet.hypomnema.block).toContain('needs simplification');
     expect(packet.mnemosBlock).toContain('substrate still carries associations');
+    expect(packet.continuityBridge).toContain('functional_memory is degraded');
+    expect(packet.continuityBridge).toContain('Mnemos pull');
     expect(packet.diagnostics).toContainEqual(expect.objectContaining({
       layer: 'functional_memory',
       status: 'error',
       message: 'memory rpc unavailable',
     }));
+  });
+
+  it('summarizes Mnemos tool output from activation result engrams', async () => {
+    const result = engram('The shape arrives before clean recall, but the association is real.');
+    result.activation = 0.73;
+    result.path = 'direct -> related';
+    result.engram.id = 'engram-naturalization';
+    result.engram.tags = ['felt-continuity'];
+
+    const packet = await loadContinuityPacket(supabaseStub, {
+      userId: 'u1',
+      agentId: 'luca',
+      threadId: 't1',
+      userMessage: 'how has memory felt?',
+    }, {
+      history: async () => [],
+      identity: async () => ({ soulMd: '', selfModel: '', userModel: '', convictions: '' }),
+      pendingRevisions: async () => [],
+      hypomnema: async () => ({ block: '', count: 0, rendered: 0 }),
+      functionalMemories: async () => [],
+      mnemos: async () => [result],
+      skills: async () => [],
+      emotionalState: async () => null,
+      beliefs: async () => [],
+    });
+
+    const summary = summarizeContinuityPacket(packet, 'memory feel');
+    expect(summary.mnemos[0]).toMatchObject({
+      id: 'engram-naturalization',
+      activation: 0.73,
+      path: 'direct -> related',
+      type: 'semantic',
+      content: 'The shape arrives before clean recall, but the association is real.',
+      tags: ['felt-continuity'],
+    });
+    expect(summary.diagnostics).toContainEqual(expect.objectContaining({
+      layer: 'mnemos',
+      status: 'ok',
+    }));
+    expect(JSON.stringify(summary.mnemos[0])).not.toContain('JSON.stringify');
   });
 
   it('loads custom agent identity without seeding Luca starter docs', async () => {
@@ -321,7 +381,7 @@ describe('Continuity Kernel read path', () => {
           return Promise.resolve({ error: null });
         },
       }),
-    } as any;
+    } as unknown as LucaIdentitySupabaseStub;
 
     const docs = await loadOrCreateLucaIdentity(supabase, 'u1', 'sophia');
 

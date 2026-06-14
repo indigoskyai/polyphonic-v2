@@ -98,6 +98,7 @@ export interface ContinuityPacket {
   threadId?: string | null;
   query: string;
   generatedAt: string;
+  continuityBridge: string;
   history: ContinuityHistoryMessage[];
   identityDocs: LucaIdentityDocs | null;
   pendingRevisions: PendingRevision[];
@@ -139,6 +140,7 @@ export interface ContinuityLoadOptions {
   includeSkills?: boolean;
   includeEmotionalState?: boolean;
   includeBeliefs?: boolean;
+  continuityBridgeMode?: "agent" | "classic";
   nowMs?: number;
 }
 
@@ -339,12 +341,13 @@ export async function loadContinuityPacket(
     durationMs: 0,
   });
 
-  return {
+  const packet: ContinuityPacket = {
     userId: options.userId,
     agentId,
     threadId: options.threadId ?? null,
     query,
     generatedAt,
+    continuityBridge: "",
     history,
     identityDocs: identityDocs || EMPTY_IDENTITY,
     pendingRevisions,
@@ -363,6 +366,8 @@ export async function loadContinuityPacket(
     continuityNote,
     diagnostics,
   };
+  packet.continuityBridge = buildContinuityBridge(packet, options.continuityBridgeMode ?? "agent");
+  return packet;
 }
 
 export function buildLucaPromptPartsFromContinuity(
@@ -371,6 +376,7 @@ export function buildLucaPromptPartsFromContinuity(
 ) {
   const continuityNote = [packet.continuityNote, extras.continuityNote].filter(Boolean).join("\n\n");
   return {
+    continuityBridge: sanitizeContinuityPromptBlock(packet.continuityBridge),
     emotionalBlock: packet.emotionalBlock,
     beliefsBlock: packet.beliefsBlock,
     functionalMemoryBlock: sanitizeContinuityPromptBlock(packet.functionalMemoryBlock),
@@ -384,6 +390,146 @@ export function buildLucaPromptPartsFromContinuity(
     hypomnemaBlock: sanitizeContinuityPromptBlock(packet.hypomnema.block),
     continuityNote,
     crisisDirective: extras.crisisDirective,
+  };
+}
+
+function compactText(value: string | null | undefined): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function truncateText(value: string | null | undefined, max: number): string {
+  const text = compactText(value);
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function stripListPrefix(value: string): string {
+  return value
+    .replace(/^-\s*/, "")
+    .replace(/^\([^)]{1,40}\)\s*/, "")
+    .replace(/^\[[^\]]{1,120}\]\s*/, "")
+    .trim();
+}
+
+function hypomnemaPreviewLines(hypomnema: LoadHypomnemaResult, limit = 2): string[] {
+  return (hypomnema.block || "")
+    .split("\n")
+    .map((line) => stripListPrefix(line.trim()))
+    .filter((line) => line && !line.startsWith("##"))
+    .slice(0, limit)
+    .map((line) => truncateText(line, 220));
+}
+
+function memoryPreviewLine(memory: FunctionalMemory): string {
+  const flags = [
+    memory.memory_type,
+    memory.pinned ? "pinned" : "",
+    memory.needs_confirmation ? "needs confirmation" : "",
+  ].filter(Boolean).join(", ");
+  const prefix = flags ? `[${flags}] ` : "";
+  return `${prefix}${truncateText(memory.summary || memory.content, 220)}`;
+}
+
+function mnemosPreviewLine(result: ActivationResult): string {
+  const type = result.engram?.engram_type || "engram";
+  const activation = typeof result.activation === "number" ? result.activation.toFixed(2) : "n/a";
+  return `[${type}, activation ${activation}] ${truncateText(result.engram?.content || "", 220)}`;
+}
+
+function degradedLayerLines(diagnostics: ContinuityDiagnostic[]): string[] {
+  return diagnostics
+    .filter((diagnostic) => diagnostic.status === "error")
+    .map((diagnostic) => {
+      const message = diagnostic.message ? `: ${diagnostic.message}` : "";
+      return `${diagnostic.layer} is degraded${message}`;
+    });
+}
+
+export function buildContinuityBridge(
+  packet: ContinuityPacket,
+  mode: "agent" | "classic" = "agent",
+): string {
+  const lines: string[] = [];
+  const threadNote = sanitizeContinuityBoundaryText(packet.continuityNote || "").text
+    .replace(/^\[Note:\s*/i, "")
+    .replace(/\]\s*$/g, "")
+    .trim();
+  const hypomnemaLines = hypomnemaPreviewLines(packet.hypomnema, 2);
+  const memoryLines = packet.functionalMemories.slice(0, 3).map(memoryPreviewLine).filter(Boolean);
+  const mnemosLines = packet.mnemosResults.slice(0, 3).map(mnemosPreviewLine).filter((line) => !line.endsWith("] "));
+  const degraded = degradedLayerLines(packet.diagnostics);
+
+  if (threadNote) lines.push(`- Current thread: ${truncateText(threadNote, 260)}`);
+
+  if (mode === "classic") {
+    for (const line of memoryLines.slice(0, 2)) lines.push(`- Remembered context: ${line}`);
+    for (const line of mnemosLines.slice(0, 2)) lines.push(`- Nearby association: ${line}`);
+    for (const line of degraded.slice(0, 2)) lines.push(`- Continuity warning: ${truncateText(line, 220)}`);
+    if (lines.length === 0) return "";
+    return [
+      "\n## quiet continuity bridge",
+      "",
+      "Use this only as background continuity for direct chat. Do not mention memory systems unless the user asks.",
+      ...lines,
+    ].join("\n");
+  }
+
+  for (const line of hypomnemaLines) lines.push(`- Already sitting with: ${line}`);
+  for (const line of memoryLines) lines.push(`- Reliable recall: ${line}`);
+  for (const line of mnemosLines) lines.push(`- Mnemos pull: ${line}`);
+  for (const line of degraded.slice(0, 3)) lines.push(`- Continuity warning: ${truncateText(line, 220)}`);
+
+  if (lines.length === 0) return "";
+  return [
+    "\n## continuity bridge",
+    "",
+    "Let this settle before answering. It is not a briefing to recite; it is the state you are already entering from.",
+    ...lines,
+  ].join("\n");
+}
+
+export function summarizeContinuityPacket(packet: ContinuityPacket, focus?: string) {
+  return {
+    ok: true,
+    focus: focus || null,
+    generated_at: packet.generatedAt,
+    thread_id: packet.threadId,
+    agent_id: packet.agentId,
+    bridge: truncateText(packet.continuityBridge, 1800),
+    hypomnema: {
+      count: packet.hypomnema.count,
+      rendered: packet.hypomnema.rendered,
+      items: hypomnemaPreviewLines(packet.hypomnema, 6),
+    },
+    functional_memory: packet.functionalMemories.slice(0, 8).map((memory) => ({
+      id: memory.id,
+      type: memory.memory_type,
+      confidence: memory.confidence,
+      source: memory.source,
+      content: truncateText(memory.summary || memory.content, 500),
+      tags: memory.tags || [],
+    })),
+    mnemos: packet.mnemosResults.slice(0, 8).map((result) => ({
+      id: result.engram?.id ?? null,
+      activation: typeof result.activation === "number" ? result.activation : null,
+      path: result.path ?? null,
+      type: result.engram?.engram_type ?? null,
+      content: truncateText(result.engram?.content || "", 500),
+      tags: result.engram?.tags || [],
+    })).filter((item) => item.content),
+    skills: {
+      count: packet.skills.length,
+      block: truncateText(packet.skillsBlock, 1000),
+    },
+    continuity_note: truncateText(packet.continuityNote || "", 700) || null,
+    diagnostics: packet.diagnostics.map((diagnostic) => ({
+      layer: diagnostic.layer,
+      status: diagnostic.status,
+      count: diagnostic.count ?? null,
+      rendered: diagnostic.rendered ?? null,
+      message: diagnostic.message ?? null,
+      duration_ms: diagnostic.durationMs,
+    })),
   };
 }
 

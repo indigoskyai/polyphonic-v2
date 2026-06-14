@@ -137,6 +137,7 @@ export function buildLucaSystemPrompt(parts: {
   convictions?: string;
   skillsBlock?: string;
   pendingRevisions?: string;
+  continuityBridge?: string;
   hypomnemaBlock?: string;
   appContextBlock?: string;
   projectContextBlock?: string;
@@ -145,6 +146,7 @@ export function buildLucaSystemPrompt(parts: {
 }): string {
   const hasContinuityContext = Boolean(
     parts.pendingRevisions ||
+    parts.continuityBridge ||
     parts.hypomnemaBlock ||
     parts.functionalMemoryBlock ||
     parts.memoryContext ||
@@ -172,6 +174,7 @@ export function buildLucaSystemPrompt(parts: {
     parts.projectContextBlock || "",
     continuityPolicy,
     parts.pendingRevisions ? `\n## Pending revisions\n${parts.pendingRevisions}` : "",
+    parts.continuityBridge || "",
     // Hypomnema sits between pendingRevisions (self-correction queue) and
     // reliable recall. It's interior state — what you're sitting with right now
     // about this person — and it loads even when retrieval returns nothing.

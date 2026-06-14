@@ -5,6 +5,7 @@ export type CustomAgentPromptParts = {
   agentPrompt?: string | null;
   identityDocs?: LucaIdentityDocs | null;
   projectContextBlock?: string;
+  continuityBridge?: string;
   hypomnemaBlock?: string;
   continuityNote?: string;
   crisisDirective?: string;
@@ -48,6 +49,7 @@ export function buildCustomAgentSystemPrompt(parts: CustomAgentPromptParts): str
     `## Agent instructions\n${agentPrompt}`,
     formatCustomIdentityDocs(parts.identityDocs),
     parts.projectContextBlock || "",
+    parts.continuityBridge || "",
     parts.hypomnemaBlock || "",
     parts.continuityNote || "",
     parts.crisisDirective || "",

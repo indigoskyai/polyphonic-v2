@@ -3,7 +3,7 @@ import { z } from "npm:zod@4.4.3/v4";
 import { logActivity } from "../activity-log.ts";
 import type { PendingRevision } from "../agents/pending-revisions.ts";
 import type { ContinuityPacket } from "../continuity/index.ts";
-import { queueContinuityTurnWrites } from "../continuity/index.ts";
+import { queueContinuityTurnWrites, summarizeContinuityPacket } from "../continuity/index.ts";
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
 
@@ -401,7 +401,7 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
         focus: z.string().optional().describe("Optional focus for what part of continuity to inspect."),
       }),
       execute: async ({ focus }) => {
-        const result = summarizeContinuityForTool(options.continuity, focus);
+        const result = summarizeContinuityPacket(options.continuity, focus);
         return result;
       },
     }),
@@ -553,45 +553,6 @@ async function safeToolResult(run: () => Promise<unknown>): Promise<unknown> {
         : String(err);
     return { ok: false, error: message };
   }
-}
-
-function summarizeContinuityForTool(packet: ContinuityPacket, focus?: string) {
-  return {
-    ok: true,
-    focus: focus || null,
-    generated_at: packet.generatedAt,
-    thread_id: packet.threadId,
-    hypomnema: {
-      count: packet.hypomnema.count,
-      rendered: packet.hypomnema.rendered,
-      block: truncate(packet.hypomnema.block, 1600),
-    },
-    functional_memory: packet.functionalMemories.slice(0, 8).map((memory) => ({
-      id: memory.id,
-      type: memory.memory_type,
-      confidence: memory.confidence,
-      source: memory.source,
-      content: truncate(memory.summary || memory.content, 500),
-      tags: memory.tags || [],
-    })),
-    mnemos: packet.mnemosResults.slice(0, 8).map((engram: any) => ({
-      id: engram.id ?? null,
-      salience: engram.salience ?? engram.score ?? null,
-      content: truncate(engram.content || engram.text || engram.summary || JSON.stringify(engram), 500),
-    })),
-    skills: {
-      count: packet.skills.length,
-      block: truncate(packet.skillsBlock, 1000),
-    },
-    continuity_note: packet.continuityNote || null,
-    diagnostics: packet.diagnostics.map((diagnostic) => ({
-      layer: diagnostic.layer,
-      status: diagnostic.status,
-      count: diagnostic.count ?? null,
-      rendered: diagnostic.rendered ?? null,
-      message: diagnostic.message ?? null,
-    })),
-  };
 }
 
 function buildToolMessages(

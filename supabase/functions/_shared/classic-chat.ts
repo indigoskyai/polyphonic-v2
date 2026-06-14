@@ -23,12 +23,14 @@ export function getClassicMemoryAgentIds(modelId: string | null | undefined): st
 
 export function buildClassicChatSystemPrompt(input: {
   selectedModel: string;
+  continuityBridge?: string;
   continuityNote?: string;
   functionalMemoryBlock?: string;
   mnemosBlock?: string;
   projectContextBlock?: string;
 }): string {
   const memoryBlocks = [
+    input.continuityBridge,
     input.continuityNote,
     input.functionalMemoryBlock,
     input.mnemosBlock,
