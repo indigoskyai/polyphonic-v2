@@ -2,6 +2,8 @@ import { Activity, Info, Menu } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AgentPicker } from '@/components/composer/AgentPicker';
+import { ModelPicker } from '@/components/composer/ModelPicker';
+import { DEFAULT_CHAT_MODEL, getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 import { getMobileSurfaceMeta } from '@/lib/mobileShell';
 import { useAuthStore } from '@/stores/authStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -42,6 +44,7 @@ export default function MobileAppBar() {
   const loadThreads = useThreadStore((s) => s.loadThreads);
   const createThread = useThreadStore((s) => s.createThread);
   const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
+  const updateThreadSelectedModel = useThreadStore((s) => s.updateThreadSelectedModel);
   const openMobileNav = useMobileShellStore((s) => s.openDrawer);
   const openContextDrawer = useDrawerStore((s) => s.open);
   const closeContextDrawer = useDrawerStore((s) => s.close);
@@ -54,6 +57,7 @@ export default function MobileAppBar() {
   // landing agent) instead of the cross-surface agent scope, so the top bar
   // never says "Luca" while the hero shows the adopted landing agent.
   const landingAgentId = useSettingsStore((s) => s.landing_agent_id) || 'luca';
+  const defaultModel = useSettingsStore((s) => s.default_model);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   useEffect(() => {
@@ -78,8 +82,13 @@ export default function MobileAppBar() {
       : baseMeta;
   const isChatSurface = location.pathname.startsWith('/chat');
   const runtimeAgentId = isChatSurface ? (currentThread?.agent_id || landingAgentId) : activeAgentId;
+  const threadRuntimeMode = currentThread
+    ? normalizeThreadRuntimeMode(currentThread.runtime_mode, 'agent')
+    : 'classic';
+  const selectedChatModel = currentThread?.selected_model || defaultModel || DEFAULT_CHAT_MODEL;
+  const classicChatActive = isChatSurface && runtimeAgentId === 'luca' && threadRuntimeMode === 'classic';
   const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';
-  const title = isChatSurface ? activeAgentName : meta.title;
+  const title = isChatSurface ? (classicChatActive ? getChatModelLabel(selectedChatModel) : activeAgentName) : meta.title;
   const subtitle = isChatSurface ? (threadTitle || 'new chat') : meta.subtitle;
   const showAgentPicker = !!user && isAgentScopedSurface(location.pathname);
 
@@ -119,6 +128,20 @@ export default function MobileAppBar() {
     user,
   ]);
 
+  const handleModelChange = useCallback(async (modelId: string) => {
+    if (!modelId || modelId === selectedChatModel) return;
+    void updateSetting('default_model', modelId);
+    if (!user || !isChatSurface || !currentThreadId) return;
+    await updateThreadSelectedModel(currentThreadId, modelId);
+  }, [
+    currentThreadId,
+    isChatSurface,
+    selectedChatModel,
+    updateSetting,
+    updateThreadSelectedModel,
+    user,
+  ]);
+
   const openMenu = () => {
     closeContextDrawer();
     openMobileNav();
@@ -147,11 +170,19 @@ export default function MobileAppBar() {
         {showAgentPicker ? (
           <div className="mobile-bar-agent-stack">
             <div className="mobile-bar-agent-picker">
-              <AgentPicker
-                activeAgentId={runtimeAgentId}
-                onChange={(id) => { void handleAgentChange(id); }}
-                variant="header"
-              />
+              {classicChatActive ? (
+                <ModelPicker
+                  activeModelId={selectedChatModel}
+                  onChange={(id) => { void handleModelChange(id); }}
+                  variant="header"
+                />
+              ) : (
+                <AgentPicker
+                  activeAgentId={runtimeAgentId}
+                  onChange={(id) => { void handleAgentChange(id); }}
+                  variant="header"
+                />
+              )}
             </div>
             {!isChatSurface && (
               <div className="mobile-bar-agent-surface">{meta.title}</div>

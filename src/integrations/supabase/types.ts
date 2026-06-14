@@ -2953,48 +2953,60 @@ export type Database = {
       }
       threads: {
         Row: {
-          agent_id: string
-          archived: boolean
-          created_at: string
-          heat: string
-          id: string
-          participating_agent_ids: string[]
-          pinned: boolean
-          primary_agent_id: string
-          project_id: string | null
-          starred: boolean
-          title: string | null
-          updated_at: string
+	          agent_id: string
+	          archived: boolean
+	          continuity_summary: string | null
+	          created_at: string
+	          heat: string
+	          id: string
+	          memory_enabled: boolean
+	          participating_agent_ids: string[]
+	          pinned: boolean
+	          primary_agent_id: string
+	          project_id: string | null
+	          runtime_mode: string
+	          selected_model: string | null
+	          starred: boolean
+	          title: string | null
+	          updated_at: string
           user_id: string
           voice_mode: string
         }
         Insert: {
-          agent_id?: string
-          archived?: boolean
-          created_at?: string
-          heat?: string
-          id?: string
-          participating_agent_ids?: string[]
-          pinned?: boolean
-          primary_agent_id?: string
-          project_id?: string | null
-          starred?: boolean
-          title?: string | null
+	          agent_id?: string
+	          archived?: boolean
+	          continuity_summary?: string | null
+	          created_at?: string
+	          heat?: string
+	          id?: string
+	          memory_enabled?: boolean
+	          participating_agent_ids?: string[]
+	          pinned?: boolean
+	          primary_agent_id?: string
+	          project_id?: string | null
+	          runtime_mode?: string
+	          selected_model?: string | null
+	          starred?: boolean
+	          title?: string | null
           updated_at?: string
           user_id: string
           voice_mode?: string
         }
         Update: {
-          agent_id?: string
-          archived?: boolean
-          created_at?: string
-          heat?: string
-          id?: string
-          participating_agent_ids?: string[]
-          pinned?: boolean
-          primary_agent_id?: string
-          project_id?: string | null
-          starred?: boolean
+	          agent_id?: string
+	          archived?: boolean
+	          continuity_summary?: string | null
+	          created_at?: string
+	          heat?: string
+	          id?: string
+	          memory_enabled?: boolean
+	          participating_agent_ids?: string[]
+	          pinned?: boolean
+	          primary_agent_id?: string
+	          project_id?: string | null
+	          runtime_mode?: string
+	          selected_model?: string | null
+	          starred?: boolean
           title?: string | null
           updated_at?: string
           user_id?: string

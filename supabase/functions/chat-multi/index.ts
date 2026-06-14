@@ -54,6 +54,11 @@ import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { formatPolyphonicAppContext } from "../_shared/agents/polyphonic-app-context.ts";
 import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
+import {
+  buildClassicChatSystemPrompt,
+  getClassicMemoryAgentIds,
+  normalizeChatRuntimeMode,
+} from "../_shared/classic-chat.ts";
 
 /** Council v2 — all proposers run on the same model so voice diversity comes from
  *  SOULs, not models (Self-MoA finding). Same model for cross-pollination too. */
@@ -295,9 +300,12 @@ serve(async (req) => {
     const body = await req.json();
     const {
       thread_id,
-      message,
-      attachments,
-      reasoning_effort: effortOverride,
+        message,
+        attachments,
+        model: modelOverride,
+        runtime_mode: runtimeModeOverride,
+        memory_enabled: memoryEnabledOverride,
+        reasoning_effort: effortOverride,
       ensemble: ensembleOverride,
       agent_mode: agentMode,
       agent_runtime: agentRuntime,
@@ -360,16 +368,16 @@ serve(async (req) => {
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       useAgentRuntime === true;
-    // Tool planner is enabled when explicitly requested OR when this is the
-    // system Luca (so image gen / web search / artifacts work out of the box
-    // without the user toggling agent mode).
+      // Tool planning belongs to Agent Mode. Classic Chat stays model-direct
+      // even if the wording resembles a tool or Forge request.
     const explicitAgentRuntime =
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
       agentRuntime === "legacy_tool_planner" ||
       useAgentRuntime === true;
 
-    const requestedModel = normalizeModelId(settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
+      const bodyModel = normalizeModelId(typeof modelOverride === "string" ? modelOverride : null);
+      const requestedModel = bodyModel || normalizeModelId(settings?.default_model || DEFAULT_ENSEMBLE[0]) || DEFAULT_ENSEMBLE[0];
     let backend: ChatBackend;
     try {
       backend = await resolveChatBackend(supabase, user, requestedModel);
@@ -404,9 +412,9 @@ serve(async (req) => {
     }
 
     // Load the thread's bound agent
-    const { data: thread } = await supabase
-      .from("threads")
-      .select("agent_id, primary_agent_id")
+      const { data: thread } = await supabase
+        .from("threads")
+        .select("agent_id, primary_agent_id, runtime_mode, selected_model, memory_enabled, continuity_summary")
       .eq("id", thread_id)
       .eq("user_id", userId)
       .maybeSingle();
@@ -422,6 +430,33 @@ serve(async (req) => {
     }
 
     const agentId = resolveThreadAgentId(thread);
+    const storedRuntimeMode = normalizeChatRuntimeMode((thread as Record<string, unknown>)?.runtime_mode, "agent");
+    const requestedRuntimeMode = normalizeChatRuntimeMode(
+      runtimeModeOverride,
+      agentMode === "agent" || agentRuntime === "openrouter_agent_sdk" || useAgentRuntime === true
+        ? "agent"
+        : storedRuntimeMode,
+    );
+    const classicRuntime = agentId === "luca" && requestedRuntimeMode === "classic";
+    const quietMemoryEnabled = (thread as Record<string, unknown>)?.memory_enabled !== false && memoryEnabledOverride !== false;
+    const storedSelectedModel = typeof (thread as Record<string, unknown>)?.selected_model === "string"
+      ? String((thread as Record<string, unknown>).selected_model)
+      : "";
+    const selectedClassicModel = normalizeModelId(
+      classicRuntime
+        ? bodyModel || storedSelectedModel || settings?.default_model || DEFAULT_ENSEMBLE[0]
+        : requestedModel,
+    ) || DEFAULT_ENSEMBLE[0];
+    const classicMemoryAgentIds = classicRuntime && quietMemoryEnabled
+      ? getClassicMemoryAgentIds(selectedClassicModel)
+      : undefined;
+    if (classicRuntime && bodyModel && bodyModel !== storedSelectedModel) {
+      await supabase
+        .from("threads")
+        .update({ runtime_mode: "classic", selected_model: bodyModel, memory_enabled: quietMemoryEnabled })
+        .eq("id", thread_id)
+        .eq("user_id", userId);
+    }
     if (agentId !== "luca" && backend.keySource !== "user") {
       const message = "Custom agents require your own OpenRouter key. Add a key in Settings -> Models, then try this agent again.";
       if (idempotencyKey) {
@@ -472,13 +507,15 @@ serve(async (req) => {
     const agentPrompt = (agentConfig?.prompt as string | undefined)?.trim() || (agentId === "luca" ? SYSTEM_PROMPT : "");
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca";
-    const forceForgeRequest = agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
-    const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
+    const agentRuntimeActive = !classicRuntime;
+    const forceForgeRequest = agentRuntimeActive && agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
+    const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
+      agentRuntimeActive &&
       !onboardingHandoff &&
       (forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)));
 
-    if (!onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
+    if (agentRuntimeActive && !onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
       if (recentForgeProposal) {
         let ackMessage = "";
@@ -551,24 +588,26 @@ serve(async (req) => {
       }
     }
 
-    const continuity = await loadContinuityPacket(supabase, {
-      userId,
-      agentId,
-      threadId: thread_id,
-      userMessage: messageWithAttachments,
-      apiKey,
-      historyLimit: backend.historyLimit,
-      includeIdentity: true,
-      includePendingRevisions: agentIsSystemLuca && backend.allowMemoryWrites,
-      includeFunctionalMemory: backend.billingTier !== "guest",
-      includeMnemos: backend.billingTier !== "guest",
-      includeSkills: agentIsSystemLuca && backend.billingTier !== "guest",
-      includeEmotionalState: backend.billingTier !== "guest",
-      includeBeliefs: backend.billingTier !== "guest",
-    });
-    logContinuityDiagnostics(continuity, "chat-multi.continuity");
+      const continuity = await loadContinuityPacket(supabase, {
+        userId,
+        agentId,
+        threadId: thread_id,
+        userMessage: messageWithAttachments,
+        apiKey,
+        memoryAgentIds: classicMemoryAgentIds,
+        historyLimit: backend.historyLimit,
+        includeIdentity: !classicRuntime,
+        includePendingRevisions: !classicRuntime && agentIsSystemLuca && backend.allowMemoryWrites,
+        includeHypomnema: !classicRuntime,
+        includeFunctionalMemory: quietMemoryEnabled && backend.billingTier !== "guest",
+        includeMnemos: quietMemoryEnabled && backend.billingTier !== "guest",
+        includeSkills: !classicRuntime && agentIsSystemLuca && backend.billingTier !== "guest",
+        includeEmotionalState: !classicRuntime && backend.billingTier !== "guest",
+        includeBeliefs: !classicRuntime && backend.billingTier !== "guest",
+      });
+      logContinuityDiagnostics(continuity, "chat-multi.continuity");
 
-    const siblingContinuity = agentIsSystemLuca && backend.allowEnsemble
+      const siblingContinuity = !classicRuntime && agentIsSystemLuca && backend.allowEnsemble
       ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, messageWithAttachments, apiKey)
       : { anima: null, vektor: null };
 
@@ -582,13 +621,13 @@ serve(async (req) => {
     const projectContextBlock = formatProjectContextPrompt(
       await loadProjectContextForThread(supabase, userId, thread_id),
     );
-    const appContextBlock = agentIsSystemLuca
-      ? formatPolyphonicAppContext({
-          billingTier: backend.billingTier,
-          keySource: backend.keySource,
-          model: backend.model,
-          clientContext,
-        })
+      const appContextBlock = !classicRuntime && agentIsSystemLuca
+        ? formatPolyphonicAppContext({
+            billingTier: backend.billingTier,
+            keySource: backend.keySource,
+            model: backend.model,
+            clientContext,
+          })
       : "";
     const simpleOpeningTurn =
       backend.keySource === "platform" &&
@@ -628,23 +667,31 @@ serve(async (req) => {
     // For the system Luca, layer in emotional state, beliefs, memories, continuity.
     // For all other agents (system Vektor/Anima/Observer or user-created), use
     // their own prompt and identity docs without borrowing Luca's substrate.
-    const enrichedSystemPrompt = agentIsSystemLuca
-      ? buildLucaSystemPrompt({
-          ...buildLucaPromptPartsFromContinuity(continuity, {
-            crisisDirective,
-          }),
-          appContextBlock,
-          projectContextBlock,
-          crisisDirective,
-        })
-      : buildCustomAgentSystemPrompt({
-          agentName,
-          agentPrompt,
-          identityDocs: continuity.identityDocs,
-          projectContextBlock,
-          hypomnemaBlock: continuity.hypomnema.block,
-          continuityNote,
-        });
+      const enrichedSystemPrompt = classicRuntime
+        ? buildClassicChatSystemPrompt({
+            selectedModel: selectedClassicModel,
+            continuityNote,
+            functionalMemoryBlock: continuity.functionalMemoryBlock,
+            mnemosBlock: continuity.mnemosBlock,
+            projectContextBlock,
+          })
+        : agentIsSystemLuca
+          ? buildLucaSystemPrompt({
+              ...buildLucaPromptPartsFromContinuity(continuity, {
+                crisisDirective,
+              }),
+              appContextBlock,
+              projectContextBlock,
+              crisisDirective,
+            })
+          : buildCustomAgentSystemPrompt({
+              agentName,
+              agentPrompt,
+              identityDocs: continuity.identityDocs,
+              projectContextBlock,
+              hypomnemaBlock: continuity.hypomnema.block,
+              continuityNote,
+            });
     const onboardingHandoffDirective = onboardingHandoff
       ? "This turn is a hidden onboarding handoff, not a message the user typed. Use it only as context. Begin the visible conversation yourself as Luca: welcome them, reflect the direction they chose in plain language, and ask one or two high-signal questions to start shaping the agent or migration. Do not mention the hidden handoff, do not call Forge yet, and do not create a proposal card until the user has actually participated in the conversation."
       : "";
@@ -667,7 +714,7 @@ serve(async (req) => {
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-    if (!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
+      if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
@@ -786,16 +833,18 @@ serve(async (req) => {
 
     // Custom / non-Luca agents always use single-model with their configured model.
     // Only the system Luca uses the multi-model ensemble path.
-    const useEnsemble = backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;
+      const useEnsemble = agentRuntimeActive && backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-      const singleModel = backend.keySource === "platform"
-        ? backend.model
-        : normalizeModelId(
-            agentIsSystemLuca
-              ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
-              : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
-          ) || DEFAULT_ENSEMBLE[0];
+        const singleModel = backend.keySource === "platform"
+          ? backend.model
+          : normalizeModelId(
+              classicRuntime
+                ? selectedClassicModel
+                : agentIsSystemLuca
+                ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
+                : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
+            ) || DEFAULT_ENSEMBLE[0];
       return singleModelStream(
         baseMessages,
         singleModel,
@@ -812,9 +861,12 @@ serve(async (req) => {
         requestId,
         {
           backend,
-          idempotencyKey,
-          enableContinuityWrites: backend.allowMemoryWrites,
-          reasoningEffort: effectiveReasoningEffort,
+            idempotencyKey,
+            enableContinuityWrites: backend.allowMemoryWrites,
+            runtimeProfile: classicRuntime ? "classic" : "agent",
+            memoryAgentIds: classicMemoryAgentIds,
+            persistedAgentId: classicRuntime ? null : agentId,
+            reasoningEffort: effectiveReasoningEffort,
           reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
           maxTokens: simpleOpeningTurn ? 1024 : undefined,
           guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make|entity|companion|openclaw|open\s+clause)\b/i.test(messageWithAttachments),
@@ -1950,20 +2002,21 @@ async function findRecentDuplicateAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   threadId: string,
-  agentId: string,
+  agentId: string | null,
   content: string,
 ): Promise<string | null> {
   const normalized = normalizeAssistantContentForDuplicate(content);
   if (!normalized) return null;
 
   const since = new Date(Date.now() - ASSISTANT_DUPLICATE_WINDOW_MS).toISOString();
-  const { data, error } = await supabase
+  let query = supabase
     .from("messages")
     .select("id, content, created_at")
     .eq("thread_id", threadId)
     .eq("role", "assistant")
-    .eq("agent", agentId)
-    .gte("created_at", since)
+    .gte("created_at", since);
+  query = agentId ? query.eq("agent", agentId) : query.is("agent", null);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(12);
 
@@ -2185,12 +2238,15 @@ async function singleModelStream(
     backend?: ChatBackend;
     idempotencyKey?: string | null;
     enableContinuityWrites?: boolean;
-    reasoningEffort?: ReasoningEffort;
-    reasoningParams?: Record<string, unknown>;
-    maxTokens?: number;
-    guardForgeToolLeaks?: boolean;
-  } = {},
-): Promise<Response> {
+      reasoningEffort?: ReasoningEffort;
+      reasoningParams?: Record<string, unknown>;
+      maxTokens?: number;
+      guardForgeToolLeaks?: boolean;
+      runtimeProfile?: "classic" | "agent";
+      memoryAgentIds?: string[];
+      persistedAgentId?: string | null;
+    } = {},
+  ): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -2394,17 +2450,18 @@ async function singleModelStream(
         const streamMetadata = streamCitations.length > 0
           ? { citations: streamCitations, ...(streamQuery ? { search_query: streamQuery } : {}) }
           : null;
-        let insertedMessage: { id: string | null } | null = null;
-        let assistantWasDuplicate = false;
-        const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, agentId, fullContent);
-        if (duplicateMessageId) {
-          console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId, duplicateMessageId });
-          insertedMessage = { id: duplicateMessageId };
-          assistantWasDuplicate = true;
-        } else {
-          const { data: inserted, error: insertError } = await supabase.from("messages").insert({
-            thread_id: threadId, user_id: userId, role: "assistant",
-            content: fullContent, model: usedModel, agent: agentId,
+          let insertedMessage: { id: string | null } | null = null;
+          let assistantWasDuplicate = false;
+          const persistedAgentId = options.persistedAgentId === undefined ? agentId : options.persistedAgentId;
+          const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, persistedAgentId, fullContent);
+          if (duplicateMessageId) {
+            console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId: persistedAgentId, duplicateMessageId });
+            insertedMessage = { id: duplicateMessageId };
+            assistantWasDuplicate = true;
+          } else {
+            const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+              thread_id: threadId, user_id: userId, role: "assistant",
+              content: fullContent, model: usedModel, agent: persistedAgentId,
             thinking_content: fullThinking || null, tokens_used: tokensUsed,
             ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
             ...(streamMetadata ? { metadata: streamMetadata } : {}),
@@ -2416,26 +2473,28 @@ async function singleModelStream(
         }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
-        const singleObservers = collectObservers({
-          primaryAgentId: agentId,
-          toolMessages,
-        });
-        if (options.enableContinuityWrites !== false && !assistantWasDuplicate) {
-          queueContinuityTurnWrites({
-            supabase,
-            threadId,
-            agentId,
+          const singleObservers = collectObservers({
+            primaryAgentId: agentId,
+            toolMessages: options.runtimeProfile === "classic" ? [] : toolMessages,
+          });
+          if (options.enableContinuityWrites !== false && !assistantWasDuplicate) {
+            queueContinuityTurnWrites({
+              supabase,
+              threadId,
+              agentId,
             userId,
             userMessage,
             agentResponse: fullContent,
             sourceMessageId: insertedMessage?.id ?? null,
-            apiKey,
-            authHeader,
-            pendingRevisions: pendingRevisions || [],
-            recentTurns: messages || [],
-            observers: singleObservers,
-          });
-        }
+              apiKey,
+              authHeader,
+              runtimeProfile: options.runtimeProfile,
+              memoryAgentIds: options.memoryAgentIds,
+              pendingRevisions: pendingRevisions || [],
+              recentTurns: messages || [],
+              observers: options.runtimeProfile === "classic" ? [] : singleObservers,
+            });
+          }
 
         const donePayload = {
           ok: true,

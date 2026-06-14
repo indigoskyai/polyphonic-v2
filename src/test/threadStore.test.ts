@@ -45,10 +45,14 @@ const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState
   title: null,
   pinned: false, starred: false, archived: false,
   heat: 'warm',
-  agent_id: 'luca',
-  primary_agent_id: 'luca',
-  participating_agent_ids: ['luca'],
-  project_id: null,
+	  agent_id: 'luca',
+	  primary_agent_id: 'luca',
+	  participating_agent_ids: ['luca'],
+	  runtime_mode: 'classic' as const,
+	  selected_model: null,
+	  memory_enabled: true,
+	  continuity_summary: null,
+	  project_id: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   ...overrides,
@@ -61,10 +65,14 @@ describe('threadStore thread list helpers', () => {
       title: 'Thread',
       pinned: false, starred: false, archived: false,
       heat: 'warm',
-      agent_id: 'luca',
-      primary_agent_id: 'luca',
-      participating_agent_ids: ['luca'],
-      project_id: null,
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
+	      runtime_mode: 'classic' as const,
+	      selected_model: null,
+	      memory_enabled: true,
+	      continuity_summary: null,
+	      project_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -90,27 +98,47 @@ describe('threadStore.createThread project scoping', () => {
   it('omits project_id for ordinary new chats', async () => {
     await useThreadStore.getState().createThread('u1', 'luca');
 
-    expect(supabaseMock.insert).toHaveBeenCalledWith({
-      user_id: 'u1',
-      agent_id: 'luca',
-      primary_agent_id: 'luca',
-      participating_agent_ids: ['luca'],
-    });
-  });
+	    expect(supabaseMock.insert).toHaveBeenCalledWith({
+	      user_id: 'u1',
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
+	      runtime_mode: 'classic',
+	      memory_enabled: true,
+	    });
+	  });
+
+	  it('stores a selected model for ordinary classic chats when provided', async () => {
+	    await useThreadStore.getState().createThread('u1', 'luca', null, {
+	      selectedModel: 'openai/gpt-5.1',
+	    });
+
+	    expect(supabaseMock.insert).toHaveBeenCalledWith({
+	      user_id: 'u1',
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
+	      runtime_mode: 'classic',
+	      selected_model: 'openai/gpt-5.1',
+	      memory_enabled: true,
+	    });
+	  });
 
   it('includes project_id only for project-scoped chats', async () => {
     supabaseMock.nextInsertedThread = makeThread({ id: 'thread-2', project_id: 'project-1' });
 
     await useThreadStore.getState().createThread('u1', 'luca', 'project-1');
 
-    expect(supabaseMock.insert).toHaveBeenCalledWith({
-      user_id: 'u1',
-      agent_id: 'luca',
-      primary_agent_id: 'luca',
-      participating_agent_ids: ['luca'],
-      project_id: 'project-1',
-    });
-  });
+	    expect(supabaseMock.insert).toHaveBeenCalledWith({
+	      user_id: 'u1',
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
+	      runtime_mode: 'classic',
+	      memory_enabled: true,
+	      project_id: 'project-1',
+	    });
+	  });
 
   it('creates custom-agent threads with primary and participant scope immediately', async () => {
     supabaseMock.nextInsertedThread = makeThread({
@@ -122,32 +150,67 @@ describe('threadStore.createThread project scoping', () => {
 
     await useThreadStore.getState().createThread('u1', 'glyph-weaver');
 
-    expect(supabaseMock.insert).toHaveBeenCalledWith({
-      user_id: 'u1',
-      agent_id: 'glyph-weaver',
-      primary_agent_id: 'glyph-weaver',
-      participating_agent_ids: ['glyph-weaver'],
-    });
-  });
+	    expect(supabaseMock.insert).toHaveBeenCalledWith({
+	      user_id: 'u1',
+	      agent_id: 'glyph-weaver',
+	      primary_agent_id: 'glyph-weaver',
+	      participating_agent_ids: ['glyph-weaver'],
+	      runtime_mode: 'agent',
+	      memory_enabled: true,
+	    });
+	  });
 
-  it('keeps empty-thread agent switches scoped across all thread identity fields', async () => {
-    supabaseMock.update.mockClear();
-    useThreadStore.setState({ threads: [makeThread({ id: 'thread-1' })], currentThreadId: 'thread-1', messages: [] });
+	  it('lets agentic Luca handoffs request agent runtime explicitly', async () => {
+	    await useThreadStore.getState().createThread('u1', 'luca', null, { runtimeMode: 'agent' });
+
+	    expect(supabaseMock.insert).toHaveBeenCalledWith({
+	      user_id: 'u1',
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
+	      runtime_mode: 'agent',
+	      memory_enabled: true,
+	    });
+	  });
+
+	  it('keeps empty-thread agent switches scoped across all thread identity fields', async () => {
+	    supabaseMock.update.mockClear();
+	    useThreadStore.setState({ threads: [makeThread({ id: 'thread-1' })], currentThreadId: 'thread-1', messages: [] });
 
     await useThreadStore.getState().updateThreadAgent('thread-1', 'glyph-weaver');
 
-    expect(supabaseMock.update).toHaveBeenCalledWith({
-      agent_id: 'glyph-weaver',
-      primary_agent_id: 'glyph-weaver',
-      participating_agent_ids: ['glyph-weaver'],
-    });
-    expect(useThreadStore.getState().threads[0]).toMatchObject({
-      agent_id: 'glyph-weaver',
-      primary_agent_id: 'glyph-weaver',
-      participating_agent_ids: ['glyph-weaver'],
-    });
-  });
-});
+	    expect(supabaseMock.update).toHaveBeenCalledWith({
+	      agent_id: 'glyph-weaver',
+	      primary_agent_id: 'glyph-weaver',
+	      participating_agent_ids: ['glyph-weaver'],
+	      runtime_mode: 'agent',
+	      selected_model: null,
+	    });
+	    expect(useThreadStore.getState().threads[0]).toMatchObject({
+	      agent_id: 'glyph-weaver',
+	      primary_agent_id: 'glyph-weaver',
+	      participating_agent_ids: ['glyph-weaver'],
+	      runtime_mode: 'agent',
+	      selected_model: null,
+	    });
+	  });
+
+	  it('stores per-thread classic model selection', async () => {
+	    supabaseMock.update.mockClear();
+	    useThreadStore.setState({ threads: [makeThread({ id: 'thread-1', runtime_mode: 'agent' })], currentThreadId: 'thread-1', messages: [] });
+
+	    await useThreadStore.getState().updateThreadSelectedModel('thread-1', 'openai/gpt-5.1');
+
+	    expect(supabaseMock.update).toHaveBeenCalledWith({
+	      selected_model: 'openai/gpt-5.1',
+	      runtime_mode: 'classic',
+	    });
+	    expect(useThreadStore.getState().threads[0]).toMatchObject({
+	      selected_model: 'openai/gpt-5.1',
+	      runtime_mode: 'classic',
+	    });
+	  });
+	});
 
 describe('threadStore message display helpers', () => {
   it('collapses persisted duplicate assistant rows from delayed replay paths', () => {

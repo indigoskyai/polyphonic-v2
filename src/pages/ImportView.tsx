@@ -110,7 +110,7 @@ export default function ImportView() {
     if (!modelKeyConnected) return;
     setCompanionLaunching(true);
     try {
-      const threadId = await createThread(user.id, 'luca');
+      const threadId = await createThread(user.id, 'luca', null, { runtimeMode: 'agent' });
       stashChatHandoff(buildOnboardingHandoffPrompt({
         intent: 'bring_existing',
         comfort: 'medium',

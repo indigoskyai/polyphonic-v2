@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  defaultRuntimeForAgent,
+  normalizeThreadRuntimeMode,
+  type ThreadRuntimeMode,
+} from '@/lib/chatRuntime';
 
 export interface Thread {
   id: string;
@@ -12,6 +17,10 @@ export interface Thread {
   agent_id: string;
   primary_agent_id: string;
   participating_agent_ids: string[];
+  runtime_mode?: ThreadRuntimeMode | null;
+  selected_model?: string | null;
+  memory_enabled?: boolean | null;
+  continuity_summary?: string | null;
   project_id: string | null;
   created_at: string;
   updated_at: string;
@@ -40,6 +49,12 @@ export interface Message {
   attachments?: MessageAttachment[] | null;
 }
 
+export interface CreateThreadOptions {
+  runtimeMode?: ThreadRuntimeMode;
+  selectedModel?: string | null;
+  memoryEnabled?: boolean;
+}
+
 interface ThreadState {
   threads: Thread[];
   currentThreadId: string | null;
@@ -51,7 +66,7 @@ interface ThreadState {
   setCurrentThread: (id: string | null) => void;
   loadMessages: (threadId: string) => Promise<void>;
   subscribeMessages: (threadId: string) => () => void;
-  createThread: (userId: string, agentId?: string, projectId?: string | null) => Promise<string>;
+  createThread: (userId: string, agentId?: string, projectId?: string | null, options?: CreateThreadOptions) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'> & Partial<Pick<Message, 'id' | 'created_at'>>) => void;
   patchMessage: (id: string, patch: Partial<Message>) => void;
   setStreaming: (s: boolean) => void;
@@ -62,6 +77,7 @@ interface ThreadState {
   updateThreadStarred: (threadId: string, starred: boolean) => Promise<void>;
   updateThreadArchived: (threadId: string, archived: boolean) => Promise<void>;
   updateThreadAgent: (threadId: string, agentId: string) => Promise<void>;
+  updateThreadSelectedModel: (threadId: string, modelId: string | null) => Promise<void>;
   updateThreadProject: (threadId: string, projectId: string | null) => Promise<void>;
   deleteThread: (threadId: string) => Promise<void>;
 }
@@ -225,19 +241,27 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     };
   },
 
-  createThread: async (userId, agentId = 'luca', projectId = null) => {
+  createThread: async (userId, agentId = 'luca', projectId = null, options = {}) => {
+    const runtimeMode = normalizeThreadRuntimeMode(options.runtimeMode, defaultRuntimeForAgent(agentId));
+    const selectedModel = options.selectedModel ?? null;
     const insertPayload: {
       user_id: string;
       agent_id: string;
       primary_agent_id: string;
       participating_agent_ids: string[];
+      runtime_mode: ThreadRuntimeMode;
+      selected_model?: string | null;
+      memory_enabled: boolean;
       project_id?: string;
     } = {
       user_id: userId,
       agent_id: agentId,
       primary_agent_id: agentId,
       participating_agent_ids: [agentId],
+      runtime_mode: runtimeMode,
+      memory_enabled: options.memoryEnabled ?? true,
     };
+    if (selectedModel) insertPayload.selected_model = selectedModel;
     if (projectId) {
       insertPayload.project_id = projectId;
     }
@@ -320,12 +344,31 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         agent_id: agentId,
         primary_agent_id: agentId,
         participating_agent_ids: [agentId],
+        runtime_mode: 'agent',
+        selected_model: null,
       })
       .eq('id', threadId);
     set((s) => ({
       threads: s.threads.map((t) => (
         t.id === threadId
-          ? { ...t, agent_id: agentId, primary_agent_id: agentId, participating_agent_ids: [agentId] }
+          ? { ...t, agent_id: agentId, primary_agent_id: agentId, participating_agent_ids: [agentId], runtime_mode: 'agent', selected_model: null }
+          : t
+      )),
+    }));
+  },
+
+  updateThreadSelectedModel: async (threadId, modelId) => {
+    await supabase
+      .from('threads')
+      .update({
+        selected_model: modelId,
+        runtime_mode: 'classic',
+      })
+      .eq('id', threadId);
+    set((s) => ({
+      threads: s.threads.map((t) => (
+        t.id === threadId
+          ? { ...t, selected_model: modelId, runtime_mode: 'classic' }
           : t
       )),
     }));

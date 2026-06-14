@@ -178,11 +178,61 @@ describe('Continuity Kernel read path', () => {
 
     expect(pendingIndex).toBeLessThan(hypomnemaIndex);
     expect(hypomnemaIndex).toBeLessThan(functionalIndex);
-    expect(functionalIndex).toBeLessThan(mnemosIndex);
-    expect(mnemosIndex).toBeLessThan(skillsIndex);
-  });
+	  expect(functionalIndex).toBeLessThan(mnemosIndex);
+	  expect(mnemosIndex).toBeLessThan(skillsIndex);
+	});
 
-  it('keeps pending revisions out of the live prompt while the dialectic flag is disabled', async () => {
+	it('loads quiet Classic Chat memory from shared and model-family lanes', async () => {
+	  const memoryCalls: string[] = [];
+	  const mnemosCalls: string[] = [];
+	  const loaders: ContinuityLoaders = {
+	    history: async () => [],
+	    functionalMemories: async (_supabase, _userId, agentId) => {
+	      memoryCalls.push(agentId);
+	      return [{
+	        id: `mem-${agentId}`,
+	        content: `memory from ${agentId}`,
+	        memory_type: 'classic',
+	        confidence: 0.9,
+	        source: 'durable',
+	      } satisfies FunctionalMemory];
+	    },
+	    mnemos: async (_supabase, _userId, agentId) => {
+	      mnemosCalls.push(agentId);
+	      const result = engram(`engram from ${agentId}`);
+	      result.engram.id = `engram-${agentId}`;
+	      result.engram.agent_id = agentId;
+	      return [result];
+	    },
+	  };
+
+	  const packet = await loadContinuityPacket(supabaseStub, {
+	    userId: 'u1',
+	    agentId: 'luca',
+	    threadId: 't1',
+	    userMessage: 'what should you remember?',
+	    memoryAgentIds: ['classic:shared', 'classic:family:openai'],
+	    includeIdentity: false,
+	    includePendingRevisions: false,
+	    includeHypomnema: false,
+	    includeSkills: false,
+	    includeEmotionalState: false,
+	    includeBeliefs: false,
+	  }, loaders);
+
+	  expect(memoryCalls).toEqual(['classic:shared', 'classic:family:openai']);
+	  expect(mnemosCalls).toEqual(['classic:shared', 'classic:family:openai']);
+	  expect(packet.functionalMemories.map((memory) => memory.id)).toEqual([
+	    'mem-classic:shared',
+	    'mem-classic:family:openai',
+	  ]);
+	  expect(packet.mnemosResults.map((result) => result.engram.agent_id)).toEqual([
+	    'classic:shared',
+	    'classic:family:openai',
+	  ]);
+	});
+
+	it('keeps pending revisions out of the live prompt while the dialectic flag is disabled', async () => {
     const packet = await loadContinuityPacket(supabaseStub, {
       userId: 'u1',
       agentId: 'luca',

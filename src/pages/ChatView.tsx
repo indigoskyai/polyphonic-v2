@@ -3,6 +3,7 @@ import { useFirstMount } from '@/lib/useFirstMount';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
 import { AgentPicker } from '@/components/composer/AgentPicker';
+import { ModelPicker } from '@/components/composer/ModelPicker';
 import { ObserverEyeChip } from '@/components/composer/ObserverEyeChip';
 import ModesDropdown from '@/components/composer/ModesDropdown';
 import DictationButton from '@/components/composer/DictationButton';
@@ -57,6 +58,12 @@ import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/c
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import {
+  DEFAULT_CHAT_MODEL,
+  defaultRuntimeForAgent,
+  getChatModelLabel,
+  normalizeThreadRuntimeMode,
+} from '@/lib/chatRuntime';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
@@ -593,6 +600,7 @@ export default function ChatView() {
   const setStreamingThinking = useThreadStore((s) => s.setStreamingThinking);
   const loadThreads = useThreadStore((s) => s.loadThreads);
   const updateThreadAgent = useThreadStore((s) => s.updateThreadAgent);
+  const updateThreadSelectedModel = useThreadStore((s) => s.updateThreadSelectedModel);
   const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
@@ -620,6 +628,7 @@ export default function ChatView() {
   const activeAgentId = currentThread?.agent_id || pendingAgentId;
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
+  const defaultModel = useSettingsStore((s) => s.default_model);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   const settingsLoaded = useSettingsStore((s) => s.loaded);
@@ -657,6 +666,7 @@ export default function ChatView() {
   const [ensembleLocked, setEnsembleLocked] = useState(false);
   const rawEnsembleActive = ensembleArmed || ensembleLocked;
   const [agentModeArmed, setAgentModeArmed] = useState(false);
+  const [pendingChatModelId, setPendingChatModelId] = useState(() => useSettingsStore.getState().default_model || DEFAULT_CHAT_MODEL);
   const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
   const accessTier = useMemo(
     () => resolveAccessTier({ user, modelKeyStatus, gateStatus: tokenGateStatus }),
@@ -665,6 +675,14 @@ export default function ChatView() {
   const byokEnabled = accessTier === 'byok';
   const ensembleActive = byokEnabled && rawEnsembleActive;
   const agentModeActive = byokEnabled && agentModeArmed && activeAgentId === 'luca';
+  const threadRuntimeMode = currentThread
+    ? normalizeThreadRuntimeMode(currentThread.runtime_mode, 'agent')
+    : defaultRuntimeForAgent(activeAgentId);
+  const selectedChatModel = currentThread?.selected_model || pendingChatModelId || defaultModel || DEFAULT_CHAT_MODEL;
+  const classicChatActive = threadRuntimeMode === 'classic' && activeAgentId === 'luca' && !agentModeActive;
+  const effectiveRuntimeMode = classicChatActive ? 'classic' : 'agent';
+  const activeMessageAgent = classicChatActive ? null : activeAgentId;
+  const memoryEnabled = currentThread?.memory_enabled !== false;
 
   // Dictation — Web Speech API → composer textarea. Final segments append
   // to `input` with a separating space. ExpressiveField listens for
@@ -755,6 +773,16 @@ export default function ChatView() {
   // platform model is reserved for the Polyphonic Guide, not agent continuity.
   const modelKeyMissing = modelKeyStatus !== 'present';
   const showFreeTierUpsell = modelKeyMissing;
+
+  useEffect(() => {
+    if (currentThread?.selected_model) {
+      setPendingChatModelId(currentThread.selected_model);
+      return;
+    }
+    if (!currentThread && defaultModel) {
+      setPendingChatModelId(defaultModel);
+    }
+  }, [currentThread?.id, currentThread?.selected_model, currentThread, defaultModel]);
 
   const openPolyphonicGuide = useCallback(() => {
     setGuideOpen(true);
@@ -861,6 +889,7 @@ export default function ChatView() {
     [agents]
   );
   const currentAgentLabel = getAgentDisplayName(activeAgentId, agentNameById);
+  const currentResponderLabel = classicChatActive ? getChatModelLabel(selectedChatModel) : currentAgentLabel;
   // Empty-thread hero identity — a custom agent shows its own deterministic
   // signature shape + name; Luca keeps the default sphere/echo/torus +
   // "polyphonic" wordmark.
@@ -905,13 +934,42 @@ export default function ChatView() {
     createThread,
     navigate,
   ]);
+  const handleModelChange = useCallback(async (modelId: string) => {
+    if (!modelId || modelId === selectedChatModel) return;
+    setPendingChatModelId(modelId);
+    void updateSetting('default_model', modelId);
+    setAgentModeArmed(false);
+    setEnsembleArmed(false);
+    setEnsembleLocked(false);
+
+    if (!currentThreadId || !classicChatActive) return;
+    try {
+      await updateThreadSelectedModel(currentThreadId, modelId);
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Could not switch models');
+    }
+  }, [
+    classicChatActive,
+    currentThreadId,
+    selectedChatModel,
+    updateSetting,
+    updateThreadSelectedModel,
+  ]);
   const renderHeaderAgentSelector = () => (
     byokEnabled ? (
-      <AgentPicker
-        activeAgentId={activeAgentId}
-        onChange={(id) => { void handleAgentChange(id); }}
-        variant="header"
-      />
+      classicChatActive ? (
+        <ModelPicker
+          activeModelId={selectedChatModel}
+          onChange={(id) => { void handleModelChange(id); }}
+          variant="header"
+        />
+      ) : (
+        <AgentPicker
+          activeAgentId={activeAgentId}
+          onChange={(id) => { void handleAgentChange(id); }}
+          variant="header"
+        />
+      )
     ) : (
       <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
     )
@@ -938,7 +996,7 @@ export default function ChatView() {
     if (!lingeringStream || typewriterSettledRef.current === false) return;
     const recentAssistant = [...messages].reverse().find((m) =>
       m.role === 'assistant' &&
-      (m.agent ?? null) === (activeAgentId ?? null) &&
+      (m.agent ?? null) === (activeMessageAgent ?? null) &&
       Date.now() - new Date(m.created_at).getTime() < 60_000
     );
     if (recentAssistant) {
@@ -950,7 +1008,7 @@ export default function ChatView() {
       if (typewriterSettledRef.current) setLingeringStream(null);
     }, 4000);
     return () => clearTimeout(timeout);
-  }, [lingeringStream, messages, activeAgentId]);
+  }, [lingeringStream, messages, activeMessageAgent]);
 
   // Auto-speak finished assistant messages via ElevenLabs TTS when the user
   // has enabled "Auto-speak replies" in Voice settings. Triggers once per
@@ -1048,14 +1106,14 @@ export default function ChatView() {
         localStorage.setItem(STREAM_KEY, JSON.stringify({
           content: streamingContent,
           thinking: streamingThinking,
-          agent: activeAgentId,
+          agent: activeMessageAgent,
           updated_at: Date.now(),
         }));
       } catch { /* quota */ }
     } else if (!isStreaming) {
       try { localStorage.removeItem(STREAM_KEY); } catch { /* */ }
     }
-  }, [STREAM_KEY, isStreaming, streamingContent, streamingThinking, activeAgentId]);
+  }, [STREAM_KEY, isStreaming, streamingContent, streamingThinking, activeMessageAgent]);
 
   // On thread mount: if there's a stale in-progress snapshot from a prior
   // session, recover it as an assistant message tagged metadata.recovered.
@@ -1134,6 +1192,11 @@ export default function ChatView() {
   // Welcome back awareness + dynamic placeholder
   useEffect(() => {
     if (!user) return;
+    if (classicChatActive) {
+      setWelcomeBack(null);
+      setDynamicPlaceholder(`Message ${getChatModelLabel(selectedChatModel)}...`);
+      return;
+    }
     // Guard against the agent flipping mid-flight (e.g. landing seeds luca →
     // the user's adopted agent): a superseded run must not win the last write
     // and leave a stale "<other agent> wants to tell you something…".
@@ -1251,7 +1314,7 @@ export default function ChatView() {
       }
     })();
     return () => { canceled = true; };
-  }, [user, activeAgentId, currentAgentLabel]);
+  }, [user, activeAgentId, currentAgentLabel, classicChatActive, selectedChatModel]);
 
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
@@ -1614,7 +1677,7 @@ export default function ChatView() {
     const messageText = input.trim();
     let tid = currentThreadId;
     if (!tid) {
-      tid = await createThread(user.id, pendingAgentId);
+      tid = await createThread(user.id, pendingAgentId, null, { runtimeMode: 'agent' });
       navigate(`/chat/${tid}`, { replace: true });
     }
 
@@ -1760,7 +1823,7 @@ export default function ChatView() {
       setFirstTurnHandoff({
         id: crypto.randomUUID(),
         text: messageText,
-        agentLabel: currentAgentLabel,
+        agentLabel: currentResponderLabel,
         attachmentCount: pendingAttachments.length + (replayAttachments?.length ?? 0),
         startedAt: new Date().toISOString(),
       });
@@ -1772,7 +1835,10 @@ export default function ChatView() {
     let createdThread = false;
     if (!tid) {
       try {
-        tid = await createThread(user.id, pendingAgentId);
+        tid = await createThread(user.id, pendingAgentId, null, {
+          runtimeMode: effectiveRuntimeMode,
+          selectedModel: effectiveRuntimeMode === 'classic' ? selectedChatModel : null,
+        });
         createdThread = true;
       } catch (err) {
         sendInFlightRef.current = false;
@@ -1821,10 +1887,10 @@ export default function ChatView() {
         addMessage({
           thread_id: tid, user_id: user.id, role: 'assistant',
           content: authExpired ? 'Could not save your message. Please sign in again, then retry.' : 'Could not save your message. Please try again.',
-          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
           kind: 'agent_error',
           metadata: {
-            agent: activeAgentId,
+            agent: activeMessageAgent,
             message: authExpired ? 'Could not save your message. Sign in again, then retry.' : 'Could not save your message.',
             detail,
             retry_text: messageText,
@@ -1878,24 +1944,29 @@ export default function ChatView() {
           'Authorization': `Bearer ${session?.access_token}`,
           'Idempotency-Key': `chat:${tid}:${clientTurnId}`,
         },
-        body: JSON.stringify({
-          thread_id: tid,
-          message: messageText,
-          source_message_id: persistedUserMessage?.id,
-          attachments: uploadedAttachments,
-          reasoning_effort: thinkingEffort,
-          ensemble: byokEnabled && ensembleActive,
-          agent_mode: byokEnabled && agentModeActive ? 'agent' : 'chat',
-          client_context: {
-            route: window.location.pathname,
-            view: 'chat',
+          body: JSON.stringify({
             thread_id: tid,
-            active_agent_id: activeAgentId,
-            active_agent_name: currentAgentLabel,
-            access_tier: accessTier,
-            composer_surface: hiddenHandoff ? 'hidden_onboarding_handoff' : landingAutosend ? 'landing_handoff' : 'chat',
-            onboarding_handoff: hiddenHandoff,
-            sidebar_visible: sidebarVisible,
+            message: messageText,
+            source_message_id: persistedUserMessage?.id,
+            attachments: uploadedAttachments,
+            model: selectedChatModel,
+            runtime_mode: effectiveRuntimeMode,
+            memory_enabled: memoryEnabled,
+            reasoning_effort: thinkingEffort,
+            ensemble: byokEnabled && ensembleActive,
+            agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat',
+            client_context: {
+              route: window.location.pathname,
+              view: 'chat',
+              thread_id: tid,
+              active_agent_id: activeAgentId,
+              active_agent_name: currentAgentLabel,
+              selected_model: selectedChatModel,
+              runtime_mode: effectiveRuntimeMode,
+              access_tier: accessTier,
+              composer_surface: hiddenHandoff ? 'hidden_onboarding_handoff' : landingAutosend ? 'landing_handoff' : 'chat',
+              onboarding_handoff: hiddenHandoff,
+              sidebar_visible: sidebarVisible,
             observer_alcove_open: alcoveOpen,
           },
         }),
@@ -1919,9 +1990,9 @@ export default function ChatView() {
           content: isMissingKey
             ? `${message}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
             : message,
-          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
           kind: 'agent_error',
-          metadata: { agent: activeAgentId, message, detail, code: err.code, request_id: err.requestId },
+          metadata: { agent: activeMessageAgent, message, detail, code: err.code, request_id: err.requestId },
         } as any);
         return;
       }
@@ -2108,7 +2179,7 @@ export default function ChatView() {
                 addMessage({
                   id: typeof data.message_id === 'string' ? data.message_id : undefined,
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: fullContent, model: data.model || null, agent: activeAgentId,
+                  content: fullContent, model: data.model || null, agent: activeMessageAgent,
                   thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
@@ -2121,9 +2192,9 @@ export default function ChatView() {
                 addMessage({
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: data.text || 'The model stream failed mid-response.',
-                  model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+                  model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
                   kind: 'agent_error',
-                  metadata: { agent: activeAgentId, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
+                  metadata: { agent: activeMessageAgent, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
                 } as any);
               }
         } catch {}
@@ -2147,9 +2218,9 @@ export default function ChatView() {
         addMessage({
           thread_id: tid!, user_id: user.id, role: 'assistant',
           content: 'Connection lost while streaming.',
-          model: null, agent: activeAgentId, thinking_content: null, tokens_used: null, bookmarked: false,
+          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
           kind: 'agent_error',
-          metadata: { agent: activeAgentId, message: 'Connection lost while streaming.', detail: String(e?.message || e) },
+          metadata: { agent: activeMessageAgent, message: 'Connection lost while streaming.', detail: String(e?.message || e) },
         } as any);
       }
     } finally {
@@ -2170,7 +2241,7 @@ export default function ChatView() {
       sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, agentModeActive, byokEnabled, accessTier, activeAgentId, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
@@ -2204,6 +2275,12 @@ export default function ChatView() {
       setAgentModeArmed(false);
     }
   }, [activeAgentId, agentModeArmed]);
+
+  useEffect(() => {
+    if (classicChatActive && alcoveOpen) {
+      setAlcoveOpen(false);
+    }
+  }, [classicChatActive, alcoveOpen]);
 
   // ⌘E / Ctrl+E toggles ensemble arm
   useEffect(() => {
@@ -2268,7 +2345,7 @@ export default function ChatView() {
       addMessage({
         thread_id: currentThreadId, user_id: user.id, role: 'assistant',
         content: partial || '_(canceled before any content)_',
-        model: null, agent: activeAgentId,
+        model: null, agent: activeMessageAgent,
         thinking_content: partialThinking || null,
         tokens_used: null, bookmarked: false,
         metadata: md as any,
@@ -2277,13 +2354,13 @@ export default function ChatView() {
         await insertMessageWithFreshSession({
           thread_id: currentThreadId, user_id: user.id, role: 'assistant',
           content: partial || '_(canceled before any content)_',
-          agent: activeAgentId,
+          agent: activeMessageAgent,
           thinking_content: partialThinking || null,
           metadata: md as any,
         });
       } catch (e) { console.warn('persist canceled stream failed', e); }
     }
-  }, [guardianStreaming, streamingContent, streamingThinking, currentThreadId, user, activeAgentId, addMessage]);
+  }, [guardianStreaming, streamingContent, streamingThinking, currentThreadId, user, activeMessageAgent, addMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -2347,10 +2424,10 @@ export default function ChatView() {
   const displayFirstTurnHandoff: FirstTurnHandoff | null = firstTurnHandoff ?? (
     landingAutosendPreviewText
       ? {
-          id: 'landing-autosend-preview',
-          text: landingAutosendPreviewText,
-          agentLabel: currentAgentLabel,
-          attachmentCount: 0,
+            id: 'landing-autosend-preview',
+            text: landingAutosendPreviewText,
+            agentLabel: currentResponderLabel,
+            attachmentCount: 0,
           startedAt: landingHandoffStartedAtRef.current,
         }
       : null
@@ -2473,10 +2550,10 @@ export default function ChatView() {
                   e.currentTarget.value = '';
                 }}
               />
-              {renderObserverAlcove()}
+              {!classicChatActive && renderObserverAlcove()}
               {!alcoveOpen && renderModelKeyNotice()}
               {!alcoveOpen && renderPendingAttachments()}
-              {!alcoveOpen && (
+              {!alcoveOpen && !classicChatActive && (
                 <CompanionImportPanel
                   open={companionImportOpen}
                   onClose={() => setCompanionImportOpen(false)}
@@ -2494,7 +2571,7 @@ export default function ChatView() {
                   autoCapitalize="sentences"
                   autoCorrect="on"
                   spellCheck={true}
-                  aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
+                  aria-label={alcoveOpen ? 'Ask Observer' : classicChatActive ? `Message ${getChatModelLabel(selectedChatModel)}` : 'Message Luca'}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
                   onFocus={() => setFocused(true)}
@@ -2506,9 +2583,16 @@ export default function ChatView() {
               </div>
               <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
                 <div className="agent-pills">
-                  {!alcoveOpen && byokEnabled && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
+                  {!alcoveOpen && byokEnabled && (
+                    <AttachmentPlusButton
+                      onClick={() => {
+                        if (classicChatActive) openCompanionFilePicker();
+                        else setCompanionImportOpen((value) => !value);
+                      }}
+                    />
+                  )}
                   {!isMobile && renderGuestStatusChip()}
-                  {!isMobile && (
+                  {!isMobile && !classicChatActive && (
                     <ObserverEyeChip
                       threadId={currentThreadId}
                       open={alcoveOpen}
@@ -2615,7 +2699,9 @@ export default function ChatView() {
           </span>
         </div>
         <span className="chat-header-meta">
-          {activeAgentId === 'luca'
+          {classicChatActive
+            ? `${getChatModelLabel(selectedChatModel)} · classic`
+            : activeAgentId === 'luca'
             ? (byokEnabled ? 'luca · opus-4.7' : 'luca · kimi-k2.6')
             : `${currentAgentLabel.toLowerCase()} · custom agent`}
         </span>
@@ -2888,7 +2974,7 @@ export default function ChatView() {
                 <div className="msg-time">
                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </div>
-                <div className="msg-author">{currentAgentLabel}</div>
+                <div className="msg-author">{currentResponderLabel}</div>
               </div>
 
               <div className="msg-body">
@@ -3014,11 +3100,11 @@ export default function ChatView() {
               e.currentTarget.value = '';
             }}
           />
-          {renderObserverAlcove()}
+          {!classicChatActive && renderObserverAlcove()}
 
           {!alcoveOpen && renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
-          {!alcoveOpen && (
+          {!alcoveOpen && !classicChatActive && (
             <CompanionImportPanel
               open={companionImportOpen}
               onClose={() => setCompanionImportOpen(false)}
@@ -3038,7 +3124,7 @@ export default function ChatView() {
               autoCapitalize="sentences"
               autoCorrect="on"
               spellCheck={true}
-              aria-label={alcoveOpen ? 'Ask Observer' : 'Message Luca'}
+              aria-label={alcoveOpen ? 'Ask Observer' : classicChatActive ? `Message ${getChatModelLabel(selectedChatModel)}` : 'Message Luca'}
               value={input}
               onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
               onFocus={() => setFocused(true)}
@@ -3052,9 +3138,16 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
             <div className="agent-pills">
-              {!alcoveOpen && byokEnabled && <AttachmentPlusButton onClick={() => setCompanionImportOpen((value) => !value)} />}
+              {!alcoveOpen && byokEnabled && (
+                <AttachmentPlusButton
+                  onClick={() => {
+                    if (classicChatActive) openCompanionFilePicker();
+                    else setCompanionImportOpen((value) => !value);
+                  }}
+                />
+              )}
               {!isMobile && renderGuestStatusChip()}
-              {!isMobile && (
+              {!isMobile && !classicChatActive && (
                 <ObserverEyeChip
                   threadId={currentThreadId}
                   open={alcoveOpen}

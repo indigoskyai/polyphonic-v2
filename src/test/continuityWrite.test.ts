@@ -80,7 +80,7 @@ describe('Continuity Kernel write path', () => {
   it('queues all post-turn memory operations through the same reportable path', () => {
     const fetchCalls: FetchCall[] = [];
     const finalized: string[] = [];
-    const encoded: string[] = [];
+	    const encoded: string[] = [];
     const metadata: string[][] = [];
 
     const deps: ContinuityWriteDeps = {
@@ -101,8 +101,8 @@ describe('Continuity Kernel write path', () => {
       finalizePendingRevisions: async (_supabase, _apiKey, revisions) => {
         finalized.push(...revisions.map((r) => r.id));
       },
-      encodeMnemosExchange: async (_supabase, _userId, _agentId, userMessage) => {
-        encoded.push(userMessage);
+	      encodeMnemosExchange: async (_supabase, _userId, agentId, userMessage) => {
+	        encoded.push(`${agentId}:${userMessage}`);
       },
       updateThreadAgentMetadata: async (_supabase, _threadId, primary, participants) => {
         metadata.push([primary, ...participants]);
@@ -135,7 +135,7 @@ describe('Continuity Kernel write path', () => {
 
     expect(report.operations.every((op) => op.status === 'queued')).toBe(true);
     expect(finalized).toEqual(['rev1']);
-    expect(encoded).toEqual(['remember this']);
+	    expect(encoded).toEqual(['luca:remember this']);
     expect(metadata[0]).toEqual(['luca', 'luca', 'anima']);
     expect(fetchCalls.map((c) => c.url)).toEqual([
       'https://example.supabase.co/functions/v1/observer-watch',
@@ -145,9 +145,81 @@ describe('Continuity Kernel write path', () => {
     ]);
     expect(fetchCalls.at(-1)?.auth).toBe('Bearer service-role');
     expect(fetchCalls.at(-1)?.body.chain_write).toHaveLength(2);
-  });
+	  });
 
-  it('runs dialectic and identity work for custom agents, not just Luca', () => {
+	  it('keeps Classic Chat writes quiet except shared and model-family Mnemos encoding', () => {
+	    const fetchCalls: FetchCall[] = [];
+	    const encoded: string[] = [];
+	    const metadata: string[][] = [];
+
+	    const deps: ContinuityWriteDeps = {
+	      env: (name) => {
+	        if (name === 'DIALECTIC_ENABLED') return 'true';
+	        if (name === 'SUPABASE_URL') return 'https://example.supabase.co';
+	        if (name === 'SUPABASE_SERVICE_ROLE_KEY') return 'service-role';
+	        return undefined;
+	      },
+	      fetch: async (url, init) => {
+	        fetchCalls.push({
+	          url: String(url),
+	          body: parseBody(init?.body),
+	          auth: String((init?.headers as Record<string, string>)?.Authorization || ''),
+	        });
+	        return new Response('{}', { status: 200 });
+	      },
+	      finalizePendingRevisions: async () => {},
+	      encodeMnemosExchange: async (_supabase, _userId, agentId, userMessage) => {
+	        encoded.push(`${agentId}:${userMessage}`);
+	      },
+	      updateThreadAgentMetadata: async (_supabase, _threadId, primary, participants) => {
+	        metadata.push([primary, ...participants]);
+	      },
+	      log: () => {},
+	      warn: () => {},
+	    };
+
+	    const report = queueContinuityTurnWrites({
+	      supabase: supabaseStub,
+	      userId: 'u1',
+	      threadId: 't1',
+	      agentId: 'luca',
+	      runtimeProfile: 'classic',
+	      memoryAgentIds: ['classic:shared', 'classic:family:openai'],
+	      userMessage: 'remember this quietly',
+	      agentResponse: 'i will.',
+	      sourceMessageId: 'a1',
+	      apiKey: 'openrouter-key',
+	      authHeader: 'Bearer user-jwt',
+	      pendingRevisions: [{
+	        id: 'rev1',
+	        revision_type: 'correction',
+	        what_was_said: 'x',
+	        what_to_say_now: 'y',
+	        rationale: null,
+	        created_at: '2026-05-05T00:00:00.000Z',
+	      }],
+	    }, deps);
+
+	    expect(encoded).toEqual([
+	      'classic:shared:remember this quietly',
+	      'classic:family:openai:remember this quietly',
+	    ]);
+	    expect(fetchCalls).toEqual([]);
+	    expect(metadata).toEqual([]);
+	    expect(report.operations).toContainEqual(expect.objectContaining({
+	      name: 'mnemos_encode',
+	      status: 'queued',
+	    }));
+	    for (const name of ['pending_revisions', 'observer_watch', 'mnemos_dialectic', 'skills_distill', 'hypomnema_gate', 'thread_agent_metadata']) {
+	      expect(report.operations).toContainEqual(expect.objectContaining({
+	        name,
+	        status: 'skipped',
+	        reason: 'classic quiet runtime',
+	      }));
+	    }
+	  });
+
+	  it('runs dialectic and identity work for custom agents, not just Luca', () => {
     const fetchCalls: Array<Omit<FetchCall, 'auth'>> = [];
     const deps: ContinuityWriteDeps = {
       env: (name) => {

@@ -126,9 +126,10 @@ export interface ContinuityLoadOptions {
   userId: string;
   agentId?: string;
   threadId?: string | null;
-  userMessage?: string;
-  apiKey?: string | null;
-  historyLimit?: number;
+    userMessage?: string;
+    apiKey?: string | null;
+    memoryAgentIds?: string[];
+    historyLimit?: number;
   includeHistory?: boolean;
   includeIdentity?: boolean;
   includePendingRevisions?: boolean;
@@ -191,8 +192,9 @@ export async function loadContinuityPacket(
   options: ContinuityLoadOptions,
   loaders: ContinuityLoaders = {},
 ): Promise<ContinuityPacket> {
-  const agentId = options.agentId || "luca";
-  const query = (options.userMessage || "").trim();
+    const agentId = options.agentId || "luca";
+    const memoryAgentIds = normalizeMemoryAgentIds(agentId, options.memoryAgentIds);
+    const query = (options.userMessage || "").trim();
   const generatedAt = new Date(options.nowMs ?? Date.now()).toISOString();
   const diagnostics: ContinuityDiagnostic[] = [];
 
@@ -252,7 +254,14 @@ export async function loadContinuityPacket(
     enabled: include.functionalMemory,
     diagnostics,
     fallback: [] as FunctionalMemory[],
-    run: () => (loaders.functionalMemories || loadFunctionalMemories)(supabase, options.userId, agentId, query, 8),
+      run: () => loadFunctionalMemoriesForAgents(
+        supabase,
+        options.userId,
+        memoryAgentIds,
+        query,
+        8,
+        loaders.functionalMemories,
+      ),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -261,7 +270,14 @@ export async function loadContinuityPacket(
     enabled: include.mnemos && query.length > 0,
     diagnostics,
     fallback: [] as ActivationResult[],
-    run: () => (loaders.mnemos || loadMnemosAssociations)(supabase, options.userId, agentId, query, options.apiKey),
+      run: () => loadMnemosAssociationsForAgents(
+        supabase,
+        options.userId,
+        memoryAgentIds,
+        query,
+        options.apiKey,
+        loaders.mnemos,
+      ),
     summarize: (items) => ({ count: items.length, rendered: items.length }),
   });
 
@@ -571,6 +587,36 @@ export async function loadFunctionalMemories(
     .slice(0, effectiveLimit);
 }
 
+function normalizeMemoryAgentIds(agentId: string, memoryAgentIds?: string[]): string[] {
+  const ids = (memoryAgentIds && memoryAgentIds.length > 0 ? memoryAgentIds : [agentId])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  return [...new Set(ids.length > 0 ? ids : [agentId])];
+}
+
+async function loadFunctionalMemoriesForAgents(
+  supabase: SupabaseLike,
+  userId: string,
+  agentIds: string[],
+  query: string,
+  limit: number,
+  loader?: ContinuityLoaders["functionalMemories"],
+): Promise<FunctionalMemory[]> {
+  const perAgentLimit = Math.max(limit, Math.ceil(limit / Math.max(1, agentIds.length)));
+  const batches = await Promise.all(agentIds.map((agentId) =>
+    (loader || loadFunctionalMemories)(supabase, userId, agentId, query, perAgentLimit)
+  ));
+  const byId = new Map<string, FunctionalMemory>();
+  for (const memory of batches.flat()) {
+    if (!memory?.id) continue;
+    const existing = byId.get(memory.id);
+    if (!existing || sortFunctionalMemories(memory, existing) < 0) {
+      byId.set(memory.id, memory);
+    }
+  }
+  return [...byId.values()].sort(sortFunctionalMemories).slice(0, limit);
+}
+
 async function loadMnemosAssociations(
   supabase: SupabaseLike,
   userId: string,
@@ -580,6 +626,31 @@ async function loadMnemosAssociations(
 ): Promise<ActivationResult[]> {
   const mnemos = new MnemosEngine(supabase as any, userId, agentId);
   return await mnemos.retrieve(query, { limit: 5, spread_activation: true, api_key: apiKey || undefined });
+}
+
+async function loadMnemosAssociationsForAgents(
+  supabase: SupabaseLike,
+  userId: string,
+  agentIds: string[],
+  query: string,
+  apiKey?: string | null,
+  loader?: ContinuityLoaders["mnemos"],
+): Promise<ActivationResult[]> {
+  const batches = await Promise.all(agentIds.map((agentId) =>
+    (loader || loadMnemosAssociations)(supabase, userId, agentId, query, apiKey)
+  ));
+  const byId = new Map<string, ActivationResult>();
+  for (const result of batches.flat()) {
+    const id = result?.engram?.id;
+    if (!id) continue;
+    const existing = byId.get(id);
+    if (!existing || result.activation > existing.activation) {
+      byId.set(id, result);
+    }
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.activation - a.activation)
+    .slice(0, 8);
 }
 
 async function loadBeliefs(

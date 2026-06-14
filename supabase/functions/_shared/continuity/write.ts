@@ -36,10 +36,12 @@ export interface ContinuityWriteOptions {
   agentId?: string;
   userMessage: string;
   agentResponse: string;
-  sourceMessageId?: string | null;
-  apiKey?: string | null;
-  authHeader?: string;
-  pendingRevisions?: PendingRevision[];
+    sourceMessageId?: string | null;
+    apiKey?: string | null;
+    authHeader?: string;
+    runtimeProfile?: "classic" | "agent";
+    memoryAgentIds?: string[];
+    pendingRevisions?: PendingRevision[];
   recentTurns?: Array<{ role: string; content: string }>;
   observers?: ContinuityObserverContribution[];
 }
@@ -65,8 +67,11 @@ export function queueContinuityTurnWrites(
   opts: ContinuityWriteOptions,
   deps: ContinuityWriteDeps = {},
 ): ContinuityWriteReport {
-  const agentId = opts.agentId || "luca";
-  const operations: ContinuityWriteOperation[] = [];
+    const agentId = opts.agentId || "luca";
+    const runtimeProfile = opts.runtimeProfile === "classic" ? "classic" : "agent";
+    const quietClassic = runtimeProfile === "classic";
+    const memoryAgentIds = normalizeMemoryAgentIds(agentId, opts.memoryAgentIds);
+    const operations: ContinuityWriteOperation[] = [];
   const log = deps.log || ((message: string, detail?: unknown) => console.log(message, detail ?? ""));
   const warn = deps.warn || ((message: string, detail?: unknown) => console.warn(message, detail ?? ""));
 
@@ -100,10 +105,10 @@ export function queueContinuityTurnWrites(
   const apiKey = opts.apiKey || "";
   const dialecticEnabled = isDialecticEnabled(opts.userId, (name) => readEnv(name, deps));
 
-  queue(
-    "pending_revisions",
-    dialecticEnabled && hasTurn && pendingRevisions.length > 0 && Boolean(apiKey),
-    !dialecticEnabled ? "dialectic disabled" : pendingRevisions.length === 0 ? "no pending revisions" : apiKey ? "empty turn" : "no api key",
+    queue(
+      "pending_revisions",
+      !quietClassic && dialecticEnabled && hasTurn && pendingRevisions.length > 0 && Boolean(apiKey),
+      quietClassic ? "classic quiet runtime" : !dialecticEnabled ? "dialectic disabled" : pendingRevisions.length === 0 ? "no pending revisions" : apiKey ? "empty turn" : "no api key",
     () => (deps.finalizePendingRevisions || finalizePendingRevisions)(
       opts.supabase,
       apiKey,
@@ -112,34 +117,36 @@ export function queueContinuityTurnWrites(
     ),
   );
 
-  queue(
-    "mnemos_encode",
-    hasTurn,
-    "empty turn",
-    () => (deps.encodeMnemosExchange || encodeMnemosExchange)(
-      opts.supabase,
-      opts.userId,
-      agentId,
-      opts.userMessage,
-      opts.agentResponse,
-      apiKey || undefined,
-    ),
-  );
+    queue(
+      "mnemos_encode",
+      hasTurn,
+      "empty turn",
+      () => Promise.all(memoryAgentIds.map((memoryAgentId) =>
+        (deps.encodeMnemosExchange || encodeMnemosExchange)(
+          opts.supabase,
+          opts.userId,
+          memoryAgentId,
+          opts.userMessage,
+          opts.agentResponse,
+          apiKey || undefined,
+        )
+      )),
+    );
 
-  queue(
-    "observer_watch",
-    hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
-    agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
+    queue(
+      "observer_watch",
+      !quietClassic && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
+      quietClassic ? "classic quiet runtime" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("observer-watch", {
       thread_id: opts.threadId,
       agent_id: agentId,
     }, opts.authHeader || "", deps),
   );
 
-  queue(
-    "mnemos_dialectic",
-    dialecticEnabled && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
-    !dialecticEnabled ? "dialectic disabled" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
+    queue(
+      "mnemos_dialectic",
+      !quietClassic && dialecticEnabled && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
+      quietClassic ? "classic quiet runtime" : !dialecticEnabled ? "dialectic disabled" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("mnemos-dialectic", {
       thread_id: opts.threadId,
       agent_id: agentId,
@@ -149,28 +156,28 @@ export function queueContinuityTurnWrites(
   // Self-model distillation runs for ALL agents now (was Luca-only). Each
   // agent builds its own self-model from conversations with the user. The
   // distiller's system prompt is tuned per-agent inside the function.
-  queue(
-    "skills_distill",
-    hasTurn && Boolean(agentId) && Boolean(opts.authHeader),
-    !agentId ? "no agent id" : opts.authHeader ? "empty turn" : "no auth header",
+    queue(
+      "skills_distill",
+      !quietClassic && hasTurn && Boolean(agentId) && Boolean(opts.authHeader),
+      quietClassic ? "classic quiet runtime" : !agentId ? "no agent id" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("skills-distill", {
       thread_id: opts.threadId,
       agent_id: agentId,
     }, opts.authHeader || "", deps),
   );
 
-  queue(
-    "hypomnema_gate",
-    hasTurn && Boolean(readEnv("SUPABASE_SERVICE_ROLE_KEY", deps)),
-    readEnv("SUPABASE_SERVICE_ROLE_KEY", deps) ? "empty turn" : "no service role",
+    queue(
+      "hypomnema_gate",
+      !quietClassic && hasTurn && Boolean(readEnv("SUPABASE_SERVICE_ROLE_KEY", deps)),
+      quietClassic ? "classic quiet runtime" : readEnv("SUPABASE_SERVICE_ROLE_KEY", deps) ? "empty turn" : "no service role",
     () => dispatchHypomnemaGate(opts, deps),
   );
 
-  const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)];
-  queue(
-    "thread_agent_metadata",
-    Boolean(opts.threadId),
-    "no thread id",
+    const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)];
+    queue(
+      "thread_agent_metadata",
+      !quietClassic && Boolean(opts.threadId),
+      quietClassic ? "classic quiet runtime" : "no thread id",
     () => (deps.updateThreadAgentMetadata || updateThreadAgentMetadata)(
       opts.supabase,
       opts.threadId,
@@ -234,6 +241,13 @@ export function stripCurrentTurnFromRecentTurns(
   trimTrailing("assistant", responseNorm);
 
   return next.slice(-6);
+}
+
+function normalizeMemoryAgentIds(agentId: string, memoryAgentIds?: string[]): string[] {
+  const ids = (memoryAgentIds && memoryAgentIds.length > 0 ? memoryAgentIds : [agentId])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  return [...new Set(ids.length > 0 ? ids : [agentId])];
 }
 
 export function buildHypomnemaGatePayload(opts: ContinuityWriteOptions): Record<string, unknown> {
