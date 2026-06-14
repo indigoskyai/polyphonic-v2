@@ -154,11 +154,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
           </div>
         )}
         <div className={`msg-author${msg.role === 'user' ? ' user' : ''}`}>
-          {msg.role === 'user'
-            ? 'You'
-            : msg.agent === 'guardian'
-              ? 'Observer'
-              : getAgentDisplayName(msg.agent, agentNameById)}
+          {msg.role === 'user' ? 'You' : assistantLabel}
         </div>
       </div>
 
