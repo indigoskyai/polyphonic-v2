@@ -10,8 +10,18 @@ const corsHeaders = {
 };
 
 function generateCode(): string {
-  const n = Math.floor(Math.random() * 1_000_000);
-  return n.toString().padStart(6, "0");
+  // 6-digit code (0..999_999). Use crypto.getRandomValues + rejection sampling
+  // against the largest multiple of RANGE that fits in a Uint32 to eliminate
+  // modulo bias.
+  const RANGE = 1_000_000;
+  const MAX = Math.floor(0x1_0000_0000 / RANGE) * RANGE;
+  const buf = new Uint32Array(1);
+  let n: number;
+  do {
+    crypto.getRandomValues(buf);
+    n = buf[0];
+  } while (n >= MAX);
+  return (n % RANGE).toString().padStart(6, "0");
 }
 
 function generateDeviceToken(): string {
@@ -70,14 +80,30 @@ Deno.serve(async (req) => {
       }
       const userId = userData.user.id;
       const admin = createClient(supabaseUrl, serviceKey);
-      const code = generateCode();
       const expires = new Date(Date.now() + 15 * 60_000).toISOString();
-      const { error } = await admin.from("openclaw_pairing_codes").insert({
-        code,
-        user_id: userId,
-        expires_at: expires,
-      });
-      if (error) throw error;
+      const MAX_ATTEMPTS = 5;
+      let code = "";
+      let lastErr: unknown = null;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        code = generateCode();
+        const { error } = await admin.from("openclaw_pairing_codes").insert({
+          code,
+          user_id: userId,
+          expires_at: expires,
+        });
+        if (!error) {
+          lastErr = null;
+          break;
+        }
+        // Postgres unique_violation = 23505. Only retry on PK collision.
+        const pgCode = (error as { code?: string }).code;
+        if (pgCode !== "23505") {
+          lastErr = error;
+          break;
+        }
+        lastErr = error;
+      }
+      if (lastErr) throw lastErr;
       return new Response(
         JSON.stringify({ code, expires_at: expires, ttl_seconds: 15 * 60 }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
