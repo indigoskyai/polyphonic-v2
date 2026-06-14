@@ -324,7 +324,7 @@ describe('Continuity Kernel read path', () => {
   it('summarizes Mnemos tool output from activation result engrams', async () => {
     const result = engram('The shape arrives before clean recall, but the association is real.');
     result.activation = 0.73;
-    result.path = 'direct -> related';
+    result.path = 'direct -> related' as ActivationResult['path'];
     result.engram.id = 'engram-naturalization';
     result.engram.tags = ['felt-continuity'];
 
