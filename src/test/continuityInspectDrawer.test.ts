@@ -29,4 +29,14 @@ describe('Continuity inspection drawer', () => {
     expect(source).toContain('summarizeContinuityPacket');
     expect(source).toContain('continuityBridgeMode: classicRuntime ? "classic" : "agent"');
   });
+
+  it('keeps functional memory recall wired to pg_trgm after extension hardening', () => {
+    const migration = readRepoFile('supabase/migrations/20260615070000_fix_match_memories_pg_trgm.sql');
+
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.match_memories');
+    expect(migration).toContain('SET search_path = public, extensions');
+    expect(migration).toContain('extensions.similarity(m.content, query_text)');
+    expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.match_memories(text, integer, uuid, text) TO authenticated, service_role');
+    expect(migration).not.toMatch(/[^.]similarity\(m\.content,\s*query_text\)/);
+  });
 });
