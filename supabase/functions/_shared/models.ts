@@ -16,12 +16,17 @@ interface ModelMeta {
 
 export const REASONING_MODELS: Record<string, ModelMeta> = {
   // Anthropic — uses thinking.type + budget_tokens
+  'anthropic/claude-opus-4.8': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.8' },
+  'anthropic/claude-4.8-opus-20260528': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.8' },
   'anthropic/claude-opus-4-7': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
   'anthropic/claude-opus-4.7': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
+  'anthropic/claude-4.7-opus-20260416': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.7' },
   'anthropic/claude-opus-4.6': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6' },
   'anthropic/claude-opus-4.6-fast': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.6 Fast' },
   'anthropic/claude-opus-4.5': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.5' },
+  'anthropic/claude-4.5-opus-20251124': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.5' },
   'anthropic/claude-opus-4.1': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.1' },
+  'anthropic/claude-4.1-opus-20250805': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4.1' },
   'anthropic/claude-opus-4': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Opus 4' },
   'anthropic/claude-sonnet-4.6': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4.6' },
   'anthropic/claude-sonnet-4.5': { reasoning: true, paramStyle: 'anthropic', label: 'Claude Sonnet 4.5' },

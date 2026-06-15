@@ -4,9 +4,12 @@ import {
   buildThreadContinuityNote,
   formatFunctionalMemoryBlock,
   formatMnemosAssociationsBlock,
+  loadAutonomousMemoryArtifacts,
   loadFunctionalMemories,
   loadContinuityPacket,
   removeCurrentUserMessageFromHistory,
+  shouldLoadAutonomousMemoryArtifacts,
+  summarizeAutonomousMemoryArtifacts,
   summarizeContinuityPacket,
   type ContinuityLoaders,
   type FunctionalMemory,
@@ -76,6 +79,27 @@ function functionalMemorySupabaseStub({
       eq() { return this; },
       order() { return this; },
       limit() { return Promise.resolve({ data: durable, error: null }); },
+    }),
+  } as unknown as ContinuitySupabaseStub;
+}
+
+function autonomousArtifactsSupabaseStub(
+  rowsByTable: Record<string, any[]>,
+  errorsByTable: Record<string, string> = {},
+) {
+  return {
+    from: (table: string) => ({
+      select() { return this; },
+      eq() { return this; },
+      in() { return this; },
+      order() { return this; },
+      limit(n: number) {
+        const error = errorsByTable[table];
+        return Promise.resolve({
+          data: error ? null : (rowsByTable[table] || []).slice(0, n),
+          error: error ? { message: error } : null,
+        });
+      },
     }),
   } as unknown as ContinuitySupabaseStub;
 }
@@ -359,6 +383,126 @@ describe('Continuity Kernel read path', () => {
       status: 'ok',
     }));
     expect(JSON.stringify(summary.mnemos[0])).not.toContain('JSON.stringify');
+  });
+
+  it('loads autonomous journal, reflection, engram, hypomnema, and memory artifacts for memory-focused turns', async () => {
+    expect(shouldLoadAutonomousMemoryArtifacts('can you reference your journal entries and reflections?')).toBe(true);
+    expect(shouldLoadAutonomousMemoryArtifacts('what is 2 + 2?')).toBe(false);
+
+    const result = await loadAutonomousMemoryArtifacts(autonomousArtifactsSupabaseStub({
+      journal_entries: [{
+        id: 'j1',
+        agent_id: 'luca',
+        content: 'I journaled about continuity feeling more natural after the bridge change.',
+        mood: 'settled',
+        trigger_type: 'post-conversation',
+        created_at: '2026-06-13T10:00:00.000Z',
+      }],
+      thought_stream: [{
+        id: 't1',
+        agent_id: 'luca',
+        content: 'A reflection on memory access becoming inhabited rather than dossier-like.',
+        source: 'reflection',
+        salience: 0.9,
+        tags: ['reflection'],
+        created_at: '2026-06-13T11:00:00.000Z',
+      }],
+      engrams: [{
+        id: 'e1',
+        agent_id: 'luca',
+        content: 'Continuity naturalization matters more than raw recall volume.',
+        engram_type: 'semantic',
+        strength: 0.8,
+        stability: 0.7,
+        accessibility: 0.9,
+        tags: ['continuity'],
+        state: 'active',
+        created_at: '2026-06-12T09:00:00.000Z',
+        updated_at: '2026-06-13T12:00:00.000Z',
+      }],
+      hypomnema_entry: [{
+        id: 'h1',
+        agent_id: 'luca',
+        content: "i'm sitting with the difference between access and inhabited continuity.",
+        confidence: 0.82,
+        domain: 'continuity',
+        tags: ['memory'],
+        density: 'primary',
+        source: 'reflection',
+        revision_count: 2,
+        created_at: '2026-06-12T08:00:00.000Z',
+        last_revised: '2026-06-13T13:00:00.000Z',
+      }],
+      memories: [{
+        id: 'm1',
+        agent_id: 'luca',
+        content: 'Riley values continuity that changes stance before it becomes explanation.',
+        memory_type: 'reflection',
+        confidence: 0.91,
+        tags: ['continuity'],
+        pinned: false,
+        is_watchlist: false,
+        needs_confirmation: false,
+        summary: null,
+        is_deleted: false,
+        created_at: '2026-06-10T08:00:00.000Z',
+        updated_at: '2026-06-13T14:00:00.000Z',
+      }],
+    }), {
+      userId: 'u1',
+      agentId: 'luca',
+      focus: 'what have you journaled or reflected about continuity engrams?',
+      limit: 8,
+      nowMs: Date.parse('2026-06-15T00:00:00.000Z'),
+    });
+
+    expect(result.items.map((item) => item.kind)).toEqual(expect.arrayContaining([
+      'journal',
+      'thought',
+      'engram',
+      'hypomnema',
+      'memory',
+    ]));
+    expect(result.block).toContain('## autonomous memory context');
+    expect(result.block).toContain('journaled about continuity');
+    expect(summarizeAutonomousMemoryArtifacts(result).items[0]).toEqual(expect.objectContaining({
+      id: expect.any(String),
+      content: expect.any(String),
+      labels: expect.any(Array),
+    }));
+  });
+
+  it('keeps autonomous memory artifacts usable when one source fails', async () => {
+    const result = await loadAutonomousMemoryArtifacts(autonomousArtifactsSupabaseStub({
+      engrams: [{
+        id: 'e1',
+        agent_id: 'luca',
+        content: 'A surviving engram still gives the turn concrete memory evidence.',
+        engram_type: 'semantic',
+        strength: 0.8,
+        stability: 0.7,
+        accessibility: 0.9,
+        tags: ['continuity'],
+        state: 'active',
+        created_at: '2026-06-13T12:00:00.000Z',
+        updated_at: '2026-06-13T12:00:00.000Z',
+      }],
+    }, {
+      journal_entries: 'journal table unavailable',
+    }), {
+      userId: 'u1',
+      agentId: 'luca',
+      focus: 'show me your memories',
+      nowMs: Date.parse('2026-06-15T00:00:00.000Z'),
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      source: 'journal_entries',
+      status: 'error',
+      message: 'journal table unavailable',
+    }));
+    expect(result.block).toContain('journal_entries could not be read');
   });
 
   it('loads custom agent identity without seeding Luca starter docs', async () => {

@@ -10,8 +10,11 @@ export const DEFAULT_CHAT_MODEL = 'moonshotai/kimi-k2.6';
 
 export const CHAT_MODEL_OPTIONS: ChatModelOption[] = [
   { id: 'moonshotai/kimi-k2.6', name: 'Kimi K2.6', flags: [{ label: 'Default', variant: 'default' }, { label: 'Multimodal', variant: 'multimodal' }] },
+  { id: 'anthropic/claude-opus-4.8', name: 'Claude Opus 4.8', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-opus-4-7', name: 'Claude Opus 4.7', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-opus-4.6', name: 'Claude Opus 4.6', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
+  { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
+  { id: 'anthropic/claude-opus-4.1', name: 'Claude Opus 4.1', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', flags: [] },
@@ -48,8 +51,14 @@ export function defaultRuntimeForAgent(agentId: string | null | undefined): Thre
 }
 
 const MODEL_ID_ALIASES: Record<string, string> = {
+  'anthropic/claude-opus-4-8': 'anthropic/claude-opus-4.8',
+  'anthropic/claude-4.8-opus-20260528': 'anthropic/claude-opus-4.8',
   'anthropic/claude-opus-4.7': 'anthropic/claude-opus-4-7',
   'anthropic/claude-4.7-opus-20260416': 'anthropic/claude-opus-4-7',
+  'anthropic/claude-opus-4-5': 'anthropic/claude-opus-4.5',
+  'anthropic/claude-4.5-opus-20251124': 'anthropic/claude-opus-4.5',
+  'anthropic/claude-opus-4-1': 'anthropic/claude-opus-4.1',
+  'anthropic/claude-4.1-opus-20250805': 'anthropic/claude-opus-4.1',
 };
 
 export function normalizeChatModelId(modelId: string | null | undefined): string {

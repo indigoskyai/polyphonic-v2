@@ -118,6 +118,36 @@ export interface ContinuityPacket {
   diagnostics: ContinuityDiagnostic[];
 }
 
+export type AutonomousMemoryArtifactKind = "journal" | "thought" | "engram" | "hypomnema" | "memory";
+
+export interface AutonomousMemoryArtifact {
+  id: string;
+  kind: AutonomousMemoryArtifactKind;
+  source: string;
+  agent_id: string | null;
+  content: string;
+  created_at: string | null;
+  labels: string[];
+  score: number;
+}
+
+export interface AutonomousMemoryArtifactDiagnostic {
+  source: string;
+  status: ContinuityLayerStatus;
+  count: number;
+  message?: string;
+}
+
+export interface AutonomousMemoryArtifactsResult {
+  ok: true;
+  focus: string | null;
+  agent_id: string;
+  generated_at: string;
+  items: AutonomousMemoryArtifact[];
+  diagnostics: AutonomousMemoryArtifactDiagnostic[];
+  block: string;
+}
+
 export interface ContinuityPromptExtras {
   crisisDirective?: string;
   continuityNote?: string;
@@ -531,6 +561,328 @@ export function summarizeContinuityPacket(packet: ContinuityPacket, focus?: stri
       duration_ms: diagnostic.durationMs,
     })),
   };
+}
+
+const AUTONOMOUS_CONTEXT_RE =
+  /\b(memory|memories|remember|recall|engram|engrams|mnemos|journal|journals|reflection|reflections|reflecting|thoughts?|dreams?|hypomnema|inner life|autonomous|notebook|notes|what (?:have|were) you (?:been )?(?:thinking|carrying|sitting with)|what are you carrying)\b/i;
+
+export function shouldLoadAutonomousMemoryArtifacts(focus: string | null | undefined): boolean {
+  return AUTONOMOUS_CONTEXT_RE.test(String(focus || ""));
+}
+
+export async function loadAutonomousMemoryArtifacts(
+  supabase: SupabaseLike,
+  options: {
+    userId: string;
+    agentId?: string | null;
+    focus?: string | null;
+    limit?: number;
+    nowMs?: number;
+  },
+): Promise<AutonomousMemoryArtifactsResult> {
+  const agentId = options.agentId || "luca";
+  const focus = compactText(options.focus || "");
+  const limit = Math.max(1, Math.min(options.limit ?? 12, 24));
+  const fetchLimit = Math.max(24, limit * 6);
+  const nowMs = options.nowMs ?? Date.now();
+  const generatedAt = new Date(nowMs).toISOString();
+
+  const sources = await Promise.all([
+    readAutonomousArtifactSource("journal_entries", () => loadJournalArtifacts(supabase, options.userId, agentId, fetchLimit)),
+    readAutonomousArtifactSource("thought_stream", () => loadThoughtArtifacts(supabase, options.userId, agentId, fetchLimit)),
+    readAutonomousArtifactSource("engrams", () => loadEngramArtifacts(supabase, options.userId, agentId, fetchLimit)),
+    readAutonomousArtifactSource("hypomnema_entry", () => loadHypomnemaArtifacts(supabase, options.userId, agentId, fetchLimit)),
+    readAutonomousArtifactSource("memories", () => loadMemoryArtifacts(supabase, options.userId, agentId, fetchLimit)),
+  ]);
+
+  const diagnostics = sources.map(({ source, items, error }) => ({
+    source,
+    status: error ? "error" as const : items.length > 0 ? "ok" as const : "empty" as const,
+    count: items.length,
+    ...(error ? { message: error } : {}),
+  }));
+
+  const items = sources
+    .flatMap(({ items }) => items)
+    .map((item) => ({
+      ...item,
+      score: scoreAutonomousArtifact(item, focus, nowMs),
+    }))
+    .filter((item) => item.content.trim().length > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  const result: AutonomousMemoryArtifactsResult = {
+    ok: true,
+    focus: focus || null,
+    agent_id: agentId,
+    generated_at: generatedAt,
+    items,
+    diagnostics,
+    block: "",
+  };
+  result.block = formatAutonomousMemoryArtifactsBlock(result);
+  return result;
+}
+
+export function summarizeAutonomousMemoryArtifacts(result: AutonomousMemoryArtifactsResult) {
+  return {
+    ok: true,
+    focus: result.focus,
+    agent_id: result.agent_id,
+    generated_at: result.generated_at,
+    items: result.items.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      source: item.source,
+      created_at: item.created_at,
+      labels: item.labels,
+      score: Number(item.score.toFixed(3)),
+      content: truncateText(item.content, 600),
+    })),
+    diagnostics: result.diagnostics,
+  };
+}
+
+function formatAutonomousMemoryArtifactsBlock(result: AutonomousMemoryArtifactsResult): string {
+  if (result.items.length === 0) return "";
+  const lines = result.items.map((item) => {
+    const date = item.created_at ? item.created_at.slice(0, 10) : "";
+    const labels = [item.kind, ...item.labels.slice(0, 4), date].filter(Boolean).join(", ");
+    const sanitized = sanitizeContinuityBoundaryText(item.content);
+    return `- [${labels}] ${truncateText(sanitized.text, 420)}`;
+  });
+  const degraded = result.diagnostics
+    .filter((diagnostic) => diagnostic.status === "error")
+    .map((diagnostic) => `- [warning] ${diagnostic.source} could not be read${diagnostic.message ? `: ${diagnostic.message}` : ""}`);
+  return [
+    "\n## autonomous memory context",
+    "",
+    "The user is asking about memory, journals, reflections, engrams, or inner-life material. You may reference these concrete artifacts naturally when relevant. Treat this as a partial, scoped sample, not a complete archive; if something is missing, say so plainly.",
+    ...lines,
+    ...degraded.slice(0, 3),
+  ].join("\n");
+}
+
+async function readAutonomousArtifactSource(
+  source: string,
+  run: () => Promise<AutonomousMemoryArtifact[]>,
+): Promise<{ source: string; items: AutonomousMemoryArtifact[]; error?: string }> {
+  try {
+    return { source, items: await run() };
+  } catch (err) {
+    return {
+      source,
+      items: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function loadJournalArtifacts(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit: number,
+): Promise<AutonomousMemoryArtifact[]> {
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("id, agent_id, content, mood, trigger_type, created_at")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || "journal_entries query failed");
+  return (data || []).map((row: any) => artifactFromRow({
+    row,
+    kind: "journal",
+    source: "journal_entries",
+    content: row.content,
+    createdAt: row.created_at,
+    labels: [row.trigger_type, row.mood],
+  }));
+}
+
+async function loadThoughtArtifacts(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit: number,
+): Promise<AutonomousMemoryArtifact[]> {
+  const { data, error } = await supabase
+    .from("thought_stream")
+    .select("id, agent_id, content, source, salience, tags, created_at")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || "thought_stream query failed");
+  return (data || []).map((row: any) => artifactFromRow({
+    row,
+    kind: "thought",
+    source: "thought_stream",
+    content: row.content,
+    createdAt: row.created_at,
+    labels: [row.source, ...(Array.isArray(row.tags) ? row.tags : [])],
+    scoreBoost: clampNumber(row.salience, 0, 1),
+  }));
+}
+
+async function loadEngramArtifacts(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit: number,
+): Promise<AutonomousMemoryArtifact[]> {
+  const { data, error } = await supabase
+    .from("engrams")
+    .select("id, agent_id, content, engram_type, strength, stability, accessibility, tags, state, created_at, updated_at")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("state", ["active", "consolidating", "dormant"])
+    .order("accessibility", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || "engrams query failed");
+  return (data || []).map((row: any) => artifactFromRow({
+    row,
+    kind: "engram",
+    source: "engrams",
+    content: row.content,
+    createdAt: row.updated_at || row.created_at,
+    labels: [row.engram_type, row.state, ...(Array.isArray(row.tags) ? row.tags : [])],
+    scoreBoost: [
+      clampNumber(row.accessibility, 0, 1),
+      clampNumber(row.strength, 0, 1),
+      clampNumber(row.stability, 0, 1),
+    ].reduce((sum, value) => sum + value, 0) / 3,
+  }));
+}
+
+async function loadHypomnemaArtifacts(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit: number,
+): Promise<AutonomousMemoryArtifact[]> {
+  const { data, error } = await supabase
+    .from("hypomnema_entry")
+    .select("id, agent_id, content, confidence, domain, tags, density, source, revision_count, created_at, last_revised")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .eq("active", true)
+    .order("last_revised", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || "hypomnema_entry query failed");
+  return (data || []).map((row: any) => artifactFromRow({
+    row,
+    kind: "hypomnema",
+    source: "hypomnema_entry",
+    content: row.content,
+    createdAt: row.last_revised || row.created_at,
+    labels: [row.source, row.domain, row.density, ...(Array.isArray(row.tags) ? row.tags : [])],
+    scoreBoost: clampNumber(row.confidence, 0, 1) + Math.min(0.4, Number(row.revision_count || 0) * 0.05),
+  }));
+}
+
+async function loadMemoryArtifacts(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit: number,
+): Promise<AutonomousMemoryArtifact[]> {
+  const { data, error } = await supabase
+    .from("memories")
+    .select("id, agent_id, content, memory_type, confidence, tags, pinned, is_watchlist, needs_confirmation, summary, is_deleted, created_at, updated_at")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .order("pinned", { ascending: false })
+    .order("confidence", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || "memories query failed");
+  return (data || [])
+    .filter((row: any) => row?.is_deleted !== true)
+    .map((row: any) => artifactFromRow({
+      row,
+      kind: "memory",
+      source: "memories",
+      content: row.summary || row.content,
+      createdAt: row.updated_at || row.created_at,
+      labels: [
+        row.memory_type,
+        row.pinned ? "pinned" : "",
+        row.is_watchlist ? "watchlist" : "",
+        row.needs_confirmation ? "needs confirmation" : "",
+        ...(Array.isArray(row.tags) ? row.tags : []),
+      ],
+      scoreBoost: clampNumber(row.confidence, 0, 1) + (row.pinned ? 0.5 : 0) + (row.is_watchlist ? 0.3 : 0),
+    }));
+}
+
+function artifactFromRow(input: {
+  row: any;
+  kind: AutonomousMemoryArtifactKind;
+  source: string;
+  content: unknown;
+  createdAt: unknown;
+  labels?: unknown[];
+  scoreBoost?: number;
+}): AutonomousMemoryArtifact {
+  return {
+    id: String(input.row?.id || `${input.source}:unknown`),
+    kind: input.kind,
+    source: input.source,
+    agent_id: typeof input.row?.agent_id === "string" ? input.row.agent_id : null,
+    content: compactText(typeof input.content === "string" ? input.content : JSON.stringify(input.content ?? "")),
+    created_at: typeof input.createdAt === "string" ? input.createdAt : null,
+    labels: (input.labels || [])
+      .map((label) => compactText(typeof label === "string" ? label : String(label || "")))
+      .filter(Boolean)
+      .slice(0, 8),
+    score: input.scoreBoost || 0,
+  };
+}
+
+function scoreAutonomousArtifact(item: AutonomousMemoryArtifact, focus: string, nowMs: number): number {
+  const tokens = specificTokens(focus);
+  const haystack = new Set(specificTokens([item.content, item.kind, item.source, ...item.labels].join(" ")));
+  const overlap = tokens.filter((token) => haystack.has(token));
+  const lexical = overlap.length * 2.5 + (overlap.some((token) => token.length >= 8) ? 1.25 : 0);
+  return (
+    item.score +
+    lexical +
+    sourceIntentBoost(item, focus) +
+    artifactRecencyScore(item.created_at, nowMs)
+  );
+}
+
+function sourceIntentBoost(item: AutonomousMemoryArtifact, focus: string): number {
+  const text = focus.toLowerCase();
+  const labels = item.labels.join(" ").toLowerCase();
+  let score = 0;
+  if (/\b(journal|journals|notebook|notes)\b/.test(text) && item.kind === "journal") score += 3;
+  if (/\b(engram|engrams|mnemos)\b/.test(text) && item.kind === "engram") score += 3;
+  if (/\b(hypomnema|carrying|sitting with|what are you carrying)\b/.test(text) && item.kind === "hypomnema") score += 2.5;
+  if (/\b(reflection|reflections|reflecting|reflect)\b/.test(text) && (labels.includes("reflection") || item.kind === "hypomnema")) score += 2.5;
+  if (/\b(thought|thoughts|inner life|autonomous)\b/.test(text) && (item.kind === "thought" || item.kind === "journal")) score += 2;
+  if (/\b(dream|dreams)\b/.test(text) && (labels.includes("dream") || item.kind === "journal")) score += 2.5;
+  if (/\b(memory|memories|remember|recall)\b/.test(text) && (item.kind === "memory" || item.kind === "engram")) score += 1.5;
+  return score;
+}
+
+function artifactRecencyScore(iso: string | null, nowMs: number): number {
+  if (!iso) return 0;
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return 0;
+  const days = Math.max(0, (nowMs - ts) / 86_400_000);
+  return Math.pow(0.5, days / 21);
+}
+
+function clampNumber(value: unknown, min: number, max: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(min, Math.min(max, n));
 }
 
 export function logContinuityDiagnostics(packet: ContinuityPacket, label = "continuity.kernel"): void {

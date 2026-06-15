@@ -198,8 +198,18 @@ function normalizeAgentModel(model: string | null | undefined): string {
       return 'anthropic/claude-sonnet-4';
     case 'anthropic/claude-opus-4-20250514':
       return 'anthropic/claude-opus-4';
+    case 'anthropic/claude-opus-4-8':
+    case 'anthropic/claude-4.8-opus-20260528':
+      return 'anthropic/claude-opus-4.8';
     case 'anthropic/claude-opus-4.7':
+    case 'anthropic/claude-4.7-opus-20260416':
       return 'anthropic/claude-opus-4-7';
+    case 'anthropic/claude-opus-4-5':
+    case 'anthropic/claude-4.5-opus-20251124':
+      return 'anthropic/claude-opus-4.5';
+    case 'anthropic/claude-opus-4-1':
+    case 'anthropic/claude-4.1-opus-20250805':
+      return 'anthropic/claude-opus-4.1';
     case 'anthropic/claude-haiku-4-5':
       return 'anthropic/claude-haiku-4.5';
     default:

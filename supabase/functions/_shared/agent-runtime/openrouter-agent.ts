@@ -3,7 +3,12 @@ import { z } from "npm:zod@4.4.3/v4";
 import { logActivity } from "../activity-log.ts";
 import type { PendingRevision } from "../agents/pending-revisions.ts";
 import type { ContinuityPacket } from "../continuity/index.ts";
-import { queueContinuityTurnWrites, summarizeContinuityPacket } from "../continuity/index.ts";
+import {
+  loadAutonomousMemoryArtifacts,
+  queueContinuityTurnWrites,
+  summarizeAutonomousMemoryArtifacts,
+  summarizeContinuityPacket,
+} from "../continuity/index.ts";
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
 
@@ -53,7 +58,11 @@ const DEFAULT_MAX_AGENT_STEPS = 5;
 const DEFAULT_MAX_AGENT_COST_USD = 0.35;
 const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
 const FORGE_MODELS = [
+  "anthropic/claude-opus-4.8",
   "anthropic/claude-opus-4-7",
+  "anthropic/claude-opus-4.6",
+  "anthropic/claude-opus-4.5",
+  "anthropic/claude-opus-4.1",
   "anthropic/claude-sonnet-4.6",
   "anthropic/claude-haiku-4.5",
   "openai/gpt-5.5",
@@ -396,13 +405,22 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
     tool({
       name: "memory_read",
       description:
-        "Read Luca's current Polyphonic continuity packet: present Hypomnema, reliable recall, Mnemos associations, skills, and layer diagnostics. Use when continuity, prior context, or memory would materially improve the answer.",
+        "Read Luca's current Polyphonic continuity packet and search autonomous memory artifacts: journal entries, thought-stream reflections, Mnemos engrams, Hypomnema, durable memories, skills, and layer diagnostics. Use when continuity, prior context, journal/reflection/engram material, or memory evidence would materially improve the answer.",
       inputSchema: z.object({
         focus: z.string().optional().describe("Optional focus for what part of continuity to inspect."),
       }),
       execute: async ({ focus }) => {
-        const result = summarizeContinuityPacket(options.continuity, focus);
-        return result;
+        const continuity = summarizeContinuityPacket(options.continuity, focus);
+        const artifacts = await loadAutonomousMemoryArtifacts(options.supabase, {
+          userId: options.userId,
+          agentId: options.agentId,
+          focus: focus || options.userMessage,
+          limit: 12,
+        });
+        return {
+          ...continuity,
+          autonomous_artifacts: summarizeAutonomousMemoryArtifacts(artifacts),
+        };
       },
     }),
     tool({

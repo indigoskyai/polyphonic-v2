@@ -15,9 +15,11 @@ import type { PendingRevision } from "../_shared/agents/pending-revisions.ts";
 import { summarizeToolContext } from "../_shared/agents/tool-context.ts";
 import {
   buildLucaPromptPartsFromContinuity,
+  loadAutonomousMemoryArtifacts,
   loadContinuityPacket,
   logContinuityDiagnostics,
   queueContinuityTurnWrites,
+  shouldLoadAutonomousMemoryArtifacts,
   type ContinuityPacket,
 } from "../_shared/continuity/index.ts";
 import {
@@ -160,7 +162,14 @@ function normalizeModelId(model: string | null | undefined): string | null {
     "anthropic/claude-sonnet-4-20250514": "anthropic/claude-sonnet-4",
     "anthropic/claude-haiku-4-5": "anthropic/claude-haiku-4.5",
     "anthropic/claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
+    "anthropic/claude-opus-4-8": "anthropic/claude-opus-4.8",
+    "anthropic/claude-4.8-opus-20260528": "anthropic/claude-opus-4.8",
     "anthropic/claude-opus-4.7": "anthropic/claude-opus-4-7",
+    "anthropic/claude-4.7-opus-20260416": "anthropic/claude-opus-4-7",
+    "anthropic/claude-opus-4-5": "anthropic/claude-opus-4.5",
+    "anthropic/claude-4.5-opus-20251124": "anthropic/claude-opus-4.5",
+    "anthropic/claude-opus-4-1": "anthropic/claude-opus-4.1",
+    "anthropic/claude-4.1-opus-20250805": "anthropic/claude-opus-4.1",
   };
 
   return aliases[normalized] || normalized;
@@ -397,6 +406,7 @@ serve(async (req) => {
       ));
     }
     const apiKey = backend.apiKey;
+    const backendKeySource = backend.keySource as string;
 
     if (backend.keySource !== "user") {
       const message = "Connect OpenRouter before chatting with Luca or custom agents. The free Polyphonic Guide can answer app/setup questions without a key.";
@@ -630,8 +640,18 @@ serve(async (req) => {
             clientContext,
           })
       : "";
+    const autonomousMemoryContext = !classicRuntime &&
+        backend.billingTier !== "guest" &&
+        shouldLoadAutonomousMemoryArtifacts(messageWithAttachments)
+      ? (await loadAutonomousMemoryArtifacts(supabase, {
+          userId,
+          agentId,
+          focus: messageWithAttachments,
+          limit: 12,
+        })).block
+      : "";
     const simpleOpeningTurn =
-      backend.keySource === "platform" &&
+      backendKeySource === "platform" &&
       agentIsSystemLuca &&
       !hasAttachments &&
       (history?.length || 0) === 0 &&
@@ -684,6 +704,7 @@ serve(async (req) => {
               }),
               appContextBlock,
               projectContextBlock,
+              autonomousMemoryBlock: autonomousMemoryContext,
               crisisDirective,
             })
           : buildCustomAgentSystemPrompt({
@@ -693,6 +714,9 @@ serve(async (req) => {
               projectContextBlock,
               continuityBridge: continuity.continuityBridge,
               hypomnemaBlock: continuity.hypomnema.block,
+              functionalMemoryBlock: continuity.functionalMemoryBlock,
+              memoryContext: continuity.mnemosBlock,
+              autonomousMemoryBlock: autonomousMemoryContext,
               continuityNote,
             });
     const onboardingHandoffDirective = onboardingHandoff
@@ -839,7 +863,7 @@ serve(async (req) => {
       const useEnsemble = agentRuntimeActive && backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;
 
     if (!useEnsemble) {
-        const singleModel = backend.keySource === "platform"
+        const singleModel = backendKeySource === "platform"
           ? backend.model
           : normalizeModelId(
               classicRuntime
@@ -916,6 +940,7 @@ serve(async (req) => {
               }),
               appContextBlock,
               projectContextBlock,
+              autonomousMemoryBlock: autonomousMemoryContext,
               crisisDirective,
             },
             anima: {

@@ -7,6 +7,9 @@ export type CustomAgentPromptParts = {
   projectContextBlock?: string;
   continuityBridge?: string;
   hypomnemaBlock?: string;
+  functionalMemoryBlock?: string;
+  memoryContext?: string;
+  autonomousMemoryBlock?: string;
   continuityNote?: string;
   crisisDirective?: string;
 };
@@ -51,6 +54,9 @@ export function buildCustomAgentSystemPrompt(parts: CustomAgentPromptParts): str
     parts.projectContextBlock || "",
     parts.continuityBridge || "",
     parts.hypomnemaBlock || "",
+    parts.functionalMemoryBlock || "",
+    parts.memoryContext || "",
+    parts.autonomousMemoryBlock || "",
     parts.continuityNote || "",
     parts.crisisDirective || "",
   ].filter(Boolean).join("\n\n");

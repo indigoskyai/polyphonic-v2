@@ -13,7 +13,11 @@ interface Props {
 }
 
 const MODELS = [
+  { value: 'anthropic/claude-opus-4.8', label: 'Claude Opus 4.8' },
   { value: 'anthropic/claude-opus-4-7', label: 'Claude Opus 4.7' },
+  { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
+  { value: 'anthropic/claude-opus-4.5', label: 'Claude Opus 4.5' },
+  { value: 'anthropic/claude-opus-4.1', label: 'Claude Opus 4.1' },
   { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
   { value: 'anthropic/claude-sonnet-4.5', label: 'Claude Sonnet 4.5' },
   { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
@@ -31,6 +35,8 @@ const MODELS = [
   { value: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
   { value: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5' },
 ];
+
+const DEFAULT_NEW_AGENT_MODEL = 'anthropic/claude-opus-4-7';
 
 const ROLE_HINTS = ['custom', 'analyst', 'researcher', 'writer', 'coach', 'planner'];
 
@@ -53,7 +59,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('custom');
   const [color, setColor] = useState<AvatarColor>('cream');
-  const [model, setModel] = useState(MODELS[0].value);
+  const [model, setModel] = useState(DEFAULT_NEW_AGENT_MODEL);
   const [prompt, setPrompt] = useState('');
   const [voiceDescription, setVoiceDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +68,7 @@ export default function CreateAgentModal({ open, onClose }: Props) {
     setName('');
     setRole('custom');
     setColor('cream');
-    setModel(MODELS[0].value);
+    setModel(DEFAULT_NEW_AGENT_MODEL);
     setPrompt('');
     setVoiceDescription('');
   };

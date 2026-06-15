@@ -14,8 +14,11 @@ import { RadioGroup } from '@/components/settings/FormControls';
 
 const MODEL_OPTIONS = [
   { label: 'Kimi K2.6', value: 'moonshotai/kimi-k2.6' },
+  { label: 'Claude Opus 4.8', value: 'anthropic/claude-opus-4.8' },
   { label: 'Claude Opus 4.7', value: 'anthropic/claude-opus-4-7' },
   { label: 'Claude Opus 4.6', value: 'anthropic/claude-opus-4.6' },
+  { label: 'Claude Opus 4.5', value: 'anthropic/claude-opus-4.5' },
+  { label: 'Claude Opus 4.1', value: 'anthropic/claude-opus-4.1' },
   { label: 'Claude Sonnet 4.6', value: 'anthropic/claude-sonnet-4.6' },
   { label: 'Claude Sonnet 4.5', value: 'anthropic/claude-sonnet-4.5' },
   { label: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
