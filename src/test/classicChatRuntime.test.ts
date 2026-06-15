@@ -24,9 +24,13 @@ describe('Classic Chat runtime', () => {
 
   it('wires the chat view as model-first classic chat with explicit Agent Mode', () => {
     const source = readRepoFile('src/pages/ChatView.tsx');
+    const picker = readRepoFile('src/components/composer/ChatTargetPicker.tsx');
 
-    expect(source).toContain('<ModelPicker');
-    expect(source).toContain('classicChatActive ? (');
+    expect(source).toContain('<ChatTargetPicker');
+    expect(source).toContain('activeChatTarget');
+    expect(picker).toContain("sectionHeader('Agents')");
+    expect(picker).toContain('LAB_LABELS');
+    expect(source).toContain('const activeChatTarget: ChatTarget = classicChatActive');
     expect(source).toContain("runtime_mode: effectiveRuntimeMode");
     expect(source).toContain('model: selectedChatModel');
     expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");

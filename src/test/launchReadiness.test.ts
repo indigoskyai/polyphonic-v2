@@ -85,7 +85,7 @@ describe('launch readiness static gates', () => {
     // Expected count grows as new edge functions land. Each new function must
     // satisfy the wrapper assertions below; bumping the count is intentional
     // and signals a deliberate review.
-    expect(rows.map((row) => row.name)).toHaveLength(85);
+    expect(rows.map((row) => row.name)).toHaveLength(86);
     expect(rows.filter((row) => !row.hasPreflight).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCorsResponse).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCatch).map((row) => row.name)).toEqual([]);

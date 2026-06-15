@@ -1,8 +1,7 @@
 import { Activity, Info, Menu } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AgentPicker } from '@/components/composer/AgentPicker';
-import { ModelPicker } from '@/components/composer/ModelPicker';
+import { ChatTargetPicker, type ChatTarget } from '@/components/composer/ChatTargetPicker';
 import { DEFAULT_CHAT_MODEL, getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 import { getMobileSurfaceMeta } from '@/lib/mobileShell';
 import { useAuthStore } from '@/stores/authStore';
@@ -88,17 +87,23 @@ export default function MobileAppBar() {
   const selectedChatModel = currentThread?.selected_model || defaultModel || DEFAULT_CHAT_MODEL;
   const classicChatActive = isChatSurface && runtimeAgentId === 'luca' && threadRuntimeMode === 'classic';
   const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';
+  const activeThreadId = currentThreadId || routeThreadId;
+  const activeChatTarget: ChatTarget = classicChatActive
+    ? { kind: 'model', id: selectedChatModel }
+    : { kind: 'agent', id: runtimeAgentId };
   const title = isChatSurface ? (classicChatActive ? getChatModelLabel(selectedChatModel) : activeAgentName) : meta.title;
   const subtitle = isChatSurface ? (threadTitle || 'new chat') : meta.subtitle;
   const showAgentPicker = !!user && isAgentScopedSurface(location.pathname);
 
   const handleAgentChange = useCallback(async (id: string) => {
-    if (!id || id === runtimeAgentId) return;
+    if (!id) return;
+    const selectingLucaAgent = id === 'luca';
+    if (id === runtimeAgentId && (!selectingLucaAgent || !classicChatActive)) return;
     setActiveAgent(id);
 
     if (!user || !isChatSurface) return;
 
-    if (!currentThreadId) {
+    if (!activeThreadId) {
       // Bare /chat landing: switch the hero's agent IN PLACE by persisting the
       // landing choice — ChatView's empty-landing field follows landing_agent_id
       // and morphs to the new agent. Do NOT spawn a blank thread + navigate:
@@ -109,15 +114,23 @@ export default function MobileAppBar() {
     }
 
     if (messages.length === 0) {
-      await updateThreadAgent(currentThreadId, id);
+      await updateThreadAgent(activeThreadId, id);
       return;
     }
 
-    const nextThreadId = await createThread(user.id, id);
+    if (selectingLucaAgent && runtimeAgentId === 'luca') {
+      await updateThreadAgent(activeThreadId, 'luca');
+      return;
+    }
+
+    const nextThreadId = await createThread(user.id, id, null, {
+      runtimeMode: selectingLucaAgent ? 'agent' : undefined,
+    });
     navigate(`/chat/${nextThreadId}`);
   }, [
+    activeThreadId,
+    classicChatActive,
     createThread,
-    currentThreadId,
     isChatSurface,
     messages.length,
     navigate,
@@ -129,14 +142,34 @@ export default function MobileAppBar() {
   ]);
 
   const handleModelChange = useCallback(async (modelId: string) => {
-    if (!modelId || modelId === selectedChatModel) return;
+    if (!modelId) return;
+    if (modelId === selectedChatModel && classicChatActive) return;
     void updateSetting('default_model', modelId);
-    if (!user || !isChatSurface || !currentThreadId) return;
-    await updateThreadSelectedModel(currentThreadId, modelId);
+    setActiveAgent('luca');
+    if (!user || !isChatSurface) return;
+    if (!activeThreadId) {
+      void updateSetting('landing_agent_id', null);
+      return;
+    }
+    if (runtimeAgentId === 'luca' || messages.length === 0) {
+      await updateThreadSelectedModel(activeThreadId, modelId);
+      return;
+    }
+    const nextThreadId = await createThread(user.id, 'luca', null, {
+      runtimeMode: 'classic',
+      selectedModel: modelId,
+    });
+    navigate(`/chat/${nextThreadId}`);
   }, [
-    currentThreadId,
+    activeThreadId,
+    classicChatActive,
+    createThread,
     isChatSurface,
+    messages.length,
+    navigate,
+    runtimeAgentId,
     selectedChatModel,
+    setActiveAgent,
     updateSetting,
     updateThreadSelectedModel,
     user,
@@ -170,19 +203,12 @@ export default function MobileAppBar() {
         {showAgentPicker ? (
           <div className="mobile-bar-agent-stack">
             <div className="mobile-bar-agent-picker">
-              {classicChatActive ? (
-                <ModelPicker
-                  activeModelId={selectedChatModel}
-                  onChange={(id) => { void handleModelChange(id); }}
-                  variant="header"
-                />
-              ) : (
-                <AgentPicker
-                  activeAgentId={runtimeAgentId}
-                  onChange={(id) => { void handleAgentChange(id); }}
-                  variant="header"
-                />
-              )}
+              <ChatTargetPicker
+                activeTarget={activeChatTarget}
+                onSelectAgent={(id) => { void handleAgentChange(id); }}
+                onSelectModel={(id) => { void handleModelChange(id); }}
+                variant="header"
+              />
             </div>
             {!isChatSurface && (
               <div className="mobile-bar-agent-surface">{meta.title}</div>

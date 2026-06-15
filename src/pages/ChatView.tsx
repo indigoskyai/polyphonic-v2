@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useFirstMount } from '@/lib/useFirstMount';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThreadStore } from '@/stores/threadStore';
-import { AgentPicker } from '@/components/composer/AgentPicker';
-import { ModelPicker } from '@/components/composer/ModelPicker';
+import { ChatTargetPicker, type ChatTarget } from '@/components/composer/ChatTargetPicker';
 import { ObserverEyeChip } from '@/components/composer/ObserverEyeChip';
 import ModesDropdown from '@/components/composer/ModesDropdown';
 import DictationButton from '@/components/composer/DictationButton';
@@ -907,10 +906,12 @@ export default function ChatView() {
     ? 'Talking to Luca'
     : `${currentAgentLabel} is selected. Custom agents require your own OpenRouter key to reply.`;
   const handleAgentChange = useCallback(async (id: string) => {
-    if (!id || id === activeAgentId) return;
+    if (!id) return;
+    const selectingLucaAgent = id === 'luca';
+    if (id === activeAgentId && (!selectingLucaAgent || !classicChatActive)) return;
     setPendingAgentId(id);
     persistLandingAgent(id);
-    setAgentModeArmed(false);
+    setAgentModeArmed(selectingLucaAgent);
     setEnsembleArmed(false);
     setEnsembleLocked(false);
 
@@ -921,15 +922,27 @@ export default function ChatView() {
       return;
     }
 
+    if (selectingLucaAgent && activeAgentId === 'luca') {
+      try {
+        await updateThreadAgent(currentThreadId, 'luca');
+      } catch (err) {
+        setAttachmentError(err instanceof Error ? err.message : 'Could not switch to Luca');
+      }
+      return;
+    }
+
     if (!user) return;
     try {
-      const nextThreadId = await createThread(user.id, id);
+      const nextThreadId = await createThread(user.id, id, null, {
+        runtimeMode: selectingLucaAgent ? 'agent' : undefined,
+      });
       navigate(`/chat/${nextThreadId}`);
     } catch (err) {
       setAttachmentError(err instanceof Error ? err.message : 'Could not switch agents');
     }
   }, [
     activeAgentId,
+    classicChatActive,
     persistLandingAgent,
     currentThreadId,
     messages.length,
@@ -939,41 +952,55 @@ export default function ChatView() {
     navigate,
   ]);
   const handleModelChange = useCallback(async (modelId: string) => {
-    if (!modelId || modelId === selectedChatModel) return;
+    if (!modelId) return;
+    if (modelId === selectedChatModel && classicChatActive) return;
     setPendingChatModelId(modelId);
+    setPendingAgentId('luca');
+    persistLandingAgent('luca');
     void updateSetting('default_model', modelId);
     setAgentModeArmed(false);
     setEnsembleArmed(false);
     setEnsembleLocked(false);
 
-    if (!currentThreadId || !classicChatActive) return;
+    if (!currentThreadId) return;
     try {
-      await updateThreadSelectedModel(currentThreadId, modelId);
+      if (activeAgentId === 'luca' || messages.length === 0) {
+        await updateThreadSelectedModel(currentThreadId, modelId);
+        return;
+      }
+      if (!user) return;
+      const nextThreadId = await createThread(user.id, 'luca', null, {
+        runtimeMode: 'classic',
+        selectedModel: modelId,
+      });
+      navigate(`/chat/${nextThreadId}`);
     } catch (err) {
       setAttachmentError(err instanceof Error ? err.message : 'Could not switch models');
     }
   }, [
+    activeAgentId,
     classicChatActive,
     currentThreadId,
+    messages.length,
+    navigate,
+    persistLandingAgent,
     selectedChatModel,
+    user,
+    createThread,
     updateSetting,
     updateThreadSelectedModel,
   ]);
+  const activeChatTarget: ChatTarget = classicChatActive
+    ? { kind: 'model', id: selectedChatModel }
+    : { kind: 'agent', id: activeAgentId };
   const renderHeaderAgentSelector = () => (
     byokEnabled ? (
-      classicChatActive ? (
-        <ModelPicker
-          activeModelId={selectedChatModel}
-          onChange={(id) => { void handleModelChange(id); }}
-          variant="header"
-        />
-      ) : (
-        <AgentPicker
-          activeAgentId={activeAgentId}
-          onChange={(id) => { void handleAgentChange(id); }}
-          variant="header"
-        />
-      )
+      <ChatTargetPicker
+        activeTarget={activeChatTarget}
+        onSelectAgent={(id) => { void handleAgentChange(id); }}
+        onSelectModel={(id) => { void handleModelChange(id); }}
+        variant="header"
+      />
     ) : (
       <LucaOnlyPill label={readonlyAgentPillLabel} title={readonlyAgentPillTitle} />
     )
@@ -2620,10 +2647,8 @@ export default function ChatView() {
                     <>
                       <div className="pill-sep" />
                       <ModesDropdown
-                        agentModeArmed={agentModeArmed}
                         ensembleArmed={ensembleArmed}
                         ensembleLocked={ensembleLocked}
-                        onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
                         onToggleEnsemble={toggleEnsemble}
                         isMobile={isMobile}
                       />
@@ -3181,10 +3206,8 @@ export default function ChatView() {
                 <>
                   <div className="pill-sep" />
                   <ModesDropdown
-                    agentModeArmed={agentModeArmed}
                     ensembleArmed={ensembleArmed}
                     ensembleLocked={ensembleLocked}
-                    onToggleAgentMode={() => setAgentModeArmed((v) => !v)}
                     onToggleEnsemble={toggleEnsemble}
                     isMobile={isMobile}
                   />

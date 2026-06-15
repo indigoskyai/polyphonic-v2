@@ -54,20 +54,25 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).not.toContain('terminal');
   });
 
-  it('keeps agent runtime opt-in from the composer so normal chat stays fast', () => {
+  it('keeps agent runtime opt-in from the unified chat target picker so normal chat stays fast', () => {
     const source = readRepoFile('src/pages/ChatView.tsx');
     const modesDropdown = readRepoFile('src/components/composer/ModesDropdown.tsx');
+    const targetPicker = readRepoFile('src/components/composer/ChatTargetPicker.tsx');
 
     expect(source).toContain('const [agentModeArmed, setAgentModeArmed] = useState(false)');
 	    expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");
 	    expect(source).toContain('runtime_mode: effectiveRuntimeMode');
 	    expect(source).toContain('model: selectedChatModel');
-    // Agent runtime is opt-in via the consolidated ModesDropdown — verify
-    // it's wired with the right state + handler so users can toggle it.
+    // Agent runtime is opt-in via the unified target picker; the composer
+    // ModesDropdown now only carries optional reply modes like Ensemble.
+    expect(source).toContain('<ChatTargetPicker');
+    expect(source).toContain('setAgentModeArmed(selectingLucaAgent)');
+    expect(targetPicker).toContain("sectionHeader('Agents')");
     expect(source).toContain('<ModesDropdown');
-    expect(source).toContain('agentModeArmed={agentModeArmed}');
-    expect(source).toContain('onToggleAgentMode={() => setAgentModeArmed');
-    expect(modesDropdown).toContain('Agent runtime');
+    expect(source).not.toContain('agentModeArmed={agentModeArmed}');
+    expect(source).not.toContain('onToggleAgentMode={() => setAgentModeArmed');
+    expect(modesDropdown).not.toContain('Agent runtime');
+    expect(modesDropdown).toContain('Ensemble');
     expect(source).toContain("Message Luca (agent)");
     expect(source).toContain('previousThreadForAgentModeRef');
     expect(source).toContain('enteredFreshChat');

@@ -365,6 +365,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await supabase
       .from('threads')
       .update({
+        agent_id: 'luca',
+        primary_agent_id: 'luca',
+        participating_agent_ids: ['luca'],
         selected_model: modelId,
         runtime_mode: 'classic',
       })
@@ -372,7 +375,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set((s) => ({
       threads: s.threads.map((t) => (
         t.id === threadId
-          ? { ...t, selected_model: modelId, runtime_mode: 'classic' }
+          ? {
+              ...t,
+              agent_id: 'luca',
+              primary_agent_id: 'luca',
+              participating_agent_ids: ['luca'],
+              selected_model: modelId,
+              runtime_mode: 'classic',
+            }
           : t
       )),
     }));

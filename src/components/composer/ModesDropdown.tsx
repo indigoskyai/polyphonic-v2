@@ -6,13 +6,11 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Boxes, ChevronDown, Lock, PocketKnife } from 'lucide-react';
+import { Boxes, ChevronDown, Lock } from 'lucide-react';
 
 interface ModesDropdownProps {
-  agentModeArmed: boolean;
   ensembleArmed: boolean;
   ensembleLocked: boolean;
-  onToggleAgentMode: () => void;
   /** Click handler — receives the mouse event so shift-click can lock. */
   onToggleEnsemble: (e: ReactMouseEvent) => void;
   /**
@@ -25,7 +23,7 @@ interface ModesDropdownProps {
 }
 
 /**
- * ModesDropdown — minimal trigger that consolidates agent runtime + ensemble.
+ * ModesDropdown — minimal trigger for optional reply modes.
  *
  * The popover renders through a Portal to document.body so it escapes the
  * composer's `overflow: hidden` clipping context. Position is computed from
@@ -37,10 +35,8 @@ interface ModesDropdownProps {
  * rest and read as "just another control" when open.
  */
 export default function ModesDropdown({
-  agentModeArmed,
   ensembleArmed,
   ensembleLocked,
-  onToggleAgentMode,
   onToggleEnsemble,
   isMobile = false,
 }: ModesDropdownProps) {
@@ -61,16 +57,11 @@ export default function ModesDropdown({
   };
 
   const ensembleOn = ensembleArmed || ensembleLocked;
-  const anyActive = agentModeArmed || ensembleOn;
+  const anyActive = ensembleOn;
 
   // Trigger label — surfaces active modes by name so configuration is always
   // visible without opening the menu.
-  const label = (() => {
-    if (agentModeArmed && ensembleOn) return 'Agent · Ensemble';
-    if (agentModeArmed) return 'Agent';
-    if (ensembleOn) return ensembleLocked ? 'Ensemble · locked' : 'Ensemble';
-    return 'Modes';
-  })();
+  const label = ensembleOn ? (ensembleLocked ? 'Ensemble · locked' : 'Ensemble') : 'Modes';
 
   // Position the portal popover relative to the trigger button. Desktop only —
   // mobile uses a bottom-anchored sheet that needs no trigger math.
@@ -122,19 +113,6 @@ export default function ModesDropdown({
 
   const menuItems = (
     <>
-      <button
-        type="button"
-        role="menuitemcheckbox"
-        aria-checked={agentModeArmed}
-        className={`modes-item${agentModeArmed ? ' armed' : ''}`}
-        onClick={() => onToggleAgentMode()}
-        title="Agent runtime — tool-using runtime for research, multi-step planning, and context checks. Luca only."
-      >
-        <PocketKnife size={13} strokeWidth={1.5} className="modes-item-icon" aria-hidden="true" />
-        <span className="modes-item-name">Agent</span>
-        <Switch on={agentModeArmed} />
-      </button>
-
       <button
         type="button"
         role="menuitemcheckbox"

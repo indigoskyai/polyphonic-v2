@@ -9,7 +9,7 @@ function readRepoFile(path: string): string {
 describe('chat agent selector placement', () => {
   it('keeps agent switching in the chat header instead of the composer footer', () => {
     const chatView = readRepoFile('src/pages/ChatView.tsx');
-    const picker = readRepoFile('src/components/composer/AgentPicker.tsx');
+    const picker = readRepoFile('src/components/composer/ChatTargetPicker.tsx');
     const styles = readRepoFile('src/index.css');
 
     expect(chatView).toContain('chat-agent-selector-corner');
@@ -17,8 +17,10 @@ describe('chat agent selector placement', () => {
     expect(chatView).toContain('variant="header"');
     expect(styles).toContain('.chat-agent-selector-corner');
     expect(styles).toContain('.agent-picker-trigger--header');
-    expect(picker).toContain('const menuWidth = 264');
-    expect(picker).toContain("maxHeight: 'min(320px, calc(100vh - 72px))'");
+    expect(picker).toContain('const menuWidth = 316');
+    expect(picker).toContain("maxHeight: 'min(420px, calc(100vh - 72px))'");
+    expect(picker).toContain("sectionHeader('Agents')");
+    expect(picker).toContain('modelGroups.map');
 
     const footerSegments = [...chatView.matchAll(/<div className="agent-pills">([\s\S]*?)<div className="composer-actions">/g)]
       .map((match) => match[1]);

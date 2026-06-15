@@ -219,10 +219,16 @@ describe('threadStore.createThread project scoping', () => {
 	    await useThreadStore.getState().updateThreadSelectedModel('thread-1', 'openai/gpt-5.1');
 
 	    expect(supabaseMock.update).toHaveBeenCalledWith({
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
 	      selected_model: 'openai/gpt-5.1',
 	      runtime_mode: 'classic',
 	    });
 	    expect(useThreadStore.getState().threads[0]).toMatchObject({
+	      agent_id: 'luca',
+	      primary_agent_id: 'luca',
+	      participating_agent_ids: ['luca'],
 	      selected_model: 'openai/gpt-5.1',
 	      runtime_mode: 'classic',
 	    });
