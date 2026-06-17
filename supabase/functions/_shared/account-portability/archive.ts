@@ -458,7 +458,7 @@ async function deriveArchiveKey(passphrase: string, salt: Uint8Array, iterations
   if (!passphrase || passphrase.length < 8) throw new Error("Passphrase must be at least 8 characters");
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    { name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations },
     material,
     { name: "AES-GCM", length: 256 },
     false,
