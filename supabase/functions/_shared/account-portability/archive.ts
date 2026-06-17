@@ -224,7 +224,7 @@ export async function decryptArchive(archive: EncryptedArchive, passphrase: stri
   const iv = base64ToBytes(archive.encryption.iv);
   const key = await deriveExistingArchiveKey(passphrase, salt, archive.encryption.iterations);
   const ciphertext = base64ToBytes(archive.payload);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ciphertext as BufferSource);
   const parsed = JSON.parse(new TextDecoder().decode(decrypted));
   return assertArchivePayload(parsed);
 }
