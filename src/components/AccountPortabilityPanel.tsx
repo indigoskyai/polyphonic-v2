@@ -80,15 +80,26 @@ export default function AccountPortabilityPanel() {
           </button>
 
           {exportStatus === 'ready' && exportUrl && (
-            <div className="account-transfer-result">
-              <FileCheck2 size={14} aria-hidden="true" />
-              <div>
-                <a href={exportUrl} download={exportFileName || undefined}>
-                  {exportFileName || 'Download export'}
-                </a>
-                <div>{exportTotal.toLocaleString()} rows captured</div>
+            <>
+              <div className="account-transfer-result">
+                <FileCheck2 size={14} aria-hidden="true" />
+                <div>
+                  <strong>{exportFileName || 'polyphonic-export.polyphonic-export'}</strong>
+                  <div>{exportTotal.toLocaleString()} rows captured - encrypted archive ready</div>
+                </div>
               </div>
-            </div>
+              <button
+                type="button"
+                className="account-transfer-button primary"
+                onClick={() => void downloadExportArchive(exportUrl, exportFileName)}
+              >
+                <Download size={14} />
+                <span>Download .polyphonic-export</span>
+              </button>
+              <div className="account-transfer-note">
+                Save this file and your passphrase. Sign in to the new account, open Settings - Account transfer, and use Preview import then Apply merge to restore.
+              </div>
+            </>
           )}
           {exportStatus === 'error' && exportError && <InlineError message={exportError} />}
           <CountStrip counts={exportCounts} />
@@ -291,4 +302,34 @@ function sumCounts(counts: Record<string, number>): number {
 
 function labelForCount(key: string): string {
   return key.replace(/_/g, ' ');
+}
+
+async function downloadExportArchive(url: string, fileName: string | null): Promise<void> {
+  const name = ensureExportExtension(fileName);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    triggerDownload(objectUrl, name);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch {
+    // Fallback: direct link (browser may open inline instead of download)
+    triggerDownload(url, name);
+  }
+}
+
+function triggerDownload(href: string, fileName: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function ensureExportExtension(fileName: string | null): string {
+  const base = (fileName || 'polyphonic-export').trim() || 'polyphonic-export';
+  return base.endsWith('.polyphonic-export') ? base : `${base}.polyphonic-export`;
 }
