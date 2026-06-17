@@ -22,7 +22,9 @@ export interface PortableTableConfig {
   onConflict?: string;
   redactColumns?: string[];
   disableOnImport?: string[];
+  omitOnImportColumns?: string[];
   remapColumns?: Record<string, string>;
+  deferredRemapColumns?: Record<string, string>;
   arrayRemapColumns?: Record<string, string>;
   jsonColumns?: string[];
   importBatchSize?: number;
@@ -165,16 +167,16 @@ export const PORTABLE_TABLES: PortableTableConfig[] = [
   { name: "conversations", idColumn: "id", userColumn: "user_id", readOnly: true },
   { name: "threads", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { project_id: "projects" }, arrayRemapColumns: { participating_agent_ids: "agent" } },
   { name: "messages", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads" }, jsonColumns: ["metadata", "attachments"], importBatchSize: 100 },
-  { name: "artifacts", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads", source_message_id: "messages", parent_artifact_id: "artifacts" }, importBatchSize: 50 },
+  { name: "artifacts", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads", source_message_id: "messages" }, deferredRemapColumns: { parent_artifact_id: "artifacts" }, importBatchSize: 50 },
   { name: "agent_consultations", idColumn: "id", userColumn: "user_id", remapColumns: { parent_thread_id: "threads", parent_message_id: "messages" } },
   { name: "memories", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["provenance"] },
   { name: "engrams", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"], importBatchSize: 25 },
   { name: "engram_archive", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"], importBatchSize: 25 },
   { name: "connections", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_id: "engrams", target_id: "engrams" }, importBatchSize: 100 },
-  { name: "beliefs", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", arrayRemapColumns: { supporting_engram_ids: "engrams", contradicting_engram_ids: "engrams" }, jsonColumns: ["evidence", "revision_history"] },
+  { name: "beliefs", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", omitOnImportColumns: ["confidence_tier"], deferredRemapColumns: { superseded_by: "beliefs" }, arrayRemapColumns: { supporting_engram_ids: "engrams", contradicting_engram_ids: "engrams" }, jsonColumns: ["evidence", "revision_history"] },
   { name: "mnemos_emotional_state", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "mnemos_digests", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
-  { name: "hypomnema_entry", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { thread_id: "threads", source_message_id: "messages", graduated_to_engram_id: "engrams", superseded_by: "hypomnema_entry" }, jsonColumns: ["meta", "revisions"], importBatchSize: 25 },
+  { name: "hypomnema_entry", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { thread_id: "threads", source_message_id: "messages", graduated_to_engram_id: "engrams" }, deferredRemapColumns: { superseded_by: "hypomnema_entry" }, jsonColumns: ["meta", "revisions"], importBatchSize: 25 },
   { name: "journal_entries", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_conversation_id: "threads" }, jsonColumns: ["source_context"], importBatchSize: 50 },
   { name: "thought_stream", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "thought_initiations", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
@@ -437,7 +439,11 @@ export function transformRowForImport(
     }
   }
 
+  for (const column of Object.keys(config.deferredRemapColumns || {})) {
+    if (column in out) out[column] = null;
+  }
   for (const column of config.disableOnImport || []) out[column] = false;
+  for (const column of config.omitOnImportColumns || []) delete out[column];
   for (const column of config.jsonColumns || []) {
     if (isRecord(out[column]) || Array.isArray(out[column])) {
       out[column] = rewriteJsonStorageRefs(out[column], maps) as JsonValue;

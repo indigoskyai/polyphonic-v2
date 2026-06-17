@@ -60,7 +60,9 @@ const maps: ImportIdMaps = {
     threads: { 'thread-old': 'thread-new' },
     messages: { 'message-old': 'message-new' },
     projects: { 'project-old': 'project-new' },
+    artifacts: { 'artifact-old': 'artifact-new', 'artifact-parent': 'artifact-parent-new' },
     engrams: { 'engram-a': 'engram-new-a', 'engram-b': 'engram-new-b' },
+    beliefs: { 'belief-old': 'belief-new', 'belief-parent': 'belief-parent-new' },
     scheduled_tasks: { 'task-old': 'task-new' },
   },
   agents: { 'custom-agent': 'restored-custom-agent' },
@@ -187,6 +189,8 @@ describe('account portability archive', () => {
     ]));
     expect(PORTABLE_TABLE_BY_NAME.get('engrams')?.importBatchSize).toBeLessThanOrEqual(25);
     expect(PORTABLE_TABLE_BY_NAME.get('hypomnema_entry')?.importBatchSize).toBeLessThanOrEqual(25);
+    expect(PORTABLE_TABLE_BY_NAME.get('beliefs')?.omitOnImportColumns).toContain('confidence_tier');
+    expect(PORTABLE_TABLE_BY_NAME.get('beliefs')?.deferredRemapColumns).toMatchObject({ superseded_by: 'beliefs' });
   });
 
   it('remaps dependent rows and refreshes imported attachment references', () => {
@@ -213,6 +217,20 @@ describe('account portability archive', () => {
     const [attachment] = transformed.attachments as AttachmentRow[];
     expect(attachment.url).toBe('https://signed.example/file.txt');
     expect(attachment.meta.path).toBe('target-user/thread-new/file.txt');
+
+    const artifact = transformRowForImport(PORTABLE_TABLE_BY_NAME.get('artifacts')!, {
+      id: 'artifact-old',
+      user_id: 'source-user',
+      thread_id: 'thread-old',
+      source_message_id: 'message-old',
+      parent_artifact_id: 'artifact-parent',
+      title: 'Draft',
+    }, 'target-user', maps, 'job-1', 'export-12345678');
+
+    expect(artifact.id).toBe('artifact-new');
+    expect(artifact.thread_id).toBe('thread-new');
+    expect(artifact.source_message_id).toBe('message-new');
+    expect(artifact.parent_artifact_id).toBeNull();
   });
 
   it('imports proactive tasks disabled and remaps memory graph edges', () => {
@@ -241,10 +259,17 @@ describe('account portability archive', () => {
       user_id: 'source-user',
       agent_id: 'luca',
       content: 'Riley values continuity.',
+      confidence: 0.82,
+      confidence_tier: 'strong',
+      superseded_by: 'belief-parent',
       supporting_engram_ids: ['engram-a'],
       contradicting_engram_ids: ['engram-b'],
     }, 'target-user', maps, 'job-1', 'export-12345678');
 
+    expect(belief.id).toBe('belief-new');
+    expect(belief.confidence).toBe(0.82);
+    expect(belief.confidence_tier).toBeUndefined();
+    expect(belief.superseded_by).toBeNull();
     expect(belief.supporting_engram_ids).toEqual(['engram-new-a']);
     expect(belief.contradicting_engram_ids).toEqual(['engram-new-b']);
   });
@@ -286,6 +311,7 @@ describe('account portability edge safety', () => {
     expect(apply).toContain('startAccountImportJob');
     expect(apply).toContain('rollbackFailedImportAttempts');
     expect(apply).toContain('account_portability_jobs');
+    expect(read('supabase/functions/_shared/account-portability/server.ts')).toContain('applyDeferredColumnUpdates');
     expect(rollback).toContain('requireAuth(req)');
     expect(rollback).toContain('rollbackImportJob');
     expect(rollback).not.toContain('.gte("created_at"');

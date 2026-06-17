@@ -106,6 +106,14 @@ interface ChunkedResolvedArchive {
 
 type ResolvedArchive = FullResolvedArchive | ChunkedResolvedArchive;
 
+interface DeferredColumnUpdate {
+  table: string;
+  idColumn: string;
+  targetRowId: string;
+  column: string;
+  value: string;
+}
+
 export function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -478,7 +486,8 @@ export async function applyImportPayload(
 ): Promise<ApplyResult> {
   const warnings = [...(payload.warnings || [])];
   const counts: Record<string, number> = {};
-  const rowMaps: JsonRecord[] = [];
+  const deferredUpdates: DeferredColumnUpdate[] = [];
+  let rowMaps = 0;
   const assetStats = await uploadAssetsForImport(admin, payload, targetUserId, importJobId, maps, warnings);
 
   for (const config of PORTABLE_TABLES) {
@@ -504,6 +513,12 @@ export async function applyImportPayload(
 
     for (const batch of chunk(prepared, importBatchSizeFor(config))) {
       const rows = batch.map((item) => item.target);
+      const mapRows = batch
+        .map((item) => buildMapRow(config, item.source, targetUserId, importJobId, maps))
+        .filter(Boolean) as JsonRecord[];
+      await insertRowMaps(admin, mapRows);
+      rowMaps += mapRows.length;
+
       const query = config.onConflict
         ? admin.from(config.name).upsert(rows, { onConflict: config.onConflict })
         : admin.from(config.name).insert(rows);
@@ -511,22 +526,16 @@ export async function applyImportPayload(
       if (error) throw new Error(`Import failed on ${config.name}: ${error.message}`);
 
       counts[config.name] += rows.length;
-      for (const item of batch) {
-        const mapRow = buildMapRow(config, item.source, targetUserId, importJobId, maps);
-        if (mapRow) rowMaps.push(mapRow);
-      }
+      deferredUpdates.push(...buildDeferredColumnUpdates(config, batch, maps, warnings));
     }
   }
 
-  for (const batch of chunk(rowMaps, 500)) {
-    const { error } = await admin.from("account_portability_row_map").insert(batch);
-    if (error) throw new Error(`Could not record import provenance: ${error.message}`);
-  }
+  await applyDeferredColumnUpdates(admin, targetUserId, deferredUpdates, warnings);
 
   return {
     counts,
     warnings,
-    row_maps: rowMaps.length,
+    row_maps: rowMaps,
     assets_uploaded: assetStats.uploaded,
     assets_missing: assetStats.missing,
   };
@@ -545,6 +554,7 @@ export async function applyImportArchive(
 
   const warnings = [...(resolved.archive.warnings || [])];
   const counts: Record<string, number> = {};
+  const deferredUpdates: DeferredColumnUpdate[] = [];
   let rowMaps = 0;
   const assetPayload = archiveShellPayload(resolved.archive);
   const assetStats = await uploadAssetsForImport(admin, assetPayload, targetUserId, importJobId, maps, warnings);
@@ -570,6 +580,12 @@ export async function applyImportArchive(
       for (const batch of chunk(prepared, importBatchSizeFor(config))) {
         if (batch.length === 0) continue;
         const rows = batch.map((item) => item.target);
+        const mapRows = batch
+          .map((item) => buildMapRow(config, item.source, targetUserId, importJobId, maps))
+          .filter(Boolean) as JsonRecord[];
+        await insertRowMaps(admin, mapRows);
+        rowMaps += mapRows.length;
+
         const query = config.onConflict
           ? admin.from(config.name).upsert(rows, { onConflict: config.onConflict })
           : admin.from(config.name).insert(rows);
@@ -577,17 +593,12 @@ export async function applyImportArchive(
         if (error) throw new Error(`Import failed on ${config.name}: ${error.message}`);
 
         counts[config.name] += rows.length;
-        const mapRows = batch
-          .map((item) => buildMapRow(config, item.source, targetUserId, importJobId, maps))
-          .filter(Boolean) as JsonRecord[];
-        for (const mapBatch of chunk(mapRows, 500)) {
-          const { error: mapError } = await admin.from("account_portability_row_map").insert(mapBatch);
-          if (mapError) throw new Error(`Could not record import provenance: ${mapError.message}`);
-          rowMaps += mapBatch.length;
-        }
+        deferredUpdates.push(...buildDeferredColumnUpdates(config, batch, maps, warnings));
       }
     }
   }
+
+  await applyDeferredColumnUpdates(admin, targetUserId, deferredUpdates, warnings);
 
   return {
     counts,
@@ -1235,6 +1246,62 @@ function buildMapRow(
     source_agent_id: sourceAgent,
     target_agent_id: sourceAgent ? maps.agents[sourceAgent] || sourceAgent : null,
   };
+}
+
+async function insertRowMaps(admin: SupabaseAdmin, mapRows: JsonRecord[]): Promise<void> {
+  for (const mapBatch of chunk(mapRows, 500)) {
+    if (mapBatch.length === 0) continue;
+    const { error } = await admin.from("account_portability_row_map").insert(mapBatch);
+    if (error) throw new Error(`Could not record import provenance: ${error.message}`);
+  }
+}
+
+function buildDeferredColumnUpdates(
+  config: PortableTableConfig,
+  batch: Array<{ source: JsonRecord; target: JsonRecord }>,
+  maps: ImportIdMaps,
+  warnings: string[],
+): DeferredColumnUpdate[] {
+  if (!config.idColumn || !config.deferredRemapColumns) return [];
+  const updates: DeferredColumnUpdate[] = [];
+  for (const item of batch) {
+    const targetRowId = typeof item.target[config.idColumn] === "string" ? item.target[config.idColumn] as string : "";
+    if (!targetRowId) continue;
+    for (const [column, tableName] of Object.entries(config.deferredRemapColumns)) {
+      const sourceValue = item.source[column];
+      if (typeof sourceValue !== "string" || !sourceValue) continue;
+      const targetValue = maps.ids[tableName]?.[sourceValue];
+      if (!targetValue) {
+        warnings.push(`${config.name}:${sourceRowId(config, item.source)} deferred reference ${column} could not be restored.`);
+        continue;
+      }
+      updates.push({
+        table: config.name,
+        idColumn: config.idColumn,
+        targetRowId,
+        column,
+        value: targetValue,
+      });
+    }
+  }
+  return updates;
+}
+
+async function applyDeferredColumnUpdates(
+  admin: SupabaseAdmin,
+  targetUserId: string,
+  updates: DeferredColumnUpdate[],
+  warnings: string[],
+): Promise<void> {
+  for (const update of updates) {
+    const { error } = await admin
+      .from(update.table)
+      .update({ [update.column]: update.value })
+      .eq("user_id", targetUserId)
+      .eq(update.idColumn, update.targetRowId);
+    if (error) throw new Error(`Import failed while restoring ${update.table}.${update.column}: ${error.message}`);
+  }
+  if (updates.length > 0) warnings.push(`Restored ${updates.length} deferred portability reference${updates.length === 1 ? "" : "s"} after row import.`);
 }
 
 function uniqueRefs(refs: Array<{ bucket: string; path: string }>): Array<{ bucket: string; path: string }> {
