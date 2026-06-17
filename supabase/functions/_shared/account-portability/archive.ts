@@ -433,7 +433,7 @@ export function isRecord(value: unknown): value is JsonRecord {
 
 function sanitizeJson(value: unknown): JsonValue {
   if (value === undefined) return null;
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value as JsonValue;
   if (Array.isArray(value)) return value.map(sanitizeJson);
   if (typeof value === "object") {
     const out: JsonRecord = {};
