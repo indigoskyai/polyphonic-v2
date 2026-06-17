@@ -198,13 +198,30 @@ async function callPortabilityFunction<T = Record<string, unknown>>(functionName
     },
     body: JSON.stringify(body),
   });
-  const payload = await response.json().catch(() => ({}));
+  const responseText = await response.text();
+  const payload = parseResponsePayload(responseText);
   if (!response.ok) {
-    throw new Error(typeof payload?.error === 'string' ? payload.error : `${functionName} failed`);
+    const detail =
+      typeof payload?.error === 'string' ? payload.error
+      : typeof payload?.message === 'string' ? payload.message
+      : responseText.trim();
+    throw new Error(detail ? `${functionName}: ${detail}` : `${functionName} failed with ${response.status}`);
   }
   return payload as T;
 }
 
 function messageFromError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function parseResponsePayload(text: string): Record<string, unknown> {
+  if (!text.trim()) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
 }

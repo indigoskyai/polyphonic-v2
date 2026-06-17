@@ -259,4 +259,15 @@ describe('account portability edge safety', () => {
     expect(component).toContain('Apply merge');
     expect(component).toContain('Rollback imported rows');
   });
+
+  it('keeps export failures diagnosable and storage assets best-effort', () => {
+    const store = read('src/stores/accountPortabilityStore.ts');
+    const server = read('supabase/functions/_shared/account-portability/server.ts');
+
+    expect(store).toContain('const responseText = await response.text()');
+    expect(store).toContain('parseResponsePayload(responseText)');
+    expect(server).toContain('MAX_TOTAL_BUNDLED_ASSET_BYTES');
+    expect(server).toContain('Storage asset size unknown; not bundled');
+    expect(server).toContain('archive asset budget reached');
+  });
 });

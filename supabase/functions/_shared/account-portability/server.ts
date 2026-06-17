@@ -29,6 +29,10 @@ import {
 
 type SupabaseAdmin = ReturnType<typeof createClient>;
 
+const MAX_BUNDLED_ASSETS = 80;
+const MAX_SINGLE_ASSET_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_BUNDLED_ASSET_BYTES = 35 * 1024 * 1024;
+
 export interface AuthContext {
   admin: SupabaseAdmin;
   user: { id: string; email?: string | null };
@@ -368,7 +372,32 @@ async function downloadAssets(
   warnings: string[],
 ): Promise<PortableAsset[]> {
   const assets: PortableAsset[] = [];
+  let bundled = 0;
+  let totalBytes = 0;
   for (const ref of refs) {
+    if (bundled >= MAX_BUNDLED_ASSETS) {
+      warnings.push(`Storage asset skipped because the export reached the bundled asset limit: ${ref.bucket}/${ref.path}`);
+      assets.push({ ...ref, missing: true, error: "bundled asset limit reached" });
+      continue;
+    }
+
+    const knownSize = await storageObjectSize(admin, ref.bucket, ref.path);
+    if (knownSize === null) {
+      warnings.push(`Storage asset size unknown; not bundled: ${ref.bucket}/${ref.path}`);
+      assets.push({ ...ref, missing: true, error: "size unknown" });
+      continue;
+    }
+    if (knownSize > MAX_SINGLE_ASSET_BYTES) {
+      warnings.push(`Storage asset too large for encrypted archive: ${ref.bucket}/${ref.path}`);
+      assets.push({ ...ref, size: knownSize, missing: true, error: "asset too large" });
+      continue;
+    }
+    if (totalBytes + knownSize > MAX_TOTAL_BUNDLED_ASSET_BYTES) {
+      warnings.push(`Storage asset skipped to keep the export under archive limits: ${ref.bucket}/${ref.path}`);
+      assets.push({ ...ref, size: knownSize, missing: true, error: "archive asset budget reached" });
+      continue;
+    }
+
     const { data, error } = await admin.storage.from(ref.bucket).download(ref.path);
     if (error || !data) {
       warnings.push(`Storage asset missing: ${ref.bucket}/${ref.path}`);
@@ -376,6 +405,13 @@ async function downloadAssets(
       continue;
     }
     const buffer = await data.arrayBuffer();
+    if (buffer.byteLength > MAX_SINGLE_ASSET_BYTES || totalBytes + buffer.byteLength > MAX_TOTAL_BUNDLED_ASSET_BYTES) {
+      warnings.push(`Storage asset skipped after download size check: ${ref.bucket}/${ref.path}`);
+      assets.push({ ...ref, size: buffer.byteLength, missing: true, error: "asset size cap exceeded" });
+      continue;
+    }
+    totalBytes += buffer.byteLength;
+    bundled += 1;
     assets.push({
       ...ref,
       content_type: data.type || "application/octet-stream",
@@ -384,6 +420,37 @@ async function downloadAssets(
     });
   }
   return assets;
+}
+
+async function storageObjectSize(admin: SupabaseAdmin, bucket: string, path: string): Promise<number | null> {
+  const cleanPath = path.replace(/^\/+/, "");
+  const parts = cleanPath.split("/");
+  const name = parts.pop();
+  if (!name) return null;
+  const prefix = parts.join("/");
+  const { data, error } = await admin.storage.from(bucket).list(prefix, {
+    limit: 100,
+    offset: 0,
+    search: name,
+  });
+  if (error || !data) return null;
+  const item = data.find((entry: unknown) => {
+    const record = entry as { name?: unknown };
+    return record.name === name;
+  });
+  return sizeFromStorageListItem(item);
+}
+
+function sizeFromStorageListItem(item: unknown): number | null {
+  if (!item || typeof item !== "object") return null;
+  const record = item as { metadata?: Record<string, unknown> | null; size?: unknown };
+  const raw = record.metadata?.size ?? record.size;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }
 
 async function uploadAssetsForImport(
