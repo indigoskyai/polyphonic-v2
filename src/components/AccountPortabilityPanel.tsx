@@ -303,3 +303,33 @@ function sumCounts(counts: Record<string, number>): number {
 function labelForCount(key: string): string {
   return key.replace(/_/g, ' ');
 }
+
+async function downloadExportArchive(url: string, fileName: string | null): Promise<void> {
+  const name = ensureExportExtension(fileName);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    triggerDownload(objectUrl, name);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch {
+    // Fallback: direct link (browser may open inline instead of download)
+    triggerDownload(url, name);
+  }
+}
+
+function triggerDownload(href: string, fileName: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function ensureExportExtension(fileName: string | null): string {
+  const base = (fileName || 'polyphonic-export').trim() || 'polyphonic-export';
+  return base.endsWith('.polyphonic-export') ? base : `${base}.polyphonic-export`;
+}
