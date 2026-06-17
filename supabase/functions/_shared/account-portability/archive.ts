@@ -456,6 +456,9 @@ export function transformRowForImport(
   if (isRecord(out.source_context)) {
     out.source_context = addImportProvenance(out.source_context, exportId, importJobId, sourceId);
   }
+  if (isRecord(out.meta)) {
+    out.meta = addImportProvenance(out.meta, exportId, importJobId, sourceId);
+  }
   if (Array.isArray(out.attachments)) {
     out.attachments = rewriteJsonStorageRefs(out.attachments, maps) as JsonValue;
   }

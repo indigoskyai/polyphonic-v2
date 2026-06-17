@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPrompt } from "./prompts.ts";
+import { loadImportedHypomnemaRows } from "./read.ts";
 import { embedOne } from "../embeddings.ts";
 import { detectContinuityCarrySignal } from "./salience.ts";
 
@@ -486,7 +487,7 @@ async function loadAgentContext(
   return { agentName, soul, identitySummary, emotionalSummary };
 }
 
-async function loadRecentHypomnema(
+export async function loadRecentHypomnemaForPrompt(
   supabase: SupabaseClient,
   userId: string,
   agentId: string,
@@ -499,12 +500,24 @@ async function loadRecentHypomnema(
     .eq("active", true)
     .order("last_revised", { ascending: false })
     .limit(MAX_RECENT_HYPOMNEMA);
-  if (!data || data.length === 0) return "(no entries yet — this is your first reflection in this relationship)";
-  return data
-    .map((r: { id: string; content: string; confidence: number }) =>
-      `- [id=${r.id} · conf=${(r.confidence ?? 0).toFixed(2)}] ${r.content}`,
-    )
-    .join("\n");
+  if (data && data.length > 0) {
+    return data
+      .map((r: { id: string; content: string; confidence: number }) =>
+        `- [id=${r.id} · conf=${(r.confidence ?? 0).toFixed(2)}] ${r.content}`,
+      )
+      .join("\n");
+  }
+
+  const importedRows = await loadImportedHypomnemaRows(supabase, userId, agentId, MAX_RECENT_HYPOMNEMA);
+  if (importedRows.length > 0) {
+    return importedRows
+      .map((r) =>
+        `- [imported prior · conf=${(r.confidence ?? 0).toFixed(2)}] ${r.content}`,
+      )
+      .join("\n");
+  }
+
+  return "(no entries yet — this is your first reflection in this relationship)";
 }
 
 export async function writeHypomnemaEntry(
@@ -516,7 +529,7 @@ export async function writeHypomnemaEntry(
   const promptTemplate = await loadPrompt(promptName);
 
   const ctx = await loadAgentContext(supabase, input.userId, input.agentId);
-  const recentHypomnema = await loadRecentHypomnema(supabase, input.userId, input.agentId);
+  const recentHypomnema = await loadRecentHypomnemaForPrompt(supabase, input.userId, input.agentId);
 
   // Try to resolve the user's display name; fall back to "the user".
   let userName = "the user";

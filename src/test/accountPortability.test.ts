@@ -63,6 +63,7 @@ const maps: ImportIdMaps = {
     artifacts: { 'artifact-old': 'artifact-new', 'artifact-parent': 'artifact-parent-new' },
     engrams: { 'engram-a': 'engram-new-a', 'engram-b': 'engram-new-b' },
     beliefs: { 'belief-old': 'belief-new', 'belief-parent': 'belief-parent-new' },
+    hypomnema_entry: { 'hyp-old': 'hyp-new' },
     scheduled_tasks: { 'task-old': 'task-new' },
   },
   agents: { 'custom-agent': 'restored-custom-agent' },
@@ -272,6 +273,28 @@ describe('account portability archive', () => {
     expect(belief.superseded_by).toBeNull();
     expect(belief.supporting_engram_ids).toEqual(['engram-new-a']);
     expect(belief.contradicting_engram_ids).toEqual(['engram-new-b']);
+
+    const hypomnema = transformRowForImport(PORTABLE_TABLE_BY_NAME.get('hypomnema_entry')!, {
+      id: 'hyp-old',
+      user_id: 'source-user',
+      agent_id: 'luca',
+      thread_id: 'thread-old',
+      source_message_id: 'message-old',
+      content: 'i am carrying this across accounts.',
+      meta: { origin: 'old-account' },
+    }, 'target-user', maps, 'job-1', 'export-12345678');
+
+    expect(hypomnema.id).toBe('hyp-new');
+    expect(hypomnema.thread_id).toBe('thread-new');
+    expect(hypomnema.source_message_id).toBe('message-new');
+    expect(hypomnema.meta).toMatchObject({
+      origin: 'old-account',
+      account_portability: {
+        source_export_id: 'export-12345678',
+        source_id: 'hyp-old',
+        import_job_id: 'job-1',
+      },
+    });
   });
 
   it('uses fresh target IDs for singleton rows while preserving available custom agent IDs', () => {
@@ -312,6 +335,8 @@ describe('account portability edge safety', () => {
     expect(apply).toContain('rollbackFailedImportAttempts');
     expect(apply).toContain('account_portability_jobs');
     expect(read('supabase/functions/_shared/account-portability/server.ts')).toContain('applyDeferredColumnUpdates');
+    expect(read('supabase/functions/_shared/account-portability/server.ts')).toContain('ensureImportedHypomnemaContinuity');
+    expect(read('supabase/functions/_shared/account-portability/server.ts')).toContain('account-portability-continuity-bridge');
     expect(rollback).toContain('requireAuth(req)');
     expect(rollback).toContain('rollbackImportJob');
     expect(rollback).not.toContain('.gte("created_at"');
@@ -336,6 +361,8 @@ describe('account portability edge safety', () => {
     expect(component).toContain('Create encrypted export');
     expect(component).toContain('Apply merge');
     expect(component).toContain('Rollback imported rows');
+    expect(component).toContain("'hypomnema_entry'");
+    expect(component).toContain("'thought_stream'");
   });
 
   it('keeps export failures diagnosable and storage assets best-effort', () => {

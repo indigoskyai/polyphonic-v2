@@ -20,7 +20,7 @@ const CHARS_PER_TOKEN = 4; // rough rule of thumb for English mixed prose
 const CHAR_CAP = TOKEN_CAP * CHARS_PER_TOKEN;
 const FETCH_LIMIT = 40; // overfetch then trim — cheaper than RPC ranking
 
-interface HypomnemaRow {
+export interface HypomnemaRow {
   id: string;
   content: string;
   confidence: number;
@@ -31,6 +31,10 @@ interface HypomnemaRow {
   created_at: string;
   density: string;
 }
+
+type SupabaseLike = {
+  from: (table: string) => any;
+};
 
 /**
  * Score for ordering entries before the token cap. Higher is better.
@@ -107,8 +111,66 @@ export async function loadHypomnema(
   }
 
   const rows = (data || []) as HypomnemaRow[];
-  if (rows.length === 0) return { block: "", count: 0, rendered: 0 };
+  if (rows.length === 0) {
+    const importedRows = await loadImportedHypomnemaRows(supabase, userId, agentId, FETCH_LIMIT);
+    if (importedRows.length === 0) return { block: "", count: 0, rendered: 0 };
+    return renderHypomnemaRows(importedRows, {
+      header: "## what i'm carrying forward from the imported account",
+      linePrefix: "imported prior",
+    });
+  }
 
+  return renderHypomnemaRows(rows, {
+    header: "## what i'm sitting with",
+  });
+}
+
+export async function loadImportedHypomnemaRows(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  limit = FETCH_LIMIT,
+): Promise<HypomnemaRow[]> {
+  const { data: mapRows, error: mapError } = await supabase
+    .from("account_portability_row_map")
+    .select("target_id")
+    .eq("user_id", userId)
+    .eq("table_name", "hypomnema_entry")
+    .eq("target_agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (mapError) {
+    console.warn("[hypomnema.read] imported row map query failed:", mapError.message);
+    return [];
+  }
+
+  const ids = [...new Set((mapRows || [])
+    .map((row: { target_id?: unknown }) => typeof row.target_id === "string" ? row.target_id : "")
+    .filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("hypomnema_entry")
+    .select("id, content, confidence, domain, foundational, active_attention, last_revised, created_at, density")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("id", ids)
+    .order("last_revised", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn("[hypomnema.read] imported hypomnema query failed:", error.message);
+    return [];
+  }
+
+  return (data || []) as HypomnemaRow[];
+}
+
+function renderHypomnemaRows(
+  rows: HypomnemaRow[],
+  options: { header: string; linePrefix?: string },
+): LoadHypomnemaResult {
   const nowMs = Date.now();
   const scored = rows
     .map((r) => ({ row: r, score: scoreEntry(r, nowMs) }))
@@ -120,7 +182,8 @@ export async function loadHypomnema(
   for (const { row } of scored) {
     const when = relativeWhen(row.last_revised || row.created_at, nowMs);
     const sanitized = sanitizeContinuityBoundaryText(row.content.trim());
-    const line = `- (${when}) ${sanitized.text}`;
+    const prefix = options.linePrefix ? `${options.linePrefix}, ${when}` : when;
+    const line = `- (${prefix}) ${sanitized.text}`;
     if (chars + line.length + 1 > CHAR_CAP) break;
     lines.push(line);
     chars += line.length + 1;
@@ -129,6 +192,6 @@ export async function loadHypomnema(
 
   if (lines.length === 0) return { block: "", count: rows.length, rendered: 0 };
 
-  const block = `\n## what i'm sitting with\n\n${lines.join("\n")}`;
+  const block = `\n${options.header}\n\n${lines.join("\n")}`;
   return { block, count: rows.length, rendered };
 }

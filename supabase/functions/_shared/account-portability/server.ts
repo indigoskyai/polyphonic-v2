@@ -531,6 +531,12 @@ export async function applyImportPayload(
   }
 
   await applyDeferredColumnUpdates(admin, targetUserId, deferredUpdates, warnings);
+  const bridgeStats = await ensureImportedHypomnemaContinuity(admin, targetUserId, importJobId);
+  warnings.push(...bridgeStats.warnings);
+  if (bridgeStats.created > 0) {
+    counts.hypomnema_entry = (counts.hypomnema_entry || 0) + bridgeStats.created;
+    rowMaps += bridgeStats.rowMaps;
+  }
 
   return {
     counts,
@@ -599,6 +605,12 @@ export async function applyImportArchive(
   }
 
   await applyDeferredColumnUpdates(admin, targetUserId, deferredUpdates, warnings);
+  const bridgeStats = await ensureImportedHypomnemaContinuity(admin, targetUserId, importJobId);
+  warnings.push(...bridgeStats.warnings);
+  if (bridgeStats.created > 0) {
+    counts.hypomnema_entry = (counts.hypomnema_entry || 0) + bridgeStats.created;
+    rowMaps += bridgeStats.rowMaps;
+  }
 
   return {
     counts,
@@ -1302,6 +1314,117 @@ async function applyDeferredColumnUpdates(
     if (error) throw new Error(`Import failed while restoring ${update.table}.${update.column}: ${error.message}`);
   }
   if (updates.length > 0) warnings.push(`Restored ${updates.length} deferred portability reference${updates.length === 1 ? "" : "s"} after row import.`);
+}
+
+async function ensureImportedHypomnemaContinuity(
+  admin: SupabaseAdmin,
+  targetUserId: string,
+  importJobId: string,
+): Promise<{ created: number; rowMaps: number; warnings: string[] }> {
+  try {
+    const { data, error } = await admin
+      .from("account_portability_row_map")
+      .select("target_id,target_agent_id")
+      .eq("user_id", targetUserId)
+      .eq("job_id", importJobId)
+      .eq("table_name", "hypomnema_entry");
+    if (error) throw new Error(error.message);
+
+    const byAgent = new Map<string, number>();
+    for (const row of data || []) {
+      const agentId = typeof row.target_agent_id === "string" ? row.target_agent_id : "";
+      if (!shouldBridgeHypomnemaAgent(agentId)) continue;
+      byAgent.set(agentId, (byAgent.get(agentId) || 0) + 1);
+    }
+    if (byAgent.size === 0) return { created: 0, rowMaps: 0, warnings: [] };
+
+    const warnings: string[] = [];
+    let created = 0;
+    let rowMaps = 0;
+    for (const [agentId, importedCount] of byAgent.entries()) {
+      const { count, error: activeError } = await admin
+        .from("hypomnema_entry")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", targetUserId)
+        .eq("agent_id", agentId)
+        .eq("active", true);
+      if (activeError) {
+        warnings.push(`Could not verify active hypomnema continuity for ${agentId}: ${activeError.message}`);
+        continue;
+      }
+      if ((count || 0) > 0) continue;
+
+      const { data: inserted, error: insertError } = await admin
+        .from("hypomnema_entry")
+        .insert({
+          user_id: targetUserId,
+          agent_id: agentId,
+          content: "i'm carrying a restored account history here. the old hypomnema entries came through as imported prior context rather than active attention, so this bridge exists to keep the relationship from being treated as first contact while the imported substrate settles.",
+          density: "primary",
+          primary_in_thread: true,
+          domain: "meta",
+          tags: ["account-portability", "continuity", "restored"],
+          confidence: 0.72,
+          source: "onboarding",
+          foundational: true,
+          active_attention: true,
+          meta: {
+            account_portability: {
+              bridge: true,
+              import_job_id: importJobId,
+              imported_hypomnema_rows: importedCount,
+              target_agent_id: agentId,
+              imported_at: new Date().toISOString(),
+            },
+          },
+        })
+        .select("id")
+        .single();
+      const targetId = typeof inserted?.id === "string" ? inserted.id : "";
+      if (insertError || !targetId) {
+        warnings.push(`Could not add hypomnema continuity bridge for ${agentId}: ${insertError?.message || "unknown error"}`);
+        continue;
+      }
+
+      try {
+        await insertRowMaps(admin, [{
+          job_id: importJobId,
+          user_id: targetUserId,
+          table_name: "hypomnema_entry",
+          source_id: `account-portability-continuity-bridge:${agentId}`,
+          target_id: targetId,
+          source_agent_id: agentId,
+          target_agent_id: agentId,
+        }]);
+      } catch (mapError) {
+        await admin
+          .from("hypomnema_entry")
+          .delete()
+          .eq("user_id", targetUserId)
+          .eq("id", targetId);
+        warnings.push(`Could not track hypomnema continuity bridge for ${agentId}: ${mapError instanceof Error ? mapError.message : "unknown error"}`);
+        continue;
+      }
+      created += 1;
+      rowMaps += 1;
+      warnings.push(`Added a hypomnema continuity bridge for ${agentId} because ${importedCount} imported hypomnema row${importedCount === 1 ? "" : "s"} were not active after restore.`);
+    }
+    return { created, rowMaps, warnings };
+  } catch (error) {
+    return {
+      created: 0,
+      rowMaps: 0,
+      warnings: [`Hypomnema continuity bridge check failed: ${error instanceof Error ? error.message : "unknown error"}`],
+    };
+  }
+}
+
+function shouldBridgeHypomnemaAgent(agentId: string): boolean {
+  const normalized = agentId.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "observer" || normalized === "guardian") return false;
+  if (normalized.startsWith("classic:")) return false;
+  return true;
 }
 
 function uniqueRefs(refs: Array<{ bucket: string; path: string }>): Array<{ bucket: string; path: string }> {
