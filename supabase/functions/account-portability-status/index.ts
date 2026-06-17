@@ -31,7 +31,26 @@ Deno.serve(async (req) => {
       .eq("job_id", jobId)
       .eq("user_id", user.id);
 
-    return jsonResponse(req, { ok: true, job, row_maps: count || 0 });
+    const jobRow = job as {
+      direction?: unknown;
+      status?: unknown;
+      storage_bucket?: unknown;
+      storage_path?: unknown;
+    };
+    let signed_url: string | null = null;
+    if (
+      jobRow.direction === "export"
+      && jobRow.status === "completed"
+      && typeof jobRow.storage_bucket === "string"
+      && typeof jobRow.storage_path === "string"
+    ) {
+      const { data } = await admin.storage
+        .from(jobRow.storage_bucket)
+        .createSignedUrl(jobRow.storage_path, 60 * 60 * 24 * 7);
+      signed_url = data?.signedUrl ?? null;
+    }
+
+    return jsonResponse(req, { ok: true, job, row_maps: count || 0, signed_url });
   } catch (error) {
     return handleError(req, error);
   }

@@ -9,11 +9,17 @@ import {
   PORTABLE_TABLES,
   type AccountExportPayload,
   type ImportIdMaps,
+  createArchiveCryptoContext,
+  createArchiveDecryptContext,
   decryptArchive,
+  decryptArchiveRowsChunk,
+  encryptArchiveRowsChunk,
   encryptPayload,
   createIdMaps,
+  parsePortableArchiveText,
   redactPortableRow,
   transformRowForImport,
+  validateChunkedArchive,
   validateEncryptedArchive,
 } from '../../supabase/functions/_shared/account-portability/archive';
 
@@ -88,6 +94,49 @@ describe('account portability archive', () => {
     await expect(decryptArchive(parsed, 'correct horse battery')).resolves.toMatchObject({
       export_id: 'export-12345678',
       source_user_id: 'source-user',
+    });
+  });
+
+  it('encrypts row chunks with reusable archive metadata', async () => {
+    const context = await createArchiveCryptoContext('correct horse battery');
+    const chunk = await encryptArchiveRowsChunk('messages', 3, [
+      { id: 'message-old', user_id: 'source-user', content: 'hello chunk' },
+    ], context);
+    const decryptContext = await createArchiveDecryptContext('correct horse battery', context.encryption);
+
+    expect(chunk.mode).toBe('chunk');
+    expect(chunk.index).toBe(3);
+    expect(chunk.row_count).toBe(1);
+    expect(chunk.payload).not.toContain('hello chunk');
+    await expect(decryptArchiveRowsChunk(chunk, decryptContext)).resolves.toEqual([
+      { id: 'message-old', user_id: 'source-user', content: 'hello chunk' },
+    ]);
+  });
+
+  it('recognizes chunked archive manifests separately from legacy single-file exports', () => {
+    const manifest = {
+      format: ACCOUNT_EXPORT_FORMAT,
+      version: ACCOUNT_EXPORT_VERSION,
+      mode: 'chunked',
+      encryption: {
+        alg: 'AES-GCM',
+        kdf: 'PBKDF2-SHA256',
+        iterations: 250_000,
+        salt: 'c2FsdA==',
+      },
+      export_id: 'export-12345678',
+      exported_at: '2026-06-16T00:00:00.000Z',
+      source_user_id: 'source-user',
+      manifest: basePayload().manifest,
+      chunks: [],
+      assets: [],
+      warnings: [],
+    };
+
+    expect(validateChunkedArchive(manifest).mode).toBe('chunked');
+    expect(parsePortableArchiveText(JSON.stringify(manifest))).toMatchObject({
+      mode: 'chunked',
+      export_id: 'export-12345678',
     });
   });
 
@@ -232,7 +281,7 @@ describe('account portability edge safety', () => {
     const apply = read('supabase/functions/account-import-apply/index.ts');
     const rollback = read('supabase/functions/account-import-rollback/index.ts');
     expect(apply).toContain('requireAuth(req)');
-    expect(apply).toContain('applyImportPayload');
+    expect(apply).toContain('applyImportArchive');
     expect(apply).toContain('account_portability_jobs');
     expect(rollback).toContain('requireAuth(req)');
     expect(rollback).toContain('rollbackImportJob');

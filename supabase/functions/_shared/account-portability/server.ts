@@ -4,21 +4,29 @@ import {
   ACCOUNT_EXPORT_FORMAT,
   ACCOUNT_EXPORT_VERSION,
   ACCOUNT_PORTABILITY_BUCKET,
+  type AccountExportChunkRef,
   type AccountExportPayload,
+  type ChunkedEncryptedArchive,
+  type EncryptedArchiveChunk,
   type ImportIdMaps,
   type JsonRecord,
   type PortableAsset,
   type PortableTableConfig,
+  EXCLUDED_PORTABILITY_TABLES,
   PORTABLE_TABLES,
   archiveFileName,
   assertArchivePayload,
   buildManifest,
   bytesToBase64,
   collectStorageRefsFromTables,
+  createArchiveCryptoContext,
+  createArchiveDecryptContext,
   createIdMaps,
   decryptArchive,
+  decryptArchiveRowsChunk,
+  encryptArchiveRowsChunk,
   encryptPayload,
-  parseArchiveText,
+  parsePortableArchiveText,
   redactPortableRow,
   rewriteStoragePathForUser,
   sha256Text,
@@ -27,7 +35,24 @@ import {
   transformRowForImport,
 } from "./archive.ts";
 
-type SupabaseAdmin = ReturnType<typeof createClient>;
+type LooseTable = {
+  Row: JsonRecord;
+  Insert: JsonRecord;
+  Update: JsonRecord;
+  Relationships: [];
+};
+
+type LooseDatabase = {
+  public: {
+    Tables: Record<string, LooseTable>;
+    Views: Record<string, LooseTable>;
+    Functions: Record<string, never>;
+    Enums: Record<string, string>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+type SupabaseAdmin = ReturnType<typeof createClient<LooseDatabase>>;
 
 const MAX_BUNDLED_ASSETS = 80;
 const MAX_SINGLE_ASSET_BYTES = 8 * 1024 * 1024;
@@ -63,6 +88,23 @@ export interface ApplyResult {
   assets_uploaded: number;
   assets_missing: number;
 }
+
+interface FullResolvedArchive {
+  kind: "full";
+  archiveText: string;
+  archiveHash: string;
+  payload: AccountExportPayload;
+}
+
+interface ChunkedResolvedArchive {
+  kind: "chunked";
+  archiveText: string;
+  archiveHash: string;
+  passphrase: string;
+  archive: ChunkedEncryptedArchive;
+}
+
+type ResolvedArchive = FullResolvedArchive | ChunkedResolvedArchive;
 
 export function jsonResponse(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -143,7 +185,7 @@ export async function createEncryptedAccountExport(
   const exportId = crypto.randomUUID();
   const payload = await buildExportPayload(admin, userId, exportId);
   const encrypted = await encryptPayload(payload, passphrase);
-  const archiveText = JSON.stringify(encrypted, null, 2);
+  const archiveText = JSON.stringify(encrypted);
   const archiveHash = await sha256Text(archiveText);
   return {
     exportId,
@@ -154,12 +196,179 @@ export async function createEncryptedAccountExport(
   };
 }
 
+export function startChunkedAccountExportJob(
+  admin: SupabaseAdmin,
+  userId: string,
+  passphrase: string,
+  jobId: string,
+  expiresAt: string,
+): void {
+  const task = runChunkedAccountExportJob(admin, userId, passphrase, jobId, expiresAt);
+  const runtime = globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  };
+  if (runtime.EdgeRuntime?.waitUntil) {
+    runtime.EdgeRuntime.waitUntil(task);
+  } else {
+    void task;
+  }
+}
+
+async function runChunkedAccountExportJob(
+  admin: SupabaseAdmin,
+  userId: string,
+  passphrase: string,
+  jobId: string,
+  expiresAt: string,
+): Promise<void> {
+  try {
+    const result = await createChunkedAccountExport(admin, userId, passphrase, jobId);
+    const { error: updateError } = await admin
+      .from("account_portability_jobs")
+      .update({
+        status: "completed",
+        archive_hash: result.archiveHash,
+        file_name: result.fileName,
+        storage_bucket: ACCOUNT_PORTABILITY_BUCKET,
+        storage_path: result.storagePath,
+        counts: result.archive.manifest.tables,
+        warnings: result.archive.warnings,
+        manifest: result.archive.manifest,
+        expires_at: expiresAt,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId);
+    if (updateError) throw new Error(updateError.message);
+  } catch (error) {
+    await admin
+      .from("account_portability_jobs")
+      .update({
+        status: "failed",
+        errors: [error instanceof Error ? error.message : "Unknown export error"],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId);
+  }
+}
+
+async function createChunkedAccountExport(
+  admin: SupabaseAdmin,
+  userId: string,
+  passphrase: string,
+  jobId: string,
+): Promise<{
+  archive: ChunkedEncryptedArchive;
+  fileName: string;
+  storagePath: string;
+  archiveHash: string;
+}> {
+  const exportId = crypto.randomUUID();
+  const exportedAt = new Date().toISOString();
+  const context = await createArchiveCryptoContext(passphrase);
+  const chunks: AccountExportChunkRef[] = [];
+  const counts: Record<string, number> = {};
+  const warnings: string[] = [];
+  const refs = new Map<string, { bucket: string; path: string }>();
+  let chunkIndex = 0;
+
+  for (const config of PORTABLE_TABLES) {
+    counts[config.name] = 0;
+    if (!config.userColumn) continue;
+    for await (const rows of fetchTableRowPages(admin, config, userId, warnings)) {
+      const redacted = rows.map((row) => redactPortableRow(config, row));
+      counts[config.name] += redacted.length;
+      for (const ref of collectStorageRefsFromTables({ [config.name]: redacted })) {
+        refs.set(`${ref.bucket}/${ref.path}`, ref);
+      }
+      if (redacted.length === 0) continue;
+
+      const encryptedChunk = await encryptArchiveRowsChunk(config.name, chunkIndex, redacted, context);
+      const chunkText = JSON.stringify(encryptedChunk);
+      const chunkPath = `${userId}/${jobId}/chunks/${String(chunkIndex).padStart(6, "0")}-${safeStorageName(config.name)}.json`;
+      const { error: uploadError } = await admin.storage
+        .from(ACCOUNT_PORTABILITY_BUCKET)
+        .upload(chunkPath, new Blob([chunkText], { type: "application/json" }), {
+          upsert: true,
+          contentType: "application/json",
+        });
+      if (uploadError) throw new Error(`Could not upload ${config.name} chunk: ${uploadError.message}`);
+
+      chunks.push({
+        table: config.name,
+        index: chunkIndex,
+        row_count: redacted.length,
+        storage_bucket: ACCOUNT_PORTABILITY_BUCKET,
+        storage_path: chunkPath,
+        sha256: await sha256Text(chunkText),
+      });
+      chunkIndex += 1;
+    }
+  }
+
+  const assets = deferredAssets([...refs.values()], warnings);
+  const archive: ChunkedEncryptedArchive = {
+    format: ACCOUNT_EXPORT_FORMAT,
+    version: ACCOUNT_EXPORT_VERSION,
+    mode: "chunked",
+    encryption: context.encryption,
+    export_id: exportId,
+    exported_at: exportedAt,
+    source_user_id: userId,
+    manifest: {
+      app: "polyphonic",
+      tables: counts,
+      assets: {
+        total: assets.length,
+        missing: assets.filter((asset) => asset.missing).length,
+      },
+      excluded: [...EXCLUDED_PORTABILITY_TABLES],
+    },
+    chunks,
+    assets,
+    warnings,
+  };
+
+  const fileName = archiveFileName(exportId);
+  const archiveText = JSON.stringify(archive);
+  const storagePath = `${userId}/${jobId}/${fileName}`;
+  const { error: uploadError } = await admin.storage
+    .from(ACCOUNT_PORTABILITY_BUCKET)
+    .upload(storagePath, new Blob([archiveText], { type: "application/json" }), {
+      upsert: true,
+      contentType: "application/json",
+    });
+  if (uploadError) throw new Error(`Could not upload export manifest: ${uploadError.message}`);
+
+  return {
+    archive,
+    fileName,
+    storagePath,
+    archiveHash: await sha256Text(archiveText),
+  };
+}
+
 export async function decryptArchiveBody(body: JsonRecord): Promise<{ archiveText: string; payload: AccountExportPayload; archiveHash: string }> {
   const archiveText = requiredString(body, "archive_text");
   const passphrase = requiredString(body, "passphrase");
-  const archive = parseArchiveText(archiveText);
+  const archive = parsePortableArchiveText(archiveText);
+  if (!("payload" in archive)) throw new Error("Use resolveArchiveBody for chunked archives");
   const payload = await decryptArchive(archive, passphrase);
   return { archiveText, payload: assertArchivePayload(payload), archiveHash: await sha256Text(archiveText) };
+}
+
+export async function resolveArchiveBody(body: JsonRecord): Promise<ResolvedArchive> {
+  const archiveText = requiredString(body, "archive_text");
+  const passphrase = requiredString(body, "passphrase");
+  const archive = parsePortableArchiveText(archiveText);
+  const archiveHash = await sha256Text(archiveText);
+  if (!("payload" in archive)) {
+    return { kind: "chunked", archiveText, archiveHash, passphrase, archive };
+  }
+  const payload = await decryptArchive(archive, passphrase);
+  return { kind: "full", archiveText, payload: assertArchivePayload(payload), archiveHash };
 }
 
 export async function buildImportPreview(
@@ -206,6 +415,53 @@ export async function buildImportPreview(
         missing: (payload.assets || []).filter((asset) => asset.missing).length,
       },
       warnings,
+      duplicate_job_id: duplicateJobId,
+      agent_mappings: agentMappings,
+      conflicts,
+    },
+  };
+}
+
+export async function buildImportPreviewForArchive(
+  admin: SupabaseAdmin,
+  resolved: ResolvedArchive,
+  targetUserId: string,
+): Promise<{ preview: PreviewResult; maps: ImportIdMaps }> {
+  if (resolved.kind === "full") {
+    return buildImportPreview(admin, resolved.payload, targetUserId, resolved.archiveHash);
+  }
+
+  const existingAgentIds = await fetchExistingAgentIds(admin, targetUserId);
+  const minimalPayload = await buildMinimalPayloadForIdMaps(admin, resolved);
+  const maps = createIdMaps(minimalPayload, existingAgentIds);
+  const conflicts = await collectImportConflictsForArchive(admin, resolved, targetUserId, maps);
+  const duplicateJobId = await findDuplicateCompletedImport(admin, targetUserId, resolved.archiveHash);
+  const agentMappings = (minimalPayload.tables.agent_configs || [])
+    .map((row) => {
+      const sourceId = typeof row.id === "string" ? row.id : "";
+      if (!sourceId) return null;
+      const targetId = maps.agents[sourceId] || sourceId;
+      return {
+        source_id: sourceId,
+        target_id: targetId,
+        mode: sourceId === targetId && isResidentAgent(sourceId)
+          ? "resident-merge" as const
+          : sourceId === targetId
+            ? "keep" as const
+            : "restored-id" as const,
+      };
+    })
+    .filter(Boolean) as PreviewResult["agent_mappings"];
+
+  return {
+    maps,
+    preview: {
+      archive_hash: resolved.archiveHash,
+      export_id: resolved.archive.export_id,
+      exported_at: resolved.archive.exported_at,
+      counts: resolved.archive.manifest.tables,
+      assets: resolved.archive.manifest.assets,
+      warnings: [...(resolved.archive.warnings || [])],
       duplicate_job_id: duplicateJobId,
       agent_mappings: agentMappings,
       conflicts,
@@ -276,6 +532,72 @@ export async function applyImportPayload(
   };
 }
 
+export async function applyImportArchive(
+  admin: SupabaseAdmin,
+  resolved: ResolvedArchive,
+  targetUserId: string,
+  importJobId: string,
+  maps: ImportIdMaps,
+): Promise<ApplyResult> {
+  if (resolved.kind === "full") {
+    return applyImportPayload(admin, resolved.payload, targetUserId, importJobId, maps);
+  }
+
+  const warnings = [...(resolved.archive.warnings || [])];
+  const counts: Record<string, number> = {};
+  let rowMaps = 0;
+  const assetPayload = archiveShellPayload(resolved.archive);
+  const assetStats = await uploadAssetsForImport(admin, assetPayload, targetUserId, importJobId, maps, warnings);
+
+  for (const config of PORTABLE_TABLES) {
+    counts[config.name] = 0;
+    if (config.readOnly) continue;
+
+    for await (const sourceRows of iterateArchiveRows(admin, resolved, config.name)) {
+      if (sourceRows.length === 0) continue;
+      const prepared: Array<{ source: JsonRecord; target: JsonRecord }> = [];
+      for (const source of sourceRows) {
+        if (await shouldSkipExistingTarget(admin, config, source, targetUserId, maps)) {
+          warnings.push(`${config.name}:${sourceRowId(config, source)} already exists in the target account; skipped.`);
+          continue;
+        }
+        prepared.push({
+          source,
+          target: transformRowForImport(config, source, targetUserId, maps, importJobId, resolved.archive.export_id),
+        });
+      }
+
+      for (const batch of chunk(prepared, 200)) {
+        if (batch.length === 0) continue;
+        const rows = batch.map((item) => item.target);
+        const query = config.onConflict
+          ? admin.from(config.name).upsert(rows, { onConflict: config.onConflict })
+          : admin.from(config.name).insert(rows);
+        const { error } = await query;
+        if (error) throw new Error(`Import failed on ${config.name}: ${error.message}`);
+
+        counts[config.name] += rows.length;
+        const mapRows = batch
+          .map((item) => buildMapRow(config, item.source, targetUserId, importJobId, maps))
+          .filter(Boolean) as JsonRecord[];
+        for (const mapBatch of chunk(mapRows, 500)) {
+          const { error: mapError } = await admin.from("account_portability_row_map").insert(mapBatch);
+          if (mapError) throw new Error(`Could not record import provenance: ${mapError.message}`);
+          rowMaps += mapBatch.length;
+        }
+      }
+    }
+  }
+
+  return {
+    counts,
+    warnings,
+    row_maps: rowMaps,
+    assets_uploaded: assetStats.uploaded,
+    assets_missing: assetStats.missing,
+  };
+}
+
 export async function rollbackImportJob(admin: SupabaseAdmin, targetUserId: string, jobId: string): Promise<Record<string, number>> {
   const { data: maps, error } = await admin
     .from("account_portability_row_map")
@@ -285,7 +607,9 @@ export async function rollbackImportJob(admin: SupabaseAdmin, targetUserId: stri
   if (error) throw new Error(error.message);
 
   const byTable = new Map<string, string[]>();
-  for (const row of maps || []) {
+  const mapRows = (maps || []) as Array<{ table_name?: unknown; target_id?: unknown }>;
+  for (const row of mapRows) {
+    if (typeof row.table_name !== "string" || typeof row.target_id !== "string") continue;
     if (!row?.table_name || !row?.target_id) continue;
     const config = PORTABLE_TABLES.find((item) => item.name === row.table_name);
     if (!config?.idColumn || config.readOnly) continue;
@@ -385,6 +709,29 @@ async function fetchTableRows(
     if (!data || data.length < pageSize) break;
   }
   return rows;
+}
+
+async function* fetchTableRowPages(
+  admin: SupabaseAdmin,
+  config: PortableTableConfig,
+  userId: string,
+  warnings: string[],
+): AsyncGenerator<JsonRecord[]> {
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
+      .from(config.name)
+      .select("*")
+      .eq(config.userColumn!, userId)
+      .range(from, from + pageSize - 1);
+    if (error) {
+      warnings.push(`${config.name} could not be exported: ${error.message}`);
+      return;
+    }
+    const rows = (data || []) as JsonRecord[];
+    if (rows.length > 0) yield rows;
+    if (rows.length < pageSize) return;
+  }
 }
 
 async function downloadAssets(
@@ -493,7 +840,7 @@ async function uploadAssetsForImport(
     }
     const targetPath = rewriteStoragePathForUser(asset, payload.source_user_id, targetUserId, importJobId);
     const bytes = base64ToUint8(asset.base64);
-    const blob = new Blob([bytes], { type: asset.content_type || "application/octet-stream" });
+    const blob = new Blob([bytes as unknown as BlobPart], { type: asset.content_type || "application/octet-stream" });
     const { error } = await admin.storage
       .from(asset.bucket)
       .upload(targetPath, blob, {
@@ -552,7 +899,9 @@ async function listWorkspaceStorageRefs(
 async function fetchExistingAgentIds(admin: SupabaseAdmin, userId: string): Promise<Set<string>> {
   const { data, error } = await admin.from("agent_configs").select("id").eq("user_id", userId);
   if (error) throw new Error(error.message);
-  return new Set((data || []).map((row: { id?: string }) => row.id).filter(Boolean));
+  return new Set((data || [])
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string"));
 }
 
 async function findDuplicateCompletedImport(admin: SupabaseAdmin, userId: string, archiveHash: string): Promise<string | null> {
@@ -566,7 +915,7 @@ async function findDuplicateCompletedImport(admin: SupabaseAdmin, userId: string
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.id || null;
+  return typeof data?.id === "string" ? data.id : null;
 }
 
 async function collectImportConflicts(
@@ -594,6 +943,134 @@ async function collectImportConflicts(
   return conflicts;
 }
 
+async function buildMinimalPayloadForIdMaps(
+  admin: SupabaseAdmin,
+  resolved: ChunkedResolvedArchive,
+): Promise<AccountExportPayload> {
+  const tables: Record<string, JsonRecord[]> = {};
+  for (const config of PORTABLE_TABLES) tables[config.name] = [];
+
+  for await (const { config, rows } of iterateArchiveTableRows(admin, resolved)) {
+    const target = tables[config.name] || [];
+    for (const row of rows) {
+      const minimal = minimalRowForIdMap(config, row);
+      if (sourceRowId(config, minimal)) target.push(minimal);
+    }
+    tables[config.name] = target;
+  }
+
+  return {
+    format: ACCOUNT_EXPORT_FORMAT,
+    version: ACCOUNT_EXPORT_VERSION,
+    export_id: resolved.archive.export_id,
+    exported_at: resolved.archive.exported_at,
+    source_user_id: resolved.archive.source_user_id,
+    manifest: resolved.archive.manifest,
+    tables,
+    assets: resolved.archive.assets || [],
+    warnings: resolved.archive.warnings || [],
+  };
+}
+
+async function collectImportConflictsForArchive(
+  admin: SupabaseAdmin,
+  resolved: ChunkedResolvedArchive,
+  targetUserId: string,
+  maps: ImportIdMaps,
+): Promise<PreviewResult["conflicts"]> {
+  const conflicts: PreviewResult["conflicts"] = [];
+  for await (const { config, rows } of iterateArchiveTableRows(admin, resolved)) {
+    if (config.readOnly) continue;
+    if (!config.singleton && config.name !== "agent_configs") continue;
+    for (const row of rows) {
+      const sourceId = sourceRowId(config, row);
+      if (await shouldSkipExistingTarget(admin, config, row, targetUserId, maps)) {
+        conflicts.push({
+          table: config.name,
+          source_id: sourceId,
+          reason: config.name === "agent_configs"
+            ? "Target account already has this resident agent configuration."
+            : "Target account already has a row for this merge key.",
+        });
+      }
+    }
+  }
+  return conflicts;
+}
+
+async function* iterateArchiveRows(
+  admin: SupabaseAdmin,
+  resolved: ResolvedArchive,
+  tableName: string,
+): AsyncGenerator<JsonRecord[]> {
+  if (resolved.kind === "full") {
+    const rows = resolved.payload.tables[tableName] || [];
+    for (const batch of chunk(rows, 500)) yield batch;
+    return;
+  }
+  for await (const item of iterateArchiveTableRows(admin, resolved, tableName)) {
+    yield item.rows;
+  }
+}
+
+async function* iterateArchiveTableRows(
+  admin: SupabaseAdmin,
+  resolved: ChunkedResolvedArchive,
+  tableName?: string,
+): AsyncGenerator<{ config: PortableTableConfig; rows: JsonRecord[] }> {
+  const configByName = new Map(PORTABLE_TABLES.map((config) => [config.name, config]));
+  const refs = [...resolved.archive.chunks]
+    .filter((ref) => !tableName || ref.table === tableName)
+    .sort((a, b) => a.index - b.index);
+  if (refs.length === 0) return;
+  const context = await createArchiveDecryptContext(resolved.passphrase, resolved.archive.encryption);
+
+  for (const ref of refs) {
+    const config = configByName.get(ref.table);
+    if (!config) continue;
+    const encryptedChunk = await downloadArchiveChunk(admin, ref);
+    const rows = await decryptArchiveRowsChunk(encryptedChunk, context);
+    yield { config, rows };
+  }
+}
+
+async function downloadArchiveChunk(
+  admin: SupabaseAdmin,
+  ref: AccountExportChunkRef,
+): Promise<EncryptedArchiveChunk> {
+  const { data, error } = await admin.storage.from(ref.storage_bucket).download(ref.storage_path);
+  if (error || !data) throw new Error(`Could not read export chunk ${ref.index}: ${error?.message || "missing"}`);
+  const text = await data.text();
+  const actualHash = await sha256Text(text);
+  if (actualHash !== ref.sha256) throw new Error(`Export chunk ${ref.index} failed integrity check`);
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`Export chunk ${ref.index} is invalid`);
+  return parsed as EncryptedArchiveChunk;
+}
+
+function archiveShellPayload(archive: ChunkedEncryptedArchive): AccountExportPayload {
+  return {
+    format: ACCOUNT_EXPORT_FORMAT,
+    version: ACCOUNT_EXPORT_VERSION,
+    export_id: archive.export_id,
+    exported_at: archive.exported_at,
+    source_user_id: archive.source_user_id,
+    manifest: archive.manifest,
+    tables: {},
+    assets: archive.assets || [],
+    warnings: archive.warnings || [],
+  };
+}
+
+function minimalRowForIdMap(config: PortableTableConfig, row: JsonRecord): JsonRecord {
+  const minimal: JsonRecord = {};
+  if (config.idColumn && row[config.idColumn] !== undefined) minimal[config.idColumn] = row[config.idColumn];
+  if (config.userColumn && row[config.userColumn] !== undefined) minimal[config.userColumn] = row[config.userColumn];
+  if (config.agentColumn && row[config.agentColumn] !== undefined) minimal[config.agentColumn] = row[config.agentColumn];
+  if (row.doc_type !== undefined) minimal.doc_type = row.doc_type;
+  return minimal;
+}
+
 async function shouldSkipExistingTarget(
   admin: SupabaseAdmin,
   config: PortableTableConfig,
@@ -618,7 +1095,8 @@ async function shouldSkipExistingTarget(
 
   let query = admin.from(config.name).select(config.idColumn || config.userColumn || "*");
   for (const column of config.onConflict.split(",").map((item) => item.trim()).filter(Boolean)) {
-    query = query.eq(column, conflictColumnValue(column, config, source, targetUserId, maps));
+    const value = conflictColumnValue(column, config, source, targetUserId, maps);
+    query = value === null ? query.is(column, null) : query.eq(column, value);
   }
   const { data } = await query.maybeSingle();
   return Boolean(data);
@@ -690,4 +1168,8 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function isResidentAgent(agentId: string): boolean {
   return ["luca", "anima", "vektor", "observer", "guardian"].includes(agentId);
+}
+
+function safeStorageName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) || "table";
 }

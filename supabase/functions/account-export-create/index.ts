@@ -1,12 +1,11 @@
 import { handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { ACCOUNT_PORTABILITY_BUCKET } from "../_shared/account-portability/archive.ts";
 import {
-  createEncryptedAccountExport,
   handleError,
   jsonResponse,
   readJsonBody,
   requireAuth,
   requiredString,
+  startChunkedAccountExportJob,
 } from "../_shared/account-portability/server.ts";
 
 Deno.serve(async (req) => {
@@ -32,49 +31,17 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (jobError || !job?.id) throw new Error(jobError?.message || "Could not create export job");
-    jobId = job.id;
+    const insertedJobId = typeof job?.id === "string" ? job.id : "";
+    if (jobError || !insertedJobId) throw new Error(jobError?.message || "Could not create export job");
+    jobId = insertedJobId;
 
-    const exportArchive = await createEncryptedAccountExport(admin, user.id, passphrase);
-    const storagePath = `${user.id}/${job.id}/${exportArchive.fileName}`;
-    const archiveBlob = new Blob([exportArchive.archiveText], { type: "application/json" });
-
-    const { error: uploadError } = await admin.storage
-      .from(ACCOUNT_PORTABILITY_BUCKET)
-      .upload(storagePath, archiveBlob, { upsert: true, contentType: "application/json" });
-    if (uploadError) throw new Error(uploadError.message);
-
-    const { data: signed, error: signedError } = await admin.storage
-      .from(ACCOUNT_PORTABILITY_BUCKET)
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
-    if (signedError || !signed?.signedUrl) throw new Error(signedError?.message || "Could not create export link");
-
-    const { error: updateError } = await admin
-      .from("account_portability_jobs")
-      .update({
-        status: "completed",
-        archive_hash: exportArchive.archiveHash,
-        file_name: exportArchive.fileName,
-        storage_bucket: ACCOUNT_PORTABILITY_BUCKET,
-        storage_path: storagePath,
-        counts: exportArchive.payload.manifest.tables,
-        warnings: exportArchive.payload.warnings,
-        manifest: exportArchive.payload.manifest,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", job.id)
-      .eq("user_id", user.id);
-    if (updateError) throw new Error(updateError.message);
+    startChunkedAccountExportJob(admin, user.id, passphrase, insertedJobId, expiresAt);
 
     return jsonResponse(req, {
       ok: true,
-      job_id: job.id,
-      file_name: exportArchive.fileName,
-      signed_url: signed.signedUrl,
+      job_id: insertedJobId,
+      status: "processing",
       expires_at: expiresAt,
-      counts: exportArchive.payload.manifest.tables,
-      warnings: exportArchive.payload.warnings,
       archive_version: 1,
     });
   } catch (error) {

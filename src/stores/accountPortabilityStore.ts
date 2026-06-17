@@ -82,12 +82,21 @@ export const useAccountPortabilityStore = create<AccountPortabilityState>((set, 
     try {
       const data = await callPortabilityFunction<{
         job_id: string;
-        file_name: string;
-        signed_url: string;
+        status?: string;
+        file_name?: string;
+        signed_url?: string;
         expires_at: string;
-        counts: Record<string, number>;
-        warnings: string[];
+        counts?: Record<string, number>;
+        warnings?: string[];
       }>('account-export-create', { passphrase });
+      if (!data.signed_url || data.status === 'processing') {
+        set({
+          exportJobId: data.job_id,
+          exportExpiresAt: data.expires_at,
+        });
+        await pollExportJob(data.job_id);
+        return;
+      }
       set({
         exportStatus: 'ready',
         exportJobId: data.job_id,
@@ -208,6 +217,52 @@ async function callPortabilityFunction<T = Record<string, unknown>>(functionName
     throw new Error(detail ? `${functionName}: ${detail}` : `${functionName} failed with ${response.status}`);
   }
   return payload as T;
+}
+
+async function pollExportJob(jobId: string): Promise<void> {
+  const started = Date.now();
+  const timeoutMs = 12 * 60 * 1000;
+  for (;;) {
+    await delay(2500);
+    const data = await callPortabilityFunction<{
+      job: {
+        id: string;
+        status: string;
+        file_name?: string | null;
+        expires_at?: string | null;
+        counts?: Record<string, number> | null;
+        warnings?: string[] | null;
+        errors?: string[] | null;
+      };
+      signed_url?: string | null;
+    }>('account-portability-status', { job_id: jobId });
+
+    if (data.job.status === 'completed' && data.signed_url) {
+      useAccountPortabilityStore.setState({
+        exportStatus: 'ready',
+        exportJobId: data.job.id,
+        exportFileName: data.job.file_name || 'polyphonic-export.polyphonic-export',
+        exportUrl: data.signed_url,
+        exportExpiresAt: data.job.expires_at || null,
+        exportCounts: data.job.counts || {},
+        exportWarnings: data.job.warnings || [],
+      });
+      return;
+    }
+
+    if (data.job.status === 'failed') {
+      const error = data.job.errors?.find(Boolean) || 'Export failed while preparing the archive.';
+      throw new Error(error);
+    }
+
+    if (Date.now() - started > timeoutMs) {
+      throw new Error('Export is still processing. Try again in a minute or check status from this page.');
+    }
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function messageFromError(error: unknown, fallback: string): string {

@@ -1,11 +1,11 @@
 import { handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import {
-  buildImportPreview,
-  decryptArchiveBody,
+  buildImportPreviewForArchive,
   handleError,
   jsonResponse,
   readJsonBody,
   requireAuth,
+  resolveArchiveBody,
 } from "../_shared/account-portability/server.ts";
 
 Deno.serve(async (req) => {
@@ -16,8 +16,8 @@ Deno.serve(async (req) => {
   try {
     const { admin, user } = await requireAuth(req);
     const body = await readJsonBody(req);
-    const { payload, archiveHash } = await decryptArchiveBody(body);
-    const { preview } = await buildImportPreview(admin, payload, user.id, archiveHash);
+    const resolved = await resolveArchiveBody(body);
+    const { preview } = await buildImportPreviewForArchive(admin, resolved, user.id);
     return jsonResponse(req, { ok: true, preview });
   } catch (error) {
     return handleError(req, error);

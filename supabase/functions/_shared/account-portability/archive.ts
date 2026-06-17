@@ -67,6 +67,57 @@ export interface EncryptedArchive {
   payload: string;
 }
 
+export interface ArchiveEncryptionMetadata {
+  alg: "AES-GCM";
+  kdf: "PBKDF2-SHA256";
+  iterations: number;
+  salt: string;
+}
+
+export interface ArchiveCryptoContext {
+  key: CryptoKey;
+  encryption: ArchiveEncryptionMetadata;
+}
+
+export interface EncryptedArchiveChunk {
+  format: typeof ACCOUNT_EXPORT_FORMAT;
+  version: typeof ACCOUNT_EXPORT_VERSION;
+  mode: "chunk";
+  table: string;
+  index: number;
+  row_count: number;
+  encryption: {
+    alg: "AES-GCM";
+    iv: string;
+  };
+  payload: string;
+}
+
+export interface AccountExportChunkRef {
+  table: string;
+  index: number;
+  row_count: number;
+  storage_bucket: string;
+  storage_path: string;
+  sha256: string;
+}
+
+export interface ChunkedEncryptedArchive {
+  format: typeof ACCOUNT_EXPORT_FORMAT;
+  version: typeof ACCOUNT_EXPORT_VERSION;
+  mode: "chunked";
+  encryption: ArchiveEncryptionMetadata;
+  export_id: string;
+  exported_at: string;
+  source_user_id: string;
+  manifest: AccountExportPayload["manifest"];
+  chunks: AccountExportChunkRef[];
+  assets: PortableAsset[];
+  warnings: string[];
+}
+
+export type PortableArchiveFile = EncryptedArchive | ChunkedEncryptedArchive;
+
 export interface ImportIdMaps {
   ids: Record<string, Record<string, string>>;
   agents: Record<string, string>;
@@ -177,6 +228,23 @@ export function validateEncryptedArchive(value: unknown): EncryptedArchive {
   return value as unknown as EncryptedArchive;
 }
 
+export function validateChunkedArchive(value: unknown): ChunkedEncryptedArchive {
+  if (!isRecord(value)) throw new Error("Export file is not valid JSON");
+  if (value.format !== ACCOUNT_EXPORT_FORMAT) throw new Error("Not a Polyphonic export");
+  if (value.version !== ACCOUNT_EXPORT_VERSION) throw new Error("Unsupported export version");
+  if (value.mode !== "chunked") throw new Error("Export is not a chunked Polyphonic export");
+  if (!isRecord(value.encryption)) throw new Error("Export is missing encryption metadata");
+  if (!Array.isArray(value.chunks)) throw new Error("Export is missing chunk references");
+  if (!isRecord(value.manifest)) throw new Error("Export is missing a manifest");
+  return value as unknown as ChunkedEncryptedArchive;
+}
+
+export function parsePortableArchiveText(text: string): PortableArchiveFile {
+  const parsed = JSON.parse(text);
+  if (isRecord(parsed) && parsed.mode === "chunked") return validateChunkedArchive(parsed);
+  return validateEncryptedArchive(parsed);
+}
+
 export function redactPortableRow(config: PortableTableConfig, row: JsonRecord): JsonRecord {
   const out: JsonRecord = {};
   const redactions = new Set([...(config.redactColumns || []), ...COMMON_REDACT_COLUMNS]);
@@ -217,6 +285,71 @@ export async function encryptPayload(payload: AccountExportPayload, passphrase: 
     },
     payload: bytesToBase64(new Uint8Array(encrypted)),
   };
+}
+
+export async function createArchiveCryptoContext(passphrase: string): Promise<ArchiveCryptoContext> {
+  const { key, salt, iterations } = await deriveNewArchiveKey(passphrase);
+  return {
+    key,
+    encryption: {
+      alg: "AES-GCM",
+      kdf: "PBKDF2-SHA256",
+      iterations,
+      salt: bytesToBase64(salt),
+    },
+  };
+}
+
+export async function createArchiveDecryptContext(
+  passphrase: string,
+  encryption: ArchiveEncryptionMetadata,
+): Promise<ArchiveCryptoContext> {
+  const salt = base64ToBytes(encryption.salt);
+  return {
+    key: await deriveExistingArchiveKey(passphrase, salt, encryption.iterations),
+    encryption,
+  };
+}
+
+export async function encryptArchiveRowsChunk(
+  table: string,
+  index: number,
+  rows: JsonRecord[],
+  context: ArchiveCryptoContext,
+): Promise<EncryptedArchiveChunk> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify({ table, rows }));
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, context.key, encoded);
+  return {
+    format: ACCOUNT_EXPORT_FORMAT,
+    version: ACCOUNT_EXPORT_VERSION,
+    mode: "chunk",
+    table,
+    index,
+    row_count: rows.length,
+    encryption: {
+      alg: "AES-GCM",
+      iv: bytesToBase64(iv),
+    },
+    payload: bytesToBase64(new Uint8Array(encrypted)),
+  };
+}
+
+export async function decryptArchiveRowsChunk(
+  chunk: EncryptedArchiveChunk,
+  context: ArchiveCryptoContext,
+): Promise<JsonRecord[]> {
+  if (chunk.format !== ACCOUNT_EXPORT_FORMAT || chunk.version !== ACCOUNT_EXPORT_VERSION || chunk.mode !== "chunk") {
+    throw new Error("Invalid export chunk");
+  }
+  const iv = base64ToBytes(chunk.encryption.iv);
+  const ciphertext = base64ToBytes(chunk.payload);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, context.key, ciphertext as BufferSource);
+  const parsed = JSON.parse(new TextDecoder().decode(decrypted));
+  if (!isRecord(parsed) || parsed.table !== chunk.table || !Array.isArray(parsed.rows)) {
+    throw new Error("Export chunk payload is invalid");
+  }
+  return parsed.rows as JsonRecord[];
 }
 
 export async function decryptArchive(archive: EncryptedArchive, passphrase: string): Promise<AccountExportPayload> {
@@ -415,8 +548,11 @@ export function archiveFileName(exportId: string): string {
 }
 
 export function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
   return btoa(binary);
 }
 

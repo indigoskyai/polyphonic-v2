@@ -1,12 +1,13 @@
 import { handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import type { JsonRecord } from "../_shared/account-portability/archive.ts";
 import {
-  applyImportPayload,
-  buildImportPreview,
-  decryptArchiveBody,
+  applyImportArchive,
+  buildImportPreviewForArchive,
   handleError,
   jsonResponse,
   readJsonBody,
   requireAuth,
+  resolveArchiveBody,
 } from "../_shared/account-portability/server.ts";
 
 Deno.serve(async (req) => {
@@ -18,8 +19,8 @@ Deno.serve(async (req) => {
   try {
     const { admin, user } = await requireAuth(req);
     const body = await readJsonBody(req);
-    const { payload, archiveHash } = await decryptArchiveBody(body);
-    const { preview, maps } = await buildImportPreview(admin, payload, user.id, archiveHash);
+    const resolved = await resolveArchiveBody(body);
+    const { preview, maps } = await buildImportPreviewForArchive(admin, resolved, user.id);
 
     if (preview.duplicate_job_id) {
       return jsonResponse(req, {
@@ -36,24 +37,25 @@ Deno.serve(async (req) => {
         user_id: user.id,
         direction: "import",
         status: "processing",
-        archive_version: payload.version,
-        archive_hash: archiveHash,
+        archive_version: 1,
+        archive_hash: resolved.archiveHash,
         counts: preview.counts,
         warnings: preview.warnings,
-        preview,
-        manifest: payload.manifest,
+        preview: preview as unknown as JsonRecord,
+        manifest: resolved.kind === "full" ? resolved.payload.manifest : resolved.archive.manifest,
       })
       .select("id")
       .single();
-    if (jobError || !job?.id) {
+    const insertedJobId = typeof job?.id === "string" ? job.id : "";
+    if (jobError || !insertedJobId) {
       if (jobError?.code === "23505") {
         return jsonResponse(req, { ok: true, already_imported: true, preview });
       }
       throw new Error(jobError?.message || "Could not create import job");
     }
-    jobId = job.id;
+    jobId = insertedJobId;
 
-    const result = await applyImportPayload(admin, payload, user.id, job.id, maps);
+    const result = await applyImportArchive(admin, resolved, user.id, insertedJobId, maps);
     const { error: updateError } = await admin
       .from("account_portability_jobs")
       .update({
@@ -63,13 +65,13 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", job.id)
+      .eq("id", insertedJobId)
       .eq("user_id", user.id);
     if (updateError) throw new Error(updateError.message);
 
     return jsonResponse(req, {
       ok: true,
-      job_id: job.id,
+      job_id: insertedJobId,
       counts: result.counts,
       warnings: result.warnings,
       row_maps: result.row_maps,
