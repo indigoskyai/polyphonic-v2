@@ -148,6 +148,7 @@ export const useAccountPortabilityStore = create<AccountPortabilityState>((set, 
     try {
       const data = await callPortabilityFunction<{
         job_id: string;
+        status?: string;
         already_imported?: boolean;
         counts?: Record<string, number>;
         warnings?: string[];
@@ -155,6 +156,11 @@ export const useAccountPortabilityStore = create<AccountPortabilityState>((set, 
         archive_text: archiveText,
         passphrase,
       });
+      if (data.status === 'processing' || !data.counts) {
+        set({ importJobId: data.job_id });
+        await pollImportJob(data.job_id);
+        return;
+      }
       set({
         importStatus: 'ready',
         importJobId: data.job_id,
@@ -263,6 +269,44 @@ async function pollExportJob(jobId: string): Promise<void> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function pollImportJob(jobId: string): Promise<void> {
+  const started = Date.now();
+  const timeoutMs = 20 * 60 * 1000;
+  for (;;) {
+    await delay(2500);
+    const data = await callPortabilityFunction<{
+      job: {
+        id: string;
+        status: string;
+        counts?: Record<string, number> | null;
+        warnings?: string[] | null;
+        errors?: string[] | null;
+      };
+      row_maps?: number;
+    }>('account-portability-status', { job_id: jobId });
+
+    if (data.job.status === 'completed') {
+      useAccountPortabilityStore.setState({
+        importStatus: 'ready',
+        importJobId: data.job.id,
+        importCounts: data.job.counts || {},
+        importWarnings: data.job.warnings || [],
+        importError: null,
+      });
+      return;
+    }
+
+    if (data.job.status === 'failed') {
+      const error = data.job.errors?.find(Boolean) || 'Import failed while restoring the archive.';
+      throw new Error(error);
+    }
+
+    if (Date.now() - started > timeoutMs) {
+      throw new Error('Import is still processing. Try again in a minute or check status from this page.');
+    }
+  }
 }
 
 function messageFromError(error: unknown, fallback: string): string {

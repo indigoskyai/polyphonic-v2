@@ -185,6 +185,8 @@ describe('account portability archive', () => {
       'token_gate_verifications',
       'email_send_log',
     ]));
+    expect(PORTABLE_TABLE_BY_NAME.get('engrams')?.importBatchSize).toBeLessThanOrEqual(25);
+    expect(PORTABLE_TABLE_BY_NAME.get('hypomnema_entry')?.importBatchSize).toBeLessThanOrEqual(25);
   });
 
   it('remaps dependent rows and refreshes imported attachment references', () => {
@@ -281,7 +283,8 @@ describe('account portability edge safety', () => {
     const apply = read('supabase/functions/account-import-apply/index.ts');
     const rollback = read('supabase/functions/account-import-rollback/index.ts');
     expect(apply).toContain('requireAuth(req)');
-    expect(apply).toContain('applyImportArchive');
+    expect(apply).toContain('startAccountImportJob');
+    expect(apply).toContain('rollbackFailedImportAttempts');
     expect(apply).toContain('account_portability_jobs');
     expect(rollback).toContain('requireAuth(req)');
     expect(rollback).toContain('rollbackImportJob');
@@ -315,11 +318,13 @@ describe('account portability edge safety', () => {
 
     expect(store).toContain('const responseText = await response.text()');
     expect(store).toContain('parseResponsePayload(responseText)');
+    expect(store).toContain('pollImportJob(data.job_id)');
     expect(server).toContain('ACCOUNT_PORTABILITY_BUNDLE_ASSETS');
     expect(server).toContain('deferredAssets(uniqueRefs(refs), warnings)');
     expect(server).toContain('asset binary deferred');
     expect(server).toContain('MAX_TOTAL_BUNDLED_ASSET_BYTES');
     expect(server).toContain('Storage asset size unknown; not bundled');
     expect(server).toContain('archive asset budget reached');
+    expect(server).toContain('importBatchSizeFor(config)');
   });
 });

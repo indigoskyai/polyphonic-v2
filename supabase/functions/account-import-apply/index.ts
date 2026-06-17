@@ -1,13 +1,14 @@
 import { handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import type { JsonRecord } from "../_shared/account-portability/archive.ts";
 import {
-  applyImportArchive,
   buildImportPreviewForArchive,
   handleError,
   jsonResponse,
   readJsonBody,
   requireAuth,
   resolveArchiveBody,
+  rollbackFailedImportAttempts,
+  startAccountImportJob,
 } from "../_shared/account-portability/server.ts";
 
 Deno.serve(async (req) => {
@@ -29,6 +30,14 @@ Deno.serve(async (req) => {
         job_id: preview.duplicate_job_id,
         preview,
       });
+    }
+
+    const rolledBackFailedJobs = await rollbackFailedImportAttempts(admin, user.id, resolved.archiveHash);
+    if (rolledBackFailedJobs.length > 0) {
+      preview.warnings = [
+        ...preview.warnings,
+        `Rolled back ${rolledBackFailedJobs.length} previous failed import attempt${rolledBackFailedJobs.length === 1 ? "" : "s"} for this archive before retrying.`,
+      ];
     }
 
     const { data: job, error: jobError } = await admin
@@ -55,28 +64,13 @@ Deno.serve(async (req) => {
     }
     jobId = insertedJobId;
 
-    const result = await applyImportArchive(admin, resolved, user.id, insertedJobId, maps);
-    const { error: updateError } = await admin
-      .from("account_portability_jobs")
-      .update({
-        status: "completed",
-        counts: result.counts,
-        warnings: result.warnings,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", insertedJobId)
-      .eq("user_id", user.id);
-    if (updateError) throw new Error(updateError.message);
+    startAccountImportJob(admin, resolved, user.id, insertedJobId, maps);
 
     return jsonResponse(req, {
       ok: true,
       job_id: insertedJobId,
-      counts: result.counts,
-      warnings: result.warnings,
-      row_maps: result.row_maps,
-      assets_uploaded: result.assets_uploaded,
-      assets_missing: result.assets_missing,
+      status: "processing",
+      preview,
     });
   } catch (error) {
     try {

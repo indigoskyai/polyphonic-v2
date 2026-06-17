@@ -502,7 +502,7 @@ export async function applyImportPayload(
 
     if (prepared.length === 0) continue;
 
-    for (const batch of chunk(prepared, 200)) {
+    for (const batch of chunk(prepared, importBatchSizeFor(config))) {
       const rows = batch.map((item) => item.target);
       const query = config.onConflict
         ? admin.from(config.name).upsert(rows, { onConflict: config.onConflict })
@@ -567,7 +567,7 @@ export async function applyImportArchive(
         });
       }
 
-      for (const batch of chunk(prepared, 200)) {
+      for (const batch of chunk(prepared, importBatchSizeFor(config))) {
         if (batch.length === 0) continue;
         const rows = batch.map((item) => item.target);
         const query = config.onConflict
@@ -596,6 +596,99 @@ export async function applyImportArchive(
     assets_uploaded: assetStats.uploaded,
     assets_missing: assetStats.missing,
   };
+}
+
+export function startAccountImportJob(
+  admin: SupabaseAdmin,
+  resolved: ResolvedArchive,
+  targetUserId: string,
+  importJobId: string,
+  maps: ImportIdMaps,
+): void {
+  const task = runAccountImportJob(admin, resolved, targetUserId, importJobId, maps);
+  const runtime = globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  };
+  if (runtime.EdgeRuntime?.waitUntil) {
+    runtime.EdgeRuntime.waitUntil(task);
+  } else {
+    void task;
+  }
+}
+
+async function runAccountImportJob(
+  admin: SupabaseAdmin,
+  resolved: ResolvedArchive,
+  targetUserId: string,
+  importJobId: string,
+  maps: ImportIdMaps,
+): Promise<void> {
+  try {
+    const result = await applyImportArchive(admin, resolved, targetUserId, importJobId, maps);
+    const { error: updateError } = await admin
+      .from("account_portability_jobs")
+      .update({
+        status: "completed",
+        counts: result.counts,
+        warnings: result.warnings,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", importJobId)
+      .eq("user_id", targetUserId);
+    if (updateError) throw new Error(updateError.message);
+  } catch (error) {
+    const errors = [error instanceof Error ? error.message : "Unknown import error"];
+    try {
+      const deleted = await rollbackImportJob(admin, targetUserId, importJobId);
+      const deletedCount = Object.values(deleted).reduce((sum, count) => sum + count, 0);
+      errors.push(`Rolled back ${deletedCount} rows from the failed import job.`);
+    } catch (rollbackError) {
+      errors.push(`Rollback after import failure failed: ${rollbackError instanceof Error ? rollbackError.message : "Unknown rollback error"}`);
+    }
+    await admin
+      .from("account_portability_jobs")
+      .update({
+        status: "failed",
+        errors,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", importJobId)
+      .eq("user_id", targetUserId);
+  }
+}
+
+export async function rollbackFailedImportAttempts(
+  admin: SupabaseAdmin,
+  targetUserId: string,
+  archiveHash: string,
+): Promise<string[]> {
+  const { data, error } = await admin
+    .from("account_portability_jobs")
+    .select("id")
+    .eq("user_id", targetUserId)
+    .eq("direction", "import")
+    .eq("archive_hash", archiveHash)
+    .eq("status", "failed");
+  if (error) throw new Error(error.message);
+
+  const rolledBack: string[] = [];
+  for (const job of data || []) {
+    const jobId = typeof job.id === "string" ? job.id : "";
+    if (!jobId) continue;
+    await rollbackImportJob(admin, targetUserId, jobId);
+    const { error: updateError } = await admin
+      .from("account_portability_jobs")
+      .update({
+        status: "rolled_back",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", targetUserId);
+    if (updateError) throw new Error(updateError.message);
+    rolledBack.push(jobId);
+  }
+  return rolledBack;
 }
 
 export async function rollbackImportJob(admin: SupabaseAdmin, targetUserId: string, jobId: string): Promise<Record<string, number>> {
@@ -1164,6 +1257,10 @@ function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let index = 0; index < items.length; index += size) out.push(items.slice(index, index + size));
   return out;
+}
+
+function importBatchSizeFor(config: PortableTableConfig): number {
+  return config.importBatchSize ?? 200;
 }
 
 function isResidentAgent(agentId: string): boolean {

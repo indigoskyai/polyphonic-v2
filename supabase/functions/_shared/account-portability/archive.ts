@@ -25,6 +25,7 @@ export interface PortableTableConfig {
   remapColumns?: Record<string, string>;
   arrayRemapColumns?: Record<string, string>;
   jsonColumns?: string[];
+  importBatchSize?: number;
 }
 
 export interface PortableAsset {
@@ -163,26 +164,26 @@ export const PORTABLE_TABLES: PortableTableConfig[] = [
   { name: "projects", idColumn: "id", userColumn: "user_id" },
   { name: "conversations", idColumn: "id", userColumn: "user_id", readOnly: true },
   { name: "threads", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { project_id: "projects" }, arrayRemapColumns: { participating_agent_ids: "agent" } },
-  { name: "messages", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads" }, jsonColumns: ["metadata", "attachments"] },
-  { name: "artifacts", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads", source_message_id: "messages", parent_artifact_id: "artifacts" } },
+  { name: "messages", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads" }, jsonColumns: ["metadata", "attachments"], importBatchSize: 100 },
+  { name: "artifacts", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads", source_message_id: "messages", parent_artifact_id: "artifacts" }, importBatchSize: 50 },
   { name: "agent_consultations", idColumn: "id", userColumn: "user_id", remapColumns: { parent_thread_id: "threads", parent_message_id: "messages" } },
   { name: "memories", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["provenance"] },
-  { name: "engrams", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"] },
-  { name: "engram_archive", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"] },
-  { name: "connections", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_id: "engrams", target_id: "engrams" } },
+  { name: "engrams", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"], importBatchSize: 25 },
+  { name: "engram_archive", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source_context"], importBatchSize: 25 },
+  { name: "connections", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_id: "engrams", target_id: "engrams" }, importBatchSize: 100 },
   { name: "beliefs", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", arrayRemapColumns: { supporting_engram_ids: "engrams", contradicting_engram_ids: "engrams" }, jsonColumns: ["evidence", "revision_history"] },
   { name: "mnemos_emotional_state", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "mnemos_digests", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
-  { name: "hypomnema_entry", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { thread_id: "threads", source_message_id: "messages", graduated_to_engram_id: "engrams", superseded_by: "hypomnema_entry" }, jsonColumns: ["meta", "revisions"] },
-  { name: "journal_entries", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_conversation_id: "threads" }, jsonColumns: ["source_context"] },
+  { name: "hypomnema_entry", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { thread_id: "threads", source_message_id: "messages", graduated_to_engram_id: "engrams", superseded_by: "hypomnema_entry" }, jsonColumns: ["meta", "revisions"], importBatchSize: 25 },
+  { name: "journal_entries", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_conversation_id: "threads" }, jsonColumns: ["source_context"], importBatchSize: 50 },
   { name: "thought_stream", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "thought_initiations", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
-  { name: "activity_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["metadata"] },
+  { name: "activity_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["metadata"], importBatchSize: 100 },
   { name: "memory_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
-  { name: "memory_candidates", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source"] },
+  { name: "memory_candidates", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source"], importBatchSize: 100 },
   { name: "cognitive_state", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", singleton: true, onConflict: "user_id,agent_id", jsonColumns: ["beliefs", "emotions", "modulators"] },
   { name: "emotional_state", userColumn: "user_id", agentColumn: "agent_id", singleton: true, onConflict: "user_id,agent_id" },
-  { name: "emotional_history", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["state"] },
+  { name: "emotional_history", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["state"], importBatchSize: 100 },
   { name: "daily_logs", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["content"] },
   { name: "observer_notes", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { thread_id: "threads" }, jsonColumns: ["metadata"] },
   { name: "observer_logs", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["observations"] },
@@ -196,7 +197,7 @@ export const PORTABLE_TABLES: PortableTableConfig[] = [
   { name: "psychological_profile", idColumn: "id", userColumn: "user_id", singleton: true, onConflict: "user_id", jsonColumns: ["personality_dimensions", "communication_patterns", "emotional_landscape", "relational_dynamics", "values_hierarchy", "shadow_patterns", "cognitive_tendencies", "growth_edges", "raw_analysis"] },
   { name: "profile_daily_pulse", idColumn: "id", userColumn: "user_id", jsonColumns: ["payload"] },
   { name: "profile_chats", idColumn: "id", userColumn: "user_id" },
-  { name: "profile_chat_messages", idColumn: "id", userColumn: "user_id", remapColumns: { chat_id: "profile_chats" }, jsonColumns: ["citations"] },
+  { name: "profile_chat_messages", idColumn: "id", userColumn: "user_id", remapColumns: { chat_id: "profile_chats" }, jsonColumns: ["citations"], importBatchSize: 100 },
   { name: "scheduled_tasks", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { target_thread_id: "threads" }, disableOnImport: ["enabled"] },
   { name: "dashboard_widgets", idColumn: "id", userColumn: "user_id", jsonColumns: ["spec"] },
   { name: "checkpoints", idColumn: "id", userColumn: "user_id" },
