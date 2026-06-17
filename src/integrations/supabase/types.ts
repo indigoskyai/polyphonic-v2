@@ -14,6 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_portability_jobs: {
+        Row: {
+          archive_hash: string | null
+          archive_version: number
+          completed_at: string | null
+          counts: Json
+          created_at: string
+          direction: string
+          errors: Json
+          expires_at: string | null
+          file_name: string | null
+          id: string
+          manifest: Json | null
+          preview: Json | null
+          status: string
+          storage_bucket: string | null
+          storage_path: string | null
+          updated_at: string
+          user_id: string
+          warnings: Json
+        }
+        Insert: {
+          archive_hash?: string | null
+          archive_version?: number
+          completed_at?: string | null
+          counts?: Json
+          created_at?: string
+          direction: string
+          errors?: Json
+          expires_at?: string | null
+          file_name?: string | null
+          id?: string
+          manifest?: Json | null
+          preview?: Json | null
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          user_id: string
+          warnings?: Json
+        }
+        Update: {
+          archive_hash?: string | null
+          archive_version?: number
+          completed_at?: string | null
+          counts?: Json
+          created_at?: string
+          direction?: string
+          errors?: Json
+          expires_at?: string | null
+          file_name?: string | null
+          id?: string
+          manifest?: Json | null
+          preview?: Json | null
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          user_id?: string
+          warnings?: Json
+        }
+        Relationships: []
+      }
+      account_portability_row_map: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          source_agent_id: string | null
+          source_id: string
+          table_name: string
+          target_agent_id: string | null
+          target_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          source_agent_id?: string | null
+          source_id: string
+          table_name: string
+          target_agent_id?: string | null
+          target_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          source_agent_id?: string | null
+          source_id?: string
+          table_name?: string
+          target_agent_id?: string | null
+          target_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_portability_row_map_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "account_portability_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activity_events: {
         Row: {
           agent_id: string

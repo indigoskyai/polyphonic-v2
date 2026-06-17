@@ -224,7 +224,7 @@ export async function decryptArchive(archive: EncryptedArchive, passphrase: stri
   const iv = base64ToBytes(archive.encryption.iv);
   const key = await deriveExistingArchiveKey(passphrase, salt, archive.encryption.iterations);
   const ciphertext = base64ToBytes(archive.payload);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ciphertext as BufferSource);
   const parsed = JSON.parse(new TextDecoder().decode(decrypted));
   return assertArchivePayload(parsed);
 }
@@ -433,7 +433,7 @@ export function isRecord(value: unknown): value is JsonRecord {
 
 function sanitizeJson(value: unknown): JsonValue {
   if (value === undefined) return null;
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value as JsonValue;
   if (Array.isArray(value)) return value.map(sanitizeJson);
   if (typeof value === "object") {
     const out: JsonRecord = {};
@@ -458,7 +458,7 @@ async function deriveArchiveKey(passphrase: string, salt: Uint8Array, iterations
   if (!passphrase || passphrase.length < 8) throw new Error("Passphrase must be at least 8 characters");
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    { name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations },
     material,
     { name: "AES-GCM", length: 256 },
     false,
