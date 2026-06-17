@@ -62,6 +62,7 @@ describe('Phase 4 reliability guardrails', () => {
       const source = readFileSync(indexPath, 'utf8');
       return !(
         source.includes('authenticateUser(req)') ||
+        source.includes('requireAuth(req)') ||
         source.includes('auth.getUser') ||
         source.includes('auth.getClaims') ||
         source.includes('.getUser(') ||

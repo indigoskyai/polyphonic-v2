@@ -6571,6 +6571,267 @@ html {
   cursor: default;
 }
 
+.account-transfer-shell {
+  margin-bottom: 34px;
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.01)),
+    var(--surface-1);
+  box-shadow: var(--shadow-inset-highlight);
+}
+
+.account-transfer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--border-faint);
+  color: var(--text-soft);
+}
+
+.account-transfer-kicker,
+.account-transfer-panel-title {
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 520;
+  letter-spacing: var(--track-folio);
+  text-transform: uppercase;
+}
+
+.account-transfer-head h2 {
+  margin: 8px 0 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 390;
+  letter-spacing: 0;
+}
+
+.account-transfer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-transfer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px 20px 20px;
+}
+
+.account-transfer-panel + .account-transfer-panel {
+  border-left: 1px solid var(--border-faint);
+}
+
+.account-transfer-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.account-transfer-input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 0 12px;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.account-transfer-input:focus {
+  border-color: var(--border-focus);
+  background: var(--surface-1);
+}
+
+.account-transfer-input::placeholder {
+  color: var(--text-ghost);
+}
+
+.account-transfer-file-row,
+.account-transfer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.account-transfer-actions {
+  flex-wrap: wrap;
+}
+
+.account-transfer-button,
+.account-transfer-icon-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 430;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.account-transfer-button {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.account-transfer-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-transfer-button.primary {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.account-transfer-button.danger {
+  border-color: rgba(201, 124, 138, 0.28);
+  color: rgba(231, 152, 166, 0.9);
+}
+
+.account-transfer-button:hover,
+.account-transfer-button:focus-visible,
+.account-transfer-icon-button:hover,
+.account-transfer-icon-button:focus-visible {
+  background: var(--surface-3);
+  border-color: var(--border);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.account-transfer-button:disabled,
+.account-transfer-icon-button:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.account-transfer-icon-button {
+  width: 38px;
+  flex: 0 0 38px;
+  padding: 0;
+  font-size: 13px;
+}
+
+.account-transfer-result,
+.account-transfer-conflicts {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-transfer-result a,
+.account-transfer-result strong {
+  color: var(--text-primary);
+  font-weight: 450;
+}
+
+.account-transfer-result div div,
+.account-transfer-note {
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.account-transfer-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 0 2px;
+}
+
+.account-transfer-preview-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.account-transfer-preview-row strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 520;
+}
+
+.account-transfer-conflicts {
+  align-items: center;
+  color: rgba(234, 179, 8, 0.88);
+  border-color: rgba(234, 179, 8, 0.2);
+  background: rgba(234, 179, 8, 0.06);
+}
+
+.account-transfer-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.account-transfer-counts span {
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  padding: 4px 7px;
+  text-transform: uppercase;
+}
+
+.account-transfer-warnings,
+.account-transfer-error {
+  border-left: 1px solid rgba(234, 179, 8, 0.26);
+  color: var(--text-ghost);
+  font-size: 11px;
+  line-height: 1.45;
+  padding-left: 10px;
+}
+
+.account-transfer-error {
+  border-left-color: rgba(231, 152, 166, 0.42);
+  color: rgba(231, 152, 166, 0.92);
+}
+
+.account-transfer-spin {
+  animation: accountTransferSpin 900ms linear infinite;
+}
+
+@keyframes accountTransferSpin {
+  to { transform: rotate(360deg); }
+}
+
 .import-companion-card {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -6695,6 +6956,26 @@ html {
 
   .import-companion-card {
     grid-template-columns: 1fr;
+  }
+
+  .account-transfer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-transfer-panel + .account-transfer-panel {
+    border-left: none;
+    border-top: 1px solid var(--border-faint);
+  }
+
+  .account-transfer-file-row,
+  .account-transfer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-transfer-button,
+  .account-transfer-icon-button {
+    width: 100%;
   }
 
   .import-companion-actions {

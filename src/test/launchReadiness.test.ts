@@ -62,6 +62,7 @@ describe('launch readiness static gates', () => {
       const source = edgeFunctionSource(name);
       const hasAuthMarker =
         source.includes('authenticateUser(req)') ||
+        source.includes('requireAuth(req)') ||
         source.includes('auth.getUser') ||
         source.includes('auth.getClaims') ||
         source.includes('.getUser(') ||
@@ -76,7 +77,7 @@ describe('launch readiness static gates', () => {
         name,
         verifyJwt: configured.get(name),
         hasPreflight: /handleCorsPreflightIfNeeded\(req\)|req\.method\s*={0,2}=\s*["']OPTIONS["']/.test(source),
-        hasCorsResponse: /getCorsHeaders\(req\)|corsHeaders|corsHeaders\(/.test(source),
+        hasCorsResponse: /getCorsHeaders\(req\)|jsonResponse\(req|corsHeaders|corsHeaders\(/.test(source),
         hasCatch: /try\s*\{/.test(source),
         hasAuthMarker,
       };
@@ -85,7 +86,7 @@ describe('launch readiness static gates', () => {
     // Expected count grows as new edge functions land. Each new function must
     // satisfy the wrapper assertions below; bumping the count is intentional
     // and signals a deliberate review.
-    expect(rows.map((row) => row.name)).toHaveLength(86);
+    expect(rows.map((row) => row.name)).toHaveLength(91);
     expect(rows.filter((row) => !row.hasPreflight).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCorsResponse).map((row) => row.name)).toEqual([]);
     expect(rows.filter((row) => !row.hasCatch).map((row) => row.name)).toEqual([]);
