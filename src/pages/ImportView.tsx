@@ -7,6 +7,7 @@ import { useAgentScopeStore } from '@/stores/agentScopeStore';
 import { supabase } from '@/integrations/supabase/client';
 import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 import EchoField from '@/components/EchoField';
+import AccountPortabilityPanel from '@/components/AccountPortabilityPanel';
 import { buildOnboardingHandoffPrompt } from '@/lib/interfaceMode';
 import { stashChatHandoff } from '@/lib/guestChat';
 import {
@@ -173,11 +174,13 @@ export default function ImportView() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}>
       <div className="flex items-center flex-shrink-0" style={{ height: 44, padding: '0 24px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Import Conversations</span>
+        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Import & export</span>
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ padding: '48px 24px' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <AccountPortabilityPanel />
+
           <div className="import-companion-card">
             <div>
               <div className="import-companion-kicker">companion migration</div>

@@ -62,6 +62,7 @@ describe('Phase 4 reliability guardrails', () => {
       const source = readFileSync(indexPath, 'utf8');
       return !(
         source.includes('authenticateUser(req)') ||
+        source.includes('requireAuth(req)') ||
         source.includes('auth.getUser') ||
         source.includes('auth.getClaims') ||
         source.includes('.getUser(') ||
@@ -129,14 +130,14 @@ describe('Phase 4 reliability guardrails', () => {
     const customPrompt = readRepoFile('supabase/functions/_shared/agents/custom-agent-prompt.ts');
 
     expect(source).toContain('buildCustomAgentSystemPrompt');
-    expect(source).toContain('.select("agent_id, primary_agent_id")');
+    expect(source).toContain('.select("agent_id, primary_agent_id, runtime_mode, selected_model, memory_enabled, continuity_summary")');
     expect(source).toContain('const agentId = resolveThreadAgentId(thread)');
     expect(source).toContain('backend.keySource !== "user"');
     expect(source).toContain('Custom agents require your own OpenRouter key');
     expect(source).not.toContain('backend.keySource === "platform" ? "luca" : threadAgentId');
-    expect(source).toContain('includeIdentity: true');
-    expect(source).toContain('includeFunctionalMemory: backend.billingTier !== "guest"');
-    expect(source).toContain('includeMnemos: backend.billingTier !== "guest"');
+    expect(source).toContain('includeIdentity: !classicRuntime');
+    expect(source).toContain('includeFunctionalMemory: quietMemoryEnabled && backend.billingTier !== "guest"');
+    expect(source).toContain('includeMnemos: quietMemoryEnabled && backend.billingTier !== "guest"');
     expect(source).toContain('identityDocs: continuity.identityDocs');
     expect(source).toContain('agent: agentId');
 

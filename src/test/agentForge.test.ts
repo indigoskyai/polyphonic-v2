@@ -61,7 +61,7 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
     expect(chatMulti).toContain('function looksLikeLegacyToolPlannerRequest');
-    expect(chatMulti).toContain('const likelyToolRequest = agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
+    expect(chatMulti).toContain('const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
     expect(chatMulti).toContain('(forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)))');
     expect(chatMulti).toContain('digital\\s+(entity|companion|being|mind)');
     expect(chatMulti).toContain('character\\s+card');
