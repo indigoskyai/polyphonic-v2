@@ -32,6 +32,7 @@ type SupabaseAdmin = ReturnType<typeof createClient>;
 const MAX_BUNDLED_ASSETS = 80;
 const MAX_SINGLE_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BUNDLED_ASSET_BYTES = 35 * 1024 * 1024;
+const BUNDLE_STORAGE_ASSETS = Deno.env.get("ACCOUNT_PORTABILITY_BUNDLE_ASSETS") === "true";
 
 export interface AuthContext {
   admin: SupabaseAdmin;
@@ -325,8 +326,12 @@ async function buildExportPayload(admin: SupabaseAdmin, userId: string, exportId
   }
 
   const refs = collectStorageRefsFromTables(tables);
-  refs.push(...await listWorkspaceStorageRefs(admin, userId, warnings));
-  const assets = await downloadAssets(admin, uniqueRefs(refs), warnings);
+  if (BUNDLE_STORAGE_ASSETS) {
+    refs.push(...await listWorkspaceStorageRefs(admin, userId, warnings));
+  }
+  const assets = BUNDLE_STORAGE_ASSETS
+    ? await downloadAssets(admin, uniqueRefs(refs), warnings)
+    : deferredAssets(uniqueRefs(refs), warnings);
 
   const manifest = buildManifest(tables, assets, warnings);
   return {
@@ -340,6 +345,22 @@ async function buildExportPayload(admin: SupabaseAdmin, userId: string, exportId
     assets,
     warnings,
   };
+}
+
+function deferredAssets(
+  refs: Array<{ bucket: string; path: string }>,
+  warnings: string[],
+): PortableAsset[] {
+  if (refs.length > 0) {
+    warnings.push(
+      `Storage asset binaries were deferred to keep this export within edge compute limits; ${refs.length} asset reference${refs.length === 1 ? "" : "s"} preserved.`,
+    );
+  }
+  return refs.map((ref) => ({
+    ...ref,
+    missing: true,
+    error: "asset binary deferred",
+  }));
 }
 
 async function fetchTableRows(

@@ -266,6 +266,9 @@ describe('account portability edge safety', () => {
 
     expect(store).toContain('const responseText = await response.text()');
     expect(store).toContain('parseResponsePayload(responseText)');
+    expect(server).toContain('ACCOUNT_PORTABILITY_BUNDLE_ASSETS');
+    expect(server).toContain('deferredAssets(uniqueRefs(refs), warnings)');
+    expect(server).toContain('asset binary deferred');
     expect(server).toContain('MAX_TOTAL_BUNDLED_ASSET_BYTES');
     expect(server).toContain('Storage asset size unknown; not bundled');
     expect(server).toContain('archive asset budget reached');
