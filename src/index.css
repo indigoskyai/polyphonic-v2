@@ -9539,8 +9539,10 @@ html {
   line-height: 1.45;
 }
 
-.luca-guide-composer textarea:focus {
+.luca-guide-composer textarea:focus,
+.luca-guide-composer textarea:focus-visible {
   background: transparent;
+  box-shadow: none;
 }
 
 .luca-guide-composer button {
