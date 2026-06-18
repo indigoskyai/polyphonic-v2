@@ -111,7 +111,7 @@ serve(async (req) => {
     const targetForLog = (typeof e === "object" && e !== null && "target" in e) ? String((e as any).target) : "unknown";
     await recordCronFailure(`anima-dispatch:${targetForLog}`, Date.now() - __jobStart, e);
     console.error("anima-dispatch fatal:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown", code: "internal_error" }), {
+    return new Response(JSON.stringify({ error: "Internal server error", code: "internal_error" }), {
       status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }

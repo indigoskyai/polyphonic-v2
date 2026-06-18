@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("openclaw-heartbeat error", err);
     return jsonResponse(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: 'Internal server error' },
       500,
     );
   }

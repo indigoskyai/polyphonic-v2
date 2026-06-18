@@ -116,7 +116,8 @@ Deno.serve(async (req) => {
     return json({ allowed, balance, usdValue, price, shortfall });
   } catch (e) {
     console.error('[verify-token-gate] error', e);
-    return json({ error: (e as Error).message }, 500);
+    console.error('verify-token-gate error:', e);
+    return json({ error: 'Internal server error' }, 500);
   }
 });
 
