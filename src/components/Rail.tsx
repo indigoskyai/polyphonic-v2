@@ -103,6 +103,14 @@ export default function Rail() {
   // Navigate without forcing the panel open — collapsed users can still
   // jump between sections by clicking icons. Expansion is its own gesture
   // (brand mark / toggle / ⌘\), matching the classic chat-app rail.
+  // Expand the rail when clicking empty space (not buttons)
+  const handleRailClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (expanded) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    setExpanded(true);
+  };
+
   const goTo = (path: string) => navigate(path);
 
   // Toggle via ⌘\ (or Ctrl+\)
@@ -129,6 +137,7 @@ export default function Rail() {
     <div
       className="rail-surface flex flex-col"
       data-expanded={expanded ? 'true' : undefined}
+      onClick={handleRailClick}
       style={{
         width: expanded ? expandedWidth : RAIL_COLLAPSED,
         minWidth: expanded ? expandedWidth : RAIL_COLLAPSED,
