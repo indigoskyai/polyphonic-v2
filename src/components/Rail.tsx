@@ -125,6 +125,16 @@ export default function Rail() {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle]);
 
+  // Auto-expand rail when navigating to a new top-level surface so users
+  // discover the section content below the primary nav.
+  const lastSurfaceRef = useRef<string | null>(activeSurfaceId);
+  useEffect(() => {
+    if (activeSurfaceId && activeSurfaceId !== lastSurfaceRef.current) {
+      lastSurfaceRef.current = activeSurfaceId;
+      if (!expanded) setExpanded(true);
+    }
+  }, [activeSurfaceId, expanded, setExpanded]);
+
   const helpActive = location.pathname.startsWith('/settings/help');
   const settingsActive =
     (location.pathname.startsWith('/settings')
