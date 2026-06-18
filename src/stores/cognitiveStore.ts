@@ -427,12 +427,78 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       })
       .subscribe();
 
+    // Keep engram + belief + connection counts live. memoryStats was previously
+    // frozen to its loadMindData snapshot, so users saw a stale "total engrams"
+    // number even as Mnemos kept writing new engrams in the background.
+    let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshMemoryStats = () => {
+      if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+      statsRefreshTimer = setTimeout(async () => {
+        statsRefreshTimer = null;
+        if (!isCurrentScope()) return;
+        const [totalR, activeR, dormantR, archivedR, connR, beliefsR] = await Promise.allSettled([
+          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'active'),
+          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'dormant'),
+          supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+          supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+          supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
+        ]);
+        if (!isCurrentScope()) return;
+        const pickCount = (r: PromiseSettledResult<{ count: number | null }>): number =>
+          r.status === 'fulfilled' ? (r.value.count ?? 0) : 0;
+        set({
+          memoryStats: {
+            total_engrams: pickCount(totalR),
+            active: pickCount(activeR),
+            dormant: pickCount(dormantR),
+            archived: pickCount(archivedR),
+            connections: pickCount(connR),
+            beliefs_count: pickCount(beliefsR),
+          },
+        });
+      }, 1500);
+    };
+
+    const onScopedChange = (payload: { new?: { agent_id?: string | null } | null; old?: { agent_id?: string | null } | null }) => {
+      const row = (payload.new ?? payload.old) as { agent_id?: string | null } | null;
+      if (!isCurrentScope()) return;
+      if (!rowMatchesAgent(row, agentId)) return;
+      refreshMemoryStats();
+    };
+
+    const engramStatsChannel = supabase
+      .channel(`engram-stats:${userId}:${agentId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'engrams', filter: `user_id=eq.${userId}` }, onScopedChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'connections', filter: `user_id=eq.${userId}` }, onScopedChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'beliefs', filter: `user_id=eq.${userId}` }, onScopedChange)
+      .subscribe();
+
+    // Journal entries also weren't live — they only loaded once via
+    // loadMindData, so the Mind view could go quiet for days while Luca was
+    // actually writing them in the background.
+    const journalChannel = supabase
+      .channel(`journal-entries:${userId}:${agentId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'journal_entries', filter: `user_id=eq.${userId}` }, (payload) => {
+        const entry = payload.new as JournalEntry;
+        if (!isCurrentScope()) return;
+        if (!rowMatchesAgent(entry, agentId)) return;
+        set((s) => {
+          if (s.journalEntries.some((j) => j.id === entry.id)) return {};
+          return { journalEntries: [entry, ...s.journalEntries].slice(0, 100) };
+        });
+      })
+      .subscribe();
+
     return () => {
+      if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
       supabase.removeChannel(cogChannel);
       supabase.removeChannel(thoughtChannel);
       supabase.removeChannel(eventChannel);
       supabase.removeChannel(activityChannel);
       supabase.removeChannel(weatherChannel);
+      supabase.removeChannel(engramStatsChannel);
+      supabase.removeChannel(journalChannel);
     };
   },
 }));
