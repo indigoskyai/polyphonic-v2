@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("openclaw-enqueue error", err);
     return jsonResponse(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: 'Internal server error' },
       500,
     );
   }
