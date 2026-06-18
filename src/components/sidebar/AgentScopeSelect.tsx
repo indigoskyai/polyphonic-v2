@@ -6,7 +6,7 @@ export default function AgentScopeSelect() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = availableAgents.find((a) => a.id === activeAgentId) ?? availableAgents[0];
-  const single = availableAgents.length <= 1;
+  
 
   useEffect(() => {
     if (!open) return;
@@ -34,8 +34,7 @@ export default function AgentScopeSelect() {
       </div>
       <button
         type="button"
-        onClick={() => !single && setOpen((o) => !o)}
-        disabled={single}
+        onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between"
         style={{
           padding: '8px 10px',
@@ -47,8 +46,7 @@ export default function AgentScopeSelect() {
           fontSize: 'var(--settings-body-size)',
           fontWeight: 'var(--weight-medium)',
           letterSpacing: 'var(--track-body)',
-          cursor: single ? 'default' : 'pointer',
-          opacity: single ? 0.85 : 1,
+          cursor: 'pointer',
         }}
       >
         <span className="flex items-center" style={{ gap: 8 }}>
@@ -70,13 +68,13 @@ export default function AgentScopeSelect() {
           fill="none"
           stroke="currentColor"
           strokeWidth={1.4}
-          style={{ color: 'var(--text-ghost)', opacity: single ? 0.4 : 1 }}
+          style={{ color: 'var(--text-ghost)' }}
         >
           <path d="M2.5 4l2.5 2.5L7.5 4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
-      {open && !single && (
+      {open && (
         <div
           style={{
             position: 'absolute',
@@ -91,6 +89,18 @@ export default function AgentScopeSelect() {
             overflow: 'hidden',
           }}
         >
+          {availableAgents.length === 0 && (
+            <div
+              style={{
+                padding: '10px 12px',
+                color: 'var(--text-ghost)',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--settings-body-size)',
+              }}
+            >
+              No agents available
+            </div>
+          )}
           {availableAgents.map((a) => (
             <button
               key={a.id}
