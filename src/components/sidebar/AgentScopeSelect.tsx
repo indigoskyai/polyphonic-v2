@@ -6,7 +6,7 @@ export default function AgentScopeSelect() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = availableAgents.find((a) => a.id === activeAgentId) ?? availableAgents[0];
-  const single = availableAgents.length <= 1;
+  
 
   useEffect(() => {
     if (!open) return;
