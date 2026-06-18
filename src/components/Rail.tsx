@@ -137,6 +137,7 @@ export default function Rail() {
     <div
       className="rail-surface flex flex-col"
       data-expanded={expanded ? 'true' : undefined}
+      onClick={handleRailClick}
       style={{
         width: expanded ? expandedWidth : RAIL_COLLAPSED,
         minWidth: expanded ? expandedWidth : RAIL_COLLAPSED,
