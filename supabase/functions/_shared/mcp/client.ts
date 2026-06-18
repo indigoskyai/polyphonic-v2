@@ -117,6 +117,9 @@ async function listMcpTools(serverUrl: string): Promise<unknown[]> {
 }
 
 async function rpc(serverUrl: string, method: string, params: Record<string, unknown>): Promise<unknown> {
+  if (!isSafePublicUrl(serverUrl)) {
+    throw new Error("MCP server URL must be a public https address");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MCP_TIMEOUT_MS);
   try {
