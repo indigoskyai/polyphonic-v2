@@ -9541,6 +9541,7 @@ html {
 
 .luca-guide-composer textarea:focus {
   background: transparent;
+  box-shadow: none;
 }
 
 .luca-guide-composer button {
