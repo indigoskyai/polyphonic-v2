@@ -20,6 +20,37 @@ type SupabaseLike = {
 
 const MCP_TIMEOUT_MS = 10_000;
 
+/**
+ * Block SSRF to private/internal ranges (loopback, RFC1918, link-local incl.
+ * AWS IMDS at 169.254.169.254, CGNAT, IPv6 loopback/ULA) before fetching a
+ * user-configured MCP server URL. Only https is allowed.
+ */
+function isSafePublicUrl(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  if (!host) return false;
+  if (host === "localhost" || host.endsWith(".localhost") || host === "0.0.0.0") return false;
+  if (host.includes(":")) {
+    const h = host.replace(/^\[|\]$/g, "");
+    if (h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return false;
+  }
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [parseInt(m[1], 10), parseInt(m[2], 10)];
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 0) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a >= 224) return false;
+  }
+  return true;
+}
+
 export async function loadMcpToolRegistrations(
   supabase: SupabaseLike,
   userId: string,
