@@ -52,6 +52,7 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const OpenRouterCallback = lazy(() => import("./pages/OpenRouterCallback"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
+const TrustPage = lazy(() => import("./pages/TrustPage"));
 const CreditsPage = lazy(() => import("./pages/CreditsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
 const MemoryView = lazy(() => import("./pages/MemoryView"));
