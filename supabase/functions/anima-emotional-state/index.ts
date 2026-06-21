@@ -247,13 +247,27 @@ serve(async (req) => {
       if (insErr) console.error("[anima-emotional-state] emotional_state insert failed:", insErr);
     }
 
-    // Append snapshot to emotional_history (for trend graphs)
-    const { error: histErr } = await supabase.from("emotional_history").insert({
-      user_id,
-      agent_id,
-      state: { ...smoothed, mood_summary: moodSummary },
-    });
-    if (histErr) console.error("[anima-emotional-state] emotional_history insert failed:", histErr);
+    // Append snapshot to emotional_history (for trend graphs) — but ONLY when the
+    // state actually moved. This used to insert every run, so idle users produced
+    // tens of thousands of identical "balanced, neutral state" rows that drowned
+    // out real trends. Always record the first snapshot; after that, require a real
+    // change so the history reflects movement, not the hourly cron's heartbeat.
+    const HISTORY_DELTA_MIN = 0.05;
+    let historyDelta = Infinity;
+    if (prevState) {
+      historyDelta = 0;
+      for (const dim of DIMENSIONS) {
+        historyDelta += Math.abs(smoothed[dim] - (prevState[dim] ?? 0.5));
+      }
+    }
+    if (historyDelta > HISTORY_DELTA_MIN) {
+      const { error: histErr } = await supabase.from("emotional_history").insert({
+        user_id,
+        agent_id,
+        state: { ...smoothed, mood_summary: moodSummary },
+      });
+      if (histErr) console.error("[anima-emotional-state] emotional_history insert failed:", histErr);
+    }
 
     // Log mood shift only if significant
     if (prevState) {

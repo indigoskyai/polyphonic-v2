@@ -126,6 +126,24 @@ async function processUser(
   const MAX_ACTIONS = 2;
   const canProactivelyReachOut = await allowsProactiveAutonomy(supabase, userId, agentId);
 
+  // Break the belief stagnation deadlock. The only writer of beliefs.stagnant=true
+  // lived inside anima-believe, which heartbeat only invokes AFTER it has already
+  // found a stagnant belief below — so nothing ever became stagnant and 0 beliefs
+  // were ever challenged. Mark stale beliefs here first, so the fetch below can
+  // surface them for challenge.
+  const STAGNATION_THRESHOLD_DAYS = 14;
+  const stagnantCutoff = new Date(Date.now() - STAGNATION_THRESHOLD_DAYS * 86_400_000).toISOString();
+  const { error: markStagnantErr } = await supabase
+    .from("beliefs")
+    .update({ stagnant: true })
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .eq("active", true)
+    .lt("last_challenged", stagnantCutoff);
+  if (markStagnantErr) {
+    console.error("[heartbeat] mark stagnant beliefs failed:", markStagnantErr);
+  }
+
   // Load signals in parallel
   const [questionsResult, thoughtsResult, beliefsResult, emotionalResult] = await Promise.all([
     supabase
