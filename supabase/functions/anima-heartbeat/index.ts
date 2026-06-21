@@ -195,13 +195,20 @@ async function processUser(
       });
     }
 
-    // Mark question as being worked on
-    await supabase
+    // Mark the question as researched. NOTE: this previously wrote `shown_at`, a
+    // column that was dropped (migration 20260413193052) and never re-added — so
+    // PostgREST rejected the entire UPDATE and, because the error was never
+    // checked, every curiosity question stayed stuck on 'pending' (0 of 1692 ever
+    // advanced). Write only columns that exist, and surface any failure loudly.
+    const { error: curiosityUpdateError } = await supabase
       .from("curiosity_questions")
-      .update({ status: "shown", shown_at: new Date().toISOString() })
+      .update({ status: "researched" })
       .eq("id", highCuriosityQ.id)
       .eq("user_id", userId)
       .eq("agent_id", agentId);
+    if (curiosityUpdateError) {
+      console.error("[heartbeat] curiosity status update failed:", curiosityUpdateError);
+    }
   }
 
   // ─── Priority 2: High-salience thoughts → deeper reflection ───

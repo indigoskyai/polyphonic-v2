@@ -299,7 +299,15 @@ export async function graduateAllEligible(supabase: SupabaseClient): Promise<Gra
     const threadIds = new Set<string>();
     if (row.thread_id) threadIds.add(row.thread_id);
     for (const r of revisionsArr) {
-      if (typeof r.thread_id === "string") threadIds.add(r.thread_id);
+      // Revisions record thread provenance as `source_thread_id` / `previous_thread_id`
+      // (see hypomnema/write.ts) — NOT a bare `thread_id`. Reading only `thread_id`
+      // meant distinctThreads was permanently 1, pinning multiSession at 0.10 and
+      // holding the total score below every graduation threshold (0 of 1763 ever
+      // graduated). Count every thread key a revision actually carries.
+      for (const key of ["source_thread_id", "previous_thread_id", "thread_id"]) {
+        const v = r[key];
+        if (typeof v === "string") threadIds.add(v);
+      }
     }
     const distinctThreads = threadIds.size || 1;
 
