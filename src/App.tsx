@@ -52,6 +52,7 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const OpenRouterCallback = lazy(() => import("./pages/OpenRouterCallback"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
+const TrustPage = lazy(() => import("./pages/TrustPage"));
 const CreditsPage = lazy(() => import("./pages/CreditsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
 const MemoryView = lazy(() => import("./pages/MemoryView"));
@@ -417,6 +418,7 @@ const App = () => (
                 <Route path="/auth/openrouter/callback" element={<OpenRouterCallback />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
+                <Route path="/trust" element={<TrustPage />} />
                 <Route path="/credits" element={<CreditsPage />} />
                 {/* Public profile (no app shell, no auth required) */}
                 <Route path="/u/:handle" element={<PublicProfileView mode="view" />} />
