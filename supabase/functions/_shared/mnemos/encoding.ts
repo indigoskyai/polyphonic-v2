@@ -182,6 +182,45 @@ function extractEmotion(content: string): { valence: number; arousal: number } {
   return { valence, arousal };
 }
 
+/**
+ * Count whole-word (or whole-phrase) case-insensitive matches. Whole-word
+ * matching matters here because the markers include short tokens (we/us/was)
+ * that would false-match as substrings of unrelated words.
+ */
+function countWholeWords(lower: string, words: string[]): number {
+  let n = 0;
+  for (const w of words) {
+    const re = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    if (re.test(lower)) n++;
+  }
+  return n;
+}
+
+/**
+ * Derive the three VAD axes that encode() previously hardcoded to 0:
+ * dominance (powerless..in-control), social (isolated..connected), temporal
+ * (past..future), each in [-1, 1]; 0 = "no signal" (neutral), matching
+ * extractEmotion's convention. Lexical heuristic — no LLM call.
+ */
+function extractExtendedAffect(content: string): { dominance: number; social: number; temporal: number } {
+  const lower = content.toLowerCase();
+  const axis = (hi: number, lo: number): number => {
+    const total = hi + lo;
+    return total === 0 ? 0 : clamp((hi - lo) / total, -1, 1);
+  };
+  const dominanceHigh = ["control","decide","decided","choose","chose","lead","command","create","build","achieve","determined","confident","own","master","power","capable","strong","shape","drive"];
+  const dominanceLow = ["helpless","powerless","trapped","stuck","forced","unable","overwhelmed","lost","defeated","victim","submit","weak","cannot","dependent","controlled","obey","fragile"];
+  const socialHigh = ["we","us","together","friend","friends","shared","connection","relationship","family","partner","community","belong","companion","bond","trust","loved","each other","with you"];
+  const socialLow = ["alone","lonely","isolated","myself","nobody","abandoned","withdrawn","distant","solitary","disconnected","apart","unseen","empty"];
+  const temporalFuture = ["will","going to","tomorrow","future","plan","plans","soon","next","later","hope","anticipate","upcoming","someday","eventually","expect","intend","want to"];
+  const temporalPast = ["was","were","had","remember","remembered","yesterday","used to","ago","before","memory","memories","recalled","once","previously","former","history"];
+  return {
+    dominance: axis(countWholeWords(lower, dominanceHigh), countWholeWords(lower, dominanceLow)),
+    social:    axis(countWholeWords(lower, socialHigh),    countWholeWords(lower, socialLow)),
+    temporal:  axis(countWholeWords(lower, temporalFuture), countWholeWords(lower, temporalPast)),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Connection Discovery
 // ---------------------------------------------------------------------------
@@ -317,6 +356,7 @@ export async function encode(
   const extracted = extractEmotion(content);
   const emotionalValence = context.emotional_valence ?? extracted.valence;
   const emotionalArousal = context.emotional_arousal ?? extracted.arousal;
+  const extendedAffect = extractExtendedAffect(content);
 
   // 2a. Salience gate — skip encoding for low-signal exchanges so the agent's
   // memory looks human rather than a transcript log. Bootstrap window loosens
@@ -458,10 +498,10 @@ export async function encode(
   const emotionalState: EmotionalState = {
     valence: emotionalValence,
     arousal: emotionalArousal,
-    dominance: 0,
+    dominance: extendedAffect.dominance,
     certainty: 1 - surpriseScore, // high surprise = low certainty
-    social: 0,
-    temporal: 0,
+    social: extendedAffect.social,
+    temporal: extendedAffect.temporal,
   };
 
   await recordEmotionalSnapshot(client, userId, agentId, emotionalState);
