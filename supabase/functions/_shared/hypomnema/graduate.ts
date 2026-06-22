@@ -26,8 +26,12 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPrompt } from "./prompts.ts";
 
-const GRAD_HARD_THRESHOLD = 0.85;
-const GRAD_SOFT_THRESHOLD = 0.65;
+// Lowered (Tier-2 graduation depth): with the age_factor term implemented and
+// weights rebalanced, a sustained multi-session top-domain mature entry now
+// reaches 0.85; 0.80/0.55 lets such entries graduate deterministically and pulls
+// more genuine candidates into the judge band (graduation ran at ~0 before).
+const GRAD_HARD_THRESHOLD = 0.80;
+const GRAD_SOFT_THRESHOLD = 0.55;
 const MIN_AGE_DAYS = 7;
 const JUDGE_MODEL = "anthropic/claude-haiku-4.5"; // borderline judge — cheap, decisive
 const JUDGE_TIMEOUT_MS = 15_000;
@@ -108,11 +112,17 @@ export function computeGraduationScore(row: HypomnemaRow, distinctThreads: numbe
   const multiSession = Math.min(1, distinctThreads / 3);
   const dWeight = domainWeight(row.domain);
   const foundationalBonus = row.foundational ? 1.0 : 0;
+  // age_factor: tenure past the 7-day minimum, saturating at ~60 days. Documented
+  // in the header but previously unimplemented — endurance is itself signal, so a
+  // mature multi-session top-domain entry can clear the deterministic gate without
+  // requiring the (rarely-set) foundational flag. Weights rebalanced to sum to 1.0.
+  const ageFactor = Math.min(1, Math.max(0, (age - MIN_AGE_DAYS) / 53));
   return (
-    revisionFactor * 0.30 +
-    multiSession * 0.30 +
+    revisionFactor * 0.25 +
+    multiSession * 0.25 +
     dWeight * 0.20 +
-    foundationalBonus * 0.20
+    foundationalBonus * 0.15 +
+    ageFactor * 0.15
   );
 }
 
@@ -310,6 +320,26 @@ export async function graduateAllEligible(supabase: SupabaseClient): Promise<Gra
       }
     }
     const distinctThreads = threadIds.size || 1;
+
+    // Foundational-setter: the live reflection loop never set `foundational`, so
+    // foundational_cnt was 0 platform-wide and that lane was dead. A sustained,
+    // multi-session, top-domain, mature entry has earned it — mark it so its bonus
+    // counts now and on future runs. NOTE: this is hypomnema_entry.foundational for
+    // graduation SCORING only; it does NOT grant decay protection (that is a
+    // separate engram-level "foundational" tag).
+    if (
+      !row.foundational &&
+      domainWeight(row.domain) >= 1.0 &&
+      (row.revision_count ?? 0) >= 4 &&
+      distinctThreads >= 3 &&
+      ageDays(row.created_at) >= 30
+    ) {
+      const { error: fErr } = await supabase
+        .from("hypomnema_entry")
+        .update({ foundational: true })
+        .eq("id", row.id);
+      if (!fErr) row.foundational = true;
+    }
 
     const score = computeGraduationScore(row, distinctThreads);
 
