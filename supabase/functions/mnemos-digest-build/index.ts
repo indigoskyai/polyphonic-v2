@@ -89,15 +89,29 @@ async function buildForAgent(supabase: SupabaseClient, userId: string, agentId: 
     if (stampErr) throw stampErr;
   }
 
-  // Auto-finalize stale digests (>48h old, still open)
+  // Retire stale open digests (>48h old) — HONESTLY, per reviewed_count.
+  // Previously every stale digest was stamped "auto_finalized", which falsely
+  // implied review happened; in prod 430/439 were "auto_finalized" with zero
+  // reviews. Now: a digest that got at least one review (human or auto) finishes
+  // as "auto_finalized"; one that nobody ever reviewed finishes as "expired"
+  // (no finalized_at) so the dashboards can tell coverage from abandonment.
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  await supabase
-    .from("mnemos_digests")
-    .update({ status: "auto_finalized", finalized_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .eq("agent_id", agentId)
-    .eq("status", "open")
-    .lt("generated_at", cutoff);
+  // deno-lint-ignore no-explicit-any
+  const onStale = (q: any) =>
+    q
+      .eq("user_id", userId)
+      .eq("agent_id", agentId)
+      .eq("status", "open")
+      .lt("generated_at", cutoff);
+
+  await onStale(
+    supabase
+      .from("mnemos_digests")
+      .update({ status: "auto_finalized", finalized_at: new Date().toISOString() }),
+  ).gt("reviewed_count", 0);
+  await onStale(
+    supabase.from("mnemos_digests").update({ status: "expired" }),
+  ).eq("reviewed_count", 0);
 
   return { digest_id: digestRow.id, engram_count: rows.length };
 }

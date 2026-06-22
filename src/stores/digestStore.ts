@@ -18,7 +18,7 @@ export interface DigestRow {
   finalized_at: string | null;
   engram_count: number;
   reviewed_count: number;
-  status: 'open' | 'finalized' | 'auto_finalized';
+  status: 'open' | 'finalized' | 'auto_finalized' | 'expired';
   summary: string | null;
 }
 
