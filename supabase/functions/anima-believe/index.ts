@@ -8,6 +8,20 @@ import { withModelRetry } from "../_shared/modelRetry.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 
+// Challenge moves confidence by a bounded, GENTLE step per assessment — never the
+// old free-form LLM number [-0.3,+0.2] that could lurch a belief in one shot. A
+// belief becomes a "living question" (<=0.4) only by accumulating contradictions
+// across several challenges; conviction (>=0.7) likewise builds slowly. Weaken is
+// weighted a touch heavier than strengthen because a stress-test's job is to find
+// where a belief is failing. (Tunable dials — see Phase-2 deploy note.)
+const CHALLENGE_DELTAS: Record<string, number> = {
+  STRENGTHEN: 0.05,
+  WEAKEN: -0.08,
+  MAINTAIN: 0,
+  SUPERSEDE: -0.12, // strongest gentle move; deliberately does NOT auto-deactivate (reversible)
+};
+const EVIDENCE_FETCH_LIMIT = 6;
+
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
@@ -160,23 +174,68 @@ serve(async (req) => {
     const challengeModel = beliefUserSettings?.belief_model || modelConfig?.model_id || "google/gemini-2.5-flash";
     const results: any[] = [];
 
-    for (const belief of stagnantBeliefs) {
-      const daysSinceChallenge = Math.floor((Date.now() - new Date(belief.last_challenged).getTime()) / 86400000);
+    // CRISIS GUARD: a crisis is an acute, transient state — not evidence about whether
+    // a belief is true. Memories formed in/around a high/acute crisis window must NOT
+    // be allowed to erode the agent's convictions (a self-negating moment shouldn't,
+    // over a few challenges, turn a held value into a "living question"). crisis_events
+    // is per-user (not an engram tag), so we exclude engram evidence that lands within
+    // a window of any recent high/acute event. (During an active acute window this
+    // leaves little/no evidence → the challenge naturally MAINTAINs, no erosion.)
+    const CRISIS_EXCLUDE_MS = 12 * 3600 * 1000; // ±12h around a high/acute event
+    const { data: crisisRows } = await supabase
+      .from("crisis_events")
+      .select("created_at")
+      .eq("user_id", user_id)
+      .in("crisis_level", ["high", "acute"])
+      .gte("created_at", new Date(Date.now() - 60 * 86400000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const crisisTimes = ((crisisRows ?? []) as { created_at: string }[]).map((r) => new Date(r.created_at).getTime());
+    const nearCrisis = (iso: string): boolean => {
+      const t = new Date(iso).getTime();
+      return crisisTimes.some((c) => Math.abs(t - c) <= CRISIS_EXCLUDE_MS);
+    };
 
-      const system = `You are a critical thinker helping examine beliefs. Your job is to stress-test a belief — find the strongest counterargument, identify hidden assumptions, or note if the belief has become more or less supported. Be genuinely challenging, not just devil's advocate. If the belief is well-supported, say so.
+    for (const belief of stagnantBeliefs) {
+      const lastExaminedAt = belief.last_challenged || belief.created_at;
+      const daysSinceChallenge = Math.floor((Date.now() - new Date(lastExaminedAt).getTime()) / 86400000);
+
+      // EVIDENCE-GROUNDED CHALLENGE: fetch what the agent has actually experienced
+      // since this belief was last examined, so the stress-test weighs the belief
+      // against reality (canonical belief_review.py) instead of in a vacuum. This is
+      // what surfaces genuine contradiction — the thing the old isolated prompt couldn't.
+      // over-fetch so the crisis-window exclusion below still leaves a full sample
+      const { data: evidenceEngrams } = await supabase
+        .from("engrams")
+        .select("id, content, created_at")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .in("state", ["active", "consolidating"])
+        .gt("created_at", lastExaminedAt)
+        .order("created_at", { ascending: false })
+        .limit(EVIDENCE_FETCH_LIMIT * 3);
+
+      const evidence = ((evidenceEngrams ?? []) as { id: string; content: string; created_at: string }[])
+        .filter((e) => !nearCrisis(e.created_at))
+        .slice(0, EVIDENCE_FETCH_LIMIT);
+      const evidenceBlock = evidence.length > 0
+        ? evidence.map((e, i) => `${i + 1}. ${(e.content || "").slice(0, 240)}`).join("\n")
+        : "(no new experiences recorded since this belief was last examined)";
+
+      const system = `You are helping an agent examine one of its own beliefs against what it has actually experienced. Weigh the belief against the evidence below: does the recent experience SUPPORT it, CONTRADICT it, or have no bearing? Be genuinely critical — name the strongest tension — but do not manufacture doubt where the evidence supports the belief.
 
 Respond with EXACTLY this format:
-CHALLENGE: [your strongest counterargument or critical observation]
-ASSESSMENT: [one of: STRENGTHEN, WEAKEN, MAINTAIN, SUPERSEDE]
-CONFIDENCE_DELTA: [a number from -0.3 to +0.2]
-REASONING: [one sentence explaining why]`;
+CHALLENGE: [the strongest tension or confirmation the evidence raises]
+ASSESSMENT: [one of: STRENGTHEN (evidence supports it), WEAKEN (evidence contradicts it), MAINTAIN (no bearing or mixed), SUPERSEDE (evidence shows it is now wrong)]
+REASONING: [one sentence grounded in the evidence above]`;
 
       const prompt = `Belief: "${belief.content}"
 Current confidence: ${belief.confidence}
 Domain: ${belief.domain}
-Held since: ${belief.created_at?.slice(0, 10)}
-Last challenged: ${belief.last_challenged?.slice(0, 10)} (${daysSinceChallenge} days ago)
-Revision count: ${(belief.revision_history || []).length}`;
+Held since: ${belief.created_at?.slice(0, 10)} · last examined ${daysSinceChallenge} days ago
+
+What the agent has experienced since (most recent first):
+${evidenceBlock}`;
 
       try {
         const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -205,7 +264,6 @@ Revision count: ${(belief.revision_history || []).length}`;
         // Parse challenge response
         let challenge = "";
         let assessment = "MAINTAIN";
-        let confidenceDelta = 0;
         let reasoning = "";
 
         for (const line of responseText.split("\n")) {
@@ -215,16 +273,21 @@ Revision count: ${(belief.revision_history || []).length}`;
             const val = trimmed.split(":")[1]?.trim().toUpperCase();
             if (["STRENGTHEN", "WEAKEN", "MAINTAIN", "SUPERSEDE"].includes(val)) assessment = val;
           }
-          else if (trimmed.startsWith("CONFIDENCE_DELTA:")) {
-            const delta = parseFloat(trimmed.split(":")[1]?.trim());
-            if (!isNaN(delta)) confidenceDelta = Math.max(-0.3, Math.min(0.2, delta));
-          }
           else if (trimmed.startsWith("REASONING:")) reasoning = trimmed.split(":", 1)[1]?.trim() || trimmed.slice(10).trim();
         }
 
-        // Update belief — clamp to the epistemic-humility band [0.05, 0.95]
-        // (never absolute, never extinct), matching formation + canonical core/belief.py.
+        // Confidence moves by the bounded gentle step for this assessment (not a
+        // free-form LLM number), then clamps to the epistemic-humility band [0.05,0.95].
+        const confidenceDelta = CHALLENGE_DELTAS[assessment] ?? 0;
         const newConfidence = Math.max(0.05, Math.min(0.95, belief.confidence + confidenceDelta));
+
+        // Tier crossing — the nightly identity derivation reflects this on its next run
+        // (>=0.7 becomes a "value", <=0.4 becomes a "living question").
+        const tierEvent =
+          belief.confidence < 0.7 && newConfidence >= 0.7 ? "BELIEF_CONFIRMED"
+          : belief.confidence > 0.4 && newConfidence <= 0.4 ? "BELIEF_CONTRADICTED"
+          : null;
+
         const revision = {
           timestamp: new Date().toISOString(),
           old_confidence: belief.confidence,
@@ -232,6 +295,9 @@ Revision count: ${(belief.revision_history || []).length}`;
           assessment,
           challenge,
           reasoning,
+          source: "challenge",
+          trigger_engram_ids: evidence.map((e) => e.id),
+          tier_event: tierEvent,
         };
 
         const revisionHistory = [...(belief.revision_history || []), revision];
@@ -262,9 +328,11 @@ Revision count: ${(belief.revision_history || []).length}`;
         await logActivity(supabase, user_id, {
           agentId: agent_id,
           type: "belief_change",
-          title: `Belief ${assessment.toLowerCase()}: ${belief.content.slice(0, 60)}`,
+          title: tierEvent
+            ? `${tierEvent === "BELIEF_CONFIRMED" ? "Belief became a value" : "Belief became a living question"}: ${belief.content.slice(0, 50)}`
+            : `Belief ${assessment.toLowerCase()}: ${belief.content.slice(0, 60)}`,
           summary: belief.content,
-          content: { action: assessment, confidence: newConfidence, domain: belief.domain },
+          content: { action: assessment, confidence: newConfidence, domain: belief.domain, tier_event: tierEvent, evidence_count: evidence.length },
           source: "autonomous",
         });
       } catch (e) {
