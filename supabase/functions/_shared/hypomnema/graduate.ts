@@ -321,26 +321,14 @@ export async function graduateAllEligible(supabase: SupabaseClient): Promise<Gra
     }
     const distinctThreads = threadIds.size || 1;
 
-    // Foundational-setter: the live reflection loop never set `foundational`, so
-    // foundational_cnt was 0 platform-wide and that lane was dead. A sustained,
-    // multi-session, top-domain, mature entry has earned it — mark it so its bonus
-    // counts now and on future runs. NOTE: this is hypomnema_entry.foundational for
-    // graduation SCORING only; it does NOT grant decay protection (that is a
-    // separate engram-level "foundational" tag).
-    if (
-      !row.foundational &&
-      domainWeight(row.domain) >= 1.0 &&
-      (row.revision_count ?? 0) >= 4 &&
-      distinctThreads >= 3 &&
-      ageDays(row.created_at) >= 30
-    ) {
-      const { error: fErr } = await supabase
-        .from("hypomnema_entry")
-        .update({ foundational: true })
-        .eq("id", row.id);
-      if (!fErr) row.foundational = true;
-    }
-
+    // NOTE: deliberately NO foundational-setter here. hypomnema_entry.foundational
+    // is the DECAY-IMMUNITY flag (migration 20260504223339: "immune to deep decay,
+    // salience floor 0.7"; decay.ts floors salience at 0.70) and a +0.25 prompt
+    // boost (read.ts) — a permanent, one-way state change nothing ever clears.
+    // Auto-setting it from graduation would grant irreversible decay immunity to
+    // crisis-user memories. The age_factor + threshold changes already let mature
+    // top-domain entries graduate; making an entry foundational is a separate,
+    // deliberate decision, not a graduation side effect.
     const score = computeGraduationScore(row, distinctThreads);
 
     let shouldGraduate = false;

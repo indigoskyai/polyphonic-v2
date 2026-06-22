@@ -461,13 +461,19 @@ async function formBeliefs(
       1
     );
 
-    // Check if a similar belief already exists for this tag
+    // Dedup by TAG, not by seed. The seed is the highest-strength engram in the
+    // group, which churns across the 14-day rehearsal-fed pool — a seed-keyed
+    // lookup misses the existing belief when the seed changes, accumulating
+    // near-duplicate beliefs per tag (there is no unique constraint on beliefs).
+    // One consolidation-belief per tag per scope; content is `[${tag}] ...`. (audit fix)
+    const tagPattern = "[" + tag.replace(/([%_\\])/g, "\\$&") + "] %";
     const { data: existingBeliefs } = await supabase
       .from("beliefs")
       .select("*")
       .eq("user_id", userId)
       .eq("agent_id", agentId)
-      .contains("supporting_engram_ids", [seed.id]);
+      .eq("source", "consolidation")
+      .ilike("content", tagPattern);
 
     const existingBelief = (existingBeliefs as Belief[] | null)?.[0];
 
