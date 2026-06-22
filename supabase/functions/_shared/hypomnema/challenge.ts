@@ -199,10 +199,13 @@ async function callCritic(
         ],
         temperature: 0.4,
         max_tokens: 1500,
-        reasoning: {
-          effort: "none",
-          exclude: true,
-        },
+        // Do NOT send `reasoning: { effort: ... }` here. CRITIC_MODEL is an Anthropic
+        // model (paramStyle 'anthropic' in models.ts); `reasoning.effort` is the
+        // OpenAI param style. Sending it made OpenRouter spend the token budget on
+        // thinking and return empty/truncated content, so callCritic returned null
+        // for ~59 of every 100 entries (a month of partial cron failures). Anthropic
+        // models don't think unless given a `thinking` param, so omitting it = fast,
+        // content-only — matching the working write.ts call on this same model.
       }),
       signal: ctrl.signal,
     });
