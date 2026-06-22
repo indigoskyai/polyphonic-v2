@@ -58,6 +58,21 @@ export const DORMANT_THRESHOLD = 0.05;
 /** Days a dormant engram must be untouched before archive. */
 export const ARCHIVE_DORMANT_DAYS = 30;
 
+// --- Tier-2 decay-survival: make stability consequential, not just measured ---
+// Today survival is decided by strength/recency only (determineState never reads
+// stability), so consolidated memory dies on the same clock as noise. These make
+// stability accrue for survivors and protect well-consolidated engrams.
+
+/** Per decay cycle, a surviving reachable engram consolidates this fraction of its
+ *  remaining headroom toward MAX_STABILITY (gentle: weeks to fully consolidate). */
+export const STABILITY_SURVIVAL_RATE = 0.004;
+
+/** Stability at/above which an engram is protected from archival entirely. */
+export const STABILITY_ARCHIVE_PROTECT_FLOOR = 0.6;
+
+/** Stability at/above which an engram resists dropping to dormant. */
+export const STABILITY_DORMANT_PROTECTION = 0.8;
+
 // ---------------------------------------------------------------------------
 // Activation & Retrieval
 // ---------------------------------------------------------------------------

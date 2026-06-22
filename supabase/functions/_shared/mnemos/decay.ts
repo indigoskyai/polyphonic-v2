@@ -24,6 +24,9 @@ import {
   STABILITY_CONNECTION_THRESHOLD,
   STABILITY_GROWTH_RATE,
   STABILITY_GROWTH_CAP,
+  STABILITY_SURVIVAL_RATE,
+  STABILITY_ARCHIVE_PROTECT_FLOOR,
+  STABILITY_DORMANT_PROTECTION,
   DORMANT_ACCESSIBILITY_THRESHOLD,
   ARCHIVE_THRESHOLD,
   ARCHIVE_DORMANT_DAYS,
@@ -103,6 +106,17 @@ export function computeDecayedValues(input: DecayInputs): DecayOutputs {
     nextAccessibility = Math.max(RECENT_ACCESSIBILITY_FLOOR, nextAccessibility);
   }
 
+  // Survival-driven consolidation: an engram that survives this decay cycle while
+  // still reachable (and not effectively dead) consolidates a little — so stability
+  // reflects endurance, not only connection count. Gentle by design; rehearsal and
+  // retrieval lift it faster for high-value memories.
+  if (nextAccessibility >= DORMANT_ACCESSIBILITY_THRESHOLD && nextStrength >= ARCHIVE_THRESHOLD) {
+    nextStability = Math.min(
+      1,
+      +(nextStability + STABILITY_SURVIVAL_RATE * (1 - nextStability)).toFixed(4),
+    );
+  }
+
   return {
     strength: +nextStrength.toFixed(4),
     stability: +nextStability.toFixed(4),
@@ -110,24 +124,30 @@ export function computeDecayedValues(input: DecayInputs): DecayOutputs {
   };
 }
 
-/** Determine the lifecycle state after decay. */
+/** Determine the lifecycle state after decay.
+ *  `stability` (optional, default 0 for backward compatibility) lets consolidated
+ *  memory survive: well-stabilized engrams resist archival entirely, and
+ *  highly-stabilized ones resist even dropping to dormant — so survival tracks
+ *  consolidation, not just recency. */
 export function determineState(
   strength: number,
   accessibility: number,
   currentState: Engram["state"],
-  hoursSinceAccess: number
+  hoursSinceAccess: number,
+  stability = 0
 ): Engram["state"] {
   if (currentState === "archived") return "archived";
 
   if (
     currentState === "dormant" &&
     strength < ARCHIVE_THRESHOLD &&
-    hoursSinceAccess >= ARCHIVE_DORMANT_DAYS * 24
+    hoursSinceAccess >= ARCHIVE_DORMANT_DAYS * 24 &&
+    stability < STABILITY_ARCHIVE_PROTECT_FLOOR
   ) {
     return "archived";
   }
 
-  if (accessibility < DORMANT_ACCESSIBILITY_THRESHOLD) {
+  if (accessibility < DORMANT_ACCESSIBILITY_THRESHOLD && stability < STABILITY_DORMANT_PROTECTION) {
     return "dormant";
   }
 
@@ -234,7 +254,7 @@ export async function runDecayCycle(
         tags: engram.tags ?? [],
       });
 
-      const newState = determineState(decayed.strength, decayed.accessibility, engram.state, elapsedHoursRaw);
+      const newState = determineState(decayed.strength, decayed.accessibility, engram.state, elapsedHoursRaw, decayed.stability);
 
       const noChange =
         Math.abs(decayed.strength - engram.strength) < 0.001 &&
