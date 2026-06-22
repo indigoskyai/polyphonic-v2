@@ -54,6 +54,15 @@ const MAX_PAIRS = 500;
 /** Similarity threshold for discovering new connections during consolidation. */
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.2;
 
+// Tier-2 belief-formation relaxation (emergent formation ran at 0.23%).
+/** Similarity bar for an engram to "support" a belief seed. Was 0.3 — above even
+ *  the 0.2 connection bar, so almost nothing qualified. */
+const BELIEF_SIMILARITY_THRESHOLD = 0.18;
+/** Lookback for the belief-candidate pool: beliefs should form from evidence that
+ *  converges over days/weeks, not only the 24h connection window. Rehearsal's
+ *  refreshed last_accessed_at feeds this pool. */
+const BELIEF_LOOKBACK_DAYS = 14;
+
 // ---------------------------------------------------------------------------
 // Trigram similarity (reused from encoding — lightweight text comparison)
 // ---------------------------------------------------------------------------
@@ -115,6 +124,33 @@ async function selectCandidates(
     throw new Error(`Consolidation: candidate selection failed — ${error.message}`);
   }
 
+  return (data ?? []) as Engram[];
+}
+
+/**
+ * Wider per-scope pool for belief formation: engrams accessed within the last
+ * BELIEF_LOOKBACK_DAYS (vs the 24h connection window), so a tag's evidence can
+ * converge over days/weeks. Kept separate from selectCandidates so the quadratic
+ * connection-discovery pass is not widened.
+ */
+async function selectBeliefCandidates(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string
+): Promise<Engram[]> {
+  const cutoff = new Date(Date.now() - BELIEF_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from("engrams")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("state", ["active", "consolidating"])
+    .gte("last_accessed_at", cutoff)
+    .order("access_count", { ascending: false })
+    .limit(300);
+  if (error) {
+    throw new Error(`Consolidation: belief candidate selection failed — ${error.message}`);
+  }
   return (data ?? []) as Engram[];
 }
 
@@ -367,9 +403,12 @@ async function promoteEngrams(
 async function formBeliefs(
   supabase: SupabaseClient,
   userId: string,
-  agentId: string,
-  candidates: Engram[]
+  agentId: string
 ): Promise<number> {
+  // Form beliefs from accumulated history (14-day pool), not just the 24h
+  // connection window — so a tag whose evidence converges over time produces a
+  // belief. Rehearsal's refreshed last_accessed_at feeds this pool.
+  const candidates = await selectBeliefCandidates(supabase, userId, agentId);
   if (candidates.length < 3) return 0;
 
   let beliefsUpdated = 0;
@@ -398,7 +437,7 @@ async function formBeliefs(
 
     for (const other of sorted.slice(1)) {
       const sim = trigramSimilarity(seed.content, other.content);
-      if (sim > 0.3) {
+      if (sim > BELIEF_SIMILARITY_THRESHOLD) {
         // Check emotional alignment — contradicting if opposite valence
         if (
           Math.sign(seed.emotional_valence) !== Math.sign(other.emotional_valence) &&
@@ -619,7 +658,7 @@ export async function runConsolidation(
   const promotions = await promoteEngrams(supabase, candidates);
 
   // 7. Belief formation
-  const beliefsUpdated = await formBeliefs(supabase, userId, agentId, candidates);
+  const beliefsUpdated = await formBeliefs(supabase, userId, agentId);
 
   // Return candidates to active state
   await supabase
