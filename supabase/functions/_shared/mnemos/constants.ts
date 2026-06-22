@@ -130,6 +130,15 @@ export const CONFIDENCE_TIERS = {
 /** Minimum confidence change to trigger a belief update. */
 export const BELIEF_UPDATE_THRESHOLD = 0.05;
 
+/**
+ * Epistemic-humility bounds (canonical Mnemos core/belief.py): a belief is never
+ * dead (<= floor) nor absolute (>= ceiling). Every belief-confidence write —
+ * formation, challenge, evidence update — clamps to this band. Prod previously used
+ * [0,1] (formation) and [0.01,0.99] (challenge), permitting certainty and extinction.
+ */
+export const BELIEF_CONFIDENCE_FLOOR = 0.05;
+export const BELIEF_CONFIDENCE_CEILING = 0.95;
+
 // ---------------------------------------------------------------------------
 // Emotional State
 // ---------------------------------------------------------------------------

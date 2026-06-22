@@ -91,7 +91,8 @@ serve(async (req) => {
           user_id,
           agent_id,
           content,
-          confidence: Math.max(0.01, Math.min(0.99, confidence)),
+          // epistemic-humility band [0.05, 0.95] (matches formation/challenge/canonical)
+          confidence: Math.max(0.05, Math.min(0.95, confidence)),
           domain,
           tags,
           source: body.source || "manual",
@@ -221,8 +222,9 @@ Revision count: ${(belief.revision_history || []).length}`;
           else if (trimmed.startsWith("REASONING:")) reasoning = trimmed.split(":", 1)[1]?.trim() || trimmed.slice(10).trim();
         }
 
-        // Update belief
-        const newConfidence = Math.max(0.01, Math.min(0.99, belief.confidence + confidenceDelta));
+        // Update belief — clamp to the epistemic-humility band [0.05, 0.95]
+        // (never absolute, never extinct), matching formation + canonical core/belief.py.
+        const newConfidence = Math.max(0.05, Math.min(0.95, belief.confidence + confidenceDelta));
         const revision = {
           timestamp: new Date().toISOString(),
           old_confidence: belief.confidence,

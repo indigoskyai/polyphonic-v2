@@ -861,7 +861,8 @@ serve(async (req) => {
               user_id,
               agent_id,
               content: mem.content,
-              confidence: Math.min(0.99, mem.confidence || 0.5),
+              // epistemic-humility band [0.05, 0.95] — beliefs are never absolute/extinct
+              confidence: Math.max(0.05, Math.min(0.95, mem.confidence || 0.5)),
               domain,
               tags: mem.tags || [],
               source: "extraction",

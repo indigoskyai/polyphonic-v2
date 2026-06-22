@@ -32,6 +32,8 @@ import {
   PROMOTION_MIN_STABILITY,
   CONFIDENCE_TIERS,
   BELIEF_UPDATE_THRESHOLD,
+  BELIEF_CONFIDENCE_FLOOR,
+  BELIEF_CONFIDENCE_CEILING,
 } from "./constants.ts";
 import { applySupersession } from "./supersession.ts";
 
@@ -453,12 +455,12 @@ async function formBeliefs(
     // Need at least 2 supporting engrams to form a belief
     if (supporting.length < 2) continue;
 
-    // Calculate confidence from evidence ratio
+    // Calculate confidence from evidence ratio (clamped to epistemic-humility band)
     const totalEvidence = supporting.length + contradicting.length;
     const confidence = clamp(
       (supporting.length - contradicting.length * 0.5) / totalEvidence,
-      0,
-      1
+      BELIEF_CONFIDENCE_FLOOR,
+      BELIEF_CONFIDENCE_CEILING
     );
 
     // Dedup by TAG, not by seed. The seed is the highest-strength engram in the
@@ -478,13 +480,35 @@ async function formBeliefs(
     const existingBelief = (existingBeliefs as Belief[] | null)?.[0];
 
     if (existingBelief) {
-      // Update existing belief if confidence changed meaningfully
-      const confidenceDelta = Math.abs(existingBelief.confidence - confidence);
-      if (confidenceDelta < BELIEF_UPDATE_THRESHOLD) continue;
+      // OWNERSHIP: once a belief has been challenged (has revision history), the
+      // challenge loop owns its confidence. Consolidation must NOT re-derive a
+      // challenged belief's confidence from the lexical count-ratio — doing so
+      // silently clobbered every challenge delta each cycle, which is why the
+      // challenge->confidence->identity loop never held.
+      const isChallenged = (existingBelief.revision_history?.length ?? 0) > 0;
 
-      // Merge evidence lists
+      // Evidence links accumulate regardless of ownership (forensic + feeds Phase 2);
+      // only the confidence value is owned by the challenge loop once touched.
       const allSupporting = [...new Set([...existingBelief.supporting_engram_ids, ...supporting, seed.id])];
       const allContradicting = [...new Set([...existingBelief.contradicting_engram_ids, ...contradicting])];
+
+      if (isChallenged) {
+        // merge evidence only; preserve the challenge-owned confidence
+        const { error } = await supabase
+          .from("beliefs")
+          .update({
+            supporting_engram_ids: allSupporting,
+            contradicting_engram_ids: allContradicting,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingBelief.id);
+        if (!error) beliefsUpdated++;
+        continue;
+      }
+
+      // un-challenged: consolidation may re-derive confidence, but only when it moved meaningfully
+      const confidenceDelta = Math.abs(existingBelief.confidence - confidence);
+      if (confidenceDelta < BELIEF_UPDATE_THRESHOLD) continue;
 
       const { error } = await supabase
         .from("beliefs")

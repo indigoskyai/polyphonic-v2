@@ -147,7 +147,8 @@ export class MnemosEngine {
       .eq("content", content)
       .limit(1);
 
-    const confidence = Math.min(1, evidenceIds.length * 0.2 + 0.3);
+    // clamp to the epistemic-humility band [0.05, 0.95] (never absolute)
+    const confidence = Math.max(0.05, Math.min(0.95, evidenceIds.length * 0.2 + 0.3));
 
     if (existing && existing.length > 0) {
       const belief = existing[0] as Belief;

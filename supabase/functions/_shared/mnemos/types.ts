@@ -83,6 +83,8 @@ export interface Belief {
   confidence_tier: ConfidenceTier;
   supporting_engram_ids: string[];
   contradicting_engram_ids: string[];
+  /** Append-only audit of confidence changes (challenge/consolidation/manual). */
+  revision_history?: Record<string, unknown>[];
   created_at: string;
   updated_at: string;
 }
