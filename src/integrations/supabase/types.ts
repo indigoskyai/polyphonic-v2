@@ -1404,6 +1404,7 @@ export type Database = {
           engram_type: string
           id: string
           last_accessed_at: string | null
+          rehearse_count: number
           review_decision: string | null
           review_note: string | null
           reviewed_at: string | null
@@ -1430,6 +1431,7 @@ export type Database = {
           engram_type: string
           id?: string
           last_accessed_at?: string | null
+          rehearse_count?: number
           review_decision?: string | null
           review_note?: string | null
           reviewed_at?: string | null
@@ -1456,6 +1458,7 @@ export type Database = {
           engram_type?: string
           id?: string
           last_accessed_at?: string | null
+          rehearse_count?: number
           review_decision?: string | null
           review_note?: string | null
           reviewed_at?: string | null
@@ -3536,7 +3539,17 @@ export type Database = {
           tags: string[]
         }[]
       }
+      mnemos_rehearse_scope: {
+        Args: {
+          p_agent_id: string
+          p_budget?: number
+          p_user_id: string
+          p_value_floor?: number
+        }
+        Returns: number
+      }
       mnemos_run_health_snapshot: { Args: never; Returns: Json }
+      mnemos_run_rehearsal_cohort: { Args: never; Returns: Json }
       move_to_dlq: {
         Args: {
           dlq_name: string
