@@ -59,8 +59,8 @@ BEGIN
                                                 (SELECT count(*) FROM hypomnema_entry WHERE active AND graduated_to_engram_id IS NULL AND created_at <= v_now - interval '7 days')::numeric
     UNION ALL SELECT 'curiosity_resolved',      (SELECT count(*) FROM curiosity_questions WHERE status <> 'pending')::numeric, true,
                                                 (SELECT count(*) FROM curiosity_questions WHERE status = 'pending')::numeric
-    UNION ALL SELECT 'beliefs_challenged',      (SELECT count(*) FROM beliefs WHERE jsonb_array_length(coalesce(revision_history,'[]'::jsonb))>0)::numeric, true,
-                                                (SELECT count(*) FROM beliefs WHERE coalesce(active,true) AND jsonb_array_length(coalesce(revision_history,'[]'::jsonb))=0)::numeric
+    UNION ALL SELECT 'beliefs_challenged',      (SELECT count(*) FROM beliefs WHERE (CASE WHEN jsonb_typeof(revision_history) = 'array' THEN jsonb_array_length(revision_history) ELSE 0 END)>0)::numeric, true,
+                                                (SELECT count(*) FROM beliefs WHERE coalesce(active,true) AND (CASE WHEN jsonb_typeof(revision_history) = 'array' THEN jsonb_array_length(revision_history) ELSE 0 END)=0)::numeric
     UNION ALL SELECT 'digest_reviewed_total',   (SELECT coalesce(sum(reviewed_count),0) FROM mnemos_digests)::numeric, true,
                                                 (SELECT count(*) FROM mnemos_digests WHERE status = 'open')::numeric
     UNION ALL SELECT 'crisis_followups_done',   (SELECT count(*) FROM crisis_events WHERE followup_completed_at IS NOT NULL)::numeric, false, NULL
