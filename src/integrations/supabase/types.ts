@@ -2103,6 +2103,36 @@ export type Database = {
         }
         Relationships: []
       }
+      mnemos_health_metric: {
+        Row: {
+          delta: number | null
+          detail: Json | null
+          id: string
+          metric: string
+          snapshot_at: string
+          stalled: boolean
+          value: number
+        }
+        Insert: {
+          delta?: number | null
+          detail?: Json | null
+          id?: string
+          metric: string
+          snapshot_at?: string
+          stalled?: boolean
+          value: number
+        }
+        Update: {
+          delta?: number | null
+          detail?: Json | null
+          id?: string
+          metric?: string
+          snapshot_at?: string
+          stalled?: boolean
+          value?: number
+        }
+        Relationships: []
+      }
       observer_chat_messages: {
         Row: {
           content: string
@@ -3506,6 +3536,7 @@ export type Database = {
           tags: string[]
         }[]
       }
+      mnemos_run_health_snapshot: { Args: never; Returns: Json }
       move_to_dlq: {
         Args: {
           dlq_name: string
