@@ -3539,7 +3539,28 @@ export type Database = {
           tags: string[]
         }[]
       }
+      mnemos_cohort: { Args: never; Returns: string[] }
+      mnemos_digest_backlog_drain: {
+        Args: {
+          p_arousal_max?: number
+          p_cohort_only?: boolean
+          p_commit?: boolean
+          p_limit?: number
+          p_surprise_max?: number
+        }
+        Returns: Json
+      }
       mnemos_digest_sensitive_tags: { Args: never; Returns: string[] }
+      mnemos_engram_autoconfirmable: {
+        Args: {
+          p_arousal: number
+          p_arousal_max?: number
+          p_surprise: number
+          p_surprise_max?: number
+          p_tags: string[]
+        }
+        Returns: boolean
+      }
       mnemos_rehearse_scope: {
         Args: {
           p_agent_id: string
