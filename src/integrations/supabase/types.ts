@@ -2136,6 +2136,42 @@ export type Database = {
         }
         Relationships: []
       }
+      mnemos_identity_snapshot: {
+        Row: {
+          agent_id: string | null
+          belief_total: number
+          computed_at: string
+          concerns_json: Json
+          id: string
+          questions_json: Json
+          tentative_json: Json
+          user_id: string
+          values_json: Json
+        }
+        Insert: {
+          agent_id?: string | null
+          belief_total?: number
+          computed_at?: string
+          concerns_json?: Json
+          id?: string
+          questions_json?: Json
+          tentative_json?: Json
+          user_id: string
+          values_json?: Json
+        }
+        Update: {
+          agent_id?: string | null
+          belief_total?: number
+          computed_at?: string
+          concerns_json?: Json
+          id?: string
+          questions_json?: Json
+          tentative_json?: Json
+          user_id?: string
+          values_json?: Json
+        }
+        Relationships: []
+      }
       observer_chat_messages: {
         Row: {
           content: string
@@ -3404,6 +3440,22 @@ export type Database = {
         }
         Relationships: []
       }
+      mnemos_belief_snapshot: {
+        Row: {
+          agent_id: string | null
+          at_bounds_count: number | null
+          challenged_count: number | null
+          newest_challenge: string | null
+          no_source_count: number | null
+          oldest_challenge: string | null
+          questions_count: number | null
+          tentative_count: number | null
+          total: number | null
+          user_id: string | null
+          values_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
@@ -3576,6 +3628,7 @@ export type Database = {
       }
       mnemos_run_digest_build_cohort: { Args: never; Returns: Json }
       mnemos_run_health_snapshot: { Args: never; Returns: Json }
+      mnemos_run_identity_derivation_cohort: { Args: never; Returns: Json }
       mnemos_run_rehearsal_cohort: { Args: never; Returns: Json }
       move_to_dlq: {
         Args: {
