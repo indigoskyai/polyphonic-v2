@@ -3539,6 +3539,7 @@ export type Database = {
           tags: string[]
         }[]
       }
+      mnemos_digest_sensitive_tags: { Args: never; Returns: string[] }
       mnemos_rehearse_scope: {
         Args: {
           p_agent_id: string
@@ -3548,6 +3549,11 @@ export type Database = {
         }
         Returns: number
       }
+      mnemos_run_digest_autoreview_cohort: {
+        Args: { p_arousal_max?: number; p_surprise_max?: number }
+        Returns: Json
+      }
+      mnemos_run_digest_build_cohort: { Args: never; Returns: Json }
       mnemos_run_health_snapshot: { Args: never; Returns: Json }
       mnemos_run_rehearsal_cohort: { Args: never; Returns: Json }
       move_to_dlq: {
