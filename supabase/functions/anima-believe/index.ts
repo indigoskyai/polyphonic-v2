@@ -113,13 +113,16 @@ serve(async (req) => {
     // ─── CHALLENGE: Challenge stagnant beliefs ───
     // Step 1: Mark stagnant beliefs
     const stagnantCutoff = new Date(Date.now() - STAGNATION_THRESHOLD_DAYS * 86400000).toISOString();
-    await supabase
-      .from("beliefs")
-      .update({ stagnant: true })
-      .eq("user_id", user_id)
-      .eq("agent_id", agent_id)
-      .eq("active", true)
-      .lt("last_challenged", stagnantCutoff);
+    // Match never-challenged beliefs (last_challenged NULL — the live table has no
+    // default, so `< cutoff` would skip them) as well as genuinely stale ones.
+    await Promise.all([
+      supabase.from("beliefs").update({ stagnant: true })
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("active", true)
+        .is("last_challenged", null),
+      supabase.from("beliefs").update({ stagnant: true })
+        .eq("user_id", user_id).eq("agent_id", agent_id).eq("active", true)
+        .lt("last_challenged", stagnantCutoff),
+    ]);
 
     // Step 2: Fetch stagnant beliefs
     const { data: stagnantBeliefs } = await supabase

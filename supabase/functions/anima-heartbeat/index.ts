@@ -133,15 +133,20 @@ async function processUser(
   // surface them for challenge.
   const STAGNATION_THRESHOLD_DAYS = 14;
   const stagnantCutoff = new Date(Date.now() - STAGNATION_THRESHOLD_DAYS * 86_400_000).toISOString();
-  const { error: markStagnantErr } = await supabase
-    .from("beliefs")
-    .update({ stagnant: true })
-    .eq("user_id", userId)
-    .eq("agent_id", agentId)
-    .eq("active", true)
-    .lt("last_challenged", stagnantCutoff);
-  if (markStagnantErr) {
-    console.error("[heartbeat] mark stagnant beliefs failed:", markStagnantErr);
+  // Never-challenged beliefs have last_challenged = NULL (the live table has no
+  // default), and `last_challenged < cutoff` is false/unknown for NULL — so a plain
+  // comparison marks ZERO of them (every belief in prod is NULL). Match both cases:
+  // never-challenged (NULL) and genuinely stale (older than the cutoff).
+  const [{ error: nullMarkErr }, { error: staleMarkErr }] = await Promise.all([
+    supabase.from("beliefs").update({ stagnant: true })
+      .eq("user_id", userId).eq("agent_id", agentId).eq("active", true)
+      .is("last_challenged", null),
+    supabase.from("beliefs").update({ stagnant: true })
+      .eq("user_id", userId).eq("agent_id", agentId).eq("active", true)
+      .lt("last_challenged", stagnantCutoff),
+  ]);
+  if (nullMarkErr || staleMarkErr) {
+    console.error("[heartbeat] mark stagnant beliefs failed:", nullMarkErr || staleMarkErr);
   }
 
   // Load signals in parallel
