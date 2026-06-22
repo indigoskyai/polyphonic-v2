@@ -465,6 +465,11 @@ async function formBeliefs(
           confidence,
           supporting_engram_ids: [seed.id, ...supporting],
           contradicting_engram_ids: contradicting,
+          // Record provenance (this path left source blank, so all beliefs in prod
+          // were unattributable) and start the challenge clock at creation — without
+          // this, last_challenged was NULL and the stagnation sweep skipped them.
+          source: "consolidation",
+          last_challenged: new Date().toISOString(),
         });
 
       if (!error) beliefsUpdated++;
