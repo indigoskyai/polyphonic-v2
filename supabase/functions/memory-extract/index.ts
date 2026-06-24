@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 
@@ -213,7 +213,25 @@ serve(async (req) => {
     const user_id = claimsData.claims.sub;
     const body = await req.json();
     const { conversation_id } = body;
-    const agent_id = normalizeAgentId(body.agent_id);
+
+    // SECURITY: derive the agent from the THREAD (conversation_id is the thread id),
+    // not the request body. Otherwise a caller could point conversation_id at one
+    // agent's thread while claiming a different agent_id, extracting that thread's
+    // messages and mis-scoping the memories/beliefs to the wrong agent. (Matches the
+    // skills-distill / mnemos-dialectic thread-validation pattern.)
+    const requestedAgentId = normalizeAgentId(body.agent_id);
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("id, agent_id, primary_agent_id")
+      .eq("id", conversation_id)
+      .eq("user_id", user_id)
+      .maybeSingle();
+    const agent_id = thread ? resolveScopeAgentId(thread) : requestedAgentId;
+    if (body.agent_id && requestedAgentId !== agent_id) {
+      console.warn("[memory-extract] ignored mismatched requested agent", {
+        requestedAgentId, threadAgentId: agent_id, conversation_id, user_id,
+      });
+    }
     if (!isSubstrateAgentId(agent_id)) {
       return nonSubstrateResponse(agent_id, "memory-extract", getCorsHeaders(req));
     }

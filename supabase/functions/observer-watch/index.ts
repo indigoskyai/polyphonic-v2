@@ -13,6 +13,9 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
 import { normalizeAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
+// EXEMPT from the agent-family model rule: the observer is a distinct cross-session
+// monitor (see observer-chat) — a wise, discerning, fast, inexpensive model chosen
+// for the monitoring role, NOT a mirror of the agent's family.
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
 serve(async (req) => {

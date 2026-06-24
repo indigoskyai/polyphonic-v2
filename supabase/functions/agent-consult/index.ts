@@ -14,6 +14,11 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { buildAnimaConsultPrompt } from "../_shared/agents/anima-soul.ts";
 import { loadHypomnema } from "../_shared/hypomnema/index.ts";
 
+// EXEMPT from the agent-family model rule: Anima is a distinct entity (the wise,
+// contemplative consultant), not the consulting agent. She answers in her OWN
+// deliberate voice — a deep, high-capability model — regardless of which agent
+// (Luca/quill/etc.) consults her. OpenRouter keys reach every provider, so this
+// works for any user. A role-optimized model choice, not family routing.
 const ANIMA_MODEL = "anthropic/claude-opus-4-7";
 const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_QUESTION_CHARS = 2000;

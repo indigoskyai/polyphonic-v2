@@ -10,6 +10,10 @@ import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-
 import { AuthError, MissingApiKeyError, UpstreamUnavailableError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
+// EXEMPT from the agent-family model rule: the observer is a distinct cross-session
+// monitor that watches the conversation and answers the user's questions about it at
+// any moment. Its job needs a wise, discerning model that is fast and inexpensive —
+// a deliberate role-optimized choice, NOT a mirror of the agent's family.
 const OBSERVER_MODEL = "anthropic/claude-haiku-4.5";
 
 serve(async (req) => {
