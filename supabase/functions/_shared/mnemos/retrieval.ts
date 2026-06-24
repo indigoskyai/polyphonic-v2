@@ -323,12 +323,17 @@ async function reconsolidate(
       r.engram.stability + STABILITY_GROWTH_FACTOR * (1 - r.engram.stability),
     );
     const newAccessibility = Math.min(1.0, r.engram.accessibility + 0.1);
+    // Canonical reconsolidation also strengthens the long-lived storage trace on a
+    // successful retrieval (+0.05). Without it, strength is one-way-down (decay only),
+    // so a recalled memory never gains durability — part of why so much sits weak/unread.
+    const newStrength = Math.min(1.0, r.engram.strength + 0.05);
 
     return supabase
       .from("engrams")
       .update({
         last_accessed_at: now,
         access_count: r.engram.access_count + 1,
+        strength: newStrength,
         stability: newStability,
         accessibility: newAccessibility,
         // Move dormant engrams back to active on access

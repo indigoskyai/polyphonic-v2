@@ -105,8 +105,11 @@ export const SPREAD_DECAY_FACTOR = 0.5;
 /** Minimum number of accesses before an episodic engram can be promoted to semantic. */
 export const PROMOTION_MIN_ACCESSES = 3;
 
-/** Minimum stability for promotion to semantic. */
-export const PROMOTION_MIN_STABILITY = 0.5;
+/** Minimum stability for promotion to semantic. Raised 0.5→0.6 so a promoted semantic
+ *  engram sits at/above the archival-protection floor (STABILITY_ARCHIVE_PROTECT_FLOOR
+ *  = 0.6); at 0.5 it could be promoted and then immediately decay below protection and
+ *  be archived. Interim auto-gate until explicit promotion is decided. */
+export const PROMOTION_MIN_STABILITY = 0.6;
 
 /** Minimum connection weight to consider for consolidation strengthening. */
 export const CONSOLIDATION_MIN_WEIGHT = 0.3;

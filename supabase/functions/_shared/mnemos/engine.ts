@@ -27,7 +27,7 @@ import {
 } from "./encoding.ts";
 import { retrieve as retrieveImpl } from "./retrieval.ts";
 import { runDecayCycle } from "./decay.ts";
-import { runConsolidation, type ConsolidationOptions } from "./consolidation.ts";
+import { runConsolidation, isUnsafeBeliefContent, type ConsolidationOptions } from "./consolidation.ts";
 import { dream } from "./dreaming.ts";
 
 // SupabaseClient is used as a constructor dependency but we avoid importing
@@ -138,6 +138,13 @@ export class MnemosEngine {
     const agentId = this.agentId;
     const evidenceIds = evidence.map((e) => e.id);
 
+    // Hardening: updateBelief bypasses the synthesis safety/activation gate. Refuse
+    // acute-harm content outright, and (below) insert any NEW belief INACTIVE — so this
+    // path can never auto-surface ungated content if a future caller wires it to an LLM.
+    if (isUnsafeBeliefContent(content)) {
+      throw new Error("updateBelief: refused unsafe belief content");
+    }
+
     // Check if a belief with this content already exists
     const { data: existing } = await client
       .from("beliefs")
@@ -182,6 +189,7 @@ export class MnemosEngine {
         confidence,
         supporting_engram_ids: evidenceIds,
         contradicting_engram_ids: [],
+        active: false,
       })
       .select()
       .single();
