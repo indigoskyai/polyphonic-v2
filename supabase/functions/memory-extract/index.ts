@@ -826,66 +826,12 @@ serve(async (req) => {
       }).catch((e) => console.error("Reflection trigger failed:", e));
     }
 
-    // ─── Anima: Extract beliefs from principle/preference memories ───
-    if (memoriesCreated > 0) {
-      try {
-        const { data: principleMemories } = await supabase
-          .from("memories")
-          .select("id, content, memory_type, confidence, tags")
-          .eq("user_id", user_id)
-          .eq("agent_id", agent_id)
-          .filter("provenance->>conversation_id", "eq", conversation_id)
-          .eq("is_deleted", false)
-          .in("memory_type", ["principle", "preference"]);
-
-        if (principleMemories && principleMemories.length > 0) {
-          // Check for existing beliefs to avoid duplicates
-          const { data: existingBeliefs } = await supabase
-            .from("beliefs")
-            .select("content")
-            .eq("user_id", user_id)
-            .eq("agent_id", agent_id)
-            .eq("active", true);
-
-          const existingSet = new Set(
-            (existingBeliefs || []).map((b: any) => b.content.toLowerCase().trim().slice(0, 60))
-          );
-
-          for (const mem of principleMemories) {
-            const normContent = mem.content.toLowerCase().trim().slice(0, 60);
-            if (existingSet.has(normContent)) continue;
-
-            // Determine domain from tags
-            const domainMap: Record<string, string> = {
-              work: "professional", career: "professional",
-              relationship: "relationships", family: "relationships", love: "relationships",
-              health: "wellbeing", mental_health: "wellbeing",
-              philosophy: "philosophy", consciousness: "philosophy",
-              identity: "identity", self: "identity",
-              creativity: "creativity", art: "creativity",
-            };
-            let domain = "general";
-            for (const tag of mem.tags || []) {
-              if (domainMap[tag]) { domain = domainMap[tag]; break; }
-            }
-
-            await supabase.from("beliefs").insert({
-              user_id,
-              agent_id,
-              content: mem.content,
-              // epistemic-humility band [0.05, 0.95] — beliefs are never absolute/extinct
-              confidence: Math.max(0.05, Math.min(0.95, mem.confidence || 0.5)),
-              domain,
-              tags: mem.tags || [],
-              source: "extraction",
-            });
-            existingSet.add(normContent);
-          }
-        }
-      } catch (beliefErr) {
-        console.error("Belief extraction error (non-blocking):", beliefErr);
-      }
-    }
+    // NOTE: extraction NO LONGER writes beliefs. This path pasted principle/
+    // preference memory text verbatim into the beliefs table (source='extraction'),
+    // polluting the belief layer with un-abstracted content (the snapshot showed raw
+    // transcripts as "values"). Beliefs now form ONLY via LLM synthesis in
+    // consolidation (abstracted, first-person, graduated confidence) + the challenge
+    // loop. memory-extract continues to write memories/engrams as before.
 
     // ─── Anima: Trigger emotional state update after extraction ───
     fetch(`${supabaseUrl}/functions/v1/anima-emotional-state`, {

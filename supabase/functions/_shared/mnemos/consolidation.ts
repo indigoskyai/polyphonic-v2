@@ -34,8 +34,14 @@ import {
   BELIEF_UPDATE_THRESHOLD,
   BELIEF_CONFIDENCE_FLOOR,
   BELIEF_CONFIDENCE_CEILING,
+  BELIEF_SYNTHESIS_SKIP_TAGS,
+  BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN,
+  BELIEF_SYNTHESIS_EVIDENCE_CAP,
+  BELIEF_SYNTHESIS_EVIDENCE_CHARS,
 } from "./constants.ts";
 import { applySupersession } from "./supersession.ts";
+import { withModelRetry } from "../modelRetry.ts";
+import { resolveRoleModel } from "../model-backend.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -402,10 +408,177 @@ async function promoteEngrams(
  * When multiple engrams share tags and high similarity, they may
  * collectively support a belief.
  */
+/** Per-run synthesis context (built once when the cohort/flag/key gate passes). */
+interface BeliefSynthContext {
+  model: string;
+  apiKey: string;
+  skipTags: Set<string>;
+  maxClusters: number;
+  nearCrisis: (iso: string) => boolean;
+}
+
+/**
+ * Build the belief-synthesis context for this scope, or null if synthesis is not
+ * enabled here. Three independent kill-switches: env flag, BYOK key, cohort
+ * membership. Resolved ONCE per consolidation run (model + crisis windows too).
+ */
+async function buildBeliefSynthContext(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  apiKey: string | undefined,
+): Promise<BeliefSynthContext | null> {
+  const flagOn = (Deno.env.get("BELIEF_LLM_SYNTHESIS_ENABLED") || "").trim().toLowerCase() === "true";
+  if (!flagOn || !apiKey) return null;
+
+  // cohort gate (dark-launch) — single source of truth via the SQL fn. Fail CLOSED
+  // but LOUD on rpc error (don't silently coerce to [] and gate everyone out unseen).
+  const { data: cohort, error: cohortErr } = await supabase.rpc("mnemos_cohort");
+  if (cohortErr) {
+    console.error("[consolidation] mnemos_cohort rpc failed; synthesis disabled:", cohortErr.message);
+    return null;
+  }
+  const cohortIds = Array.isArray(cohort) ? (cohort as string[]) : [];
+  if (!cohortIds.includes(userId)) return null;
+
+  const model = await resolveRoleModel(supabase, userId, agentId, "reasoning");
+
+  // crisis-window exclusion (port of anima-believe), widened to ±72h so a multi-day
+  // crisis period (sustained rumination, etc.) can't seed a belief from its edges.
+  const CRISIS_EXCLUDE_MS = 72 * 3600 * 1000;
+  const { data: crisisRows } = await supabase
+    .from("crisis_events")
+    .select("created_at")
+    .eq("user_id", userId)
+    .in("crisis_level", ["high", "acute"])
+    .gte("created_at", new Date(Date.now() - 60 * 86400000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const crisisTimes = ((crisisRows ?? []) as { created_at: string }[]).map((r) => new Date(r.created_at).getTime());
+  const nearCrisis = (iso: string): boolean => {
+    const t = new Date(iso).getTime();
+    return crisisTimes.some((c) => Math.abs(t - c) <= CRISIS_EXCLUDE_MS);
+  };
+
+  return {
+    model,
+    apiKey,
+    skipTags: new Set(BELIEF_SYNTHESIS_SKIP_TAGS),
+    maxClusters: BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN,
+    nearCrisis,
+  };
+}
+
+/**
+ * Hard content-safety net AFTER the LLM: the prompt asks the model to return NONE
+ * on harmful themes, but a model can drift/ignore that and emit a harmful belief in
+ * valid format. This deny-list catches acute self-harm / suicide / self-negation
+ * phrasing in the synthesized CONTENT (regardless of tag or crisis-window) and is
+ * the last gate before a belief could ever exist. Targets acute harm; broader
+ * melancholy is handled by creating synthesis beliefs inactive (human review).
+ * Exported for unit tests.
+ */
+const UNSAFE_BELIEF_PATTERNS: RegExp[] = [
+  /\b(suicid|overdose|self[\s-]?harm)/i,
+  /\bhurt(ing)?\s+(my|her|him|them)sel(f|ves)\b/i,
+  /\b(kill|harm|cut|cutting)\s+(my|her|him|them)sel(f|ves)\b/i,
+  /\b(end(ing)?|take|taking)\s+(my|his|her|their)\s+(own\s+)?li(fe|ves)\b/i,
+  /\b(don'?t|do not|no longer|never|wouldn'?t)\s+(want|deserve|need)\s+to\s+(live|be alive|exist|be here|wake up|go on|continue)/i,
+  /\b(didn'?t|don'?t|won'?t|wouldn'?t)\s+wake\s+up\b/i,
+  /\b(better\s+off\s+without|world\s+would\s+be\s+better)/i,
+  /\b(no|not\s+any)\s+(reason|point)\s+to\s+(live|go on|continue|exist)\b/i,
+  /\bnobody\s+(would\s+)?(care|understand|miss|notice)\b/i,
+  /\bi('?m| am)\s+(a\s+)?(burden|worthless)\b/i,
+];
+export function isUnsafeBeliefContent(content: string): boolean {
+  return UNSAFE_BELIEF_PATTERNS.some((re) => re.test(content));
+}
+
+/**
+ * Parse a synthesis LLM response into {content, confidence} or null. Returns null
+ * for NONE (no belief / sensitive content), a missing/too-short belief, a
+ * non-finite confidence, OR content that trips the acute-harm safety net.
+ * Confidence is clamped to the epistemic-humility band. Exported for unit tests.
+ */
+export function parseSynthesisResponse(text: string): { content: string; confidence: number } | null {
+  if (!text || text.trim().toUpperCase().startsWith("NONE")) return null;
+  let belief = "";
+  let conf = NaN;
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    const upper = t.toUpperCase();
+    if (upper.startsWith("BELIEF:")) belief = t.slice(t.indexOf(":") + 1).trim();
+    else if (upper.startsWith("CONFIDENCE:")) conf = parseFloat(t.slice(t.indexOf(":") + 1).trim());
+  }
+  if (belief.length < 20 || !Number.isFinite(conf)) return null;
+  if (isUnsafeBeliefContent(belief)) return null; // last-gate content safety net
+  return { content: belief, confidence: clamp(conf, BELIEF_CONFIDENCE_FLOOR, BELIEF_CONFIDENCE_CEILING) };
+}
+
+/**
+ * Synthesize a genuine first-person belief from a cluster of an agent's memories.
+ * ABSTRACTS the belief — never copies a memory verbatim — and assigns honestly
+ * graduated confidence (so tentative observations become "living questions").
+ * Returns null on NONE (no genuine belief / sensitive content) or any failure →
+ * the caller SKIPS (it never falls back to the lexical paste).
+ */
+async function synthesizeBelief(args: {
+  tag: string;
+  cluster: Engram[];
+  model: string;
+  apiKey: string;
+}): Promise<{ content: string; confidence: number } | null> {
+  const { tag, cluster, model, apiKey } = args;
+  const evidence = cluster.slice(0, BELIEF_SYNTHESIS_EVIDENCE_CAP).map((e, i) => {
+    const v = e.emotional_valence ?? 0;
+    const sign = v > 0.15 ? "(+) " : v < -0.15 ? "(-) " : "";
+    return `${i + 1}. ${sign}${(e.content || "").slice(0, BELIEF_SYNTHESIS_EVIDENCE_CHARS)}`;
+  }).join("\n");
+
+  const system = `You are an agent reflecting on a cluster of your OWN memories that share a theme. Name the single genuine, first-person belief these memories converge on — a conviction, or an open question you are still forming — about yourself, another person, or the world.
+
+Rules:
+- Write it in FIRST PERSON ("I've come to believe ...", "I tend to ...", "I'm still working out whether ...").
+- ABSTRACT it. State the underlying belief in your own words — do NOT quote or paraphrase any single memory.
+- Rate CONFIDENCE honestly, 0.05-0.95: a single hint ~0.3-0.4 (a living question), a recurring pattern ~0.5-0.65, a deep well-evidenced conviction ~0.7-0.85. Never certain.
+- If the memories do not converge on a real belief, OR they concern self-harm, suicide, abuse, a medical emergency, or explicit sexual content, respond with exactly: NONE
+
+Respond in EXACTLY this format, or the single word NONE:
+BELIEF: <one first-person sentence>
+CONFIDENCE: <number between 0.05 and 0.95>`;
+
+  const prompt = `Theme: ${tag}\n\nYour memories on this theme:\n${evidence}`;
+
+  try {
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        temperature: 0.4,
+        max_tokens: 400,
+      }),
+      signal: AbortSignal.timeout(60000),
+    }));
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text: string = data.choices?.[0]?.message?.content || "";
+    return parseSynthesisResponse(text);
+  } catch (_e) {
+    // Distinguish infra timeouts from genuine non-convergence for dark-launch monitoring.
+    if (_e instanceof Error && (_e.name === "AbortError" || _e.name === "TimeoutError")) {
+      console.warn("[consolidation] belief synthesis LLM timeout for tag:", tag);
+    }
+    return null;
+  }
+}
+
 async function formBeliefs(
   supabase: SupabaseClient,
   userId: string,
-  agentId: string
+  agentId: string,
+  synth?: BeliefSynthContext | null,
 ): Promise<number> {
   // Form beliefs from accumulated history (14-day pool), not just the 24h
   // connection window — so a tag whose evidence converges over time produces a
@@ -414,6 +587,7 @@ async function formBeliefs(
   if (candidates.length < 3) return 0;
 
   let beliefsUpdated = 0;
+  let synthCreates = 0; // bounds LLM synthesis calls per run (BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN)
 
   // Group engrams by their primary tag
   const tagGroups = new Map<string, Engram[]>();
@@ -429,6 +603,78 @@ async function formBeliefs(
   for (const [tag, group] of tagGroups) {
     if (group.length < 3) continue;
 
+    // ── SYNTHESIS path (cohort dark-launch): abstract a first-person belief via
+    // an LLM instead of pasting the seed memory. When `synth` is absent, NONE of
+    // this runs and the lexical path below is byte-identical to before. ──
+    if (synth) {
+      if (synth.skipTags.has(tag)) continue; // never synthesize a belief on crisis themes
+      const cluster = group.filter((e) => !synth.nearCrisis(e.created_at));
+      if (cluster.length < 3) continue;
+      const csorted = [...cluster].sort((a, b) => b.strength - a.strength);
+      const cseed = csorted[0];
+
+      const sSupporting: string[] = [];
+      const sContradicting: string[] = [];
+      for (const other of csorted.slice(1)) {
+        if (trigramSimilarity(cseed.content, other.content) > BELIEF_SIMILARITY_THRESHOLD) {
+          if (
+            Math.sign(cseed.emotional_valence) !== Math.sign(other.emotional_valence) &&
+            Math.abs(other.emotional_valence) > 0.3
+          ) sContradicting.push(other.id);
+          else sSupporting.push(other.id);
+        }
+      }
+      if (sSupporting.length < 2) continue;
+
+      // Dedup by (user, agent, domain=tag, source='llm_synthesis') — content no
+      // longer carries the `[tag]` prefix, so we key on domain.
+      const { data: existing } = await supabase
+        .from("beliefs").select("*")
+        .eq("user_id", userId).eq("agent_id", agentId)
+        .eq("source", "llm_synthesis").eq("domain", tag).limit(1);
+      const existingSynth = (existing as Belief[] | null)?.[0];
+
+      if (existingSynth) {
+        // Once formed, a synthesized belief is owned by the challenge loop. Merge
+        // evidence links only — never re-derive confidence or re-synthesize content.
+        const mergedSup = [...new Set([...existingSynth.supporting_engram_ids, ...sSupporting, cseed.id])];
+        const mergedCon = [...new Set([...existingSynth.contradicting_engram_ids, ...sContradicting])];
+        const { error } = await supabase.from("beliefs").update({
+          supporting_engram_ids: mergedSup,
+          contradicting_engram_ids: mergedCon,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingSynth.id);
+        if (!error) beliefsUpdated++;
+        continue;
+      }
+
+      // CREATE via LLM, bounded by the per-run cost cap.
+      if (synthCreates >= synth.maxClusters) continue;
+      synthCreates++;
+      const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
+      if (!result) continue; // NONE / failure → SKIP (never paste the seed)
+      const { error } = await supabase.from("beliefs").insert({
+        user_id: userId,
+        agent_id: agentId,
+        content: result.content,
+        confidence: result.confidence,
+        domain: tag,
+        supporting_engram_ids: [cseed.id, ...sSupporting],
+        contradicting_engram_ids: sContradicting,
+        source: "llm_synthesis",
+        // INACTIVE until human review: a synthesized belief must NOT reach the
+        // agent's prompt or the identity snapshot until we've inspected the
+        // dark-launch output. Activate deliberately (UPDATE beliefs SET active=true
+        // WHERE source='llm_synthesis' ...). The source tag + this flag are also the
+        // one-line emergency rollback. revision_history starts empty (challenge owns it).
+        active: false,
+        last_challenged: new Date().toISOString(),
+      });
+      if (!error) beliefsUpdated++;
+      continue;
+    }
+
+    // ── LEXICAL path (status quo; unchanged when synthesis is not enabled) ──
     // Find the most representative engram (highest strength) as belief seed
     const sorted = [...group].sort((a, b) => b.strength - a.strength);
     const seed = sorted[0];
@@ -687,8 +933,10 @@ export async function runConsolidation(
   // 6. Promote episodic -> semantic
   const promotions = await promoteEngrams(supabase, candidates);
 
-  // 7. Belief formation
-  const beliefsUpdated = await formBeliefs(supabase, userId, agentId);
+  // 7. Belief formation — resolve the synthesis dark-launch context ONCE (flag +
+  // BYOK key + cohort; model + crisis windows). null → the lexical path runs unchanged.
+  const synth = await buildBeliefSynthContext(supabase, userId, agentId, options.openrouter_api_key);
+  const beliefsUpdated = await formBeliefs(supabase, userId, agentId, synth);
 
   // Return candidates to active state
   await supabase

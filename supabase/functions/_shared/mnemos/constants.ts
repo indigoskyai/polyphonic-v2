@@ -139,6 +139,23 @@ export const BELIEF_UPDATE_THRESHOLD = 0.05;
 export const BELIEF_CONFIDENCE_FLOOR = 0.05;
 export const BELIEF_CONFIDENCE_CEILING = 0.95;
 
+// ── Phase 3 — LLM belief synthesis (cohort dark-launch) ──────────────────────
+/**
+ * Narrow crisis-content tags that skip LLM synthesis entirely — a belief must
+ * NEVER be auto-formed from a cluster on these themes. Deliberately NOT the
+ * digest's full mnemos_digest_sensitive_tags() (which includes identity/value/
+ * belief — the legitimate belief domains; using it would gut formation).
+ */
+export const BELIEF_SYNTHESIS_SKIP_TAGS = [
+  "crisis", "self_harm", "suicide", "suicidal_ideation", "overdose", "emergency",
+  "trauma", "abuse",
+];
+/** Cost bound: max LLM synthesis CREATE calls per consolidation run per scope. */
+export const BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN = 8;
+/** Evidence sent to the synthesis LLM: at most N engrams, each truncated. */
+export const BELIEF_SYNTHESIS_EVIDENCE_CAP = 12;
+export const BELIEF_SYNTHESIS_EVIDENCE_CHARS = 240;
+
 // ---------------------------------------------------------------------------
 // Emotional State
 // ---------------------------------------------------------------------------
