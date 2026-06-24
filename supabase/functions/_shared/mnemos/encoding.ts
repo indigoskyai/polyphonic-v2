@@ -78,10 +78,13 @@ function trigramSimilarity(a: string, b: string): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Compute how surprising new content is relative to existing engrams.
- * Returns a value in [0, 1] — higher means more novel.
+ * Compute how NOVEL new content is relative to existing engrams (1 - max similarity).
  *
- * surprise = 1 - max_similarity(content, existing_engrams)
+ * NOTE on the name: despite living under `surprise_score`, this is a NOVELTY signal,
+ * NOT belief-contradiction "surprise" (canonical Mnemos detects surprise as contradiction
+ * of existing beliefs). It is a light encoding-strength aid only, and a poor proxy for
+ * "mundane vs important" (a freshly-worded "hello" scores high). It must not be the sole
+ * gate for anything safety-sensitive. Returns [0,1], higher = more novel.
  */
 async function computeSurprise(
   engine: MnemosEngine,

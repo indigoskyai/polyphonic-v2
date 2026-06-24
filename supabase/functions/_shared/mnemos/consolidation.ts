@@ -66,6 +66,12 @@ const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.2;
 /** Similarity bar for an engram to "support" a belief seed. Was 0.3 — above even
  *  the 0.2 connection bar, so almost nothing qualified. */
 const BELIEF_SIMILARITY_THRESHOLD = 0.18;
+/** Belief-vs-belief content similarity above which a newly synthesized belief is treated
+ *  as a near-duplicate of an existing active synth belief (any domain) and merged into it
+ *  rather than created — stops the same idea under different tags from inflating the count.
+ *  Trigram is weak on heavy rewording, so 0.5 catches near-verbatim restatements without
+ *  merging genuinely distinct beliefs (deeper semantic dedup is a later LLM pass). */
+const BELIEF_DEDUP_SIMILARITY = 0.5;
 /** Lookback for the belief-candidate pool: beliefs should form from evidence that
  *  converges over days/weeks, not only the 24h connection window. Rehearsal's
  *  refreshed last_accessed_at feeds this pool. */
@@ -768,6 +774,33 @@ async function formBeliefs(
       synthCreates++;
       const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
       if (!result) continue; // NONE / failure → SKIP (never paste the seed)
+
+      // Phase 4.1 — semantic dedup. The existing-belief check above keys on domain(tag)
+      // only, so the SAME idea synthesized under a different tag would create a near-
+      // duplicate (this inflated belief counts). Scan this scope's ACTIVE synth beliefs
+      // (any domain) for a high-similarity twin; if found, merge evidence into it instead
+      // of creating a dup. Trigram catches near-verbatim restatements (deeper semantic
+      // dedup is a later LLM pass). Scoped to ACTIVE on purpose: inflation only matters for
+      // the surfacing set (the kernel loads active beliefs), so held/dark-launch dups are
+      // inert and not worth merging until they'd activate.
+      const { data: activeSynth } = await supabase
+        .from("beliefs")
+        .select("id, content, supporting_engram_ids, contradicting_engram_ids")
+        .eq("user_id", userId).eq("agent_id", agentId)
+        .eq("source", "llm_synthesis").eq("active", true);
+      const twin = (activeSynth as Array<{ id: string; content: string; supporting_engram_ids: string[]; contradicting_engram_ids: string[] }> | null)
+        ?.find((b) => trigramSimilarity(result.content, b.content) > BELIEF_DEDUP_SIMILARITY);
+      if (twin) {
+        const mergedSup = [...new Set([...twin.supporting_engram_ids, cseed.id, ...sSupporting])];
+        const mergedCon = [...new Set([...twin.contradicting_engram_ids, ...sContradicting])];
+        const { error: mErr } = await supabase.from("beliefs").update({
+          supporting_engram_ids: mergedSup,
+          contradicting_engram_ids: mergedCon,
+          updated_at: new Date().toISOString(),
+        }).eq("id", twin.id);
+        if (!mErr) beliefsUpdated++;
+        continue; // merged into the twin; do not create a duplicate
+      }
 
       // Phase 4 — auto-activation gate. With the kill-switch OFF this returns
       // {active:false, reason:'autoactivate_off'} → identical to the dark-launch
