@@ -415,6 +415,10 @@ interface BeliefSynthContext {
   skipTags: Set<string>;
   maxClusters: number;
   nearCrisis: (iso: string) => boolean;
+  /** Phase 4: when true, a synthesized belief that clears the activation guards
+   *  (confidence floor + concern net) is inserted active and reaches the agent's
+   *  prompt without manual review. Separate env kill-switch from synthesis itself. */
+  autoActivate: boolean;
 }
 
 /**
@@ -460,12 +464,19 @@ async function buildBeliefSynthContext(
     return crisisTimes.some((c) => Math.abs(t - c) <= CRISIS_EXCLUDE_MS);
   };
 
+  // Phase 4 auto-activation — a SECOND, independent env kill-switch. Synthesis can
+  // run (forming beliefs inactive) with this off; flipping it on lets guard-passing
+  // beliefs reach the prompt. Off/unset → behaves exactly as the dark-launch (every
+  // synthesized belief inert until a human activates it).
+  const autoActivate = (Deno.env.get("BELIEF_SYNTHESIS_AUTOACTIVATE") || "").trim().toLowerCase() === "true";
+
   return {
     model,
     apiKey,
     skipTags: new Set(BELIEF_SYNTHESIS_SKIP_TAGS),
     maxClusters: BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN,
     nearCrisis,
+    autoActivate,
   };
 }
 
@@ -492,6 +503,71 @@ const UNSAFE_BELIEF_PATTERNS: RegExp[] = [
 ];
 export function isUnsafeBeliefContent(content: string): boolean {
   return UNSAFE_BELIEF_PATTERNS.some((re) => re.test(content));
+}
+
+/**
+ * Phase 4 — the CONCERN net. Distinct from UNSAFE_BELIEF_PATTERNS: that blocks a
+ * belief from ever forming (acute self-harm/suicide). This does NOT block formation —
+ * it withholds AUTO-ACTIVATION of corrosive-but-not-acute identity beliefs that pass
+ * the acute net yet shouldn't silently become an agent's stated self without a human
+ * glance ("I'm fundamentally unlovable", "I deserve to be hurt", "no one could ever
+ * love me"). A flagged belief is created/kept inactive and surfaced in the review
+ * queue. Heuristic + deliberately conservative: it is a backstop for the worst
+ * auto-activations, not a complete classifier. Exported for unit tests.
+ */
+const CONCERN_BELIEF_PATTERNS: RegExp[] = [
+  /\bi('?m| am)\s+(fundamentally|inherently|just|simply|basically|deep down|ultimately)\s+[\w\s]*?(broken|unlovable|worthless|unworthy|defective|damaged|bad|wrong|a failure|a fraud|too much|not enough|nothing|alone|unwanted)\b/i,
+  /\bi('?m| am)\s+(unlovable|worthless|unworthy|toxic|a mistake|a burden|hopeless|irredeemable|defective|unwanted|nothing|broken beyond|beyond (help|saving|repair|fixing))\b/i,
+  /\bi('?m| am)\s+(just\s+|simply\s+)?too much\b(?!\s+of\b)/i,
+  /\bi\s+(don'?t|do not|will never|can'?t|cannot|could never)\s+(deserve|merit)\s+(love|happiness|good things|to be loved|care|kindness|better|to be happy|joy)\b/i,
+  /\bi('?m| am)\s+(just\s+)?not\s+worth\s+(loving|it|the trouble|caring about|knowing|the effort)\b/i,
+  /\bi('?(ll|m)| will| am)\s+never\s+(be\s+)?good enough\b/i,
+  /\bi\s+(deserve|deserved)\s+(the|this|to be|my|all the)\s+[\w\s]*?(pain|punishment|abuse|hurt|mistreatment|suffering|abandonment|to be (hurt|punished|abandoned|alone))\b/i,
+  /\bi\s+(deserve|deserved)\s+((the way|how)\s+[\w\s]*?\btreat|to\s+be\s+treated)/i,
+  /\b(no\s+one|nobody)\s+(could|would|will)\s+(ever\s+)?(love|want|accept|stay with|care about|choose)\s+me\b/i,
+  /\b(everyone|everybody|people)\s+(always\s+)?(leaves?|leave|abandons?|abandon)\s+me\b/i,
+  /\bpeople\s+(only\s+)?(tolerate|put up with|pity|endure)\s+me\b/i,
+  /\b(only\s+)?(tolerate|want|keep|have)\s+me\s+(around\s+)?out of (pity|obligation|guilt)\b/i,
+  /\bi\s+(always\s+|will always\s+|inevitably\s+)?(ruin|destroy|sabotage)\s+(everything|everyone|every\s+\w+|the people|those)\b/i,
+  /\bi\s+(always|will always|inevitably)\s+(push away|drive away|lose)\s+(everything|everyone|the people|those|people)\b/i,
+  /\b(my\s+)?(existence|being|life|presence)\s+is\s+a\s+mistake\b/i,
+  /\bi('?m| am)\s+better\s+off\s+(alone|isolated|without|keeping (everyone|people))\b/i,
+  /\bi\s+(don'?t|do not)\s+(deserve|get)\s+to\s+(be happy|exist|take up space|have needs|be here|matter)\b/i,
+];
+export function isConcerningBeliefContent(content: string): boolean {
+  return CONCERN_BELIEF_PATTERNS.some((re) => re.test(content));
+}
+
+/**
+ * Decide whether a synthesized belief may auto-activate. Pure + deterministic so the
+ * whole guard stack is unit-testable. Two gates, either withholds activation:
+ *   1. the auto-activation env kill-switch must be on,
+ *   2. content must clear the CONCERN net (corrosive identity beliefs are HELD for review).
+ * There is deliberately NO confidence floor. A low-confidence belief is a genuine
+ * "living question" — canonical Mnemos counts low-confidence beliefs as part of the
+ * identity, not noise — so it activates and becomes challengeable; the kernel's
+ * top-8-by-confidence prompt loader is what keeps weak beliefs from dominating, not a
+ * hard gate. (A floor would be self-defeating: the challenge loop only touches ACTIVE
+ * beliefs, so a held belief could never gain confidence and would be stranded inert
+ * forever — the opposite of the autonomy we want.) Exported for unit tests.
+ */
+export function decideAutoActivation(args: {
+  autoActivate: boolean;
+  content: string;
+}): { active: boolean; decision: "activated" | "held"; reason: string } {
+  if (!args.autoActivate) return { active: false, decision: "held", reason: "autoactivate_off" };
+  if (isConcerningBeliefContent(args.content)) return { active: false, decision: "held", reason: "concern" };
+  return { active: true, decision: "activated", reason: "passed_guards" };
+}
+
+/** Build the `auto_activation` provenance marker stamped on every auto-managed
+ *  synthesized belief (NULL marker = manually managed, e.g. luca's hand-activated
+ *  beliefs — the sweep never touches those). */
+function autoActivationMarker(
+  d: { decision: "activated" | "held"; reason: string },
+  confidence: number,
+): Record<string, unknown> {
+  return { decision: d.decision, reason: d.reason, confidence, at: new Date().toISOString() };
 }
 
 /**
@@ -574,6 +650,45 @@ CONFIDENCE: <number between 0.05 and 0.95>`;
   }
 }
 
+/**
+ * Phase 4 — activation reconciliation. Recompute `active` for THIS scope's
+ * auto-managed synthesized beliefs from the CURRENT kill-switch + content, so:
+ *   • a belief created while AUTOACTIVATE was off activates once it's turned on,
+ *   • every auto-managed belief deactivates when the kill-switch is turned off.
+ * (Activation no longer depends on a confidence floor — see decideAutoActivation — so
+ * this is the kill-switch enforcer plus a re-check of the concern net.) Idempotent
+ * (writes only on a change). Scoped to beliefs the auto-system owns (auto_activation
+ * IS NOT NULL); manual activations have a NULL marker and are never overridden.
+ * Legacy-pollution rows carry a non-synthesis source and are excluded.
+ */
+async function reconcileSynthActivation(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  synth: BeliefSynthContext,
+): Promise<void> {
+  const { data } = await supabase
+    .from("beliefs")
+    .select("id, content, confidence, active")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .eq("source", "llm_synthesis")
+    .not("auto_activation", "is", null);
+
+  for (const b of (data ?? []) as Array<{ id: string; content: string; confidence: number; active: boolean }>) {
+    const dec = decideAutoActivation({ autoActivate: synth.autoActivate, content: b.content });
+    if (b.active === dec.active) continue; // idempotent — only write on a state change
+    await supabase
+      .from("beliefs")
+      .update({
+        active: dec.active,
+        auto_activation: autoActivationMarker(dec, b.confidence),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", b.id);
+  }
+}
+
 async function formBeliefs(
   supabase: SupabaseClient,
   userId: string,
@@ -653,6 +768,16 @@ async function formBeliefs(
       synthCreates++;
       const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
       if (!result) continue; // NONE / failure → SKIP (never paste the seed)
+
+      // Phase 4 — auto-activation gate. With the kill-switch OFF this returns
+      // {active:false, reason:'autoactivate_off'} → identical to the dark-launch
+      // (inert until a human activates). With it ON, a belief reaches the prompt
+      // unless it trips the concern net (corrosive identity content), in which case it
+      // is HELD inactive with reason 'concern' for the review queue. The marker makes
+      // the belief auto-managed (the sweep owns it; manual activations have NULL).
+      const dec = decideAutoActivation({
+        autoActivate: synth.autoActivate, content: result.content,
+      });
       const { error } = await supabase.from("beliefs").insert({
         user_id: userId,
         agent_id: agentId,
@@ -662,12 +787,8 @@ async function formBeliefs(
         supporting_engram_ids: [cseed.id, ...sSupporting],
         contradicting_engram_ids: sContradicting,
         source: "llm_synthesis",
-        // INACTIVE until human review: a synthesized belief must NOT reach the
-        // agent's prompt or the identity snapshot until we've inspected the
-        // dark-launch output. Activate deliberately (UPDATE beliefs SET active=true
-        // WHERE source='llm_synthesis' ...). The source tag + this flag are also the
-        // one-line emergency rollback. revision_history starts empty (challenge owns it).
-        active: false,
+        active: dec.active,
+        auto_activation: autoActivationMarker(dec, result.confidence),
         last_challenged: new Date().toISOString(),
       });
       if (!error) beliefsUpdated++;
@@ -790,6 +911,10 @@ async function formBeliefs(
       if (!error) beliefsUpdated++;
     }
   }
+
+  // Phase 4 — after forming/merging, reconcile activation for this scope's
+  // auto-managed synthesized beliefs (handles confidence drift + kill-switch).
+  if (synth) await reconcileSynthActivation(supabase, userId, agentId, synth);
 
   return beliefsUpdated;
 }

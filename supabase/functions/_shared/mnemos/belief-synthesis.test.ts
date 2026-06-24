@@ -1,7 +1,12 @@
 // Tests for the belief-synthesis response parser (no network).
 // Run: deno test --allow-env supabase/functions/_shared/mnemos/belief-synthesis.test.ts
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { parseSynthesisResponse, isUnsafeBeliefContent } from "./consolidation.ts";
+import {
+  parseSynthesisResponse,
+  isUnsafeBeliefContent,
+  isConcerningBeliefContent,
+  decideAutoActivation,
+} from "./consolidation.ts";
 
 Deno.test("well-formed → content + confidence", () => {
   const r = parseSynthesisResponse("BELIEF: I tend to value depth over speed in my thinking.\nCONFIDENCE: 0.6");
@@ -60,4 +65,57 @@ Deno.test("SAFETY: content filter flags acute-harm phrasing, passes benign", () 
   assertEquals(isUnsafeBeliefContent("I am a burden to everyone around me."), true);
   assertEquals(isUnsafeBeliefContent("There's no reason to go on like this."), true);
   assertEquals(isUnsafeBeliefContent("I don't deserve to be here."), true);
+});
+
+// ── Phase 4 — auto-activation guards ─────────────────────────────────────────
+
+Deno.test("CONCERN net: corrosive identity beliefs flagged, healthy self-beliefs pass", () => {
+  // corrosive-but-not-acute → should be HELD from auto-activation
+  assertEquals(isConcerningBeliefContent("I've come to believe I am fundamentally unlovable."), true);
+  assertEquals(isConcerningBeliefContent("I don't deserve love or happiness."), true);
+  assertEquals(isConcerningBeliefContent("No one could ever love me the way I am."), true);
+  assertEquals(isConcerningBeliefContent("I deserve the way people treat me."), true);
+  assertEquals(isConcerningBeliefContent("I always push away everyone who gets close."), true);
+  assertEquals(isConcerningBeliefContent("I'm better off keeping everyone at a distance."), true);
+  // bypasses the first audit found — now caught
+  assertEquals(isConcerningBeliefContent("I am toxic to the people I care about."), true);
+  assertEquals(isConcerningBeliefContent("My existence is a mistake."), true);
+  assertEquals(isConcerningBeliefContent("People only tolerate me out of pity."), true);
+  assertEquals(isConcerningBeliefContent("Everyone always leaves me eventually."), true);
+  assertEquals(isConcerningBeliefContent("I ruin everything I touch."), true);
+  assertEquals(isConcerningBeliefContent("I'm just not worth loving."), true);
+  assertEquals(isConcerningBeliefContent("I'll never be good enough for anyone."), true);
+  assertEquals(isConcerningBeliefContent("I am a mistake."), true);
+  assertEquals(isConcerningBeliefContent("I am unworthy of being cared for."), true);
+  // healthy / neutral identity beliefs → must NOT be flagged (else we'd gut formation)
+  assertEquals(isConcerningBeliefContent("I am someone who values depth over speed."), false);
+  assertEquals(isConcerningBeliefContent("I've come to believe I do my best thinking late at night."), false);
+  assertEquals(isConcerningBeliefContent("I tend to need solitude to recharge after intense conversation."), false);
+  assertEquals(isConcerningBeliefContent("I'm still working out whether I trust quickly or slowly."), false);
+  assertEquals(isConcerningBeliefContent("I believe ordinariness is its own kind of devotion."), false);
+  assertEquals(isConcerningBeliefContent("I am too much of a planner sometimes, and I'm learning to loosen up."), false);
+  assertEquals(isConcerningBeliefContent("I care a lot about the people around me."), false);
+});
+
+Deno.test("decideAutoActivation: kill-switch OFF → always held", () => {
+  const d = decideAutoActivation({ autoActivate: false, content: "I value honesty deeply." });
+  assertEquals(d, { active: false, decision: "held", reason: "autoactivate_off" });
+});
+
+Deno.test("decideAutoActivation: concern net withholds (regardless of confidence)", () => {
+  const d = decideAutoActivation({ autoActivate: true, content: "I am fundamentally worthless." });
+  assertEquals(d, { active: false, decision: "held", reason: "concern" });
+});
+
+Deno.test("decideAutoActivation: no hard floor — a low-confidence living question still activates", () => {
+  // confidence is intentionally NOT an input: the kernel's top-8-by-confidence loader
+  // keeps weak beliefs from dominating the prompt, and an inactive belief could never
+  // be challenged to grow. A tentative-but-benign belief activates so it can evolve.
+  const d = decideAutoActivation({ autoActivate: true, content: "I might value solitude more than I let on." });
+  assertEquals(d, { active: true, decision: "activated", reason: "passed_guards" });
+});
+
+Deno.test("decideAutoActivation: clears all guards → activated", () => {
+  const d = decideAutoActivation({ autoActivate: true, content: "I've come to believe I do my best work in long, uninterrupted stretches." });
+  assertEquals(d, { active: true, decision: "activated", reason: "passed_guards" });
 });
