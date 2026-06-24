@@ -661,6 +661,7 @@ export type Database = {
         Row: {
           active: boolean | null
           agent_id: string
+          auto_activation: Json | null
           confidence: number
           confidence_tier: string | null
           content: string
@@ -683,6 +684,7 @@ export type Database = {
         Insert: {
           active?: boolean | null
           agent_id?: string
+          auto_activation?: Json | null
           confidence?: number
           confidence_tier?: string | null
           content: string
@@ -705,6 +707,7 @@ export type Database = {
         Update: {
           active?: boolean | null
           agent_id?: string
+          auto_activation?: Json | null
           confidence?: number
           confidence_tier?: string | null
           content?: string
@@ -3440,6 +3443,39 @@ export type Database = {
         }
         Relationships: []
       }
+      mnemos_belief_review_queue: {
+        Row: {
+          agent_id: string | null
+          confidence: number | null
+          content: string | null
+          created_at: string | null
+          held_at: string | null
+          held_reason: string | null
+          id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          confidence?: never
+          content?: string | null
+          created_at?: string | null
+          held_at?: never
+          held_reason?: never
+          id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          confidence?: never
+          content?: string | null
+          created_at?: string | null
+          held_at?: never
+          held_reason?: never
+          id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       mnemos_belief_snapshot: {
         Row: {
           agent_id: string | null
@@ -3590,6 +3626,14 @@ export type Database = {
           similarity: number
           tags: string[]
         }[]
+      }
+      mnemos_belief_is_legacy_pollution: {
+        Args: { p_content: string; p_source: string }
+        Returns: boolean
+      }
+      mnemos_cleanup_legacy_beliefs: {
+        Args: { p_cohort_only?: boolean; p_commit?: boolean; p_limit?: number }
+        Returns: Json
       }
       mnemos_cohort: { Args: never; Returns: string[] }
       mnemos_digest_backlog_drain: {
