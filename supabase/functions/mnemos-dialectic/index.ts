@@ -21,7 +21,7 @@ import {
   type DialecticRevision,
 } from "../_shared/mnemos/dialectic.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
-import { resolveOpenRouterKeyForUser, resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveOpenRouterKeyForUser, resolveRoleModel } from "../_shared/model-backend.ts";
 import { normalizeAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
@@ -153,10 +153,11 @@ serve(async (req) => {
       convictions: identityDocs.convictions,
     });
 
-    // The dialectic writes Luca's identity (soul / self-model / user-model /
-    // convictions), so it authors in the agent's own voice — its primary model,
-    // not a cheaper off-family one.
-    const dialecticModel = await resolvePrimaryModel(supabase, user.id);
+    // The dialectic writes the agent's identity (soul / self-model / user-model /
+    // convictions), so it authors in the agent's own VOICE — its full primary
+    // model (now agent-aware: a substrate agent uses its own model, not the
+    // user default).
+    const dialecticModel = await resolveRoleModel(supabase, user.id, agentId, "voice");
 
     const modelResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -88,11 +89,8 @@ serve(async (req) => {
       });
     }
 
-    // Resolve model
-    const { data: modelConfig } = await supabase
-      .from("model_configs").select("model_id")
-      .eq("feature_key", "anima_question").eq("is_active", true).maybeSingle();
-    const questionModel = modelConfig?.model_id || "google/gemini-2.5-flash";
+    // Curiosity surfacing is REASONING → mid-tier in the agent's own family.
+    const questionModel = await resolveRoleModel(supabase, user_id, agent_id, "reasoning");
 
     // Gather context
     const [

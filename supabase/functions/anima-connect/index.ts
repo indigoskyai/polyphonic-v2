@@ -5,6 +5,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { logActivity } from "../_shared/activity-log.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 const CONNECTOR_PROMPT = `You are examining two memories from the same mind. Your job: determine if these memories are meaningfully connected.
 
@@ -98,11 +99,8 @@ serve(async (req) => {
       });
     }
 
-    // Resolve model
-    const { data: modelConfig } = await supabase
-      .from("model_configs").select("model_id")
-      .eq("feature_key", "anima_connect").eq("is_active", true).maybeSingle();
-    const connectModel = modelConfig?.model_id || "google/gemini-2.5-flash";
+    // Connection discovery is REASONING → mid-tier in the agent's own family.
+    const connectModel = await resolveRoleModel(supabase, user_id, agent_id, "reasoning");
 
     // Select candidate memory pairs using tag overlap
     const { data: memories } = await supabase

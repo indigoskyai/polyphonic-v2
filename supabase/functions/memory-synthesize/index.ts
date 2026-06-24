@@ -209,6 +209,9 @@ ALL MEMORIES FOR THIS USER (${allMemories.length} total):
 ${memoryDump}`;
 
     // Background synthesis stays on a cheap model; user-facing chat owns the Opus budget.
+    // EXEMPT from the agent-family model rule: this runs on the Lovable free gateway
+    // (ai.gateway.lovable.dev), not the user's OpenRouter BYOK key, so per-agent family
+    // routing (resolveRoleModel) doesn't apply — the gateway dictates the model.
     const synthesisModel = "google/gemini-2.5-flash";
 
     const aiResponse = await withModelRetry(() => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

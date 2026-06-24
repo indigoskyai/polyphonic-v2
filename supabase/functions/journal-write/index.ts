@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
@@ -151,22 +151,9 @@ serve(async (req) => {
       .maybeSingle();
 
     // Fetch admin-configured model for journal
-    const { data: modelConfig } = await supabase
-      .from("model_configs")
-      .select("model_id")
-      .eq("feature_key", "journal")
-      .eq("is_active", true)
-      .maybeSingle();
-
-    // Fetch user's preferred journal model
-    const { data: userSettings } = await supabase
-      .from("user_settings")
-      .select("journal_model")
-      .eq("user_id", user_id)
-      .maybeSingle();
-
-    // Priority: user preference > admin config > hardcoded default
-    const journalModel = (agentConfig.model as string | null) || userSettings?.journal_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
+    // Journaling is VOICE → the agent's own full model. journal_model override
+    // wins; otherwise the agent's primary (agent-aware via resolveRoleModel).
+    const journalModel = await resolveRoleModel(supabase, user_id, agentId, "voice", { overrideColumn: "journal_model" });
 
     const { data: identityDocs } = await supabase
       .from("agent_identity")

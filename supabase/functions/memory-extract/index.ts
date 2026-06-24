@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 // ── Task 1.1: Upgraded extraction prompt with Behavioral Change Test ──
 const EXTRACTION_PROMPT = `You are a memory extraction specialist. Your job is to analyze a conversation and identify information worth remembering permanently.
@@ -291,15 +292,8 @@ serve(async (req) => {
         .join("\n\n");
     }
 
-    // Get admin-configured model for extraction
-    const { data: modelConfig } = await supabase
-      .from("model_configs")
-      .select("model_id")
-      .eq("feature_key", "memory_extract")
-      .eq("is_active", true)
-      .maybeSingle();
-
-    const extractionModel = modelConfig?.model_id || "google/gemini-2.5-flash";
+    // Extraction is MECHANICAL → cheapest model in the agent's own family.
+    const extractionModel = await resolveRoleModel(supabase, user_id, agent_id, "mechanical");
 
     // Get admin-configured system prompt override (if any)
     const { data: promptConfig } = await supabase

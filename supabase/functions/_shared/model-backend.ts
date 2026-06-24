@@ -175,6 +175,113 @@ export async function resolvePrimaryModel(
   return requested || FREE_LUCA_MODEL;
 }
 
+// ── Family-aware role models for autonomous activity ─────────────────────────
+// Every background/autonomous LLM call should run on a model in the AGENT'S OWN
+// family, at the cheapest tier that fits the role: VOICE = the agent's full
+// primary (inner-life must sound like the agent); REASONING = mid tier (belief
+// synthesis/challenge, connection, curiosity, consolidation, dialectic);
+// MECHANICAL = cheapest (extraction/classification). Only the three families
+// whose exact slugs we control are cost-tiered; every other family (x-ai,
+// moonshotai, deepseek, unknown) falls back to the agent's own primary —
+// family-correct and incapable of emitting a non-existent slug.
+
+export type AutonomousRole = "voice" | "reasoning" | "mechanical";
+
+type TierRow = { reasoning: string; mechanical: string };
+export const ROLE_MODEL_TIER_MAP: Record<string, TierRow> = {
+  anthropic: { reasoning: "anthropic/claude-sonnet-4.6", mechanical: "anthropic/claude-haiku-4.5" },
+  openai:    { reasoning: "openai/gpt-5-mini",           mechanical: "openai/gpt-5-mini" },
+  google:    { reasoning: "google/gemini-2.5-pro",       mechanical: "google/gemini-2.5-flash" },
+};
+
+// inlined to keep this foundational module import-light (no cycle risk)
+const NON_SUBSTRATE_FOR_MODEL = new Set(["observer", "guardian"]);
+function normAgentLocal(v: unknown): string {
+  return typeof v === "string" && v.trim() ? v.trim() : "luca";
+}
+function modelFamilyLocal(modelId: string): string {
+  return String(modelId || "").split("/")[0]?.toLowerCase() || "";
+}
+function pickStr(v: unknown): string {
+  return typeof v === "string" && v.trim() ? v.trim() : "";
+}
+
+/** The agent's own primary model (the family anchor). Agent-aware, unlike
+ *  resolvePrimaryModel: substrate agents anchor on agent_configs.model. */
+async function resolveAgentPrimaryModel(
+  supabase: any,
+  userId: string,
+  agentId: string,
+): Promise<string> {
+  const norm = normAgentLocal(agentId);
+  if (norm === "luca" || NON_SUBSTRATE_FOR_MODEL.has(norm.toLowerCase())) {
+    return resolvePrimaryModel(supabase, userId);
+  }
+  // substrate agent: BYOK gate (mirrors resolvePrimaryModel), then its own model
+  const key = await loadUserOpenRouterKey(supabase, userId);
+  if (!key) return FREE_LUCA_MODEL;
+  const { data } = await supabase
+    .from("agent_configs")
+    .select("model")
+    .eq("user_id", userId)
+    .eq("id", norm)
+    .maybeSingle();
+  return pickStr(data?.model) || await resolvePrimaryModel(supabase, userId);
+}
+
+/** The user's EXPLICIT per-role model override, if any (always wins over the
+ *  family default). opts.overrideColumn lets a surface prefer its own column
+ *  (journal_model, dreamer_model). */
+async function resolveRoleOverride(
+  supabase: any,
+  userId: string,
+  role: AutonomousRole,
+  overrideColumn?: string,
+): Promise<string> {
+  if (!userId) return "";
+  const { data } = await supabase
+    .from("user_settings")
+    .select("voice_model, belief_model, synthesis_model, memory_model, dreamer_model, journal_model")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data) return "";
+  if (overrideColumn) {
+    const direct = pickStr((data as Record<string, unknown>)[overrideColumn]);
+    if (direct) return direct;
+  }
+  if (role === "voice") return pickStr(data.voice_model);
+  if (role === "reasoning") return pickStr(data.belief_model) || pickStr(data.synthesis_model);
+  return pickStr(data.memory_model); // mechanical
+}
+
+/**
+ * Resolve the model an autonomous surface should use for an (agent, role).
+ * Precedence: explicit user override → VOICE returns the agent's primary →
+ * family→tier map → safe fallback (the agent's own primary). Never empty.
+ * Kill-switch: env ROLE_MODEL_FAMILY_ALIGN="off" disables tiering (everything
+ * runs on the agent's full primary — family-correct, just not cost-optimized).
+ */
+export async function resolveRoleModel(
+  supabase: any,
+  userId: string,
+  agentId: string,
+  role: AutonomousRole,
+  opts?: { overrideColumn?: string },
+): Promise<string> {
+  const primary = await resolveAgentPrimaryModel(supabase, userId, agentId);
+
+  const override = await resolveRoleOverride(supabase, userId, role, opts?.overrideColumn);
+  if (override) return override;
+
+  if (role === "voice") return primary;
+
+  const aligned = (Deno.env.get("ROLE_MODEL_FAMILY_ALIGN") ?? "on").trim().toLowerCase() !== "off";
+  if (!aligned) return primary;
+
+  const tier = ROLE_MODEL_TIER_MAP[modelFamilyLocal(primary)];
+  return (tier && tier[role]) || primary;
+}
+
 export async function resolveOpenRouterKeyForUser(
   supabase: any,
   userId: string,

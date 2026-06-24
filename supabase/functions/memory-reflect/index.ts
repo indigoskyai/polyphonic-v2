@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
 serve(async (req) => {
@@ -90,13 +90,10 @@ serve(async (req) => {
       });
     }
 
-    // Get model: user settings > admin config > default
-    const [{ data: modelConfig }, { data: memUserSettings }] = await Promise.all([
-      supabase.from("model_configs").select("model_id").eq("feature_key", "memory_reflect").eq("is_active", true).maybeSingle(),
-      supabase.from("user_settings").select("memory_model").eq("user_id", user_id).maybeSingle(),
-    ]);
-
-    const reflectionModel = memUserSettings?.memory_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
+    // Consolidation/decay scoring is MECHANICAL (cost-optimizable filtering/decay
+    // math, not identity synthesis) → cheapest model in the agent's own family.
+    // The "mechanical" role natively honors the user's memory_model override.
+    const reflectionModel = await resolveRoleModel(supabase, user_id, agent_id, "mechanical");
 
     // Get admin-configured prompt
     const { data: promptConfig } = await supabase

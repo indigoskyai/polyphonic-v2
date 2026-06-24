@@ -5,6 +5,7 @@ import { logActivity } from "../_shared/activity-log.ts";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
 
@@ -166,12 +167,9 @@ serve(async (req) => {
       });
     }
 
-    const [{ data: modelConfig }, { data: beliefUserSettings }] = await Promise.all([
-      supabase.from("model_configs").select("model_id").eq("feature_key", "anima_believe").eq("is_active", true).maybeSingle(),
-      supabase.from("user_settings").select("belief_model").eq("user_id", user_id).maybeSingle(),
-    ]);
-
-    const challengeModel = beliefUserSettings?.belief_model || modelConfig?.model_id || "google/gemini-2.5-flash";
+    // Belief challenge is REASONING (identity-shaping) → mid-tier in the agent's
+    // own family. The user's belief_model override is honored by resolveRoleModel.
+    const challengeModel = await resolveRoleModel(supabase, user_id, agent_id, "reasoning");
     const results: any[] = [];
 
     // CRISIS GUARD: a crisis is an acute, transient state — not evidence about whether

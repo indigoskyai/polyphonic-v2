@@ -4,7 +4,7 @@ import { withModelRetry } from "../_shared/modelRetry.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -100,11 +100,8 @@ serve(async (req) => {
       }
     }
 
-    // Resolve model
-    const { data: modelConfig } = await supabase
-      .from("model_configs").select("model_id")
-      .eq("feature_key", "anima_reflect").eq("is_active", true).maybeSingle();
-    const reflectModel = modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
+    // Meta-cognition is VOICE → the agent's own full model (voice_model override honored).
+    const reflectModel = await resolveRoleModel(supabase, user_id, agent_id, "voice");
 
     // Gather context (last 48h focus)
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();

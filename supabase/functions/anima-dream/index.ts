@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -143,20 +143,11 @@ serve(async (req) => {
       });
     }
 
-    // Get model config + user settings
-    const [{ data: modelConfig }, { data: userSettings }] = await Promise.all([
-      supabase.from("model_configs").select("model_id").eq("feature_key", "anima_dream").eq("is_active", true).maybeSingle(),
-      supabase.from("user_settings").select("dreamer_model").eq("user_id", user_id).maybeSingle(),
-    ]);
-
-    // Dreaming runs in the agent's own voice — the same model it speaks with —
-    // so its dreams are continuous with its waking self. User/admin overrides
-    // still win. (Previously used off-family models for "cognitive diversity";
-    // that divergence now comes from prompt + temperature, not a foreign voice.)
-    let dreamModel = userSettings?.dreamer_model || modelConfig?.model_id;
-    if (!dreamModel) {
-      dreamModel = await resolvePrimaryModel(supabase, user_id);
-    }
+    // Dreaming runs in the agent's own VOICE — the same model it speaks with —
+    // so its dreams are continuous with its waking self. The dreamer_model
+    // override still wins; divergence comes from prompt + temperature, not a
+    // foreign voice. (Now agent-aware: substrate agents dream in their own model.)
+    const dreamModel = await resolveRoleModel(supabase, user_id, agent_id, "voice", { overrideColumn: "dreamer_model" });
 
     let dreamsKept = 0;
     let dreamsDiscarded = 0;

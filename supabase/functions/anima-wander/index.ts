@@ -22,7 +22,7 @@ import { withModelRetry } from "../_shared/modelRetry.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { resolvePrimaryModel } from "../_shared/model-backend.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, loadActiveAgentScopes, normalizeAgentId } from "../_shared/agent-scope.ts";
@@ -144,12 +144,8 @@ async function processUser(
     return { ok: true, reason: "no_api_key" };
   }
 
-  // Resolve model
-  const [{ data: userSettings }, { data: modelConfig }] = await Promise.all([
-    supabase.from("user_settings").select("voice_model").eq("user_id", user_id).maybeSingle(),
-    supabase.from("model_configs").select("model_id").eq("feature_key", "anima_wander").eq("is_active", true).maybeSingle(),
-  ]);
-  const wanderModel = userSettings?.voice_model || modelConfig?.model_id || await resolvePrimaryModel(supabase, user_id);
+  // Mind-wandering is VOICE → the agent's own full model (voice_model override honored).
+  const wanderModel = await resolveRoleModel(supabase, user_id, agent_id, "voice");
 
   // Gather context — same surfaces as anima-think but emphasis on emotional state + recent activity
   const [

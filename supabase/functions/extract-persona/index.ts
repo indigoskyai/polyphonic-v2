@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { normalizeAgentId } from "../_shared/agent-scope.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 // ============================================================================
 // EXTRACT-PERSONA: Reconstruct AI companion personality from ChatGPT history
@@ -459,19 +460,12 @@ serve(async (req) => {
     console.log(`[extract-persona] Starting for user ${user_id}, ${rawConversations.length} conversations`);
 
     // ── Resolve API key and model ──
-    const [{ data: decryptedKeyData }, { data: modelConfig }] = await Promise.all([
-      supabase.rpc("decrypt_user_api_key", { p_user_id: user_id }),
-      supabase
-        .from("model_configs")
-        .select("model_id")
-        .eq("feature_key", "persona_extract")
-        .eq("is_active", true)
-        .maybeSingle(),
-    ]);
+    const { data: decryptedKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: user_id });
 
     const userApiKey = typeof decryptedKeyData === "string" ? decryptedKeyData.trim() : "";
     const openrouterKey = userApiKey!;
-    const extractionModel = modelConfig?.model_id || "openai/gpt-4o";
+    // Persona extraction is MECHANICAL → cheapest model in the agent's own family.
+    const extractionModel = await resolveRoleModel(supabase, user_id, agent_id, "mechanical");
 
     // ── Linearize conversations (handle both mapping and pre-parsed formats) ──
     const conversations: Array<{

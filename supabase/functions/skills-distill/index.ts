@@ -11,9 +11,7 @@ import {
   normalizeSkillName,
 } from "../_shared/agents/skills.ts";
 import { resolveScopeAgentId } from "../_shared/agent-scope.ts";
-import { resolveOpenRouterKeyForUser } from "../_shared/model-backend.ts";
-
-const SKILL_DISTILL_MODEL = "anthropic/claude-haiku-4.5";
+import { resolveOpenRouterKeyForUser, resolveRoleModel } from "../_shared/model-backend.ts";
 
 type SkillDraft = {
   name?: string;
@@ -133,6 +131,9 @@ serve(async (req) => {
       .join("\n\n")
       .slice(-12000);
 
+    // Skill distillation is MECHANICAL → cheapest model in the agent's own family.
+    const distillModel = await resolveRoleModel(supabase, user.id, agentId, "mechanical");
+
     const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -142,7 +143,7 @@ serve(async (req) => {
         "X-Title": "Polyphonic Skills Distiller",
       },
       body: JSON.stringify({
-        model: SKILL_DISTILL_MODEL,
+        model: distillModel,
         messages: [
           {
             role: "system",

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { logProcessRan } from "../_shared/activity-gate.ts";
@@ -90,11 +91,8 @@ serve(async (req) => {
       });
     }
 
-    // Resolve model
-    const { data: modelConfig } = await supabase
-      .from("model_configs").select("model_id")
-      .eq("feature_key", "anima_consolidate").eq("is_active", true).maybeSingle();
-    const consolidateModel = modelConfig?.model_id || "google/gemini-2.5-flash";
+    // Consolidation reasoning → mid-tier in the agent's own family.
+    const consolidateModel = await resolveRoleModel(supabase, user_id, agent_id, "reasoning");
 
     // Gather last 24h of data
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

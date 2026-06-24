@@ -111,6 +111,9 @@ function wordSetOverlap(a: string, b: string): number {
 }
 
 const IMPORT_CONFIDENCE_CEILING = 0.85;
+// EXEMPT from the agent-family model rule: this runs on the Lovable free gateway
+// (ai.gateway.lovable.dev), not the user's OpenRouter BYOK key, so per-agent family
+// routing (resolveRoleModel) doesn't apply — the gateway dictates the model.
 const EXTRACTION_MODEL = "google/gemini-2.5-flash";
 
 function calculateStalenessRisk(createTime: number): "low" | "medium" | "high" {

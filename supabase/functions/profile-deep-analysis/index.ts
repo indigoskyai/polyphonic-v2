@@ -7,6 +7,9 @@ import {
 } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
 
+// EXEMPT from the agent-family model rule: this runs on the Lovable free gateway
+// (ai.gateway.lovable.dev), not the user's OpenRouter BYOK key, so per-agent family
+// routing (resolveRoleModel) doesn't apply — the gateway dictates the model.
 const ANALYSIS_MODEL = "google/gemini-2.5-pro";
 
 // ── Pass 1: Linguistic Fingerprinting ──
