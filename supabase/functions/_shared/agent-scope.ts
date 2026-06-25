@@ -64,7 +64,35 @@ export async function loadActiveAgentScopes(
   })).values()]
     .filter((scope) => isSubstrateAgentId((scope as AgentScope).agentId)) as AgentScope[];
 
-  return filterValidAgentScopes(supabase, candidateScopes);
+  // BYOK gate: Mnemos + the autonomous loop are real agent processes, available
+  // only to users who supplied their own API key. Keyless users get free-tier chat
+  // (FREE_LUCA_MODEL) with NO memory/inner-life. Dropping their scopes here gates
+  // every dispatcher that fans out from this list — anima-dispatch, anima-wander,
+  // anima-heartbeat — in one place. (Keyed population mirrors mnemos_cohort().)
+  const keyedScopes = await filterKeyedScopes(supabase, candidateScopes);
+
+  return filterValidAgentScopes(supabase, keyedScopes);
+}
+
+// Keep only scopes whose user has a stored API key (BYOK). Fails CLOSED: if the
+// lookup errors we skip the whole batch rather than risk running agent processes
+// for keyless users.
+async function filterKeyedScopes(
+  supabase: any,
+  scopes: AgentScope[],
+): Promise<AgentScope[]> {
+  const userIds = [...new Set(scopes.map((s) => s.userId))];
+  if (userIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("user_api_keys")
+    .select("user_id")
+    .in("user_id", userIds);
+  if (error) {
+    console.warn("[agent-scope] BYOK key-gate lookup failed; skipping batch:", error.message);
+    return [];
+  }
+  const keyed = new Set((data || []).map((r: { user_id: string }) => r.user_id));
+  return scopes.filter((s) => keyed.has(s.userId));
 }
 
 export async function filterValidAgentScopes(

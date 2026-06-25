@@ -130,6 +130,14 @@ serve(async (req) => {
       const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: uid });
       const userApiKey = (keyData as string | null) ?? null;
 
+      // BYOK gate: consolidation (engram promotion, belief formation, connections)
+      // is a real agent process — never run it for a keyless user. They get
+      // free-tier chat only; no memory substrate is built without their own key.
+      if (!userApiKey) {
+        console.log("[mnemos-consolidate] skipped", { user_id: uid, reason: "no_api_key", force });
+        return { skipped: true, reason: "no_api_key" };
+      }
+
       const engine = new MnemosEngine(supabase, uid, agentId);
       const userResult = await engine.consolidate({
         lookback_hours: body.lookback_hours || 24,
