@@ -13174,40 +13174,44 @@ html {
 .canvas-pane[data-fullscreen="true"] { position: fixed; inset: 0; width: 100%; z-index: 220; border-left: none; }
 .canvas-pane-inner { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-.canvas-resize-handle { position: absolute; left: -3px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
-.canvas-resize-handle::after {
-  content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 2px;
-  background: transparent; transition: background var(--dur-fast) var(--ease-out);
+/* Resize handle — a discoverable grip on the canvas's left edge. */
+.canvas-resize-handle {
+  position: absolute; left: -5px; top: 0; bottom: 0; width: 10px;
+  cursor: col-resize; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
 }
-.canvas-resize-handle:hover::after { background: var(--luca-full, var(--text-soft)); }
+.canvas-resize-handle::after {
+  content: ''; width: 3px; height: 30px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background var(--dur-fast) var(--ease-out), height var(--dur-fast) var(--ease-out);
+}
+.canvas-resize-handle:hover::after,
+body[data-canvas-resizing] .canvas-resize-handle::after { background: var(--luca-full, var(--text-soft)); height: 52px; }
 .canvas-pane[data-fullscreen="true"] .canvas-resize-handle { display: none; }
 
-/* Chat reflows left to make room for the pane (desktop). */
-.chat-view[data-canvas-open="true"] .chat-header,
-.chat-view[data-canvas-open="true"] .chat-agent-selector-mobile,
-.chat-view[data-canvas-open="true"] .chat-scroll-area,
-.chat-view[data-canvas-open="true"] .input-zone {
-  margin-right: var(--canvas-w);
-  transition: margin-right var(--dur-drawer, 380ms) var(--ease-premium);
+/* Chat reflows to make room for the pane. padding-right on .chat-view shrinks
+   the flow content (header / thread / composer all reflow + recenter together),
+   while the absolute pane — positioned against the padding box — stays pinned to
+   the true right edge. Replaces per-element margin-right, which broke the
+   composer's `margin: 0 auto` centering. */
+.chat-view[data-canvas-open="true"] {
+  padding-right: var(--canvas-w);
+  transition: padding-right var(--dur-drawer, 380ms) var(--ease-premium);
 }
-.chat-view[data-canvas-fullscreen="true"] .chat-header,
-.chat-view[data-canvas-fullscreen="true"] .chat-agent-selector-mobile,
-.chat-view[data-canvas-fullscreen="true"] .chat-scroll-area,
-.chat-view[data-canvas-fullscreen="true"] .input-zone { margin-right: 0; }
+.chat-view[data-canvas-fullscreen="true"] { padding-right: 0; }
 
 body[data-canvas-resizing] { cursor: col-resize; user-select: none; }
 body[data-canvas-resizing] .canvas-pane,
-body[data-canvas-resizing] .chat-header,
-body[data-canvas-resizing] .chat-agent-selector-mobile,
-body[data-canvas-resizing] .chat-scroll-area,
-body[data-canvas-resizing] .input-zone { transition: none !important; }
+body[data-canvas-resizing] .chat-view { transition: none !important; }
+/* Shield: during a drag, keep mouse events off the artifact iframe (which would
+   otherwise capture them and stall the resize). */
+body[data-canvas-resizing]::after {
+  content: ''; position: fixed; inset: 0; z-index: 2147483646; cursor: col-resize;
+}
 
 @media (max-width: 768px) {
   .canvas-pane { width: 100%; z-index: 220; }
-  .chat-view[data-canvas-open="true"] .chat-header,
-  .chat-view[data-canvas-open="true"] .chat-agent-selector-mobile,
-  .chat-view[data-canvas-open="true"] .chat-scroll-area,
-  .chat-view[data-canvas-open="true"] .input-zone { margin-right: 0; }
+  .chat-view[data-canvas-open="true"] { padding-right: 0; }
   .canvas-resize-handle { display: none; }
 }
 
