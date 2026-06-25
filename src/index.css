@@ -13174,19 +13174,23 @@ html {
 .canvas-pane[data-fullscreen="true"] { position: fixed; inset: 0; width: 100%; z-index: 220; border-left: none; }
 .canvas-pane-inner { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Resize handle — a discoverable grip on the canvas's left edge. */
+/* Resize handle — a discoverable grip spanning the canvas's full left edge.
+   NOTE: no `display:flex` here — on an absolutely-positioned box it collapsed
+   the top/bottom stretch to a tiny square. The grip is centered with absolute
+   positioning instead, so the hit area stays full-height. */
 .canvas-resize-handle {
-  position: absolute; left: -5px; top: 0; bottom: 0; width: 10px;
+  position: absolute; left: -6px; top: 0; height: 100%; width: 12px;
   cursor: col-resize; z-index: 3;
-  display: flex; align-items: center; justify-content: center;
 }
 .canvas-resize-handle::after {
-  content: ''; width: 3px; height: 30px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px; height: 40px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
   transition: background var(--dur-fast) var(--ease-out), height var(--dur-fast) var(--ease-out);
 }
 .canvas-resize-handle:hover::after,
-body[data-canvas-resizing] .canvas-resize-handle::after { background: var(--luca-full, var(--text-soft)); height: 52px; }
+body[data-canvas-resizing] .canvas-resize-handle::after { background: var(--luca-full, var(--text-soft)); height: 72px; }
 .canvas-pane[data-fullscreen="true"] .canvas-resize-handle { display: none; }
 
 /* Chat reflows to make room for the pane. padding-right on .chat-view shrinks
