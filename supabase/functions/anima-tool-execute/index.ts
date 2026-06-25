@@ -176,7 +176,7 @@ const TOOL_SCHEMAS = [
     function: {
       name: "generate_image",
       description:
-        "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using OpenAI gpt-image-2. Use for anything that should look like a real image. For diagrams, icons, or anything line-based, prefer create_artifact with kind=svg instead.",
+        "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using OpenAI gpt-image-2. Use only for imagery that should look like a real photo or illustration. Do NOT use it for SVG, diagrams, charts, icons, logos, or anything line-based/renderable — the assistant authors those itself as live artifacts.",
       parameters: {
         type: "object",
         properties: {
@@ -206,23 +206,6 @@ const TOOL_SCHEMAS = [
           prompt: { type: "string", description: "What to change about the image." },
         },
         required: ["source_path", "prompt"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_artifact",
-      description: "Create a self-contained renderable artifact: HTML, React, SVG, Mermaid, or rich markdown. Use when the user wants a visible document/component/diagram. Do not use this for custom-agent creation or agent definitions; use forge_agent instead.",
-      parameters: {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["html", "react", "svg", "mermaid", "markdown"] },
-          title: { type: "string", description: "Short title for the artifact header" },
-          content: { type: "string", description: "Artifact source code or markdown" },
-          iterates_on: { type: "string", description: "Optional artifact id this revises" },
-        },
-        required: ["kind", "title", "content"],
       },
     },
   },
@@ -279,7 +262,6 @@ Available tools:
 - browse: Open a real browser session for web pages that need browser behavior.
 - generate_image: Generate a high-quality raster image (gpt-image-2). Use for photographic, painterly, or illustrative imagery.
 - edit_image: Iterate on the most recently generated image (e.g. "make it darker", "swap the background"). Pass the storage_path from the prior image.
-- create_artifact: Create a rendered artifact (HTML, React, SVG, Mermaid, markdown). Use SVG for icons/diagrams/charts/logos.
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
 - update_self_model: Luca updates their self-model from evidence about how they are showing up.
@@ -291,8 +273,7 @@ Rules:
 - If the user provides a URL or asks to read/summarize a link, use read_url.
 - If the task needs clicking, page state, or browser-only behavior, use browse.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
-- For icons, line diagrams, simple logos, charts, flowcharts, or anything that should be vector/clean lines, use create_artifact with kind="svg" instead of generate_image.
-- Never use create_artifact to create, define, or test a custom agent. Agent creation must use forge_agent or, if underspecified, a clarifying question.
+- Do NOT use any tool to build HTML pages, web apps, SVG graphics, React components, Mermaid diagrams, charts, or code/markup. The assistant writes those itself, directly in its reply, as live artifacts — there is no artifact tool here. Only reach for generate_image when the user wants raster imagery that should look like a real photo or illustration.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
 - If the user asks to create, build, make, design, forge, or revise a custom agent, use the tool named exactly forge_agent once there is enough identity detail to draft the full Open Clause shape. Do not call ForgeAgentBlueprint or invent another tool name. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
@@ -822,21 +803,6 @@ serve(async (req) => {
               input: args,
               output,
             };
-          } else if (fnName === "create_artifact") {
-            clearTimeout(timeout);
-            const output = await executeCreateArtifact(
-              supabase,
-              userId,
-              typeof thread_id === "string" ? thread_id : null,
-              typeof source_message_id === "string" ? source_message_id : null,
-              args,
-            );
-            return {
-              tool_call_id: tc.id,
-              tool: fnName,
-              input: args,
-              output,
-            };
           } else if (fnName === "dispatch_subagent") {
             clearTimeout(timeout);
             const output = await executeDispatchSubagent(
@@ -1180,54 +1146,4 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, Math.round(parsed)));
-}
-
-async function executeCreateArtifact(
-  supabase: any,
-  userId: string | null,
-  threadId: string | null,
-  sourceMessageId: string | null,
-  args: any,
-) {
-  if (!userId || !threadId) return { error: "Missing user or thread context" };
-
-  const validKinds = new Set(["html", "react", "svg", "mermaid", "markdown"]);
-  const kind = String(args.kind || "");
-  const title = String(args.title || "Untitled artifact").trim().slice(0, 120);
-  const content = String(args.content || "").trim();
-  const parentArtifactId = typeof args.iterates_on === "string" && args.iterates_on.trim()
-    ? args.iterates_on.trim()
-    : null;
-
-  if (!validKinds.has(kind)) return { error: "Invalid artifact kind" };
-  if (!content) return { error: "Artifact content is required" };
-
-  let version = 1;
-  if (parentArtifactId) {
-    const { data: parent } = await supabase
-      .from("artifacts")
-      .select("version")
-      .eq("id", parentArtifactId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    version = Number(parent?.version || 0) + 1;
-  }
-
-  const { data, error } = await supabase
-    .from("artifacts")
-    .insert({
-      user_id: userId,
-      thread_id: threadId,
-      source_message_id: sourceMessageId,
-      kind,
-      title,
-      content,
-      parent_artifact_id: parentArtifactId,
-      version,
-    })
-    .select("id, kind, title, version")
-    .single();
-
-  if (error) return { error: error.message };
-  return { ok: true, artifact: data };
 }

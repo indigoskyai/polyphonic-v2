@@ -44,6 +44,7 @@ import {
 import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
+import { extractArtifactsFromContent } from "../_shared/artifacts/extract.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { claimIdempotencyKey, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
@@ -728,11 +729,16 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), create_artifact (kind=svg for vector graphics, kind=code for code blocks), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
+      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), web_search + read_url (live web research with citations), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
       : "";
+    // Renderable artifacts are authored by the model itself, directly in its
+    // reply, as fenced code blocks — never via a tool. Advertised on every turn
+    // so each agent/model builds its own artifacts, like a standard chat app.
+    const artifactNote =
+      "\n\nBuilding artifacts: when the user asks you to build, make, or create something renderable and self-contained — a full HTML page or web app, an SVG graphic, a React component, or a Mermaid diagram — write the COMPLETE source yourself as a single fenced code block tagged with its language (```html, ```svg, ```jsx, or ```mermaid). It renders immediately as a live, interactive artifact the user can open, edit, and download. Author the whole thing directly in your reply; there is no separate tool and nothing to wait on. Keep ordinary code (short examples, shell commands, snippets) as normal inline code blocks — only those renderable kinds become artifacts.";
     // Build base messages array
     const baseMessages: any[] = [
-      { role: "system", content: turnSystemPrompt + toolCapabilityNote },
+      { role: "system", content: turnSystemPrompt + artifactNote + toolCapabilityNote },
     ];
     if (history) {
       for (const msg of history) {
@@ -2150,6 +2156,40 @@ interface SavedAssistantMessageResult {
   duplicate: boolean;
 }
 
+/**
+ * Persist the renderable fenced blocks the model authored in its reply to the
+ * `artifacts` table, linked to the saved assistant message. The frontend shows
+ * these live during streaming (extractStreamingArtifacts) and reloads them from
+ * the table on done / refresh; this insert is what lets them survive a reload.
+ * Best-effort — never throws into the turn.
+ */
+async function persistArtifactsFromContent(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  params: { threadId: string; userId: string; messageId: string | null; content: string },
+): Promise<void> {
+  const { threadId, userId, messageId, content } = params;
+  if (!messageId || !threadId || !userId || !content) return;
+  const artifacts = extractArtifactsFromContent(content);
+  if (artifacts.length === 0) return;
+  try {
+    const { error } = await supabase.from("artifacts").insert(
+      artifacts.map((a) => ({
+        user_id: userId,
+        thread_id: threadId,
+        source_message_id: messageId,
+        kind: a.kind,
+        title: a.title,
+        content: a.content,
+        version: 1,
+      })),
+    );
+    if (error) console.warn("[chat-multi] artifact persist failed:", error.message);
+  } catch (e) {
+    console.warn("[chat-multi] artifact persist threw:", e);
+  }
+}
+
 async function saveAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -2230,6 +2270,13 @@ async function saveAssistantMessage(
   if (insertError) {
     throw new Error(`Failed to save assistant message: ${insertError.message}`);
   }
+
+  await persistArtifactsFromContent(supabase, {
+    threadId,
+    userId,
+    messageId: inserted?.id ?? null,
+    content,
+  });
 
   // Legacy variants sidecar (kept for backward compat with any existing
   // readers; new readers should use messages.metadata).
@@ -2498,6 +2545,14 @@ async function singleModelStream(
             throw new Error(`Failed to save assistant message: ${insertError.message}`);
           }
           insertedMessage = inserted;
+        }
+        if (!assistantWasDuplicate) {
+          await persistArtifactsFromContent(supabase, {
+            threadId,
+            userId,
+            messageId: insertedMessage?.id ?? null,
+            content: fullContent,
+          });
         }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
