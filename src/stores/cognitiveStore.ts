@@ -294,19 +294,15 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       .order('confidence', { ascending: false })
       .limit(80);
 
-    // Memory stats
-    const statsPromises = [
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'active'),
-      supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'dormant'),
-      supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-      supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-      supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-    ];
+    // Memory stats — one RPC instead of six per-table count(*) round-trips.
+    const statsPromise = (supabase as any).rpc('cognitive_memory_stats', {
+      p_user_id: userId,
+      p_agent_id: agentId,
+    });
 
     // Use allSettled so a single failure (e.g. missing journal_entries table) doesn't nuke all mind data.
     const results = await Promise.allSettled([
-      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, journalPromise, beliefsTablePromise, ...statsPromises,
+      dreamsPromise, insightsPromise, reflectionsPromise, wanderingsPromise, journalPromise, beliefsTablePromise, statsPromise,
     ]);
     const pick = <T,>(i: number): { data?: T[]; count?: number } => {
       const r = results[i];
@@ -327,6 +323,10 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       created_at?: string | null;
       updated_at?: string | null;
     }>(5);
+    const statsR = results[6];
+    const statsRow = statsR.status === 'fulfilled'
+      ? (Array.isArray((statsR.value as any)?.data) ? (statsR.value as any).data[0] : (statsR.value as any)?.data)
+      : null;
 
     const beliefsFromTable: Belief[] = (beliefsTableRes.data ?? []).map((b) => ({
       id: b.id,
@@ -349,15 +349,16 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       // Prefer beliefs from the table (live, authoritative) over whatever stale JSONB was in cognitive_state.
       ...(beliefsFromTable.length > 0 ? { beliefs: beliefsFromTable } : {}),
       memoryStats: {
-        total_engrams: pick(6).count ?? 0,
-        active: pick(7).count ?? 0,
-        dormant: pick(8).count ?? 0,
-        archived: pick(9).count ?? 0,
-        connections: pick(10).count ?? 0,
-        beliefs_count: pick(11).count ?? 0,
+        total_engrams: Number(statsRow?.total_engrams ?? 0),
+        active: Number(statsRow?.active ?? 0),
+        dormant: Number(statsRow?.dormant ?? 0),
+        archived: Number(statsRow?.archived ?? 0),
+        connections: Number(statsRow?.connections ?? 0),
+        beliefs_count: Number(statsRow?.beliefs_count ?? 0),
       },
     });
   },
+
 
   subscribe: (userId: string, agentId = 'luca') => {
     const isCurrentScope = () => get().scope?.userId === userId && get().scope?.agentId === agentId;
@@ -427,38 +428,41 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       })
       .subscribe();
 
-    // Keep engram + belief + connection counts live. memoryStats was previously
-    // frozen to its loadMindData snapshot, so users saw a stale "total engrams"
-    // number even as Mnemos kept writing new engrams in the background.
+    // Keep engram + belief + connection counts live. Debounced + rate-limited
+    // because Mnemos writes can fire dozens of engrams per turn and each one
+    // would otherwise trigger a fresh stats round-trip.
     let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastStatsRefreshAt = 0;
+    const STATS_DEBOUNCE_MS = 4000;
+    const STATS_MIN_INTERVAL_MS = 15000;
     const refreshMemoryStats = () => {
       if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+      const sinceLast = Date.now() - lastStatsRefreshAt;
+      const wait = Math.max(STATS_DEBOUNCE_MS, STATS_MIN_INTERVAL_MS - sinceLast);
       statsRefreshTimer = setTimeout(async () => {
         statsRefreshTimer = null;
         if (!isCurrentScope()) return;
-        const [totalR, activeR, dormantR, archivedR, connR, beliefsR] = await Promise.allSettled([
-          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'active'),
-          supabase.from('engrams').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId).eq('state', 'dormant'),
-          supabase.from('engram_archive').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-          supabase.from('connections').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-          supabase.from('beliefs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('agent_id', agentId),
-        ]);
-        if (!isCurrentScope()) return;
-        const pickCount = (r: PromiseSettledResult<{ count: number | null }>): number =>
-          r.status === 'fulfilled' ? (r.value.count ?? 0) : 0;
+        lastStatsRefreshAt = Date.now();
+        const { data, error } = await (supabase as any).rpc('cognitive_memory_stats', {
+          p_user_id: userId,
+          p_agent_id: agentId,
+        });
+        if (error || !isCurrentScope()) return;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) return;
         set({
           memoryStats: {
-            total_engrams: pickCount(totalR),
-            active: pickCount(activeR),
-            dormant: pickCount(dormantR),
-            archived: pickCount(archivedR),
-            connections: pickCount(connR),
-            beliefs_count: pickCount(beliefsR),
+            total_engrams: Number(row.total_engrams ?? 0),
+            active: Number(row.active ?? 0),
+            dormant: Number(row.dormant ?? 0),
+            archived: Number(row.archived ?? 0),
+            connections: Number(row.connections ?? 0),
+            beliefs_count: Number(row.beliefs_count ?? 0),
           },
         });
-      }, 1500);
+      }, wait);
     };
+
 
     const onScopedChange = (payload: { new?: { agent_id?: string | null } | null; old?: { agent_id?: string | null } | null }) => {
       const row = (payload.new ?? payload.old) as { agent_id?: string | null } | null;
