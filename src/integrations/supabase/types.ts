@@ -3666,6 +3666,7 @@ export type Database = {
         }
         Returns: number
       }
+      mnemos_run_belief_challenge_cohort: { Args: never; Returns: Json }
       mnemos_run_digest_autoreview_cohort: {
         Args: { p_arousal_max?: number; p_surprise_max?: number }
         Returns: Json
