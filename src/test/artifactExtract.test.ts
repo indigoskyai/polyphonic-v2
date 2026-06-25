@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { extractArtifactsFromContent } from '../../supabase/functions/_shared/artifacts/extract.ts';
+import { extractArtifactsFromContent, persistArtifactsFromContent } from '../../supabase/functions/_shared/artifacts/extract.ts';
 
 function readRepoFile(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
@@ -46,13 +46,47 @@ describe('extractArtifactsFromContent — model-authored artifacts', () => {
   });
 });
 
+describe('persistArtifactsFromContent (shared by classic + agent runtimes)', () => {
+  const mockSb = () => {
+    const calls: any[] = [];
+    return { calls, from: () => ({ insert: async (rows: any) => { calls.push(rows); return { error: null }; } }) };
+  };
+  const htmlFence = '```html\n<html><body><h1>Hi</h1></body></html>\n```';
+
+  it('inserts one row per promoted artifact, linked to the message', async () => {
+    const sb = mockSb();
+    await persistArtifactsFromContent(sb as any, { threadId: 't1', userId: 'u1', messageId: 'm1', content: htmlFence });
+    expect(sb.calls).toHaveLength(1);
+    expect(sb.calls[0]).toHaveLength(1);
+    expect(sb.calls[0][0]).toMatchObject({ user_id: 'u1', thread_id: 't1', source_message_id: 'm1', kind: 'html', version: 1 });
+  });
+
+  it('no-ops without a messageId or when there are no artifacts', async () => {
+    const a = mockSb();
+    await persistArtifactsFromContent(a as any, { threadId: 't1', userId: 'u1', messageId: null, content: htmlFence });
+    expect(a.calls).toHaveLength(0);
+    const b = mockSb();
+    await persistArtifactsFromContent(b as any, { threadId: 't1', userId: 'u1', messageId: 'm1', content: 'just prose, no fence' });
+    expect(b.calls).toHaveLength(0);
+  });
+});
+
 describe('artifact authoring is wired to the model, not the planner', () => {
   it('chat-multi persists model-authored fenced blocks + advertises the instruction', () => {
     const src = readRepoFile('supabase/functions/chat-multi/index.ts');
-    expect(src).toContain('extractArtifactsFromContent');
     expect(src).toContain('persistArtifactsFromContent');
+    expect(src).toContain('artifacts/extract.ts'); // shared helper
     expect(src).toContain('const artifactNote');
     expect(src).toContain('turnSystemPrompt + artifactNote + toolCapabilityNote');
+    expect(src).toContain('options.maxTokens ?? 16000'); // room for real artifacts, not 4096
+  });
+
+  it('the agent (SDK) runtime persists artifacts and has budget for big builds', () => {
+    const src = readRepoFile('supabase/functions/_shared/agent-runtime/openrouter-agent.ts');
+    expect(src).toContain('persistArtifactsFromContent');
+    expect(src).toContain('DEFAULT_MAX_OUTPUT_TOKENS = 16000');
+    expect(src).toContain('DEFAULT_MAX_AGENT_COST_USD = 1.0');
+    expect(src).not.toContain('maxOutputTokens: 4096'); // the empty/truncated-reply cause
   });
 
   it('the gemini tool-planner no longer authors artifacts (timeout path removed)', () => {

@@ -66,3 +66,38 @@ function titleFor(kind: ArtifactKind, body: string): string {
   if (kind === "react") return "React preview";
   return "Artifact";
 }
+
+/**
+ * Persist the renderable fenced blocks the model authored in its reply to the
+ * `artifacts` table, linked to the saved assistant message. The frontend shows
+ * these live during streaming (extractStreamingArtifacts) and reloads them from
+ * the table on done / refresh; this insert is what lets them survive a reload
+ * and drives the canvas auto-open. Shared by the classic chat path and the
+ * OpenRouter agent runtime. Best-effort — never throws into the turn.
+ */
+export async function persistArtifactsFromContent(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  params: { threadId: string; userId: string; messageId: string | null; content: string },
+): Promise<void> {
+  const { threadId, userId, messageId, content } = params;
+  if (!messageId || !threadId || !userId || !content) return;
+  const artifacts = extractArtifactsFromContent(content);
+  if (artifacts.length === 0) return;
+  try {
+    const { error } = await supabase.from("artifacts").insert(
+      artifacts.map((a) => ({
+        user_id: userId,
+        thread_id: threadId,
+        source_message_id: messageId,
+        kind: a.kind,
+        title: a.title,
+        content: a.content,
+        version: 1,
+      })),
+    );
+    if (error) console.warn("[artifacts] persist failed:", error.message);
+  } catch (e) {
+    console.warn("[artifacts] persist threw:", e);
+  }
+}

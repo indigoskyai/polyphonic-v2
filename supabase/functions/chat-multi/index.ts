@@ -44,7 +44,7 @@ import {
 import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
-import { extractArtifactsFromContent } from "../_shared/artifacts/extract.ts";
+import { persistArtifactsFromContent } from "../_shared/artifacts/extract.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { claimIdempotencyKey, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { resolveChatBackend, type ChatBackend } from "../_shared/model-backend.ts";
@@ -2156,40 +2156,6 @@ interface SavedAssistantMessageResult {
   duplicate: boolean;
 }
 
-/**
- * Persist the renderable fenced blocks the model authored in its reply to the
- * `artifacts` table, linked to the saved assistant message. The frontend shows
- * these live during streaming (extractStreamingArtifacts) and reloads them from
- * the table on done / refresh; this insert is what lets them survive a reload.
- * Best-effort — never throws into the turn.
- */
-async function persistArtifactsFromContent(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  params: { threadId: string; userId: string; messageId: string | null; content: string },
-): Promise<void> {
-  const { threadId, userId, messageId, content } = params;
-  if (!messageId || !threadId || !userId || !content) return;
-  const artifacts = extractArtifactsFromContent(content);
-  if (artifacts.length === 0) return;
-  try {
-    const { error } = await supabase.from("artifacts").insert(
-      artifacts.map((a) => ({
-        user_id: userId,
-        thread_id: threadId,
-        source_message_id: messageId,
-        kind: a.kind,
-        title: a.title,
-        content: a.content,
-        version: 1,
-      })),
-    );
-    if (error) console.warn("[chat-multi] artifact persist failed:", error.message);
-  } catch (e) {
-    console.warn("[chat-multi] artifact persist threw:", e);
-  }
-}
-
 async function saveAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -2351,7 +2317,7 @@ async function singleModelStream(
             model,
             messages,
             stream: true,
-            max_tokens: options.maxTokens ?? 4096,
+            max_tokens: options.maxTokens ?? 16000,
             ...reasoningParams,
           }),
           signal: AbortSignal.timeout(120000),

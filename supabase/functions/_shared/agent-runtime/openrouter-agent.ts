@@ -11,6 +11,7 @@ import {
 } from "../continuity/index.ts";
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
+import { persistArtifactsFromContent } from "../artifacts/extract.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -55,7 +56,11 @@ interface RuntimeToolResult {
 }
 
 const DEFAULT_MAX_AGENT_STEPS = 5;
-const DEFAULT_MAX_AGENT_COST_USD = 0.35;
+// Headroom for a full turn: reasoning + a substantial artifact build can run
+// well past the old $0.35 / 4k-token ceilings (which caused empty/truncated
+// artifact replies in agent mode). Both stay env-overridable.
+const DEFAULT_MAX_AGENT_COST_USD = 1.0;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
 const FORGE_MODELS = [
   "anthropic/claude-opus-4.8",
@@ -223,7 +228,7 @@ async function runOpenRouterAgentSdkTurn(
       stepCountIs(getNumberEnv("OPENROUTER_AGENT_SDK_MAX_STEPS", DEFAULT_MAX_AGENT_STEPS)),
       maxCost(getNumberEnv("OPENROUTER_AGENT_SDK_MAX_COST_USD", DEFAULT_MAX_AGENT_COST_USD)),
     ],
-    maxOutputTokens: 4096,
+    maxOutputTokens: getNumberEnv("OPENROUTER_AGENT_SDK_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
     metadata: {
       polyphonic_runtime: "openrouter_agent_sdk",
       thread_id: options.threadId,
@@ -365,6 +370,15 @@ async function runOpenRouterAgentSdkTurn(
       throw new Error(`Failed to save assistant message: ${insertError.message}`);
     }
     insertedMessage = inserted;
+  }
+
+  if (!assistantWasDuplicate) {
+    await persistArtifactsFromContent(options.supabase, {
+      threadId: options.threadId,
+      userId: options.userId,
+      messageId: insertedMessage?.id ?? null,
+      content: finalContent,
+    });
   }
 
   await options.supabase
