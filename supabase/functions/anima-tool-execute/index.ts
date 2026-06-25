@@ -756,10 +756,13 @@ serve(async (req) => {
 
           if (fnName === "web_search") {
             edgeFn = "anima-web-search";
-            body = { query: args.query };
+            // Service-role call: anima-web-search resolves the user (and their
+            // OpenRouter key) from body.user_id, so it MUST be passed or the
+            // call 401s and the agent silently loses web access.
+            body = { user_id: userId, query: args.query };
           } else if (fnName === "read_url") {
             edgeFn = "anima-web-read";
-            body = { url: args.url, focus: args.focus };
+            body = { user_id: userId, url: args.url, focus: args.focus };
           } else if (fnName === "browse") {
             edgeFn = "anima-browser";
             body = {
