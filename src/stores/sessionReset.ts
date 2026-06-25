@@ -5,6 +5,7 @@ import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useArtifactStore } from '@/stores/artifactStore';
 import { useAttachmentStore } from '@/stores/attachmentStore';
 import { useBrowserSessionStore } from '@/stores/browserSessionStore';
+import { useCanvasStore } from '@/stores/canvasStore';
 import { useCheckpointStore } from '@/stores/checkpointStore';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { useDigestStore } from '@/stores/digestStore';
@@ -158,6 +159,7 @@ export function resetClientSessionStores(): void {
     expanded: false,
   });
   useArtifactStore.setState({ byThread: {}, current: null });
+  useCanvasStore.setState({ isOpen: false, activeArtifactId: null, fullscreen: false, seenByThread: {} });
   useProfileCanvasStore.setState({
     profile: null,
     items: [],

@@ -12,6 +12,24 @@ const KIND_MAP: Record<string, ArtifactKind> = {
 
 const MIN_LINES = 30;
 
+/** The artifact kind a fenced block maps to, or null if it's just code. */
+export function fenceKind(lang: string): ArtifactKind | null {
+  return KIND_MAP[(lang || '').toLowerCase()] || null;
+}
+
+/**
+ * Whether a fenced block should be promoted to an artifact (vs stay inline as a
+ * regular code block). The single source of truth shared by the streaming
+ * extractor, the backend persister's mirror, and RichBody's code-wall
+ * suppression: a renderable kind that is either substantial (>= MIN_LINES) or
+ * visibly complete markup.
+ */
+export function isPromotableFence(lang: string, body: string): boolean {
+  if (!fenceKind(lang)) return false;
+  const lines = body.split('\n').length;
+  return lines >= MIN_LINES || /<\/(html|svg|body)>/i.test(body);
+}
+
 /**
  * Scan in-progress streamed content for fenced blocks that should be
  * promoted to live artifact previews. Returns ephemeral Artifact-like
@@ -34,11 +52,8 @@ export function extractStreamingArtifacts(
   while ((match = re.exec(source)) !== null) {
     const lang = (match[1] || '').toLowerCase();
     const body = match[2] || '';
-    const kind = KIND_MAP[lang];
-    if (!kind) { idx++; continue; }
-    const lines = body.split('\n').length;
-    // Allow shorter html/svg if they look complete (< full open).
-    if (lines < MIN_LINES && !/<\/(html|svg|body)>/i.test(body)) { idx++; continue; }
+    const kind = fenceKind(lang);
+    if (!kind || !isPromotableFence(lang, body)) { idx++; continue; }
     const id = `stream-${kind}-${idx}-${hashString(body.slice(0, 256))}`;
     found.push({
       id,

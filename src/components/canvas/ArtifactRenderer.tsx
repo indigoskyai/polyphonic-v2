@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Code2, Eye, RefreshCw, Copy, Check, Download, ExternalLink } from 'lucide-react';
+import { Code2, Eye, RefreshCw, Copy, Check, Download, ExternalLink, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RichBody from '@/components/rich/RichBody';
 import CodeBlock from '@/components/rich/CodeBlock';
 import type { Artifact } from '@/stores/artifactStore';
-
-function htmlDoc(content: string) {
-  if (/<html[\s>]/i.test(content) || /<!doctype/i.test(content)) return content;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://esm.sh; font-src https: data:;"></head><body style="margin:0;font-family:system-ui,-apple-system,sans-serif;">${content}</body></html>`;
-}
+import { buildHtmlDoc, buildReactRuntimeDoc } from './artifactRuntime';
 
 const EXT_FOR_KIND: Record<string, string> = {
   html: 'html', svg: 'svg', mermaid: 'mmd', markdown: 'md', react: 'tsx',
@@ -17,6 +13,17 @@ const EXT_FOR_KIND: Record<string, string> = {
 const LANG_FOR_KIND: Record<string, string> = {
   html: 'html', svg: 'xml', mermaid: 'mermaid', markdown: 'markdown', react: 'tsx',
 };
+
+/** Diagnostics posted by the artifact iframe runtime (artifactRuntime.ts). */
+export interface RuntimeMessage {
+  __artifact: true;
+  type: 'ready' | 'error' | 'console';
+  kind?: string;
+  level?: string;
+  message?: string;
+  stack?: string;
+  args?: string[];
+}
 
 function MermaidView({ source }: { source: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -50,15 +57,61 @@ function MermaidView({ source }: { source: string }) {
   return <div ref={ref} className="mermaid-host" style={{ display: 'flex', justifyContent: 'center', padding: 24, background: 'var(--surface-1)' }} />;
 }
 
-export default function ArtifactRenderer({ artifact, compact = false }: { artifact: Artifact; compact?: boolean }) {
+interface ArtifactRendererProps {
+  artifact: Artifact;
+  /** Inline compact card (320px). */
+  compact?: boolean;
+  /** Fill the parent (canvas pane / fullscreen) instead of a fixed height. */
+  fill?: boolean;
+  /** Controlled preview/code toggle. */
+  view?: 'preview' | 'code';
+  onViewChange?: (view: 'preview' | 'code') => void;
+  /** When set, shows a close (X) button (canvas pane). */
+  onClose?: () => void;
+  /** When set, shows a fullscreen toggle. */
+  onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
+  /** In the canvas, the external-link opens /canvas/:id in a NEW tab rather than navigating. */
+  inCanvas?: boolean;
+  /** Receives runtime diagnostics from the iframe (Phase 2 console). */
+  onRuntimeMessage?: (msg: RuntimeMessage) => void;
+}
+
+export default function ArtifactRenderer({
+  artifact,
+  compact = false,
+  fill = false,
+  view: viewProp,
+  onViewChange,
+  onClose,
+  onToggleFullscreen,
+  isFullscreen = false,
+  inCanvas = false,
+  onRuntimeMessage,
+}: ArtifactRendererProps) {
   const navigate = useNavigate();
-  const [view, setView] = useState<'preview' | 'code'>('preview');
+  const [internalView, setInternalView] = useState<'preview' | 'code'>('preview');
+  const view = viewProp ?? internalView;
+  const setView = (v: 'preview' | 'code') => { onViewChange ? onViewChange(v) : setInternalView(v); };
   const [iframeKey, setIframeKey] = useState(0);
   const [copied, setCopied] = useState(false);
-  const height = compact ? 320 : 620;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const ext = EXT_FOR_KIND[artifact.kind] || 'txt';
   const lang = LANG_FOR_KIND[artifact.kind] || 'text';
+  const isFrameKind = artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'react';
+
+  // Forward iframe runtime diagnostics (only from THIS artifact's frame).
+  useEffect(() => {
+    if (!onRuntimeMessage) return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.data && e.data.__artifact && e.source === iframeRef.current?.contentWindow) {
+        onRuntimeMessage(e.data as RuntimeMessage);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [onRuntimeMessage]);
 
   const copy = async () => {
     try {
@@ -76,53 +129,60 @@ export default function ArtifactRenderer({ artifact, compact = false }: { artifa
     URL.revokeObjectURL(url);
   };
 
+  const frameHeight = fill ? '100%' : (compact ? 320 : 620);
+  const codeMaxHeight = fill ? undefined : (compact ? 320 : 620);
+
   const previewBody = useMemo(() => {
     if (view === 'code') {
       return (
-        <div style={{ background: 'var(--floor)', maxHeight: height, overflow: 'auto' }}>
+        <div style={{ background: 'var(--floor)', height: fill ? '100%' : undefined, maxHeight: codeMaxHeight, overflow: 'auto' }}>
           <CodeBlock lang={lang} source={artifact.content} />
         </div>
       );
     }
     if (artifact.kind === 'markdown') {
-      return <div style={{ padding: 18, background: 'var(--surface-1)' }}><RichBody source={artifact.content} /></div>;
+      return <div style={{ padding: 18, background: 'var(--surface-1)', height: fill ? '100%' : undefined, overflow: 'auto' }}><RichBody source={artifact.content} /></div>;
     }
     if (artifact.kind === 'mermaid') {
       return <MermaidView source={artifact.content} />;
     }
-    if (artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'react') {
+    if (isFrameKind) {
+      const srcDoc = artifact.kind === 'react' ? buildReactRuntimeDoc(artifact.content) : buildHtmlDoc(artifact.content);
       return (
         <iframe
-          key={iframeKey}
+          ref={iframeRef}
+          key={`${artifact.id}:${artifact.version}:${iframeKey}`}
           title={artifact.title || 'Artifact preview'}
-          sandbox="allow-scripts"
-          srcDoc={htmlDoc(artifact.content)}
-          style={{ width: '100%', height, border: 'none', background: '#fff', display: 'block' }}
+          sandbox="allow-scripts allow-popups allow-forms allow-modals"
+          srcDoc={srcDoc}
+          style={{ width: '100%', height: frameHeight, border: 'none', background: '#fff', display: 'block' }}
         />
       );
     }
     return (
-      <pre style={{ margin: 0, padding: 16, color: 'var(--text-body)', background: 'var(--surface-1)', fontSize: 12, lineHeight: 1.6, maxHeight: height, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+      <pre style={{ margin: 0, padding: 16, color: 'var(--text-body)', background: 'var(--surface-1)', fontSize: 12, lineHeight: 1.6, height: fill ? '100%' : undefined, maxHeight: codeMaxHeight, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
         {artifact.content}
       </pre>
     );
-  }, [view, artifact, height, iframeKey, lang]);
+  }, [view, artifact, fill, compact, iframeKey, lang, frameHeight, codeMaxHeight, isFrameKind]);
 
-  const canRefresh = view === 'preview' && (artifact.kind === 'html' || artifact.kind === 'svg' || artifact.kind === 'react');
+  const canRefresh = view === 'preview' && isFrameKind;
 
   return (
     <div className="artifact-renderer" style={{
-      border: '1px solid var(--border-subtle)',
-      borderRadius: 'var(--radius-md)',
+      border: fill ? 'none' : '1px solid var(--border-subtle)',
+      borderRadius: fill ? 0 : 'var(--radius-md)',
       overflow: 'hidden',
       background: 'var(--floor)',
-      boxShadow: '0 1px 0 rgba(255,255,255,0.02) inset, 0 12px 30px -22px rgba(0,0,0,0.6)',
+      boxShadow: fill ? 'none' : '0 1px 0 rgba(255,255,255,0.02) inset, 0 12px 30px -22px rgba(0,0,0,0.6)',
+      ...(fill ? { height: '100%', display: 'flex', flexDirection: 'column' as const } : {}),
     }}>
       <div className="artifact-toolbar" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '6px 10px 6px 14px',
         background: 'var(--surface-1)',
         borderBottom: '1px solid var(--border-subtle)',
+        flex: fill ? '0 0 auto' : undefined,
       }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--luca-full, var(--text-ghost))', boxShadow: '0 0 6px rgba(201,168,124,0.35)' }} />
@@ -130,7 +190,7 @@ export default function ArtifactRenderer({ artifact, compact = false }: { artifa
             {artifact.kind}{artifact.version > 1 ? ` · v${artifact.version}` : ''}
           </span>
           {artifact.title && (
-            <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginLeft: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320 }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginLeft: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: fill ? 420 : 320 }}>
               {artifact.title}
             </span>
           )}
@@ -155,14 +215,28 @@ export default function ArtifactRenderer({ artifact, compact = false }: { artifa
           <button type="button" className="code-icon-btn" onClick={copy} title={copied ? 'Copied' : 'Copy'} aria-label="Copy">
             {copied ? <Check size={12} /> : <Copy size={12} />}
           </button>
-          {!compact && (
+          {inCanvas ? (
+            <button type="button" className="code-icon-btn" onClick={() => window.open(`/canvas/${artifact.id}`, '_blank', 'noopener')} title="Open in new tab" aria-label="Open in new tab">
+              <ExternalLink size={12} />
+            </button>
+          ) : !compact ? (
             <button type="button" className="code-icon-btn" onClick={() => navigate(`/canvas/${artifact.id}`)} title="Open in canvas" aria-label="Open in canvas">
               <ExternalLink size={12} />
+            </button>
+          ) : null}
+          {onToggleFullscreen && (
+            <button type="button" className="code-icon-btn" onClick={onToggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} aria-label="Toggle fullscreen">
+              {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
+          )}
+          {onClose && (
+            <button type="button" className="code-icon-btn" onClick={onClose} title="Close" aria-label="Close canvas">
+              <X size={13} />
             </button>
           )}
         </div>
       </div>
-      {previewBody}
+      {fill ? <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>{previewBody}</div> : previewBody}
     </div>
   );
 }

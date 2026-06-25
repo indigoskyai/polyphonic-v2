@@ -31,8 +31,9 @@ import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import LandingAmbient from '@/components/chat/LandingAmbient';
 import CompanionImportPanel from '@/components/chat/CompanionImportPanel';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
-import ArtifactCard from '@/components/canvas/ArtifactCard';
+import ArtifactChip, { StreamingArtifactChip } from '@/components/canvas/ArtifactChip';
 import { useArtifactStore } from '@/stores/artifactStore';
+import { useCanvasStore } from '@/stores/canvasStore';
 import { useAttachmentStore, type Attachment } from '@/stores/attachmentStore';
 import type { Message, MessageAttachment as PersistedAttachment } from '@/stores/threadStore';
 import SubAgentRow from '@/components/subagents/SubAgentRow';
@@ -57,6 +58,7 @@ import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/c
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import CanvasPane from '@/components/canvas/CanvasPane';
 import {
   DEFAULT_CHAT_MODEL,
   defaultRuntimeForAgent,
@@ -232,7 +234,7 @@ function StreamingText({
   }, [displayed, settled, isStreaming]);
 
   const tree = useMemo(
-    () => <RichBody source={displayed.slice(0, treeSourceLen)} streaming />,
+    () => <RichBody source={displayed.slice(0, treeSourceLen)} streaming suppressArtifactFences />,
     [displayed, treeSourceLen]
   );
 
@@ -269,7 +271,7 @@ const StreamingArtifacts = React.memo(function StreamingArtifacts({
   return (
     <>
       {artifacts.map((art) => (
-        <ArtifactCard key={art.id} artifact={art} />
+        <StreamingArtifactChip key={art.id} artifact={art} />
       ))}
     </>
   );
@@ -607,6 +609,14 @@ export default function ChatView() {
   const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
+  const canvasWidth = useCanvasStore((s) => s.width);
+  const canvasIsOpen = useCanvasStore((s) => s.isOpen);
+  const canvasFullscreen = useCanvasStore((s) => s.fullscreen);
+  const openCanvas = useCanvasStore((s) => s.open);
+  const markCanvasSeen = useCanvasStore((s) => s.markSeen);
+  // Set true right before reloading artifacts after a finished turn, so the
+  // canvas auto-opens for a freshly-created artifact (but not on thread revisit).
+  const justStreamedRef = useRef(false);
   const threadArtifacts = useMemo(
     () => currentThreadId ? (artifactsByThread[currentThreadId] || []) : [],
     [artifactsByThread, currentThreadId],
@@ -1216,6 +1226,23 @@ export default function ChatView() {
     const unsub = subscribeMessages(threadId);
     return unsub;
   }, [threadId, loadMessages, loadArtifacts, setCurrentThread, subscribeMessages]);
+
+  // Auto-open the canvas when a NEW artifact is created in this thread after a
+  // finished turn — like Claude/ChatGPT. Existing artifacts are seeded as "seen"
+  // on thread open without popping, so revisiting a thread never re-opens.
+  useEffect(() => {
+    const tid = currentThreadId;
+    if (!tid) return;
+    const list = artifactsByThread[tid] || [];
+    if (list.length === 0) return;
+    const hadNew = markCanvasSeen(tid, list.map((a) => a.id));
+    const wasStreamed = justStreamedRef.current;
+    justStreamedRef.current = false;
+    if (hadNew && wasStreamed) {
+      const newest = list.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
+      openCanvas(newest.id);
+    }
+  }, [artifactsByThread, currentThreadId, markCanvasSeen, openCanvas]);
 
   // Live agent-to-agent consultations (Luca → Anima for now).
   useAgentConsultRealtime(threadId);
@@ -2218,6 +2245,7 @@ export default function ChatView() {
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
                   metadata: { ...(councilMetadata || {}), local_stream_stub: true },
                 } as any);
+                justStreamedRef.current = true;
                 if (tid) loadArtifacts(tid);
               } else if (data.type === 'error') {
                 addMessage({
@@ -2725,12 +2753,15 @@ export default function ChatView() {
     /* ═══ CONVERSATION STATE — normal chat layout ═══ */
     <div
       className={`chat-view flex flex-col flex-1 min-h-0 overflow-hidden${isFirstTurnHandoff ? ' chat-view--handoff' : ''}${landingThreadEnter ? ' chat-view--landing-enter' : ''}`}
-      style={{ animation: (skipMountFade || landingThreadEnter) ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative' }}
+      style={{ animation: (skipMountFade || landingThreadEnter) ? undefined : 'viewFadeIn var(--dur-normal) var(--ease-out) both', position: 'relative', ['--canvas-w' as any]: `${canvasWidth}px` }}
+      data-canvas-open={canvasIsOpen ? 'true' : undefined}
+      data-canvas-fullscreen={canvasFullscreen ? 'true' : undefined}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <CanvasPane />
       {/* Header — participant dot + title + subtle meta */}
       <div className="chat-header flex items-center flex-shrink-0">
         <div className="chat-header-left">
@@ -3009,7 +3040,7 @@ export default function ChatView() {
                   <div className="msg-author">Luca</div>
                 </div>
                 <div className="msg-body">
-                  <ArtifactCard artifact={artifact} />
+                  <ArtifactChip artifact={artifact} />
                 </div>
               </div>
             ))}

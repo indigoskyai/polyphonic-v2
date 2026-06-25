@@ -10,7 +10,7 @@ import ImagePreview from '@/components/attachments/ImagePreview';
 import ImageCard from '@/components/messages/ImageCard';
 import SearchCitationsCard, { type Citation } from '@/components/messages/SearchCitationsCard';
 import CodePreviewCard from '@/components/attachments/CodePreviewCard';
-import ArtifactCard from '@/components/canvas/ArtifactCard';
+import ArtifactChip from '@/components/canvas/ArtifactChip';
 import { useFirstMount } from '@/lib/useFirstMount';
 import { getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 
@@ -163,7 +163,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
           <ThinkingBlockComplete content={msg.thinking_content} />
         )}
 
-        <RichBody source={msg.content} />
+        <RichBody source={msg.content} suppressArtifactFences />
 
         {(() => {
           const md = (msg as any).metadata;
@@ -219,7 +219,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
         })()}
 
         {attachedArtifacts.map((artifact) => (
-          <ArtifactCard key={artifact.id} artifact={artifact} />
+          <ArtifactChip key={artifact.id} artifact={artifact} />
         ))}
       </div>
     </div>

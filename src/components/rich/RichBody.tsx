@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CodeBlock from './CodeBlock';
+import { isPromotableFence } from '@/lib/streamingArtifacts';
 
 interface RichBodyProps {
   source: string;
   className?: string;
   streaming?: boolean;
+  /** Hide fenced blocks that were promoted to an artifact (rendered in the
+   *  canvas / as a chip) so the message doesn't also show the raw code wall. */
+  suppressArtifactFences?: boolean;
 }
 
 /**
@@ -27,7 +31,7 @@ function autoCloseFence(src: string): { text: string; openBlockIndex: number | n
   return { text: src, openBlockIndex: null };
 }
 
-function RichBody({ source, className, streaming = false }: RichBodyProps) {
+function RichBody({ source, className, streaming = false, suppressArtifactFences = false }: RichBodyProps) {
   const navigate = useNavigate();
   const { text, openBlockIndex } = streaming
     ? autoCloseFence(source)
@@ -68,6 +72,7 @@ function RichBody({ source, className, streaming = false }: RichBodyProps) {
               return <code {...props}>{children}</code>;
             }
             const myIndex = blockCounterRef.current++;
+            if (suppressArtifactFences && isPromotableFence(lang || '', text)) return null;
             const isOpenStreamingBlock = streaming && openBlockIndex !== null && myIndex === openBlockIndex;
             return <CodeBlock lang={lang} source={text} streaming={isOpenStreamingBlock} />;
           },
