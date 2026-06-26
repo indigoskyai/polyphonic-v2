@@ -48,7 +48,7 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('max_tokens: options.maxTokens ?? (forceForgeOnly ? 12_000 : 700)');
     expect(planner).toContain('force_forge_only === true');
     expect(planner).toContain('If the user asks for a generic agent, companion agent, test agent');
-    expect(planner).toContain('Never use create_artifact to create, define, or test a custom agent');
+    expect(planner).toContain('The only valid tool path is forge_agent. Do not create an artifact.');
     expect(planner).toContain('raw === "ForgeAgentBlueprint"');
     expect(planner).toContain('normalizeForgeArgs(args)');
     expect(planner).toContain('Do not call ForgeAgentBlueprint or invent another tool name');

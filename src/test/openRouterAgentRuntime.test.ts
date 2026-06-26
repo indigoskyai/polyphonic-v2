@@ -42,8 +42,11 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('name: "memory_read"');
     expect(source).toContain('name: "web_search"');
     expect(source).toContain('name: "read_url"');
+    expect(source).toContain('name: "browse"');
     expect(source).toContain('name: "forge_agent"');
     expect(source).toContain('callMcpTool(registration');
+    expect(source).toContain('invokeEdgeJson(options, "anima-browser"');
+    expect(source).toContain('Browserbase browser');
 
     expect(source).toContain('agent_tool_result');
     expect(source).toContain('thread_id: options.threadId');

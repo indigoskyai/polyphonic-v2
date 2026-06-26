@@ -58,7 +58,7 @@ const TOOL_SCHEMAS = [
     function: {
       name: "web_search",
       description:
-        "Search the web for current information. Use when asked about recent events, news, or to look something up.",
+        "Search the web through Perplexity Sonar. Returns a synthesized answer with citations, not raw page content. Use to discover sources or get current overviews, then use read_url to verify exact source text when accuracy matters.",
       parameters: {
         type: "object",
         properties: { query: { type: "string", description: "Search query" } },
@@ -70,12 +70,14 @@ const TOOL_SCHEMAS = [
     type: "function",
     function: {
       name: "read_url",
-      description: "Read and extract content from a web page URL.",
+      description: "Directly fetch a public http(s) URL and return source content/metadata without model synthesis. Use for raw HTML, JSON, text files, or verifying a specific cited source. Use browse for JavaScript-rendered pages or interactive sites.",
       parameters: {
         type: "object",
         properties: {
           url: { type: "string", description: "URL to read" },
           focus: { type: "string", description: "What to focus on (optional)" },
+          format: { type: "string", enum: ["text", "raw"], description: "Use text for extracted readable text, raw for the unmodified response body." },
+          max_chars: { type: "integer", description: "Maximum characters to return, default 12000." },
         },
         required: ["url"],
       },
@@ -85,13 +87,14 @@ const TOOL_SCHEMAS = [
     type: "function",
     function: {
       name: "browse",
-      description: "Navigate a website in a Browserbase browser session and inspect the resulting page. Use for web tasks that need an actual browser. For simple reading, use read_url.",
+      description: "Open a public http(s) page in a Browserbase browser, allow JavaScript to render, and inspect the DOM. Returns visible text, final URL, title, headings, links, buttons, and forms without model synthesis. Use when read_url is insufficient for dynamic/browser-rendered pages.",
       parameters: {
         type: "object",
         properties: {
           goal: { type: "string", description: "What you are trying to accomplish on the site" },
           starting_url: { type: "string", description: "URL to start from" },
-          max_steps: { type: "integer", default: 10, description: "Cap on browser actions" },
+          max_steps: { type: "integer", default: 10, description: "Reserved action budget for the browse attempt" },
+          wait_ms: { type: "integer", default: 2500, description: "Milliseconds to wait for page rendering before inspection" },
         },
         required: ["goal", "starting_url"],
       },
@@ -257,9 +260,9 @@ function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
   return `You are a tool-planning assistant. Your ONLY job is to decide whether the user's message requires using a tool, and if so, call the appropriate tool(s).
 
 Available tools:
-- web_search: Search the web for current/recent information, news, facts, or anything the user wants looked up. Powered by Perplexity Sonar — produces a synthesized answer with citations.
-- read_url: Read a specific URL to extract its content.
-- browse: Open a real browser session for web pages that need browser behavior.
+- web_search: Search the web for current/recent information, news, facts, or anything the user wants looked up. Powered by Perplexity Sonar — produces a synthesized answer with citations, not raw page content.
+- read_url: Directly fetch a specific public URL and return source content/metadata without model synthesis. It can read HTML text, raw HTML, JSON, and plain text. Use format="raw" when the user needs exact markup/source.
+- browse: Open a public URL in a Browserbase browser, wait for JavaScript rendering, and return DOM text plus page structure (headings, links, buttons, forms). Use this when read_url cannot see browser-rendered state.
 - generate_image: Generate a high-quality raster image (gpt-image-2). Use for photographic, painterly, or illustrative imagery.
 - edit_image: Iterate on the most recently generated image (e.g. "make it darker", "swap the background"). Pass the storage_path from the prior image.
 - workspace_file: Read, write, list, or delete persistent workspace files.
@@ -269,9 +272,9 @@ Available tools:
 ${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
-- If the user asks about current events, recent news, real-time data, or anything that requires up-to-date information, use web_search. Chain web_search -> read_url when a single source needs deeper extraction.
-- If the user provides a URL or asks to read/summarize a link, use read_url.
-- If the task needs clicking, page state, or browser-only behavior, use browse.
+- If the user asks about current events, recent news, real-time data, or anything that requires up-to-date information, use web_search for source discovery. Verify claims that matter by chaining web_search -> read_url on the primary sources.
+- If the user provides a URL or asks to read/summarize a link, use read_url. Trust read_url over web_search for what a specific page actually says.
+- If the task needs browser-rendered page state or JavaScript output, use browse. If it needs multi-step clicking, logins, forms, or authenticated state, explain the limitation unless a dedicated interactive browser workflow is available.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
 - Do NOT use any tool to build HTML pages, web apps, SVG graphics, React components, Mermaid diagrams, charts, or code/markup. The assistant writes those itself, directly in its reply, as live artifacts — there is no artifact tool here. Only reach for generate_image when the user wants raster imagery that should look like a real photo or illustration.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
@@ -743,7 +746,7 @@ serve(async (req) => {
             body = { user_id: userId, query: args.query };
           } else if (fnName === "read_url") {
             edgeFn = "anima-web-read";
-            body = { user_id: userId, url: args.url, focus: args.focus };
+            body = { user_id: userId, url: args.url, focus: args.focus, format: args.format, max_chars: args.max_chars };
           } else if (fnName === "browse") {
             edgeFn = "anima-browser";
             body = {
@@ -751,6 +754,7 @@ serve(async (req) => {
               goal: args.goal,
               starting_url: args.starting_url,
               max_steps: args.max_steps,
+              wait_ms: args.wait_ms,
             };
           } else if (fnName === "generate_image") {
             edgeFn = "anima-image-create";

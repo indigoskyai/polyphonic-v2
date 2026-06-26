@@ -55,7 +55,12 @@ serve(async (req) => {
       content: { citations: result.results.slice(0, 6) },
     });
 
-    return jsonResp({ answer: result.answer, results: result.results }, 200, req);
+    return jsonResp({
+      answer: result.answer,
+      results: result.results,
+      engine: "perplexity_sonar",
+      synthesis: true,
+    }, 200, req);
   } catch (e) {
     console.error("anima-web-search error:", e);
     return jsonResp({ error: "An unexpected error occurred." }, 500, req);

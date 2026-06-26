@@ -26,7 +26,7 @@ const SUBAGENT_TOOL_SCHEMAS = [
     type: "function",
     function: {
       name: "web_search",
-      description: "Search the web for current information.",
+      description: "Search the web through Perplexity Sonar. Returns a synthesized answer with citations, not raw page content.",
       parameters: {
         type: "object",
         properties: { query: { type: "string", description: "Search query" } },
@@ -38,14 +38,34 @@ const SUBAGENT_TOOL_SCHEMAS = [
     type: "function",
     function: {
       name: "read_url",
-      description: "Read and extract content from a web page URL.",
+      description: "Directly fetch a public http(s) URL and return source content/metadata without model synthesis.",
       parameters: {
         type: "object",
         properties: {
           url: { type: "string", description: "URL to read" },
           focus: { type: "string", description: "What to focus on" },
+          format: { type: "string", enum: ["text", "raw"], description: "Use text for readable extraction, raw for unmodified source." },
+          max_chars: { type: "integer", description: "Maximum characters to return, default 12000." },
         },
         required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browse",
+      description:
+        "Open a public http(s) page in a Browserbase browser, allow JavaScript to render, and inspect the DOM. Use when read_url cannot see the dynamic page state.",
+      parameters: {
+        type: "object",
+        properties: {
+          goal: { type: "string", description: "What you are trying to learn or inspect on the page." },
+          starting_url: { type: "string", description: "The public URL to open in the browser." },
+          max_steps: { type: "integer", default: 10, description: "Reserved action budget for the browse attempt." },
+          wait_ms: { type: "integer", default: 2500, description: "Milliseconds to wait for page rendering before inspection." },
+        },
+        required: ["goal", "starting_url"],
       },
     },
   },
@@ -433,7 +453,17 @@ async function runSubagentTool(
     },
     read_url: {
       fn: "anima-web-read",
-      body: { user_id: userId, url: args?.url ?? "", focus: args?.focus },
+      body: { user_id: userId, url: args?.url ?? "", focus: args?.focus, format: args?.format, max_chars: args?.max_chars },
+    },
+    browse: {
+      fn: "anima-browser",
+      body: {
+        user_id: userId,
+        goal: args?.goal ?? "",
+        starting_url: args?.starting_url ?? "",
+        max_steps: args?.max_steps,
+        wait_ms: args?.wait_ms,
+      },
     },
     workspace_file: {
       fn: "anima-workspace-file",

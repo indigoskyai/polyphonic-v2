@@ -1,15 +1,15 @@
-// Shared Perplexity Sonar (via OpenRouter) helper.
+// Shared Perplexity Sonar (via OpenRouter) helper for synthesized web search.
 //
-// Both anima-web-search and anima-web-read run through this so the
-// search/read engine is consistent: Perplexity Sonar online for synthesized
-// answers + citations. Brave / Tavily are not used.
+// `anima-web-search` uses this as an answer engine: Sonar searches online and
+// returns a synthesized response plus citations. `anima-web-read` intentionally
+// does NOT use this helper; direct URL reads bypass synthesis and fetch source
+// content through `_shared/direct-url-read.ts`.
 //
 // Resolves the user's OpenRouter key from `decrypt_user_api_key` regardless
 // of whether the call came in via JWT or via service-role (in which case
 // the caller must pass `userId` explicitly — there's no platform key).
 
 const SEARCH_MODEL = "perplexity/sonar";
-const READ_MODEL = "perplexity/sonar";
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface SonarCitation {
@@ -67,45 +67,6 @@ export async function perplexitySearch(
     },
     { role: "user", content: query },
   ], { model: options.model || SEARCH_MODEL, temperature: options.temperature ?? 0.1, maxTokens: options.maxTokens ?? 1500 });
-}
-
-/**
- * Read a specific URL through Perplexity Sonar. Sonar's online routing
- * fetches the page itself and returns content with citations. If `focus` is
- * provided, the request is shaped to extract just that focus area.
- */
-export async function perplexityRead(
-  apiKey: string,
-  url: string,
-  focus: string | undefined,
-  options: SonarOptions = {},
-): Promise<SonarResult & { title: string }> {
-  const focusBlock = focus && focus.trim().length > 0
-    ? `Focus specifically on: ${focus.trim()}.`
-    : "Summarize the page faithfully without injecting outside information.";
-
-  const result = await runSonar(apiKey, [
-    {
-      role: "system",
-      content:
-        "You are a careful web reader. The user will give you a URL. Visit and read the page, then return a JSON object with this exact shape: " +
-        '{"title": "page title", "answer": "the page content or focused summary", "results": [{"title": "title", "url": "url", "snippet": "excerpt"}]}. ' +
-        `${focusBlock} ` +
-        "Include the source URL plus any other URLs you actually referenced as `results`. Return ONLY valid JSON, no markdown fences.",
-    },
-    {
-      role: "user",
-      content: `Read this URL: ${url}`,
-    },
-  ], { model: options.model || READ_MODEL, temperature: options.temperature ?? 0.2, maxTokens: options.maxTokens ?? 2000 });
-
-  // The read prompt asks for a `title` field in addition to answer/results.
-  // The runSonar parse already pulls title if present; provide a sane fallback.
-  return {
-    title: (result as any).title || "",
-    answer: result.answer,
-    results: result.results,
-  };
 }
 
 interface ChatMessage {

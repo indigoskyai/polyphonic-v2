@@ -440,7 +440,7 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
     tool({
       name: "web_search",
       description:
-        "Search the web for current or external information. Use when the user asks for recent facts, research, sources, or anything that should be looked up.",
+        "Search the web through Perplexity Sonar. Returns a synthesized answer with citations, not raw page content. Use for current overviews or source discovery; use read_url on specific sources when exact page content matters.",
       inputSchema: z.object({
         query: z.string().min(1).describe("The search query."),
       }),
@@ -452,15 +452,40 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
     }),
     tool({
       name: "read_url",
-      description: "Read and summarize a specific URL.",
+      description:
+        "Directly fetch a public http(s) URL and return source content/metadata without model synthesis. Use for raw HTML, JSON, text files, or verifying what a specific page actually says. Use browse for JavaScript-rendered or interactive pages.",
       inputSchema: z.object({
         url: z.string().url().describe("The URL to read."),
         focus: z.string().optional().describe("Optional focus for the read."),
+        format: z.enum(["text", "raw"]).optional().describe("Use text for extracted readable text, raw for the unmodified response body."),
+        max_chars: z.number().int().min(1000).max(40000).optional().describe("Maximum characters to return, default 12000."),
       }),
-      execute: async ({ url, focus }) => {
+      execute: async ({ url, focus, format, max_chars }) => {
         recordTrace(`Reading ${url}.`);
         send({ type: "tool_progress", tool: "read_url", text: `Reading: ${url}` });
-        return await invokeEdgeJson(options, "anima-web-read", { user_id: options.userId, url, focus });
+        return await invokeEdgeJson(options, "anima-web-read", { user_id: options.userId, url, focus, format, max_chars });
+      },
+    }),
+    tool({
+      name: "browse",
+      description:
+        "Open a public http(s) page in a Browserbase browser, allow JavaScript to render, and inspect the DOM. Returns visible text, title, final URL, headings, links, buttons, and forms without model synthesis. Use when read_url is insufficient because the page is dynamic, browser-rendered, or interaction-shaped.",
+      inputSchema: z.object({
+        goal: z.string().min(1).max(800).describe("What you are trying to learn or inspect on the page."),
+        starting_url: z.string().url().describe("The public URL to open in the browser."),
+        max_steps: z.number().int().min(1).max(50).optional().describe("Reserved action budget for the browse attempt, default 10."),
+        wait_ms: z.number().int().min(500).max(10000).optional().describe("Milliseconds to wait for page rendering before inspection, default 2500."),
+      }),
+      execute: async ({ goal, starting_url, max_steps, wait_ms }) => {
+        recordTrace(`Browsing ${starting_url}.`);
+        send({ type: "tool_progress", tool: "browse", text: `Opening browser: ${starting_url}` });
+        return await invokeEdgeJson(options, "anima-browser", {
+          user_id: options.userId,
+          goal,
+          starting_url,
+          max_steps,
+          wait_ms,
+        });
       },
     }),
     tool({

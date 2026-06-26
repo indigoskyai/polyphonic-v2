@@ -4,6 +4,8 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 
 const MAX_SESSION_SECONDS = 600;
 const MAX_ACTIONS = 50;
+const DEFAULT_WAIT_MS = 2_500;
+const MAX_WAIT_MS = 10_000;
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -25,6 +27,7 @@ serve(async (req) => {
     const goal = String(body.goal || "").slice(0, 800);
     const startingUrl = String(body.starting_url || "");
     const maxSteps = Math.min(Math.max(Number(body.max_steps || 10), 1), MAX_ACTIONS);
+    const waitMs = Math.min(Math.max(Number(body.wait_ms || DEFAULT_WAIT_MS), 500), MAX_WAIT_MS);
     if (!goal || !isHttpUrl(startingUrl)) {
       return json({ error: "goal and a valid starting_url are required" }, 400, corsHeaders);
     }
@@ -54,9 +57,9 @@ serve(async (req) => {
       { status: "success", text: `Started Browserbase session ${session.id}` },
     ];
 
-    let page: { url?: string; title?: string; text?: string } = {};
+    let page: Partial<BrowserPageInspection> = {};
     try {
-      page = await inspectPage(session.connectUrl, startingUrl);
+      page = await inspectPage(session.connectUrl, startingUrl, waitMs);
       actions.push({ status: "success", text: `Opened ${page.url || startingUrl}` });
     } catch (err) {
       actions.push({ status: "error", text: err instanceof Error ? err.message : String(err) });
@@ -71,6 +74,10 @@ serve(async (req) => {
       goal,
       starting_url: startingUrl,
       max_steps: maxSteps,
+      wait_ms: waitMs,
+      engine: "browserbase",
+      synthesis: false,
+      capabilities: ["render_js", "inspect_dom_text", "extract_links", "extract_forms"],
       limits: { session_seconds: MAX_SESSION_SECONDS, max_actions: MAX_ACTIONS, compute_budget_usd: 0.5 },
       actions,
       page,
@@ -81,7 +88,17 @@ serve(async (req) => {
   }
 });
 
-async function inspectPage(connectUrl: string, startingUrl: string): Promise<{ url: string; title: string; text: string }> {
+interface BrowserPageInspection {
+  url: string;
+  title: string;
+  text: string;
+  headings: Array<{ level: number; text: string }>;
+  links: Array<{ text: string; href: string }>;
+  buttons: string[];
+  forms: Array<{ action: string; method: string; fields: Array<{ name: string; type: string; label: string }> }>;
+}
+
+async function inspectPage(connectUrl: string, startingUrl: string, waitMs: number): Promise<BrowserPageInspection> {
   const cdp = await connectCdp(connectUrl);
   try {
     const target = await cdp.send("Target.createTarget", { url: startingUrl });
@@ -90,12 +107,51 @@ async function inspectPage(connectUrl: string, startingUrl: string): Promise<{ u
     const sessionId = attached.sessionId;
     await cdp.send("Page.enable", {}, sessionId);
     await cdp.send("Runtime.enable", {}, sessionId);
-    await delay(1800);
+    await delay(waitMs);
     const evaluated = await cdp.send("Runtime.evaluate", {
-      expression: `(() => ({ url: location.href, title: document.title, text: document.body ? document.body.innerText.slice(0, 5000) : "" }))()`,
+      expression: `(() => {
+        const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+        const visibleText = (el) => clean(el && (el.innerText || el.textContent || el.getAttribute("aria-label") || el.getAttribute("title")));
+        const labelFor = (input) => {
+          const id = input.getAttribute("id");
+          if (id) {
+            const label = Array.from(document.querySelectorAll("label")).find((candidate) => candidate.getAttribute("for") === id);
+            if (label) return visibleText(label);
+          }
+          const wrapping = input.closest("label");
+          return wrapping ? visibleText(wrapping) : "";
+        };
+        return {
+          url: location.href,
+          title: document.title,
+          text: document.body ? document.body.innerText.slice(0, 8000) : "",
+          headings: Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).slice(0, 40).map((el) => ({
+            level: Number(el.tagName.slice(1)),
+            text: visibleText(el).slice(0, 240),
+          })).filter((h) => h.text),
+          links: Array.from(document.querySelectorAll("a[href]")).slice(0, 80).map((el) => ({
+            text: visibleText(el).slice(0, 240),
+            href: el.href,
+          })).filter((link) => link.href),
+          buttons: Array.from(document.querySelectorAll("button,[role=button],input[type=button],input[type=submit]"))
+            .slice(0, 60)
+            .map((el) => visibleText(el) || clean(el.value))
+            .filter(Boolean)
+            .map((text) => text.slice(0, 160)),
+          forms: Array.from(document.querySelectorAll("form")).slice(0, 20).map((form) => ({
+            action: form.action || location.href,
+            method: (form.method || "get").toLowerCase(),
+            fields: Array.from(form.querySelectorAll("input, textarea, select")).slice(0, 40).map((input) => ({
+              name: input.getAttribute("name") || input.getAttribute("id") || "",
+              type: input.getAttribute("type") || input.tagName.toLowerCase(),
+              label: labelFor(input).slice(0, 160),
+            })),
+          })),
+        };
+      })()`,
       returnByValue: true,
     }, sessionId);
-    return evaluated.result?.value || { url: startingUrl, title: "", text: "" };
+    return evaluated.result?.value || { url: startingUrl, title: "", text: "", headings: [], links: [], buttons: [], forms: [] };
   } finally {
     cdp.close();
   }
