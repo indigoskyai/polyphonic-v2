@@ -3699,10 +3699,9 @@ export type Database = {
         Args: { p_device_id: string; p_token: string }
         Returns: boolean
       }
-      prune_cron_job_run_details: {
-        Args: { p_retention?: string }
-        Returns: number
-      }
+      prune_cron_job_run_details:
+        | { Args: never; Returns: number }
+        | { Args: { p_retention?: string }; Returns: number }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
