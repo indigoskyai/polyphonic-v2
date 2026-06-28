@@ -1233,12 +1233,18 @@ export async function runConsolidation(
   const engramsStrengthened = await strengthenEngrams(supabase, agentId, candidates);
 
   // 6. Promote episodic -> semantic
-  const promotions = await promoteEngrams(supabase, candidates);
+  const { count: promotions, promotedIds } = await promoteEngrams(supabase, candidates);
+
+  // 6b. Bridge stable / freshly-promoted engrams into durable memory_candidates.
+  const memoryCandidatesCreated = await bridgeEngramsToCandidates(
+    supabase, userId, agentId, candidates, promotedIds,
+  );
 
   // 7. Belief formation — resolve the synthesis dark-launch context ONCE (flag +
   // BYOK key + cohort; model + crisis windows). null → the lexical path runs unchanged.
   const synth = await buildBeliefSynthContext(supabase, userId, agentId, options.openrouter_api_key);
   const beliefsUpdated = await formBeliefs(supabase, userId, agentId, synth);
+
 
   // Return candidates to active state
   await supabase
