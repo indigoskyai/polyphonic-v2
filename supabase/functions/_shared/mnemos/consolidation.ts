@@ -606,6 +606,7 @@ async function bridgeEngramsToCandidates(
   const eligible: Engram[] = [];
   const seen = new Set<string>();
   let rejTag = 0, rejTranscript = 0, rejExplicit = 0, rejShape = 0;
+  let rejAnalysis = 0, rejUnconfirmedProfile = 0;
   for (const e of candidates) {
     if (isExcludedSubstrate(e)) continue;
     const isPromoted = promotedIds.has(e.id);
@@ -617,7 +618,9 @@ async function bridgeEngramsToCandidates(
     if (seen.has(e.id)) continue;
 
     // Hardening gates — order matters for diagnostics.
+    if (isDerivedAnalysis(e)) { rejAnalysis++; continue; }
     if (!hasDurableTag(e)) { rejTag++; continue; }
+    if (isUnconfirmedSensitiveProfile(e)) { rejUnconfirmedProfile++; continue; }
     if (looksExplicit(e.content ?? "")) { rejExplicit++; continue; }
     if (looksLikeTranscript(e.content ?? "")) { rejTranscript++; continue; }
     if (!isDistilledMemory(e.content ?? "")) { rejShape++; continue; }
@@ -625,9 +628,11 @@ async function bridgeEngramsToCandidates(
     seen.add(e.id);
     eligible.push(e);
   }
-  if (rejTag || rejTranscript || rejExplicit || rejShape) {
+  if (rejTag || rejTranscript || rejExplicit || rejShape || rejAnalysis || rejUnconfirmedProfile) {
     console.log("[consolidation] bridge filters rejected", {
       user_id: userId, agent_id: agentId,
+      derived_analysis: rejAnalysis,
+      unconfirmed_sensitive_profile: rejUnconfirmedProfile,
       no_durable_tag: rejTag, transcript_shape: rejTranscript,
       explicit: rejExplicit, not_distilled: rejShape,
     });
@@ -647,34 +652,77 @@ async function bridgeEngramsToCandidates(
   // Dedupe against existing candidates (any non-rejected status) for this scope.
   const { data: existingCands } = await supabase
     .from("memory_candidates")
-    .select("source")
+    .select("source, content")
     .eq("user_id", userId)
     .eq("agent_id", agentId)
     .in("status", ["pending", "pinned", "committed"]);
   const usedFromCandidates = new Set<string>();
-  for (const row of (existingCands ?? []) as Array<{ source: Record<string, unknown> | null }>) {
+  const existingNormContent = new Set<string>();
+  for (const row of (existingCands ?? []) as Array<{ source: Record<string, unknown> | null; content: string | null }>) {
     const eid = row?.source && typeof row.source === "object"
       ? (row.source as Record<string, unknown>).engram_id : undefined;
     if (typeof eid === "string") usedFromCandidates.add(eid);
+    if (typeof row?.content === "string") {
+      const norm = normalizeForDup(row.content);
+      if (norm) existingNormContent.add(norm);
+    }
   }
 
   // Dedupe against already-committed memories for this scope.
   const usedFromMemories = new Set<string>();
   const { data: existingMems } = await supabase
     .from("memories")
-    .select("provenance")
+    .select("provenance, content")
     .eq("user_id", userId)
     .eq("agent_id", agentId)
     .eq("is_deleted", false);
-  for (const row of (existingMems ?? []) as Array<{ provenance: Record<string, unknown> | null }>) {
+  for (const row of (existingMems ?? []) as Array<{ provenance: Record<string, unknown> | null; content: string | null }>) {
     const eid = row?.provenance && typeof row.provenance === "object"
       ? (row.provenance as Record<string, unknown>).engram_id : undefined;
     if (typeof eid === "string") usedFromMemories.add(eid);
+    if (typeof row?.content === "string") {
+      const norm = normalizeForDup(row.content);
+      if (norm) existingNormContent.add(norm);
+    }
   }
 
-  const fresh = pool.filter((e) => !usedFromCandidates.has(e.id) && !usedFromMemories.has(e.id));
+  // Per-run near-duplicate suppression by normalized content AND by domain
+  // (same durable-tag set). Either match collapses the candidate.
+  const runNormSeen = new Set<string>();
+  const runDomainSeen = new Set<string>();
+  let rejNearDup = 0, rejDomainDup = 0;
+  const fresh: Engram[] = [];
+  for (const e of pool) {
+    if (usedFromCandidates.has(e.id) || usedFromMemories.has(e.id)) continue;
+    const norm = normalizeForDup(e.content ?? "");
+    if (norm && (runNormSeen.has(norm) || existingNormContent.has(norm))) {
+      rejNearDup++;
+      continue;
+    }
+    const dk = domainKey(e);
+    // Suppress only when the domain key is meaningful (non-empty) and we've
+    // already surfaced something for that exact durable-tag signature in
+    // this run. Lets multiple distinct preferences through, blocks 5x
+    // "profile" near-dupes.
+    if (dk && runDomainSeen.has(dk)) {
+      rejDomainDup++;
+      continue;
+    }
+    if (norm) runNormSeen.add(norm);
+    if (dk) runDomainSeen.add(dk);
+    fresh.push(e);
+  }
+  if (rejNearDup || rejDomainDup) {
+    console.log("[consolidation] bridge dedupe suppressed", {
+      user_id: userId, agent_id: agentId,
+      near_duplicate_content: rejNearDup,
+      same_domain_signature: rejDomainDup,
+    });
+  }
+
   const toInsert = fresh.slice(0, MAX_CANDIDATES_PER_RUN);
   if (toInsert.length === 0) return 0;
+
 
   const rows = toInsert.map((e) => ({
     user_id: userId,
