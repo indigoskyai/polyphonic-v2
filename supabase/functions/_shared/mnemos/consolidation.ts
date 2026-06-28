@@ -378,8 +378,9 @@ async function strengthenEngrams(
 async function promoteEngrams(
   supabase: SupabaseClient,
   candidates: Engram[]
-): Promise<number> {
+): Promise<{ count: number; promotedIds: Set<string> }> {
   let promoted = 0;
+  const promotedIds = new Set<string>();
 
   for (const engram of candidates) {
     if (engram.engram_type !== "episodic") continue;
@@ -399,10 +400,153 @@ async function promoteEngrams(
       })
       .eq("id", engram.id);
 
-    if (!error) promoted++;
+    if (!error) {
+      promoted++;
+      promotedIds.add(engram.id);
+    }
   }
 
-  return promoted;
+  return { count: promoted, promotedIds };
+}
+
+// ---------------------------------------------------------------------------
+// Step 5b: Durable Memory-Candidate Bridge
+// ---------------------------------------------------------------------------
+
+/** Per-run cap on candidates surfaced from the engram substrate. */
+const MAX_CANDIDATES_PER_RUN = 8;
+/** Minimum strength for a "stable" semantic engram to qualify as a candidate. */
+const CANDIDATE_MIN_STRENGTH = 0.5;
+/** Source contexts / tags we must NOT surface as durable candidates. */
+const EXCLUDED_SUBSTRATE_KINDS = new Set(["dream", "debug", "verification", "test"]);
+const EXCLUDED_SUBSTRATE_TAGS = new Set(["dream", "debug", "verification", "test"]);
+
+function isExcludedSubstrate(engram: Engram): boolean {
+  const ctx = (engram.source_context ?? {}) as Record<string, unknown>;
+  const kind = typeof ctx.kind === "string" ? ctx.kind.toLowerCase() : "";
+  const source = typeof ctx.source === "string" ? ctx.source.toLowerCase() : "";
+  if (EXCLUDED_SUBSTRATE_KINDS.has(kind) || EXCLUDED_SUBSTRATE_KINDS.has(source)) return true;
+  for (const t of engram.tags ?? []) {
+    if (EXCLUDED_SUBSTRATE_TAGS.has(String(t).toLowerCase())) return true;
+  }
+  return false;
+}
+
+function deriveMemoryType(engram: Engram): string {
+  const tagSet = new Set((engram.tags ?? []).map((t) => String(t).toLowerCase()));
+  if (tagSet.has("preference")) return "preference";
+  if (tagSet.has("goal")) return "goal";
+  if (tagSet.has("relationship")) return "relationship";
+  if (tagSet.has("principle") || tagSet.has("value") || tagSet.has("belief")) return "principle";
+  if (tagSet.has("fact")) return "fact";
+  if (engram.engram_type === "semantic") return "pattern";
+  return "context";
+}
+
+/**
+ * Surface stable semantic engrams (and ones promoted this cycle) as durable
+ * pending memory_candidates. Scoped per user_id + agent_id, deduplicated
+ * against existing memory_candidates.source->>'engram_id' and
+ * memories.provenance->>'engram_id', capped at MAX_CANDIDATES_PER_RUN.
+ */
+async function bridgeEngramsToCandidates(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  candidates: Engram[],
+  promotedIds: Set<string>,
+): Promise<number> {
+  const eligible: Engram[] = [];
+  const seen = new Set<string>();
+  for (const e of candidates) {
+    if (isExcludedSubstrate(e)) continue;
+    const isPromoted = promotedIds.has(e.id);
+    const isStableSemantic =
+      e.engram_type === "semantic" &&
+      e.strength >= CANDIDATE_MIN_STRENGTH &&
+      e.stability >= PROMOTION_MIN_STABILITY;
+    if (!isPromoted && !isStableSemantic) continue;
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    eligible.push(e);
+  }
+
+  if (eligible.length === 0) return 0;
+
+  eligible.sort((a, b) => {
+    const pa = promotedIds.has(a.id) ? 1 : 0;
+    const pb = promotedIds.has(b.id) ? 1 : 0;
+    if (pa !== pb) return pb - pa;
+    return (b.strength + b.stability) - (a.strength + a.stability);
+  });
+
+  const pool = eligible.slice(0, MAX_CANDIDATES_PER_RUN * 3);
+
+  // Dedupe against existing candidates (any non-rejected status) for this scope.
+  const { data: existingCands } = await supabase
+    .from("memory_candidates")
+    .select("source")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .in("status", ["pending", "pinned", "committed"]);
+  const usedFromCandidates = new Set<string>();
+  for (const row of (existingCands ?? []) as Array<{ source: Record<string, unknown> | null }>) {
+    const eid = row?.source && typeof row.source === "object"
+      ? (row.source as Record<string, unknown>).engram_id : undefined;
+    if (typeof eid === "string") usedFromCandidates.add(eid);
+  }
+
+  // Dedupe against already-committed memories for this scope.
+  const usedFromMemories = new Set<string>();
+  const { data: existingMems } = await supabase
+    .from("memories")
+    .select("provenance")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .eq("is_deleted", false);
+  for (const row of (existingMems ?? []) as Array<{ provenance: Record<string, unknown> | null }>) {
+    const eid = row?.provenance && typeof row.provenance === "object"
+      ? (row.provenance as Record<string, unknown>).engram_id : undefined;
+    if (typeof eid === "string") usedFromMemories.add(eid);
+  }
+
+  const fresh = pool.filter((e) => !usedFromCandidates.has(e.id) && !usedFromMemories.has(e.id));
+  const toInsert = fresh.slice(0, MAX_CANDIDATES_PER_RUN);
+  if (toInsert.length === 0) return 0;
+
+  const rows = toInsert.map((e) => ({
+    user_id: userId,
+    agent_id: agentId,
+    content: e.content,
+    memory_type: deriveMemoryType(e),
+    confidence: clamp(e.strength, 0.05, 0.95),
+    candidate_type: "standard" as const,
+    rationale: promotedIds.has(e.id)
+      ? `Promoted from episodic to semantic this cycle (strength ${e.strength.toFixed(2)}, stability ${e.stability.toFixed(2)}).`
+      : `Stable ${e.engram_type} engram surfaced for durable review (strength ${e.strength.toFixed(2)}, stability ${e.stability.toFixed(2)}).`,
+    source: {
+      source: "mnemos_consolidation",
+      engram_id: e.id,
+      engram_type: e.engram_type,
+      promoted_this_cycle: promotedIds.has(e.id),
+      strength: e.strength,
+      stability: e.stability,
+      tags: e.tags ?? [],
+      agent: agentId,
+    },
+    status: "pending" as const,
+  }));
+
+  const { data, error } = await supabase
+    .from("memory_candidates")
+    .insert(rows)
+    .select("id");
+
+  if (error) {
+    console.warn("[consolidation] bridgeEngramsToCandidates insert failed:", error.message);
+    return 0;
+  }
+  return (data ?? []).length;
 }
 
 // ---------------------------------------------------------------------------
