@@ -1157,6 +1157,8 @@ export interface ConsolidationReport {
   engrams_strengthened: number;
   promotions: number;
   beliefs_updated: number;
+  /** Durable memory_candidates surfaced from the engram substrate this run. */
+  memory_candidates_created: number;
   duration_ms: number;
   /** Summaries of consolidated engrams for the dreaming module. */
   candidate_summaries: Array<{
@@ -1167,6 +1169,7 @@ export interface ConsolidationReport {
     tags: string[];
   }>;
 }
+
 
 /**
  * Run a full consolidation cycle.
