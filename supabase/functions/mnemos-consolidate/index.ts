@@ -202,17 +202,29 @@ serve(async (req) => {
       });
     }
 
-    // Cron mode: consolidate for all users with recent activity
+    // Cron mode: consolidate for all users with recent activity.
+    // Include both recently-accessed and newly-created engrams so that brand-new
+    // agents (whose engrams have not yet been re-read) still enter the consolidation
+    // scope and can form memory candidates on their first eligible cycle.
     const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const { data: users } = await supabase
-      .from("engrams")
-      .select("user_id, agent_id")
-      .gte("last_accessed_at", cutoff)
-      .limit(100);
+    const [{ data: accessedUsers }, { data: createdUsers }] = await Promise.all([
+      supabase
+        .from("engrams")
+        .select("user_id, agent_id")
+        .gte("last_accessed_at", cutoff)
+        .limit(100),
+      supabase
+        .from("engrams")
+        .select("user_id, agent_id")
+        .gte("created_at", cutoff)
+        .limit(100),
+    ]);
 
+    const users = [...(accessedUsers ?? []), ...(createdUsers ?? [])];
     const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
       [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }]
     )).values()];
+
     const results: Record<string, unknown> = {};
 
     for (const scope of uniqueScopes) {
