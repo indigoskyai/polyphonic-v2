@@ -1196,6 +1196,7 @@ export async function runConsolidation(
       new_connections: 0,
       beliefs_updated: 0,
       promotions: 0,
+      memory_candidates_created: 0,
       duration_ms: Date.now() - startTime,
     };
     const emptyReport: ConsolidationReport = {
@@ -1206,9 +1207,11 @@ export async function runConsolidation(
       engrams_strengthened: 0,
       promotions: 0,
       beliefs_updated: 0,
+      memory_candidates_created: 0,
       duration_ms: Date.now() - startTime,
       candidate_summaries: [],
     };
+
     return { result: emptyResult, report: emptyReport };
   }
 
