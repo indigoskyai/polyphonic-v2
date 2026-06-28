@@ -104,10 +104,12 @@ export default function MnemosOverview() {
       const promoted = Number(result.promotions ?? 0);
       const linked = Number(result.new_connections ?? 0);
       const beliefsUpdated = Number(result.beliefs_updated ?? 0);
+      const candidatesCreated = Number(result.memory_candidates_created ?? 0);
       toast({
         title: 'Consolidation finished',
-        description: `${candidatesFound} candidates reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated`,
+        description: `${candidatesFound} engrams reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated · ${candidatesCreated} new memory candidate${candidatesCreated === 1 ? '' : 's'}`,
       });
+
     } catch (err) {
       toast({
         title: 'Could not consolidate',
@@ -124,18 +126,18 @@ export default function MnemosOverview() {
       num="01"
       streamLabel="DIGEST"
       title="Substrate"
-      subtitle={`${stats.engrams} engrams across ${stats.connections} connections. ${stats.candidates} candidate${stats.candidates === 1 ? '' : 's'} pending review.`}
+      subtitle={`${stats.engrams} engrams in the Mnemos substrate across ${stats.connections} connections. ${stats.candidates} candidate${stats.candidates === 1 ? '' : 's'} awaiting your commit into durable memory.`}
       hideToolbar
     >
       {/* Hero stat strip */}
       <div className="s-stat-strip">
         <div className="s-stat">
-          <span className="s-stat-label">Memories</span>
+          <span className="s-stat-label">Committed memories</span>
           <span className="s-stat-value">{stats.memories}</span>
-          <span className="s-stat-delta">{stats.candidates} pending</span>
+          <span className="s-stat-delta">{stats.candidates} pending commit</span>
         </div>
         <div className="s-stat">
-          <span className="s-stat-label">Engrams</span>
+          <span className="s-stat-label">Mnemos engrams</span>
           <span className="s-stat-value">{stats.engrams}</span>
           <span className="s-stat-delta">{stats.active} active · {stats.consolidating} consol.</span>
         </div>
@@ -145,11 +147,12 @@ export default function MnemosOverview() {
           <span className="s-stat-delta">+{/* MOCK */}0 this week</span>
         </div>
         <div className="s-stat">
-          <span className="s-stat-label">Connections</span>
+          <span className="s-stat-label">Substrate connections</span>
           <span className="s-stat-value">{stats.connections}</span>
           <span className="s-stat-delta">{/* MOCK */}graph density 0.04</span>
         </div>
       </div>
+
 
       {/* Two-column: distribution + pending candidates */}
       <div className="s-panel-grid">
