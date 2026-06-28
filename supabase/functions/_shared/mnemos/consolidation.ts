@@ -1261,6 +1261,7 @@ export async function runConsolidation(
     new_connections: connectionsCreated,
     beliefs_updated: beliefsUpdated,
     promotions,
+    memory_candidates_created: memoryCandidatesCreated,
     duration_ms: duration,
   };
 
@@ -1272,6 +1273,7 @@ export async function runConsolidation(
     engrams_strengthened: engramsStrengthened,
     promotions,
     beliefs_updated: beliefsUpdated,
+    memory_candidates_created: memoryCandidatesCreated,
     duration_ms: duration,
     candidate_summaries: candidates.map((e) => ({
       id: e.id,
@@ -1284,3 +1286,4 @@ export async function runConsolidation(
 
   return { result, report };
 }
+
