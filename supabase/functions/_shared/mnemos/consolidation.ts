@@ -422,6 +422,26 @@ const EXCLUDED_SUBSTRATE_KINDS = new Set(["dream", "debug", "verification", "tes
 const EXCLUDED_SUBSTRATE_TAGS = new Set(["dream", "debug", "verification", "test"]);
 
 /**
+ * Derived psychometric / deep-analysis tags. These represent inferred profile
+ * traits (Big Five, OCEAN, shadow analysis, etc.) and must never be auto-
+ * promoted to durable memory by the Mnemos bridge. They are sensitive,
+ * frequently near-duplicate across runs, and should only be confirmed via
+ * the explicit profile-review surface — not surfaced as memory candidates.
+ */
+const ANALYSIS_TAGS = new Set([
+  "deep-analysis", "deep_analysis", "deepanalysis",
+  "big-five", "big_five", "bigfive",
+  "ocean", "psychometric", "psychometrics",
+  "personality-analysis", "personality_analysis",
+  "trait-analysis", "trait_analysis",
+  "shadow-analysis", "shadow_analysis",
+  "profile-analysis", "profile_analysis",
+]);
+
+/** Tags that are sensitive and require explicit human authorship/confirmation. */
+const SENSITIVE_PROFILE_TAGS = new Set(["profile", "context"]);
+
+/**
  * Durable tag allowlist. An engram must carry at least one of these meaningful
  * tags to qualify as a durable memory candidate. "conversation" alone is NOT
  * sufficient — it just means "came from a chat turn", not "worth remembering".
@@ -456,6 +476,10 @@ const EXPLICIT_PATTERNS = [
   /\b(intimate|sexual|erotic|nsfw)\b.*\b(roleplay|rp)\b/i,
 ];
 
+function lowerTags(engram: Engram): string[] {
+  return (engram.tags ?? []).map((t) => String(t).toLowerCase());
+}
+
 function isExcludedSubstrate(engram: Engram): boolean {
   const ctx = (engram.source_context ?? {}) as Record<string, unknown>;
   const kind = typeof ctx.kind === "string" ? ctx.kind.toLowerCase() : "";
@@ -467,8 +491,43 @@ function isExcludedSubstrate(engram: Engram): boolean {
   return false;
 }
 
+/** True when the engram's tags include any derived-analysis marker. */
+function isDerivedAnalysis(engram: Engram): boolean {
+  for (const t of lowerTags(engram)) {
+    if (ANALYSIS_TAGS.has(t)) return true;
+  }
+  const ctx = (engram.source_context ?? {}) as Record<string, unknown>;
+  const source = typeof ctx.source === "string" ? ctx.source.toLowerCase() : "";
+  const kind = typeof ctx.kind === "string" ? ctx.kind.toLowerCase() : "";
+  if (source.includes("deep-analysis") || source.includes("big_five") || source.includes("psychometric")) return true;
+  if (kind.includes("deep-analysis") || kind.includes("big_five") || kind.includes("psychometric")) return true;
+  return false;
+}
+
+/**
+ * True when an engram carries sensitive profile/context tags AND is NOT
+ * marked as human-authored or explicitly confirmed by the user. Derived
+ * psychometric inferences slip through the "profile" durable tag otherwise.
+ */
+function isUnconfirmedSensitiveProfile(engram: Engram): boolean {
+  const tags = lowerTags(engram);
+  const sensitive = tags.some((t) => SENSITIVE_PROFILE_TAGS.has(t));
+  if (!sensitive) return false;
+  const ctx = (engram.source_context ?? {}) as Record<string, unknown>;
+  const authoredBy = typeof ctx.authored_by === "string" ? ctx.authored_by.toLowerCase() : "";
+  const humanAuthored =
+    ctx.human_authored === true ||
+    ctx.user_authored === true ||
+    authoredBy === "user" || authoredBy === "human";
+  const confirmed =
+    ctx.confirmed === true ||
+    ctx.user_confirmed === true ||
+    ctx.explicitly_confirmed === true;
+  return !(humanAuthored || confirmed);
+}
+
 function hasDurableTag(engram: Engram): boolean {
-  const tags = (engram.tags ?? []).map((t) => String(t).toLowerCase());
+  const tags = lowerTags(engram);
   if (tags.length === 0) return false;
   // "conversation" alone (or with only excluded peers) is not enough.
   return tags.some((t) => DURABLE_TAGS.has(t));
@@ -497,6 +556,25 @@ function isDistilledMemory(content: string): boolean {
   if (looksLikeTranscript(trimmed)) return false;
   return true;
 }
+
+/** Normalize content for near-duplicate detection within a single run. */
+function normalizeForDup(content: string): string {
+  return (content ?? "")
+    .toLowerCase()
+    .replace(/\b\d+(?:\.\d+)?\s*%?\b/g, "#") // collapse "0.95", "95%", "100"
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+/** Domain key from durable tags — used to suppress same-domain near-dupes. */
+function domainKey(engram: Engram): string {
+  const durable = lowerTags(engram).filter((t) => DURABLE_TAGS.has(t)).sort();
+  return durable.join("|");
+}
+
+
 
 function deriveMemoryType(engram: Engram): string {
   const tagSet = new Set((engram.tags ?? []).map((t) => String(t).toLowerCase()));
