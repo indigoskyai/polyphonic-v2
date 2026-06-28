@@ -104,10 +104,12 @@ export default function MnemosOverview() {
       const promoted = Number(result.promotions ?? 0);
       const linked = Number(result.new_connections ?? 0);
       const beliefsUpdated = Number(result.beliefs_updated ?? 0);
+      const candidatesCreated = Number(result.memory_candidates_created ?? 0);
       toast({
         title: 'Consolidation finished',
-        description: `${candidatesFound} candidates reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated`,
+        description: `${candidatesFound} engrams reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated · ${candidatesCreated} new memory candidate${candidatesCreated === 1 ? '' : 's'}`,
       });
+
     } catch (err) {
       toast({
         title: 'Could not consolidate',
