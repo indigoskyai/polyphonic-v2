@@ -421,6 +421,41 @@ const CANDIDATE_MIN_STRENGTH = 0.5;
 const EXCLUDED_SUBSTRATE_KINDS = new Set(["dream", "debug", "verification", "test"]);
 const EXCLUDED_SUBSTRATE_TAGS = new Set(["dream", "debug", "verification", "test"]);
 
+/**
+ * Durable tag allowlist. An engram must carry at least one of these meaningful
+ * tags to qualify as a durable memory candidate. "conversation" alone is NOT
+ * sufficient — it just means "came from a chat turn", not "worth remembering".
+ */
+const DURABLE_TAGS = new Set([
+  "preference", "relationship", "identity", "goal", "principle",
+  "project", "work-patterns", "continuity", "profile", "context",
+  // adjacent durable kinds we already key memory_type off of
+  "value", "belief", "fact",
+]);
+
+/** Transcript / dialogue markers — content with these is raw, not distilled. */
+const TRANSCRIPT_MARKERS = [
+  /\buser\s*:/i,
+  /\bassistant\s*:/i,
+  /\bhuman\s*:/i,
+  /\bai\s*:/i,
+  /\bsystem\s*:/i,
+];
+
+/**
+ * Explicit sexual / intimate roleplay filter. Conservative regex — surfaces
+ * to durable memory should never include erotic content even when the user
+ * opts into it elsewhere in the app. Skips, doesn't moderate.
+ */
+const EXPLICIT_PATTERNS = [
+  /\b(sex|sexual|sexually|sexy|nsfw|erotic|erotica|porn|pornographic)\b/i,
+  /\b(orgasm|orgasmic|masturbat\w*|aroused|arousal|horny|kink|kinky|fetish)\b/i,
+  /\b(nude|naked|topless|nipples?|breasts?|boobs?|genital\w*|penis|vagina|clitoris|anus)\b/i,
+  /\b(fuck\w*|cock|dick|pussy|cum(?:ming|shot)?|blowjob|handjob)\b/i,
+  /\b(roleplay|rp)\b.*\b(intimate|sexual|erotic|nsfw)\b/i,
+  /\b(intimate|sexual|erotic|nsfw)\b.*\b(roleplay|rp)\b/i,
+];
+
 function isExcludedSubstrate(engram: Engram): boolean {
   const ctx = (engram.source_context ?? {}) as Record<string, unknown>;
   const kind = typeof ctx.kind === "string" ? ctx.kind.toLowerCase() : "";
@@ -430,6 +465,37 @@ function isExcludedSubstrate(engram: Engram): boolean {
     if (EXCLUDED_SUBSTRATE_TAGS.has(String(t).toLowerCase())) return true;
   }
   return false;
+}
+
+function hasDurableTag(engram: Engram): boolean {
+  const tags = (engram.tags ?? []).map((t) => String(t).toLowerCase());
+  if (tags.length === 0) return false;
+  // "conversation" alone (or with only excluded peers) is not enough.
+  return tags.some((t) => DURABLE_TAGS.has(t));
+}
+
+function looksLikeTranscript(content: string): boolean {
+  if (!content) return true;
+  for (const re of TRANSCRIPT_MARKERS) if (re.test(content)) return true;
+  // Multi-line dialogue with quote markers or repeated speaker-style colons.
+  const colonLines = (content.match(/^\s*[A-Z][a-zA-Z _-]{0,30}\s*:\s/gm) ?? []).length;
+  if (colonLines >= 2) return true;
+  return false;
+}
+
+function looksExplicit(content: string): boolean {
+  if (!content) return false;
+  for (const re of EXPLICIT_PATTERNS) if (re.test(content)) return true;
+  return false;
+}
+
+function isDistilledMemory(content: string): boolean {
+  const trimmed = (content ?? "").trim();
+  if (trimmed.length < 20) return false;
+  // Distilled memory is short prose. Raw transcript snippets bloat past this.
+  if (trimmed.length > 600) return false;
+  if (looksLikeTranscript(trimmed)) return false;
+  return true;
 }
 
 function deriveMemoryType(engram: Engram): string {
@@ -448,6 +514,9 @@ function deriveMemoryType(engram: Engram): string {
  * pending memory_candidates. Scoped per user_id + agent_id, deduplicated
  * against existing memory_candidates.source->>'engram_id' and
  * memories.provenance->>'engram_id', capped at MAX_CANDIDATES_PER_RUN.
+ *
+ * Hardened: requires a meaningful durable tag, rejects transcript-shaped
+ * content, and skips explicit sexual / intimate roleplay material.
  */
 async function bridgeEngramsToCandidates(
   supabase: SupabaseClient,
@@ -458,6 +527,7 @@ async function bridgeEngramsToCandidates(
 ): Promise<number> {
   const eligible: Engram[] = [];
   const seen = new Set<string>();
+  let rejTag = 0, rejTranscript = 0, rejExplicit = 0, rejShape = 0;
   for (const e of candidates) {
     if (isExcludedSubstrate(e)) continue;
     const isPromoted = promotedIds.has(e.id);
@@ -467,8 +537,22 @@ async function bridgeEngramsToCandidates(
       e.stability >= PROMOTION_MIN_STABILITY;
     if (!isPromoted && !isStableSemantic) continue;
     if (seen.has(e.id)) continue;
+
+    // Hardening gates — order matters for diagnostics.
+    if (!hasDurableTag(e)) { rejTag++; continue; }
+    if (looksExplicit(e.content ?? "")) { rejExplicit++; continue; }
+    if (looksLikeTranscript(e.content ?? "")) { rejTranscript++; continue; }
+    if (!isDistilledMemory(e.content ?? "")) { rejShape++; continue; }
+
     seen.add(e.id);
     eligible.push(e);
+  }
+  if (rejTag || rejTranscript || rejExplicit || rejShape) {
+    console.log("[consolidation] bridge filters rejected", {
+      user_id: userId, agent_id: agentId,
+      no_durable_tag: rejTag, transcript_shape: rejTranscript,
+      explicit: rejExplicit, not_distilled: rejShape,
+    });
   }
 
   if (eligible.length === 0) return 0;
