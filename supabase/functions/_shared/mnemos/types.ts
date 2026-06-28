@@ -230,6 +230,9 @@ export interface ConsolidationResult {
   beliefs_updated: number;
   /** Engrams promoted from episodic to semantic. */
   promotions: number;
+  /** Durable memory_candidates surfaced from the engram substrate this run. */
+  memory_candidates_created?: number;
   /** Duration of the consolidation cycle in milliseconds. */
   duration_ms: number;
 }
+
