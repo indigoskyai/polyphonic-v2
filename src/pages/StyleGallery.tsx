@@ -196,13 +196,13 @@ function Row({ label, state, variant }: RowProps) {
 
     case 'sageDot':
       extra = {
-        background: isActive ? 'rgba(201,168,124,0.06)' : isHover ? 'var(--overlay-hover)' : 'transparent',
+        background: isActive ? 'rgba(96, 165, 250, 0.06)' : isHover ? 'var(--overlay-hover)' : 'transparent',
         borderRadius: 10,
       };
       if (isActive) {
         inner = (
           <>
-            <span style={{ position: 'absolute', left: 5, top: '50%', width: 4, height: 4, transform: 'translateY(-50%)', borderRadius: '50%', background: 'var(--luca-full, #c9a87c)', boxShadow: '0 0 6px rgba(201,168,124,0.5)' }} />
+            <span style={{ position: 'absolute', left: 5, top: '50%', width: 4, height: 4, transform: 'translateY(-50%)', borderRadius: '50%', background: 'var(--luca-full, #60a5fa)', boxShadow: '0 0 6px rgba(96, 165, 250, 0.5)' }} />
             {label}
           </>
         );
@@ -212,7 +212,7 @@ function Row({ label, state, variant }: RowProps) {
     case 'edgeGlow':
       extra = {
         background: isActive
-          ? 'linear-gradient(90deg, rgba(201,168,124,0.10) 0%, rgba(201,168,124,0.02) 40%, transparent 100%)'
+          ? 'linear-gradient(90deg, rgba(96, 165, 250, 0.10) 0%, rgba(96, 165, 250, 0.02) 40%, transparent 100%)'
           : isHover
             ? 'var(--overlay-hover)'
             : 'transparent',
@@ -267,7 +267,7 @@ function Row({ label, state, variant }: RowProps) {
                 left: 8,
                 bottom: 4,
                 height: 1,
-                background: 'var(--luca-full, #c9a87c)',
+                background: 'var(--luca-full, #60a5fa)',
                 animation: 'trail-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
               }}
             />
@@ -490,8 +490,8 @@ function ComposerHaloDemo() {
             outline: 'none',
             transition: 'border-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out)',
             ...(focused && {
-              borderColor: 'rgba(201,168,124,0.32)',
-              boxShadow: '0 0 0 3px rgba(201,168,124,0.06)',
+              borderColor: 'rgba(96, 165, 250, 0.32)',
+              boxShadow: '0 0 0 3px rgba(96, 165, 250, 0.06)',
             }),
             ...(isBreathing && {
               animation: 'halo-breathe 3.5s ease-in-out infinite',
@@ -518,7 +518,7 @@ function PageRippleDemo() {
               top: 0,
               bottom: 0,
               width: '40%',
-              background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,124,0.45) 50%, transparent 100%)',
+              background: 'linear-gradient(90deg, transparent 0%, rgba(96, 165, 250, 0.45) 50%, transparent 100%)',
               animation: 'page-ripple 800ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
             }}
           />
@@ -563,7 +563,7 @@ function SendShimmerDemo() {
             position: 'relative',
             overflow: 'hidden',
             background: armed
-              ? 'linear-gradient(110deg, rgba(201,168,124,0.16) 0%, rgba(201,168,124,0.05) 30%, rgba(255,255,255,0.18) 50%, rgba(201,168,124,0.05) 70%, rgba(201,168,124,0.16) 100%)'
+              ? 'linear-gradient(110deg, rgba(96, 165, 250, 0.16) 0%, rgba(96, 165, 250, 0.05) 30%, rgba(255,255,255,0.18) 50%, rgba(96, 165, 250, 0.05) 70%, rgba(96, 165, 250, 0.16) 100%)'
               : 'rgba(255,255,255,0.04)',
             backgroundSize: armed ? '200% 100%' : '100% 100%',
             animation: armed ? 'shimmer 4s linear infinite' : 'none',
@@ -613,7 +613,7 @@ function ThreadRow({ label, hasUnread }: { label: string; hasUnread?: boolean })
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: 'var(--luca-full, #c9a87c)',
+            background: 'var(--luca-full, #60a5fa)',
             animation: 'murmur-slow 1s ease-in-out infinite',
           }}
         />
@@ -695,7 +695,7 @@ function DrawerSweepDemo() {
                 top: 0,
                 bottom: 0,
                 width: 1,
-                background: 'var(--luca-full, #c9a87c)',
+                background: 'var(--luca-full, #60a5fa)',
                 opacity: 0.6,
                 animation: 'drawer-edge-sweep 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
               }}
@@ -948,8 +948,8 @@ function GalleryStyles() {
         50%      { opacity: 1; }
       }
       @keyframes halo-breathe {
-        0%, 100% { box-shadow: 0 0 0 3px rgba(201,168,124,0.04), 0 0 0 1px rgba(201,168,124,0.32) inset; }
-        50%      { box-shadow: 0 0 0 6px rgba(201,168,124,0.08), 0 0 0 1px rgba(201,168,124,0.45) inset; }
+        0%, 100% { box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.04), 0 0 0 1px rgba(96, 165, 250, 0.32) inset; }
+        50%      { box-shadow: 0 0 0 6px rgba(96, 165, 250, 0.08), 0 0 0 1px rgba(96, 165, 250, 0.45) inset; }
       }
       @keyframes page-ripple {
         from { left: -40%; opacity: 0; }
@@ -957,10 +957,10 @@ function GalleryStyles() {
         to   { left: 100%; opacity: 0; }
       }
       @keyframes identity-drift {
-        0%   { background: rgba(201,168,124,0.12); border-color: rgba(201,168,124,0.30); color: #c9a87c; }
+        0%   { background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.30); color: #60a5fa; }
         33%  { background: rgba(168,140,201,0.12); border-color: rgba(168,140,201,0.30); color: #a88cc9; }
         66%  { background: rgba(91,138,173,0.12);  border-color: rgba(91,138,173,0.30);  color: #5b8aad; }
-        100% { background: rgba(201,168,124,0.12); border-color: rgba(201,168,124,0.30); color: #c9a87c; }
+        100% { background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.30); color: #60a5fa; }
       }
       @keyframes drawer-slide {
         from { transform: translateX(8%); opacity: 0; }

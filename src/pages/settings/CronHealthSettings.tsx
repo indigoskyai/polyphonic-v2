@@ -57,7 +57,7 @@ function statusFor(row: CronHealthRow): 'green' | 'amber' | 'red' | 'idle' {
 
 const STATUS_COLOR: Record<'green' | 'amber' | 'red' | 'idle', string> = {
   green: '#82b484',
-  amber: '#c9a87c',
+  amber: '#60a5fa',
   red: '#e15873',
   idle: 'rgba(178, 176, 172, 0.4)',
 };

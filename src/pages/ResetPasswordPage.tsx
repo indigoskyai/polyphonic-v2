@@ -421,10 +421,10 @@ function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
       }}
       onFocus={(e) => {
         const el = e.currentTarget as HTMLInputElement;
-        el.style.borderColor = 'rgba(201, 168, 124, 0.32)';
+        el.style.borderColor = 'rgba(96, 165, 250, 0.32)';
         el.style.background = 'rgba(20, 20, 24, 0.7)';
         el.style.boxShadow =
-          '0 0 0 3px rgba(201, 168, 124, 0.06), inset 0 1px 0 rgba(255,255,255,0.025)';
+          '0 0 0 3px rgba(96, 165, 250, 0.06), inset 0 1px 0 rgba(255,255,255,0.025)';
         rest.onFocus?.(e);
       }}
       onBlur={(e) => {

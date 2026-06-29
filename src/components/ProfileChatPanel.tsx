@@ -132,9 +132,9 @@ export default function ProfileChatPanel({ onClose, starterPrompts, agentId }: P
               fontSize: 9,
               padding: '1px 5px',
               borderRadius: 3,
-              background: 'rgba(201,168,124,0.15)',
-              color: '#c9a87c',
-              border: '1px solid rgba(201,168,124,0.3)',
+              background: 'rgba(96, 165, 250, 0.15)',
+              color: '#60a5fa',
+              border: '1px solid rgba(96, 165, 250, 0.3)',
               fontFamily: 'var(--font-mono)',
               verticalAlign: 'baseline',
             }}
@@ -191,12 +191,12 @@ export default function ProfileChatPanel({ onClose, starterPrompts, agentId }: P
             marginTop: 10,
             padding: '10px 12px',
             background: 'var(--bg-deep)',
-            border: '1px solid rgba(201,168,124,0.3)',
+            border: '1px solid rgba(96, 165, 250, 0.3)',
             borderRadius: 'var(--radius-sm)',
             fontSize: 11,
           }}
         >
-          <div style={{ marginBottom: 6, color: '#c9a87c', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+          <div style={{ marginBottom: 6, color: '#60a5fa', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
             pass: {cite.pass_name} · topic: {cite.topic}
           </div>
           <div style={{ color: 'var(--text-soft)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{cite.excerpt}</div>

@@ -85,7 +85,7 @@ export default function WelcomeBackCard({ data, onUseAsInput, onDismiss }: Props
           width: 5,
           height: 5,
           borderRadius: '50%',
-          background: 'var(--luca-full, #c9a87c)',
+          background: 'var(--luca-full, #60a5fa)',
           flex: '0 0 5px',
           animation: 'breathe 5s ease-in-out infinite',
         }}

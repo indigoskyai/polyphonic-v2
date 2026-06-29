@@ -189,7 +189,7 @@ export default function ArtifactRenderer({
         flex: fill ? '0 0 auto' : undefined,
       }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--luca-full, var(--text-ghost))', boxShadow: '0 0 6px rgba(201,168,124,0.35)' }} />
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--luca-full, var(--text-ghost))', boxShadow: '0 0 6px rgba(96, 165, 250, 0.35)' }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 'var(--track-mono)', color: 'var(--text-soft)' }}>
             {artifact.kind}{artifact.version > 1 ? ` · v${artifact.version}` : ''}
           </span>

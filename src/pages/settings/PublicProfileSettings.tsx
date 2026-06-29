@@ -33,7 +33,7 @@ const DEFAULT_FORM: PublicProfileForm = {
   display_name: '',
   bio_short: '',
   bio_long: '',
-  accent_color: '#c9a87c',
+  accent_color: '#60a5fa',
   published: false,
 };
 
@@ -93,7 +93,7 @@ export default function PublicProfileSettings() {
           display_name: data?.display_name || myHandle.handle,
           bio_short: data?.bio_short || '',
           bio_long: data?.bio_long || '',
-          accent_color: validAccent(data?.accent_color || '') ? data!.accent_color! : '#c9a87c',
+          accent_color: validAccent(data?.accent_color || '') ? data!.accent_color! : '#60a5fa',
           published: Boolean(data?.published),
         };
         setForm(next);
@@ -126,7 +126,7 @@ export default function PublicProfileSettings() {
   async function handleSave() {
     if (!myHandle || saving) return;
     if (!validAccent(form.accent_color)) {
-      toast({ title: 'Invalid accent color', description: 'Use a full hex value like #c9a87c.' });
+      toast({ title: 'Invalid accent color', description: 'Use a full hex value like #60a5fa.' });
       return;
     }
     setSaving(true);
@@ -275,7 +275,7 @@ export default function PublicProfileSettings() {
                       <input
                         aria-label="Profile accent color"
                         type="color"
-                        value={validAccent(form.accent_color) ? form.accent_color : '#c9a87c'}
+                        value={validAccent(form.accent_color) ? form.accent_color : '#60a5fa'}
                         onChange={(event) => setForm((current) => ({ ...current, accent_color: event.target.value }))}
                         style={{
                           width: 40,

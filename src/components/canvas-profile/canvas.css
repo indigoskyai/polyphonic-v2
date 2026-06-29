@@ -126,7 +126,7 @@
 .frame-root,
 .frame-system-shell,
 .frame-canvas-shell {
-  --frame-accent: var(--luca-full, #c9a87c);
+  --frame-accent: var(--luca-full, #60a5fa);
   position: fixed;
   inset: 0;
   color: var(--text-body);

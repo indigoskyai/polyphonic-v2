@@ -133,7 +133,7 @@ function Variant({
           fontWeight: 500,
           letterSpacing: 'var(--track-folio)',
           textTransform: 'uppercase',
-          color: rec ? 'var(--luca-full, #c9a87c)' : 'var(--text-ghost)',
+          color: rec ? 'var(--luca-full, #60a5fa)' : 'var(--text-ghost)',
           marginBottom: 8,
         }}
       >
@@ -162,7 +162,7 @@ function ComposerFrame({ children, armed }: { children: React.ReactNode; armed?:
         position: 'relative',
         overflow: 'hidden',
         transition: 'border-color 220ms var(--ease-out)',
-        ...(armed && { borderColor: 'rgba(201,168,124,0.25)' }),
+        ...(armed && { borderColor: 'rgba(96, 165, 250, 0.25)' }),
       }}
     >
       {children}
@@ -339,9 +339,9 @@ function HybridComposer() {
                   fontWeight: 500,
                   letterSpacing: 'var(--track-folio)',
                   textTransform: 'uppercase',
-                  color: 'var(--luca-full, #c9a87c)',
-                  background: 'rgba(201, 168, 124, 0.06)',
-                  border: '1px solid rgba(201, 168, 124, 0.18)',
+                  color: 'var(--luca-full, #60a5fa)',
+                  background: 'rgba(96, 165, 250, 0.06)',
+                  border: '1px solid rgba(96, 165, 250, 0.18)',
                   borderRadius: 999,
                   padding: '2px 9px',
                 }}
@@ -464,7 +464,7 @@ function MenuItem({
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = 'var(--sage-overlay-hover)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <span style={{ display: 'inline-flex', width: 18, justifyContent: 'center', color: toggle ? 'var(--luca-full, #c9a87c)' : 'inherit' }}>
+      <span style={{ display: 'inline-flex', width: 18, justifyContent: 'center', color: toggle ? 'var(--luca-full, #60a5fa)' : 'inherit' }}>
         {icon}
       </span>
       <span style={{ flex: 1 }}>{label}</span>
@@ -474,7 +474,7 @@ function MenuItem({
             width: 24,
             height: 13,
             borderRadius: 999,
-            background: toggle ? 'var(--luca-full, #c9a87c)' : 'rgba(255,255,255,0.10)',
+            background: toggle ? 'var(--luca-full, #60a5fa)' : 'rgba(255,255,255,0.10)',
             position: 'relative',
             transition: 'background 180ms var(--ease-out)',
           }}
@@ -563,9 +563,9 @@ function PillButton({
         height: 28,
         padding: '0 10px',
         borderRadius: 999,
-        background: active ? 'rgba(201,168,124,0.10)' : 'transparent',
-        border: `1px solid ${active ? 'rgba(201,168,124,0.28)' : 'var(--border-faint)'}`,
-        color: active ? 'var(--luca-full, #c9a87c)' : 'var(--text-tertiary)',
+        background: active ? 'rgba(96, 165, 250, 0.10)' : 'transparent',
+        border: `1px solid ${active ? 'rgba(96, 165, 250, 0.28)' : 'var(--border-faint)'}`,
+        color: active ? 'var(--luca-full, #60a5fa)' : 'var(--text-tertiary)',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
         fontWeight: 500,
@@ -669,12 +669,12 @@ function SendButton({ armed }: { armed: boolean }) {
         height: 32,
         borderRadius: 999,
         background: armed
-          ? 'linear-gradient(180deg, rgba(201,168,124,0.18) 0%, rgba(201,168,124,0.10) 100%)'
+          ? 'linear-gradient(180deg, rgba(96, 165, 250, 0.18) 0%, rgba(96, 165, 250, 0.10) 100%)'
           : 'transparent',
         border: 'none',
         color: armed ? 'var(--ink)' : 'var(--text-ghost)',
         boxShadow: armed
-          ? '0 0 0 1px rgba(201,168,124,0.30), 0 0 12px rgba(201,168,124,0.18)'
+          ? '0 0 0 1px rgba(96, 165, 250, 0.30), 0 0 12px rgba(96, 165, 250, 0.18)'
           : 'none',
         display: 'flex',
         alignItems: 'center',

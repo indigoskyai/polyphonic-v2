@@ -547,8 +547,8 @@ const cardStyle: CSSProperties = {
 
 const headerStyle: CSSProperties = { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexShrink: 0, flexWrap: 'wrap' };
 const metaRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' };
-const eyebrowStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, color: 'rgba(226,188,132,0.88)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase' };
-const evidencePillStyle: CSSProperties = { border: '1px solid rgba(226,188,132,0.22)', borderRadius: 999, background: 'rgba(226,188,132,0.065)', color: 'rgba(226,188,132,0.82)', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.08em', padding: '3px 7px', textTransform: 'uppercase' };
+const eyebrowStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, color: 'rgba(96,165,250,0.88)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase' };
+const evidencePillStyle: CSSProperties = { border: '1px solid rgba(96,165,250,0.22)', borderRadius: 999, background: 'rgba(96,165,250,0.065)', color: 'rgba(96,165,250,0.82)', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.08em', padding: '3px 7px', textTransform: 'uppercase' };
 const titleStyle: CSSProperties = { margin: '8px 0 0', color: 'var(--text-primary)', fontSize: 19, lineHeight: 1.12, fontWeight: 430, letterSpacing: 0 };
 const questionStyle: CSSProperties = { margin: '7px 0 0', color: 'var(--text-tertiary)', fontSize: 12.5, lineHeight: 1.45, maxWidth: 580 };
 const datasetPillStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 'min(100%, 238px)', padding: '7px 9px', border: '1px solid var(--border-faint)', borderRadius: 10, color: 'var(--text-tertiary)', background: 'rgba(0,0,0,0.14)', fontFamily: 'var(--font-mono)', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 1 };
@@ -561,11 +561,11 @@ const controlsStyle: CSSProperties = { display: 'grid', alignContent: 'start', g
 const controlClusterStyle: CSSProperties = { display: 'grid', gap: 8 };
 const labelStyle: CSSProperties = { color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 'var(--track-mono)', textTransform: 'uppercase' };
 const chipWrapStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 6 };
-const fieldChipStyle = (active: boolean): CSSProperties => ({ border: `1px solid ${active ? 'rgba(226,188,132,0.48)' : 'var(--border-faint)'}`, borderRadius: 999, background: active ? 'rgba(226,188,132,0.105)' : 'rgba(255,255,255,0.025)', color: active ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 11.5, lineHeight: 1, padding: '7px 10px', cursor: 'pointer' });
+const fieldChipStyle = (active: boolean): CSSProperties => ({ border: `1px solid ${active ? 'rgba(96,165,250,0.48)' : 'var(--border-faint)'}`, borderRadius: 999, background: active ? 'rgba(96,165,250,0.105)' : 'rgba(255,255,255,0.025)', color: active ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 11.5, lineHeight: 1, padding: '7px 10px', cursor: 'pointer' });
 const controlGroupStyle: CSSProperties = { display: 'grid', gap: 8 };
 const sliderHeaderStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 };
 const valueStyle: CSSProperties = { color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10.5 };
-const rangeStyle: CSSProperties = { width: '100%', accentColor: 'rgb(226,188,132)' };
+const rangeStyle: CSSProperties = { width: '100%', accentColor: 'rgb(96,165,250)' };
 const parametersStyle: CSSProperties = { display: 'grid', gap: 10 };
 const parameterGridStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 14px' };
 const paramStyle: CSSProperties = { display: 'grid', gap: 6, color: 'var(--text-tertiary)', fontSize: 11.5, minWidth: 0 };
@@ -582,7 +582,7 @@ const monoTextStyle: CSSProperties = { margin: '7px 0 0', color: 'var(--text-ter
 const measurementChipStyle: CSSProperties = { border: '1px solid rgba(110,160,210,0.32)', borderRadius: 999, color: 'rgb(164,198,228)', background: 'rgba(78,135,190,0.10)', fontSize: 11, padding: '5px 8px' };
 const actionRowStyle: CSSProperties = { display: 'flex', gap: 7, flexWrap: 'wrap', flexShrink: 0 };
 const actionButtonStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border-faint)', borderRadius: 9, background: 'rgba(255,255,255,0.035)', color: 'var(--text-tertiary)', fontSize: 11.5, padding: '8px 10px', cursor: 'pointer' };
-const primaryActionButtonStyle: CSSProperties = { ...actionButtonStyle, color: 'var(--text-secondary)', background: 'rgba(226,188,132,0.08)', border: '1px solid rgba(226,188,132,0.26)' };
-const liveDotStyle: CSSProperties = { width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-soft)', boxShadow: '0 0 12px rgba(209,168,116,0.6)' };
-const buildingGridStyle: CSSProperties = { width: '100%', height: '100%', background: 'linear-gradient(90deg, rgba(255,255,255,0.03), rgba(209,168,116,0.11), rgba(255,255,255,0.03))', backgroundSize: '220% 100%', animation: 'artifactDots 1.6s ease-in-out infinite' };
+const primaryActionButtonStyle: CSSProperties = { ...actionButtonStyle, color: 'var(--text-secondary)', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.26)' };
+const liveDotStyle: CSSProperties = { width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-soft)', boxShadow: '0 0 12px rgba(96,165,250,0.6)' };
+const buildingGridStyle: CSSProperties = { width: '100%', height: '100%', background: 'linear-gradient(90deg, rgba(255,255,255,0.03), rgba(96,165,250,0.11), rgba(255,255,255,0.03))', backgroundSize: '220% 100%', animation: 'artifactDots 1.6s ease-in-out infinite' };
 const errorPreStyle: CSSProperties = { margin: '10px 0 0', padding: 10, border: '1px solid var(--border-faint)', borderRadius: 8, background: 'var(--surface-muted)', color: 'var(--text-tertiary)', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' };

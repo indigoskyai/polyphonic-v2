@@ -690,7 +690,7 @@ const rankStyle = (active: boolean): CSSProperties => ({
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: active ? 'rgba(201,168,124,0.14)' : 'rgba(255,255,255,0.035)',
+  background: active ? 'rgba(96, 165, 250, 0.14)' : 'rgba(255,255,255,0.035)',
   color: active ? 'var(--accent-soft)' : 'var(--text-ghost)',
   fontFamily: 'var(--font-mono)',
   fontSize: 10,

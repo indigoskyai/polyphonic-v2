@@ -85,7 +85,7 @@ function publicUrl(path: string): string {
 }
 
 function safeAccent(value: string | null | undefined): string {
-  return /^#[0-9a-f]{3,8}$/i.test(value || '') ? value! : '#c9a87c';
+  return /^#[0-9a-f]{3,8}$/i.test(value || '') ? value! : '#60a5fa';
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

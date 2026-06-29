@@ -28,7 +28,7 @@ export default function OpenRouterCallback() {
   }, []);
 
   const accent = status.ok
-    ? { dot: "var(--luca-full, #c9a87c)", ring: "rgba(201, 168, 124, 0.32)", glow: "rgba(201, 168, 124, 0.55)" }
+    ? { dot: "var(--luca-full, #60a5fa)", ring: "rgba(96, 165, 250, 0.32)", glow: "rgba(96, 165, 250, 0.55)" }
     : { dot: "#c97c7c", ring: "rgba(201, 124, 124, 0.32)", glow: "rgba(201, 124, 124, 0.55)" };
 
   return (
