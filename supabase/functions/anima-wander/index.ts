@@ -315,7 +315,7 @@ function parseWanderings(raw: string): ParsedWandering[] {
   for (const block of blocks) {
     if (!block.trim().startsWith("WANDERING:")) continue;
 
-    const contentMatch = block.match(/WANDERING:\s*(.+?)(?=\nSALIENCE:|\Z)/s);
+    const contentMatch = block.match(/WANDERING:\s*(.+?)(?=\nSALIENCE:|$)/s);
     const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
     const typeMatch = block.match(/TYPE:\s*(wandering|insight)/i);
     const tagsMatch = block.match(/TAGS:\s*(.+)/);

@@ -98,7 +98,9 @@ export function useCanvasViewport({ containerRef, enabled = true, initial }: Arg
     const onUp = (e: PointerEvent) => {
       if (draggingRef.current) {
         draggingRef.current = null;
-        try { el.releasePointerCapture(e.pointerId); } catch {}
+        try { el.releasePointerCapture(e.pointerId); } catch {
+          // Pointer capture can be gone if the drag ended outside the surface.
+        }
         setPanCursor(spaceDownRef.current);
       }
     };

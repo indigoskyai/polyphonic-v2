@@ -183,7 +183,7 @@ serve(async (req) => {
 
         if (raw.includes("NO_CONNECTION")) continue;
 
-        const connMatch = raw.match(/CONNECTION:\s*(.+?)(?=\nSTRENGTH:|\Z)/s);
+        const connMatch = raw.match(/CONNECTION:\s*(.+?)(?=\nSTRENGTH:|$)/s);
         const strMatch = raw.match(/STRENGTH:\s*([\d.]+)/);
         const typeMatch = raw.match(/TYPE:\s*(\S+)/);
 

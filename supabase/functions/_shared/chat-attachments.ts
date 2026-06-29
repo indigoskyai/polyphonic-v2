@@ -44,7 +44,7 @@ function formatAttachmentRow(attachment: ChatAttachment, index: number): string 
 
 function cleanText(value: unknown, fallback = ""): string {
   if (typeof value !== "string") return fallback;
-  return value.replace(/\u0000/g, "").trim().slice(0, 24_000) || fallback;
+  return value.split("\u0000").join("").trim().slice(0, 24_000) || fallback;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

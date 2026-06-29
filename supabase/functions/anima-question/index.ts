@@ -176,7 +176,7 @@ ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
     const blocks = raw.split(/(?=QUESTION:)/);
     for (const block of blocks) {
       if (!block.trim().startsWith("QUESTION:")) continue;
-      const qMatch = block.match(/QUESTION:\s*(.+?)(?=\nSALIENCE:|\Z)/s);
+      const qMatch = block.match(/QUESTION:\s*(.+?)(?=\nSALIENCE:|$)/s);
       const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
       const ctxMatch = block.match(/CONTEXT:\s*(.+)/);
       if (!qMatch) continue;

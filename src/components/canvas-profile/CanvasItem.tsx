@@ -75,7 +75,9 @@ function CanvasItemImpl({ itemId, mode, zoom }: Props) {
     if (!d) return;
     dragStateRef.current = null;
     setInteracting(false);
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {
+      // Pointer capture may already be released after fast drags.
+    }
     // Persist final state
     persistItem(itemId, { x: item.x, y: item.y, w: item.w, h: item.h });
   }, [item.x, item.y, item.w, item.h, itemId, persistItem]);

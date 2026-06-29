@@ -194,7 +194,7 @@ ${beliefsText}`;
     const blocks = raw.split(/(?=THOUGHT:)/);
     for (const block of blocks) {
       if (!block.trim().startsWith("THOUGHT:")) continue;
-      const contentMatch = block.match(/THOUGHT:\s*(.+?)(?=\nSALIENCE:|\Z)/s);
+      const contentMatch = block.match(/THOUGHT:\s*(.+?)(?=\nSALIENCE:|$)/s);
       const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
       const tagsMatch = block.match(/TAGS:\s*(.+)/);
       if (!contentMatch) continue;

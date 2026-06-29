@@ -463,7 +463,9 @@ function parseMultiModelVariants(thinkingContent: string): Array<{ model: string
     if (parsed?.type === 'multi_model' && Array.isArray(parsed?.variants)) {
       return parsed.variants;
     }
-  } catch {}
+  } catch {
+    // Thinking content can be legacy plain text.
+  }
   return [];
 }
 
@@ -2274,7 +2276,9 @@ export default function ChatView() {
                   metadata: { agent: activeMessageAgent, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
                 } as any);
               }
-        } catch {}
+        } catch {
+          // The stream may already have ended or the fallback row may fail locally.
+        }
       };
 
       if (reader) {

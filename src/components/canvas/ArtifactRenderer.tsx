@@ -93,7 +93,10 @@ export default function ArtifactRenderer({
   const navigate = useNavigate();
   const [internalView, setInternalView] = useState<'preview' | 'code'>('preview');
   const view = viewProp ?? internalView;
-  const setView = (v: 'preview' | 'code') => { onViewChange ? onViewChange(v) : setInternalView(v); };
+  const setView = (v: 'preview' | 'code') => {
+    if (onViewChange) onViewChange(v);
+    else setInternalView(v);
+  };
   const [iframeKey, setIframeKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);

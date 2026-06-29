@@ -222,7 +222,7 @@ export default function GraphTab() {
       adj.get(c.target_id)!.add(c.source_id);
     }
 
-    let isFirst = nodesRef.current.size === 0;
+    const isFirst = nodesRef.current.size === 0;
 
     activeEngrams.forEach((engram, i) => {
       const prev = nodesRef.current.get(engram.id);

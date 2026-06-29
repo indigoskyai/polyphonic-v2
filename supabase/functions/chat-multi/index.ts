@@ -1889,7 +1889,9 @@ function buildCitationsFromToolMessages(toolMessages: any[]): { citations: Array
       for (const tc of m.tool_calls) {
         if (!tc?.id || !tc?.function?.name) continue;
         let args: any = {};
-        try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}; } catch {}
+        try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}; } catch {
+          args = {};
+        }
         toolCallById.set(tc.id, { name: tc.function.name, args });
       }
     }

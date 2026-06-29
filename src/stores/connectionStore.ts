@@ -115,8 +115,7 @@ function scheduleReconnect(set: (partial: Partial<ConnectionState>) => void) {
 function openChannel(set: (partial: Partial<ConnectionState>) => void) {
   clearReconnectTimer();
   tearDown();
-  let channel: RealtimeChannel;
-  channel = supabase
+  const channel: RealtimeChannel = supabase
     .channel('system:presence')
     .subscribe((status) => {
       if (closed || currentChannel !== channel) return;

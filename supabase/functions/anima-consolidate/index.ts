@@ -173,9 +173,9 @@ serve(async (req) => {
     const blocks = raw.split(/(?=MEMORY:)/);
     for (const block of blocks) {
       if (!block.trim().startsWith("MEMORY:")) continue;
-      const contentMatch = block.match(/MEMORY:\s*(.+?)(?=\nTYPE:|\Z)/s);
+      const contentMatch = block.match(/MEMORY:\s*(.+?)(?=\nTYPE:|$)/s);
       const typeMatch = block.match(/TYPE:\s*(\S+)/);
-      const emotionMatch = block.match(/EMOTIONAL_CONTEXT:\s*(.+?)(?=\nSALIENCE:|\Z)/s);
+      const emotionMatch = block.match(/EMOTIONAL_CONTEXT:\s*(.+?)(?=\nSALIENCE:|$)/s);
       const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
       const tagsMatch = block.match(/TAGS:\s*(.+)/);
       if (!contentMatch) continue;

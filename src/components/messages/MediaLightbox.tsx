@@ -69,7 +69,9 @@ export default function MediaLightbox({
   };
 
   const handleCopyLink = async () => {
-    try { await navigator.clipboard.writeText(src); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch {}
+    try { await navigator.clipboard.writeText(src); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch {
+      // Clipboard access can be denied by the browser; opening still works.
+    }
   };
 
   const submitEdit = () => {

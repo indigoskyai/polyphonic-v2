@@ -242,7 +242,7 @@ serve(async (req) => {
         const blocks = raw.split(/(?=OBSERVATION:)/);
         for (const block of blocks) {
           if (!block.trim().startsWith("OBSERVATION:")) continue;
-          const obsMatch = block.match(/OBSERVATION:\s*(.+?)(?=\nTYPE:|\Z)/s);
+          const obsMatch = block.match(/OBSERVATION:\s*(.+?)(?=\nTYPE:|$)/s);
           const typeMatch = block.match(/TYPE:\s*(\S+)/);
           const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
           if (!obsMatch) continue;

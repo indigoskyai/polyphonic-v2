@@ -27,7 +27,9 @@ export default function SearchCitationsCard({ citations, query }: Props) {
       <div className="citations-card-grid">
         {citations.slice(0, 8).map((c, i) => {
           let host = '';
-          try { host = new URL(c.url).hostname.replace(/^www\./, ''); } catch {}
+          try { host = new URL(c.url).hostname.replace(/^www\./, ''); } catch {
+            host = c.url;
+          }
           return (
             <a
               key={i}

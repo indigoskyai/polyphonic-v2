@@ -961,9 +961,9 @@ ${pass5}`;
       }
     });
 
-    // @ts-ignore — EdgeRuntime is provided by the Supabase edge runtime
+    // @ts-expect-error — EdgeRuntime is provided by the Supabase edge runtime
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
-      // @ts-ignore
+      // @ts-expect-error — EdgeRuntime is provided by the Supabase edge runtime
       EdgeRuntime.waitUntil(bgTask);
     }
 

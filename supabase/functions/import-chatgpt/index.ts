@@ -64,7 +64,13 @@ function extractJsonFromResponse(response: string): unknown {
     .replace(/```\s*/g, "")
     .trim();
 
-  const jsonStart = cleaned.search(/[\{\[]/);
+  const objectStart = cleaned.indexOf("{");
+  const arrayStart = cleaned.indexOf("[");
+  const jsonStart = objectStart === -1
+    ? arrayStart
+    : arrayStart === -1
+      ? objectStart
+      : Math.min(objectStart, arrayStart);
   if (jsonStart === -1) {
     throw new Error("No JSON found in model response");
   }
@@ -84,7 +90,7 @@ function extractJsonFromResponse(response: string): unknown {
     cleaned = cleaned
       .replace(/,\s*}/g, "}")
       .replace(/,\s*]/g, "]")
-      .replace(/[\x00-\x1F\x7F]/g, "");
+      .replace(new RegExp("[\\u0000-\\u001F\\u007F]", "g"), "");
     return JSON.parse(cleaned);
   }
 }
@@ -432,7 +438,7 @@ ${batchText}`;
     } catch (parseErr: any) {
       console.error("Failed to parse extraction:", parseErr, aiData?.choices?.[0]?.message);
       return new Response(JSON.stringify({ error: "parse error", details: parseErr?.message || "unknown parse error", stage: "parse", memories_created: 0, questions_generated: 0, conflicts_detected: 0 }), {
-        status: 200,
+        status: 500,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }

@@ -419,9 +419,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
 
           if (!response.ok) {
             const err = await response.json().catch(() => ({ error: 'Unknown error' }));
-            console.error(`Chunk ${i + 1} failed:`, err.error);
-            // Continue to next chunk instead of aborting
-            continue;
+            throw new Error(`Import chunk ${i + 1}/${totalChunks} failed: ${errorMessage(err.error, `HTTP ${response.status}`)}`);
           }
 
           const result = objectRecord(await response.json());
@@ -443,7 +441,9 @@ export const useImportStore = create<ImportState>((set, get) => ({
           });
         } catch (chunkErr: unknown) {
           console.error(`Chunk ${i + 1} error after retries:`, errorMessage(chunkErr, 'Unknown chunk error'));
-          // Continue to next chunk
+          throw chunkErr instanceof Error
+            ? chunkErr
+            : new Error(`Import chunk ${i + 1}/${totalChunks} failed`);
         }
       }
 

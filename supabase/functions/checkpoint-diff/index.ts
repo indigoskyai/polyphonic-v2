@@ -200,14 +200,14 @@ Deno.serve(async (req) => {
       const b = bMap.get(path);
       let hunks: DiffHunk[] = [];
 
-      if (b?.diff_blob) {
+      if (a?.diff_blob && b?.diff_blob) {
+        // Compute diff between the two stored blobs as a fallback
+        hunks = computeUnifiedDiff(a.diff_blob, b.diff_blob);
+      } else if (b?.diff_blob) {
         // Prefer the newer side's stored unified diff
         hunks = parseUnifiedDiff(b.diff_blob);
       } else if (a?.diff_blob && !b) {
         hunks = parseUnifiedDiff(a.diff_blob);
-      } else if (a?.diff_blob && b?.diff_blob) {
-        // Compute diff between the two stored blobs as a fallback
-        hunks = computeUnifiedDiff(a.diff_blob, b.diff_blob);
       }
 
       const added = hunks.reduce(

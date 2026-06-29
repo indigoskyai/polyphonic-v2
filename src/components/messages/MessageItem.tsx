@@ -25,7 +25,9 @@ function parseMultiModelVariants(thinkingContent: string): Array<{ model: string
   try {
     const parsed = JSON.parse(thinkingContent);
     if (parsed?.type === 'multi_model' && Array.isArray(parsed?.variants)) return parsed.variants;
-  } catch {}
+  } catch {
+    // Older thinking payloads can be plain text.
+  }
   return [];
 }
 

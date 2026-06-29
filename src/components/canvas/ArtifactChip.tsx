@@ -16,14 +16,14 @@ const KIND_META: Record<ArtifactKind, { icon: LucideIcon; label: string }> = {
 /** Compact launcher shown inline in a message; opens the artifact in the canvas
  *  pane (like Claude's artifact pill). Replaces the old inline preview card. */
 export default function ArtifactChip({ artifact }: { artifact: Artifact }) {
-  if (artifact.kind === 'simulation') {
-    return <SimulationCard artifact={artifact} compact />;
-  }
-
   const open = useCanvasStore((s) => s.open);
   const activeId = useCanvasStore((s) => s.activeArtifactId);
   const isOpen = useCanvasStore((s) => s.isOpen);
   const active = isOpen && activeId === artifact.id;
+
+  if (artifact.kind === 'simulation') {
+    return <SimulationCard artifact={artifact} compact />;
+  }
 
   const meta = KIND_META[artifact.kind] || { icon: FileCode2, label: artifact.kind };
   const Icon = meta.icon;
