@@ -1,7 +1,8 @@
-import { Globe, Atom, Shapes, Workflow, FileText, FileCode2, ExternalLink } from 'lucide-react';
+import { Globe, Atom, Shapes, Workflow, FileText, FileCode2, ExternalLink, FlaskConical } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useCanvasStore } from '@/stores/canvasStore';
 import type { Artifact, ArtifactKind } from '@/stores/artifactStore';
+import SimulationCard from '@/components/simulations/SimulationCard';
 
 const KIND_META: Record<ArtifactKind, { icon: LucideIcon; label: string }> = {
   html: { icon: Globe, label: 'HTML page' },
@@ -9,11 +10,16 @@ const KIND_META: Record<ArtifactKind, { icon: LucideIcon; label: string }> = {
   svg: { icon: Shapes, label: 'SVG graphic' },
   mermaid: { icon: Workflow, label: 'Diagram' },
   markdown: { icon: FileText, label: 'Document' },
+  simulation: { icon: FlaskConical, label: 'Simulation' },
 };
 
 /** Compact launcher shown inline in a message; opens the artifact in the canvas
  *  pane (like Claude's artifact pill). Replaces the old inline preview card. */
 export default function ArtifactChip({ artifact }: { artifact: Artifact }) {
+  if (artifact.kind === 'simulation') {
+    return <SimulationCard artifact={artifact} compact />;
+  }
+
   const open = useCanvasStore((s) => s.open);
   const activeId = useCanvasStore((s) => s.activeArtifactId);
   const isOpen = useCanvasStore((s) => s.isOpen);
@@ -45,6 +51,10 @@ export default function ArtifactChip({ artifact }: { artifact: Artifact }) {
  *  we don't run partial code, so this stands in until the finished artifact
  *  persists and the canvas opens. */
 export function StreamingArtifactChip({ artifact }: { artifact: Artifact }) {
+  if (artifact.kind === 'simulation') {
+    return <SimulationCard artifact={artifact} compact streaming />;
+  }
+
   const meta = KIND_META[artifact.kind] || { icon: FileCode2, label: artifact.kind };
   const Icon = meta.icon;
   return (

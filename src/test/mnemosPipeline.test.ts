@@ -4,6 +4,12 @@ import {
   determineState,
 } from "../../supabase/functions/_shared/mnemos/decay";
 import { computeEncodingSalience } from "../../supabase/functions/_shared/mnemos/salience";
+import {
+  buildDurableCandidateDraft,
+  computeDurableCandidateConfidence,
+  inferDurableCandidateMemoryType,
+} from "../../supabase/functions/_shared/mnemos/consolidation";
+import type { Engram } from "../../supabase/functions/_shared/mnemos/types";
 
 describe("mnemos salience gate", () => {
   it("rejects low-signal small talk", () => {
@@ -38,6 +44,18 @@ describe("mnemos salience gate", () => {
     });
     expect(d.encode).toBe(true);
     expect(d.reason).toContain("forcing_tag");
+  });
+
+  it("forces encoding for explicit continuity-carry tags", () => {
+    const d = computeEncodingSalience({
+      surprise: 0.05,
+      emotionalArousal: 0,
+      emotionalValence: 0,
+      tags: ["conversation", "continuity-carry"],
+      existingEngramCount: 100,
+    });
+    expect(d.encode).toBe(true);
+    expect(d.reason).toBe("forcing_tag:continuity-carry");
   });
 
   it("loosens during the bootstrap window", () => {
@@ -99,5 +117,105 @@ describe("mnemos dual-trace decay", () => {
   it("only archives dormant engrams after 30 days untouched", () => {
     expect(determineState(0.005, 0.005, "dormant", 24 * 5)).toBe("dormant");
     expect(determineState(0.005, 0.005, "dormant", 24 * 31)).toBe("archived");
+  });
+});
+
+describe("mnemos durable candidate bridge", () => {
+  const engram = (overrides: Partial<Engram> = {}): Engram => ({
+    id: "engram-1",
+    user_id: "user-1",
+    agent_id: "agent-1",
+    content: "The user values quiet continuity work.",
+    engram_type: "semantic",
+    strength: 0.8,
+    stability: 0.75,
+    accessibility: 0.7,
+    emotional_valence: 0.2,
+    emotional_arousal: 0.2,
+    surprise_score: 0.2,
+    source_context: {},
+    tags: ["continuity"],
+    state: "active",
+    last_accessed_at: "2026-06-28T00:00:00.000Z",
+    access_count: 4,
+    created_at: "2026-06-28T00:00:00.000Z",
+    updated_at: "2026-06-28T00:00:00.000Z",
+    ...overrides,
+  });
+
+  it("maps promoted engram tags into reviewable memory types", () => {
+    expect(inferDurableCandidateMemoryType({ tags: ["relationship", "trust"], source_context: {} }))
+      .toBe("relationship");
+    expect(inferDurableCandidateMemoryType({ tags: ["preference"], source_context: {} }))
+      .toBe("preference");
+    expect(inferDurableCandidateMemoryType({ tags: ["continuity"], source_context: { type: "hypomnema_graduation" } }))
+      .toBe("pattern");
+  });
+
+  it("keeps promoted candidate confidence bounded but meaningful", () => {
+    const weak = computeDurableCandidateConfidence({
+      strength: 0.1,
+      stability: 0.1,
+      access_count: 0,
+      surprise_score: 0,
+      emotional_arousal: 0,
+    });
+    const strong = computeDurableCandidateConfidence({
+      strength: 0.9,
+      stability: 0.8,
+      access_count: 8,
+      surprise_score: 0.5,
+      emotional_arousal: 0.2,
+    });
+
+    expect(weak).toBeGreaterThanOrEqual(0.48);
+    expect(strong).toBeGreaterThan(weak);
+    expect(strong).toBeLessThanOrEqual(0.92);
+  });
+
+  it("distills a meaningful conversation-only quiz moment instead of surfacing raw transcript", () => {
+    const draft = buildDurableCandidateDraft(engram({
+      content: `User: We did the Knights Radiant quiz and it turns out he is an Edgedancer. He loved that.\nAssistant: That feels meaningful.`,
+      tags: ["conversation"],
+      engram_type: "semantic",
+      stability: 0.9,
+      surprise_score: 0.7,
+    }));
+
+    expect(draft?.content).toContain("Knights Radiant quiz");
+    expect(draft?.content).toContain("Edgedancer");
+    expect(draft?.content).not.toContain("User:");
+    expect(draft?.tags).toContain("self-understanding");
+    expect(draft?.distilled).toBe(true);
+  });
+
+  it("skips raw conversation substrate when it cannot be distilled", () => {
+    const draft = buildDurableCandidateDraft(engram({
+      content: "User: hey\nAssistant: hi, how can I help?",
+      tags: ["conversation"],
+      engram_type: "semantic",
+    }));
+
+    expect(draft).toBeNull();
+  });
+
+  it("skips deep-analysis and big-five profile artifacts", () => {
+    const draft = buildDurableCandidateDraft(engram({
+      content: "PERSONALITY DIMENSIONS — openness: 0.95/100, neuroticism: 0.85/100",
+      tags: ["profile", "big-five", "deep-analysis"],
+      engram_type: "semantic",
+    }));
+
+    expect(draft).toBeNull();
+  });
+
+  it("skips explicit intimate content even when the engram is semantic", () => {
+    const draft = buildDurableCandidateDraft(engram({
+      content: "The user described straddling the agent and grinding slowly during roleplay.",
+      tags: ["relationship"],
+      engram_type: "semantic",
+    }));
+
+    expect(draft).toBeNull();
   });
 });

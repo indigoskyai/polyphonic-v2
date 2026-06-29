@@ -31,11 +31,56 @@ function autoCloseFence(src: string): { text: string; openBlockIndex: number | n
   return { text: src, openBlockIndex: null };
 }
 
+function stripPromotedArtifactFences(src: string): string {
+  if (!src.includes('```')) return src;
+  const lines = src.split('\n');
+  const kept: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const opener = lines[index].match(/^```([a-zA-Z0-9_-]+)?(?:\s.*)?$/);
+    if (!opener) {
+      kept.push(lines[index]);
+      continue;
+    }
+
+    const lang = (opener[1] || '').toLowerCase();
+    const bodyLines: string[] = [];
+    let cursor = index + 1;
+    let closed = false;
+    for (; cursor < lines.length; cursor += 1) {
+      if (/^```(?:\s*)$/.test(lines[cursor])) {
+        closed = true;
+        break;
+      }
+      bodyLines.push(lines[cursor]);
+    }
+
+    const body = bodyLines.join('\n');
+    if (isPromotableFence(lang, body)) {
+      if (kept.length > 0 && kept[kept.length - 1] !== '') kept.push('');
+      if (!closed) break;
+      index = cursor;
+      continue;
+    }
+
+    kept.push(lines[index], ...bodyLines);
+    if (closed) {
+      kept.push(lines[cursor]);
+      index = cursor;
+    } else {
+      break;
+    }
+  }
+
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
 function RichBody({ source, className, streaming = false, suppressArtifactFences = false }: RichBodyProps) {
   const navigate = useNavigate();
+  const renderSource = suppressArtifactFences ? stripPromotedArtifactFences(source) : source;
   const { text, openBlockIndex } = streaming
-    ? autoCloseFence(source)
-    : { text: source, openBlockIndex: null as number | null };
+    ? autoCloseFence(renderSource)
+    : { text: renderSource, openBlockIndex: null as number | null };
 
   // Track which fenced block we're rendering so we can flag the open one.
   const blockCounterRef = React.useRef(0);

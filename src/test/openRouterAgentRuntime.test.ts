@@ -51,6 +51,8 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('agent_tool_result');
     expect(source).toContain('thread_id: options.threadId');
     expect(source).toContain('queueContinuityTurnWrites');
+    expect(source).toContain('the current agent');
+    expect(source).not.toContain("Read Luca's current Polyphonic continuity packet");
 
     expect(source).not.toContain('workspace_file');
     expect(source).not.toContain('local filesystem');

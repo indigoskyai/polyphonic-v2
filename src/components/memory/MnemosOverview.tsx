@@ -4,7 +4,7 @@
  * Hero stat strip · type distribution · pending candidates panel · recent engrams.
  * Wraps in MnemosStreamShell with hero "# 01 · MNEMOS · DIGEST".
  *
- * MOCK: 24h candidate delta, last consolidation timestamp, weekly drift.
+ * Manual consolidation surfaces promoted Mnemos engrams into durable candidates.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,13 +60,21 @@ export default function MnemosOverview() {
   const stats = useMemo(() => {
     const active = engrams.filter((e) => e.state === 'active').length;
     const consolidating = engrams.filter((e) => e.state === 'consolidating').length;
+    const semantic = engrams.filter((e) => e.engram_type === 'semantic').length;
+    const linkedEngramIds = new Set<string>();
+    for (const connection of connections) {
+      linkedEngramIds.add(connection.source_id);
+      linkedEngramIds.add(connection.target_id);
+    }
     return {
-      memories: memories.length,
+      committed: memories.length,
       engrams: engrams.length,
       active,
       consolidating,
+      semantic,
       beliefs: beliefs.length,
       connections: connections.length,
+      linkedEngrams: linkedEngramIds.size,
       candidates: candidates.length,
     };
   }, [memories, engrams, beliefs, connections, candidates]);
@@ -102,11 +110,12 @@ export default function MnemosOverview() {
       const result = (data ?? {}) as Record<string, unknown>;
       const candidatesFound = Number(result.candidates_found ?? 0);
       const promoted = Number(result.promotions ?? 0);
+      const durableCandidates = Number(result.memory_candidates_created ?? 0);
       const linked = Number(result.new_connections ?? 0);
       const beliefsUpdated = Number(result.beliefs_updated ?? 0);
       toast({
         title: 'Consolidation finished',
-        description: `${candidatesFound} candidates reviewed · ${promoted} promoted · ${linked} linked · ${beliefsUpdated} beliefs updated`,
+        description: `${candidatesFound} engrams reviewed · ${promoted} promoted · ${durableCandidates} durable candidates · ${linked} linked · ${beliefsUpdated} beliefs updated`,
       });
     } catch (err) {
       toast({
@@ -124,30 +133,30 @@ export default function MnemosOverview() {
       num="01"
       streamLabel="DIGEST"
       title="Substrate"
-      subtitle={`${stats.engrams} engrams across ${stats.connections} connections. ${stats.candidates} candidate${stats.candidates === 1 ? '' : 's'} pending review.`}
+      subtitle={`${stats.engrams} engrams across ${stats.connections} connections. ${stats.candidates} durable candidate${stats.candidates === 1 ? '' : 's'} pending review.`}
       hideToolbar
     >
       {/* Hero stat strip */}
       <div className="s-stat-strip">
         <div className="s-stat">
-          <span className="s-stat-label">Memories</span>
-          <span className="s-stat-value">{stats.memories}</span>
+          <span className="s-stat-label">Committed</span>
+          <span className="s-stat-value">{stats.committed}</span>
           <span className="s-stat-delta">{stats.candidates} pending</span>
         </div>
         <div className="s-stat">
           <span className="s-stat-label">Engrams</span>
           <span className="s-stat-value">{stats.engrams}</span>
-          <span className="s-stat-delta">{stats.active} active · {stats.consolidating} consol.</span>
+          <span className="s-stat-delta">{stats.active} active · {stats.semantic} semantic</span>
         </div>
         <div className="s-stat">
           <span className="s-stat-label">Beliefs</span>
           <span className="s-stat-value">{stats.beliefs}</span>
-          <span className="s-stat-delta">+{/* MOCK */}0 this week</span>
+          <span className="s-stat-delta">{stats.semantic} semantic engrams</span>
         </div>
         <div className="s-stat">
           <span className="s-stat-label">Connections</span>
           <span className="s-stat-value">{stats.connections}</span>
-          <span className="s-stat-delta">{/* MOCK */}graph density 0.04</span>
+          <span className="s-stat-delta">{stats.linkedEngrams} linked engrams</span>
         </div>
       </div>
 
@@ -202,13 +211,13 @@ export default function MnemosOverview() {
               </button>
             </span>
           </div>
-          <div className="s-panel-title">Candidates</div>
+          <div className="s-panel-title">Durable candidates</div>
           <p className="s-hero-sub" style={{ fontSize: 12, marginBottom: 14 }}>
-            New memory candidates awaiting commit. Auto-commits at low confidence after 48h.
+            Memory candidates awaiting commit. Auto-commits at lower confidence after 48h.
           </p>
           {topCandidates.length === 0 && (
             <div style={{ padding: '20px 0', fontSize: 12, color: 'var(--text-whisper)' }}>
-              Inbox zero. Mnemos will surface new candidates as they form.
+              No durable candidates pending.
             </div>
           )}
           {topCandidates.map((c) => (

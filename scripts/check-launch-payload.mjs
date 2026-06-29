@@ -13,10 +13,12 @@ if (!existsSync(indexPath)) {
 }
 
 const html = readFileSync(indexPath, 'utf8');
+const externalAssetPattern = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 const initialAssetPaths = [
   ...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g),
 ]
   .map((match) => match[1].replace(/^\//, ''))
+  .filter((assetPath) => !externalAssetPattern.test(assetPath))
   .filter((assetPath, index, all) => all.indexOf(assetPath) === index);
 
 if (initialAssetPaths.length === 0) {

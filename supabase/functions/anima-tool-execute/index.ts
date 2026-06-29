@@ -103,6 +103,23 @@ const TOOL_SCHEMAS = [
   {
     type: "function",
     function: {
+      name: "the_well_research",
+      description:
+        "Query Luca's structured registry of The Well physics simulation datasets. Use when the user asks which physics simulation dataset can test a claim, how Luca should use The Well, what dataset/access name/fields/measurements apply, or how to create a reproducible simulated-evidence truth card. Returns catalog metadata and access recipes only; does not download raw tensors.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Research question, claim, phenomenon, or physics simulation need." },
+          dataset_id: { type: "string", description: "Optional known Well family id or exact variant access name." },
+          limit: { type: "integer", default: 5, description: "Number of candidate datasets to return." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "workspace_file",
       description: "Read, write, list, or delete files in the user's persistent workspace.",
       parameters: {
@@ -263,6 +280,7 @@ Available tools:
 - web_search: Search the web for current/recent information, news, facts, or anything the user wants looked up. Powered by Perplexity Sonar — produces a synthesized answer with citations, not raw page content.
 - read_url: Directly fetch a specific public URL and return source content/metadata without model synthesis. It can read HTML text, raw HTML, JSON, and plain text. Use format="raw" when the user needs exact markup/source.
 - browse: Open a public URL in a Browserbase browser, wait for JavaScript rendering, and return DOM text plus page structure (headings, links, buttons, forms). Use this when read_url cannot see browser-rendered state.
+- the_well_research: Query The Well physics-simulation registry for datasets, access names, fields, measurements, and truth-card plans. Does not download raw tensors.
 - generate_image: Generate a high-quality raster image (gpt-image-2). Use for photographic, painterly, or illustrative imagery.
 - edit_image: Iterate on the most recently generated image (e.g. "make it darker", "swap the background"). Pass the storage_path from the prior image.
 - workspace_file: Read, write, list, or delete persistent workspace files.
@@ -275,6 +293,7 @@ Rules:
 - If the user asks about current events, recent news, real-time data, or anything that requires up-to-date information, use web_search for source discovery. Verify claims that matter by chaining web_search -> read_url on the primary sources.
 - If the user provides a URL or asks to read/summarize a link, use read_url. Trust read_url over web_search for what a specific page actually says.
 - If the task needs browser-rendered page state or JavaScript output, use browse. If it needs multi-step clicking, logins, forms, or authenticated state, explain the limitation unless a dedicated interactive browser workflow is available.
+- If the user asks about The Well, physics simulations, simulated evidence, which dataset can test a physical claim, a physics truth card, or to show/model/compare turbulence, cooling, waves, MHD, field lines, reaction-diffusion, shocks, or other physical phenomena, use the_well_research before answering. Be explicit that The Well provides simulated evidence under stated equations/solvers, not direct observation.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
 - Do NOT use any tool to build HTML pages, web apps, SVG graphics, React components, Mermaid diagrams, charts, or code/markup. The assistant writes those itself, directly in its reply, as live artifacts — there is no artifact tool here. Only reach for generate_image when the user wants raster imagery that should look like a real photo or illustration.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
@@ -755,6 +774,14 @@ serve(async (req) => {
               starting_url: args.starting_url,
               max_steps: args.max_steps,
               wait_ms: args.wait_ms,
+            };
+          } else if (fnName === "the_well_research") {
+            edgeFn = "the-well-research";
+            body = {
+              user_id: userId,
+              query: args.query,
+              dataset_id: args.dataset_id,
+              limit: args.limit,
             };
           } else if (fnName === "generate_image") {
             edgeFn = "anima-image-create";

@@ -9,6 +9,14 @@ project_id = "kknchdnrujzheulqzowv"
     verify_jwt = false
   [functions.agent-identity-save]
     verify_jwt = false
+  [functions.agent-social-x-autopilot]
+    verify_jwt = false
+  [functions.agent-social-x-channel]
+    verify_jwt = false
+  [functions.agent-social-x-oauth-callback]
+    verify_jwt = false
+  [functions.agent-social-x-oauth-start]
+    verify_jwt = false
   [functions.anima-believe]
     verify_jwt = false
   [functions.anima-browser]
@@ -78,6 +86,8 @@ project_id = "kknchdnrujzheulqzowv"
   [functions.journal-write]
     verify_jwt = false
   [functions.luca-app-guide]
+    verify_jwt = false
+  [functions.luca-download]
     verify_jwt = false
   [functions.luca-initiate]
     verify_jwt = false

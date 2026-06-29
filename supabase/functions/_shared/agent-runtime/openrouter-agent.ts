@@ -415,11 +415,12 @@ async function runOpenRouterAgentSdkTurn(
 }
 
 function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEvent, recordTrace: TraceRecorder) {
+  const memoryOwner = options.agentId === "luca" ? "Luca's" : "the current agent's";
   const tools: any[] = [
     tool({
       name: "memory_read",
       description:
-        "Read Luca's current Polyphonic continuity packet and search autonomous memory artifacts: journal entries, thought-stream reflections, Mnemos engrams, Hypomnema, durable memories, skills, and layer diagnostics. Use when continuity, prior context, journal/reflection/engram material, or memory evidence would materially improve the answer.",
+        `Read ${memoryOwner} Polyphonic continuity packet and search autonomous memory artifacts: journal entries, thought-stream reflections, Mnemos engrams, Hypomnema, durable memories, skills, and layer diagnostics. Use when continuity, prior context, journal/reflection/engram material, or memory evidence would materially improve the answer.`,
       inputSchema: z.object({
         focus: z.string().optional().describe("Optional focus for what part of continuity to inspect."),
       }),
@@ -485,6 +486,26 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
           starting_url,
           max_steps,
           wait_ms,
+        });
+      },
+    }),
+    tool({
+      name: "the_well_research",
+      description:
+        "Query Luca's structured registry of The Well physics simulation datasets. Use when the user asks which physics simulation dataset can test a claim, how Luca should use The Well, what dataset/access name/fields/measurements apply, how to create a reproducible simulated-evidence truth card, or how to ground an inline simulation artifact. This returns catalog metadata and access recipes only; it does not download raw tensors.",
+      inputSchema: z.object({
+        query: z.string().min(1).describe("The research question, claim, phenomenon, or physics simulation need."),
+        dataset_id: z.string().optional().describe("Optional known Well family id or exact variant access name."),
+        limit: z.number().int().min(1).max(8).optional().describe("Number of candidate datasets to return, default 5."),
+      }),
+      execute: async ({ query, dataset_id, limit }) => {
+        recordTrace(`Querying The Well registry for "${query}".`);
+        send({ type: "tool_progress", tool: "the_well_research", text: `Checking The Well: ${query}` });
+        return await invokeEdgeJson(options, "the-well-research", {
+          user_id: options.userId,
+          query,
+          dataset_id,
+          limit,
         });
       },
     }),
@@ -722,7 +743,7 @@ function humanToolName(name: string): string {
 }
 
 function formatToolStartTrace(name: string, input: unknown): string {
-  if (name === "memory_read") return "Checking Luca continuity and memory context.";
+  if (name === "memory_read") return "Checking continuity and memory context.";
   if (name === "web_search" || name === "read_url") return "";
   return `Using ${humanToolName(name)}.`;
 }

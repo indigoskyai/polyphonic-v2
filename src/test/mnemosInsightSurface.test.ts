@@ -20,6 +20,10 @@ describe('consolidationIsNoteworthy', () => {
     expect(consolidationIsNoteworthy({ new_connections: 3 })).toBe(true);
   });
 
+  it('fires when durable memory candidates are surfaced', () => {
+    expect(consolidationIsNoteworthy({ memory_candidates_created: 1 })).toBe(true);
+  });
+
   it('requires two beliefs to fire', () => {
     expect(consolidationIsNoteworthy({ beliefs_updated: 1 })).toBe(false);
     expect(consolidationIsNoteworthy({ beliefs_updated: 2 })).toBe(true);
@@ -38,10 +42,12 @@ describe('formatConsolidationSummary', () => {
   it('mentions each non-zero count it has', () => {
     const out = formatConsolidationSummary({
       promotions: 1,
+      memory_candidates_created: 1,
       new_connections: 4,
       beliefs_updated: 2,
     });
     expect(out).toMatch(/1 memory settled/);
+    expect(out).toMatch(/1 durable candidate/);
     expect(out).toMatch(/4 new connections/);
     expect(out).toMatch(/2 beliefs updated/);
   });
@@ -59,5 +65,33 @@ describe('formatConsolidationSummary', () => {
   it('singular vs plural forms', () => {
     expect(formatConsolidationSummary({ new_connections: 1 })).toMatch(/1 new connection between/);
     expect(formatConsolidationSummary({ beliefs_updated: 1 })).toMatch(/1 belief updated/);
+  });
+
+  it('uses grounded detail when consolidation carries insight artifacts', () => {
+    const out = formatConsolidationSummary({
+      promotions: 1,
+      new_connections: 3,
+      beliefs_updated: 2,
+      insights: {
+        promoted_engrams: [{
+          content: 'Riley keeps asking for continuity to feel carried rather than merely reconstructed from a brief.',
+        }],
+        longstanding_connections: [{
+          connection_type: 'supports',
+          shared_tags: ['continuity'],
+          source_content: 'Fresh threads should remember what Luca was already sitting with.',
+          target_content: 'Hypomnema carries present interior continuity across conversations.',
+        }],
+        surfaced_beliefs: [{
+          content: "I'm learning that continuity needs both infrastructure and voice.",
+          active: true,
+          action: 'activated',
+        }],
+      },
+    });
+
+    expect(out).toContain('around "Riley keeps asking');
+    expect(out).toContain('supports (continuity) between');
+    expect(out).toContain("I'm learning that continuity");
   });
 });

@@ -248,6 +248,7 @@ export const SALIENCE_FORCING_TAGS: readonly string[] = [
   "milestone",
   "promise",
   "boundary",
+  "continuity-carry",
   "goal",
   "value",
   "manual",

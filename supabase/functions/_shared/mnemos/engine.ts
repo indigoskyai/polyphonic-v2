@@ -121,6 +121,7 @@ export class MnemosEngine {
       candidates_found: report.candidates_found,
       pairs_analyzed: report.pairs_analyzed,
       connections_strengthened: report.connections_strengthened,
+      memory_candidates_created: report.memory_candidates_created,
     };
   }
 

@@ -26,6 +26,7 @@ const KNOWN_TOOLS = [
   "web_search",
   "read_url",
   "browse",
+  "the_well_research",
   "workspace_file",
   "create_artifact",
   "dispatch_subagent",

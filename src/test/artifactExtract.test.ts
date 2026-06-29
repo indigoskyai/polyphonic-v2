@@ -44,6 +44,23 @@ describe('extractArtifactsFromContent — model-authored artifacts', () => {
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe('html');
   });
+
+  it('persists simulation payload fences as simulation artifacts', () => {
+    const body = JSON.stringify({
+      version: 1,
+      title: 'Cooling Turbulence Probe',
+      question: 'Show what cooling does to turbulence.',
+      dataset: { family_id: 'turbulent_radiative_layer', label: 'Turbulent radiative layer', access_name: 'turbulent_radiative_layer_2D', docs_url: 'https://polymathic-ai.org/the_well/datasets/turbulent_radiative_layer/' },
+      evidence: { claim_boundary: 'Simulated evidence only.', evidence_level: 'simulation-direct', measurements: ['density contrast'], caveats: ['not observation'] },
+      preview: { preset: 'fluid-field', fields: ['density', 'pressure', 'velocity'], parameters: { cooling: 1 }, initial_state: { timestep: 0.38 }, color_mode: 'thermal' },
+      access: { streaming_snippet: 'from the_well.data import WellDataset', download_command: 'the-well-download --dataset turbulent_radiative_layer_2D --split train', raw_ingest_default: false },
+    });
+
+    const out = extractArtifactsFromContent(fence('simulation', body));
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('simulation');
+    expect(out[0].title).toBe('Cooling Turbulence Probe');
+  });
 });
 
 describe('persistArtifactsFromContent (shared by classic + agent runtimes)', () => {
@@ -77,7 +94,7 @@ describe('artifact authoring is wired to the model, not the planner', () => {
     expect(src).toContain('persistArtifactsFromContent');
     expect(src).toContain('artifacts/extract.ts'); // shared helper
     expect(src).toContain('const artifactNote');
-    expect(src).toContain('turnSystemPrompt + artifactNote + toolCapabilityNote');
+    expect(src).toContain('turnSystemPrompt + artifactNote + simulationArtifactNote + toolCapabilityNote');
     expect(src).toContain('options.maxTokens ?? 16000'); // room for real artifacts, not 4096
   });
 
@@ -98,7 +115,7 @@ describe('artifact authoring is wired to the model, not the planner', () => {
   it('backend extractor stays in lockstep with the frontend streaming extractor', () => {
     const backend = readRepoFile('supabase/functions/_shared/artifacts/extract.ts');
     const frontend = readRepoFile('src/lib/streamingArtifacts.ts');
-    const KEYS = ['html', 'svg', 'mermaid', 'jsx', 'tsx', 'markdown', 'md'];
+    const KEYS = ['html', 'svg', 'mermaid', 'jsx', 'tsx', 'markdown', 'md', 'simulation'];
     for (const src of [backend, frontend]) {
       expect(src).toMatch(/MIN_LINES = 30/);
       for (const k of KEYS) {

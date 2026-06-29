@@ -3,6 +3,7 @@ import {
   type PendingRevision,
 } from "../agents/pending-revisions.ts";
 import { isDialecticEnabled } from "../config.ts";
+import { detectContinuityCarrySignal } from "../hypomnema/salience.ts";
 import { MnemosEngine } from "../mnemos/engine.ts";
 
 type SupabaseLike = {
@@ -51,6 +52,11 @@ export interface ContinuityWriteReport {
   threadId: string;
   agentId: string;
   operations: ContinuityWriteOperation[];
+}
+
+export interface MnemosExchangeEncodingContext {
+  tags: string[];
+  source_context: Record<string, unknown>;
 }
 
 export interface ContinuityWriteDeps {
@@ -129,6 +135,7 @@ export function queueContinuityTurnWrites(
           opts.userMessage,
           opts.agentResponse,
           apiKey || undefined,
+          stripCurrentTurnFromRecentTurns(opts.recentTurns || [], opts.userMessage, opts.agentResponse),
         )
       )),
     );
@@ -198,17 +205,46 @@ export async function encodeMnemosExchange(
   userMessage: string,
   assistantResponse: string,
   apiKey?: string,
+  recentTurns: Array<{ role: string; content: string }> = [],
 ): Promise<void> {
   const mnemos = new MnemosEngine(supabase as any, userId, agentId || "luca");
+  const encoding = deriveMnemosExchangeEncodingContext(userMessage, assistantResponse, recentTurns);
   await mnemos.encode(
     `User: ${userMessage}\nAssistant: ${assistantResponse.slice(0, 500)}`,
     {
       engram_type: "episodic",
-      tags: ["conversation"],
-      source_context: { type: "chat_exchange" },
+      tags: encoding.tags,
+      source_context: { ...encoding.source_context, agent_id: agentId || "luca" },
       api_key: apiKey,
     },
   );
+}
+
+export function deriveMnemosExchangeEncodingContext(
+  userMessage: string,
+  assistantResponse: string,
+  recentTurns: Array<{ role: string; content: string }> = [],
+): MnemosExchangeEncodingContext {
+  const continuityCarryReason = detectContinuityCarrySignal({
+    userMessage,
+    agentResponse: assistantResponse,
+    recentTurns,
+  });
+
+  if (!continuityCarryReason) {
+    return {
+      tags: ["conversation"],
+      source_context: { type: "chat_exchange" },
+    };
+  }
+
+  return {
+    tags: ["conversation", "continuity", "felt-continuity", "continuity-carry"],
+    source_context: {
+      type: "chat_exchange",
+      continuity_carry_reason: continuityCarryReason,
+    },
+  };
 }
 
 function normalizeTurnContent(content: string | undefined | null): string {

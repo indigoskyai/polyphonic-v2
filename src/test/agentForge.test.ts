@@ -66,7 +66,8 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('digital\\s+(entity|companion|being|mind)');
     expect(chatMulti).toContain('character\\s+card');
     expect(chatMulti).toContain('const onboardingHandoff');
-    expect(chatMulti).toContain('!onboardingHandoff && looksLikeAgentForgeRequest');
+    expect(chatMulti).toContain('!simulationRequestWithoutForgeSubject');
+    expect(chatMulti).toContain('looksLikeAgentForgeRequest(visibleMessageForRouting)');
     expect(chatMulti).toContain('Do not mention the hidden handoff, do not call Forge yet');
     expect(chatMulti).toContain('tool_planner_fallback: true');
     expect(chatMulti).toContain('findForgeToolError');

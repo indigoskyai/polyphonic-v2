@@ -5,13 +5,14 @@ import RichBody from '@/components/rich/RichBody';
 import CodeBlock from '@/components/rich/CodeBlock';
 import type { Artifact } from '@/stores/artifactStore';
 import { buildHtmlDoc, buildReactRuntimeDoc } from './artifactRuntime';
+import SimulationCard from '@/components/simulations/SimulationCard';
 
 const EXT_FOR_KIND: Record<string, string> = {
-  html: 'html', svg: 'svg', mermaid: 'mmd', markdown: 'md', react: 'tsx',
+  html: 'html', svg: 'svg', mermaid: 'mmd', markdown: 'md', react: 'tsx', simulation: 'json',
 };
 
 const LANG_FOR_KIND: Record<string, string> = {
-  html: 'html', svg: 'xml', mermaid: 'mermaid', markdown: 'markdown', react: 'tsx',
+  html: 'html', svg: 'xml', mermaid: 'mermaid', markdown: 'markdown', react: 'tsx', simulation: 'json',
 };
 
 /** Diagnostics posted by the artifact iframe runtime (artifactRuntime.ts). */
@@ -145,6 +146,9 @@ export default function ArtifactRenderer({
     }
     if (artifact.kind === 'mermaid') {
       return <MermaidView source={artifact.content} />;
+    }
+    if (artifact.kind === 'simulation') {
+      return <SimulationCard artifact={artifact} compact={compact} fill={fill} inCanvas={inCanvas} />;
     }
     if (isFrameKind) {
       const srcDoc = artifact.kind === 'react' ? buildReactRuntimeDoc(artifact.content) : buildHtmlDoc(artifact.content);

@@ -78,6 +78,7 @@ describe('isPromotableFence — the one promotion rule', () => {
     expect(fenceKind('jsx')).toBe('react');
     expect(fenceKind('tsx')).toBe('react');
     expect(fenceKind('html')).toBe('html');
+    expect(fenceKind('simulation')).toBe('simulation');
     expect(fenceKind('python')).toBeNull();
   });
 
@@ -96,5 +97,10 @@ describe('isPromotableFence — the one promotion rule', () => {
     expect(isPromotableFence('svg', '<svg><rect/>')).toBe(false); // short, not visibly complete
     expect(isPromotableFence('js', lines(50))).toBe(false);
     expect(isPromotableFence('python', lines(50))).toBe(false);
+  });
+
+  it('promotes simulation JSON immediately so streaming can show a building card', () => {
+    expect(isPromotableFence('simulation', '{"version":')).toBe(true);
+    expect(isPromotableFence('simulation', '   ')).toBe(false);
   });
 });

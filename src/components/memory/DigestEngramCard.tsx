@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import type { DigestEngram } from '@/stores/digestStore';
+import { useAgentScopeStore, type AgentScope } from '@/stores/agentScopeStore';
 
 interface Props {
   engram: DigestEngram;
@@ -28,18 +29,37 @@ function rationaleFor(e: DigestEngram): string {
   return reasons.join(' · ');
 }
 
-function agentFromContext(ctx: Record<string, unknown> | null): string {
-  const a = (ctx?.agent as string | undefined)?.toLowerCase();
-  if (a === 'vektor' || a === 'anima' || a === 'mnemos') return a;
-  return 'luca';
+const BUILT_IN_AGENT_LABELS: Record<string, string> = {
+  luca: 'Luca',
+  vektor: 'Vektor',
+  anima: 'Anima',
+  mnemos: 'Mnemos',
+};
+
+function cleanString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function agentBadgeFor(e: DigestEngram, availableAgents: AgentScope[]): { id: string; label: string; tone: string } {
+  const ctx = e.source_context ?? {};
+  const id = cleanString(e.agent_id) ?? cleanString(ctx.agent_id) ?? cleanString(ctx.agent) ?? 'luca';
+  const configured = availableAgents.find((agent) => agent.id === id);
+  const label = configured?.name
+    ?? cleanString(ctx.agent_name)
+    ?? cleanString(ctx.agent_label)
+    ?? BUILT_IN_AGENT_LABELS[id]
+    ?? id;
+  const tone = id === 'luca' || id === 'vektor' || id === 'anima' ? id : '';
+  return { id, label, tone };
 }
 
 export default function DigestEngramCard({ engram, onConfirm, onReject, onEdit }: Props) {
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(engram.content);
   const reviewed = !!engram.reviewed_at;
   const decision = engram.review_decision;
-  const agent = agentFromContext(engram.source_context);
+  const agent = agentBadgeFor(engram, availableAgents);
 
   const save = () => {
     const next = draft.trim();
@@ -50,7 +70,9 @@ export default function DigestEngramCard({ engram, onConfirm, onReject, onEdit }
   return (
     <div className="mn-cand" data-reviewed={reviewed ? decision : undefined}>
       <div className="mn-cand-head">
-        <span className={`mn-cand-agent ${agent}`}>{agent}</span>
+        <span className={`mn-cand-agent ${agent.tone}`} data-agent-id={agent.id} title={`Agent: ${agent.label}`}>
+          {agent.label}
+        </span>
         <span className="mn-cand-type">{engram.engram_type}</span>
         <span className="mn-cand-conf">{engram.strength.toFixed(2)}</span>
       </div>

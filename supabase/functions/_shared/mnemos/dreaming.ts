@@ -135,6 +135,7 @@ export interface DreamReport {
     connections_strengthened: number;
     engrams_strengthened: number;
     promotions: number;
+    memory_candidates_created?: number;
     beliefs_updated: number;
     duration_ms: number;
   };
@@ -232,6 +233,7 @@ export async function dream(
         connections_strengthened: report.connections_strengthened,
         engrams_strengthened: report.engrams_strengthened,
         promotions: report.promotions,
+        memory_candidates_created: report.memory_candidates_created,
         beliefs_updated: report.beliefs_updated,
         duration_ms: report.duration_ms,
       },

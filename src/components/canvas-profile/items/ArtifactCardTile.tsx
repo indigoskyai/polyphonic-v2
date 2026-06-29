@@ -20,13 +20,14 @@ interface Props {
 }
 
 function publicUrl(path: string): string {
-  const { data } = (supabase as any).storage.from('profile-uploads').getPublicUrl(path);
+  const { data } = (supabase as any).storage.from('profile-uploads').getPublicUrl(path.replace(/^profile-uploads\//, ''));
   return data?.publicUrl || '';
 }
 
 function typeLabel(item: ProfileItem): string {
   if (item.item_type === 'artifact') {
     const k = (item.payload as any)?.snapshot?.kind || (item.payload as any)?.kind;
+    if (k && ['html', 'react', 'svg'].includes(String(k).toLowerCase())) return `live · ${k}`;
     return k ? `artifact · ${k}` : 'artifact';
   }
   if (item.item_type === 'upload') {
@@ -119,7 +120,8 @@ function UploadPreviewBody({ item }: { item: ProfileItem }) {
 export default function ArtifactCardTile({ item, onOpen }: Props) {
   const label = typeLabel(item);
   const title = titleFor(item);
-  const isImage = item.item_type === 'upload' && (item.payload as any)?.mime?.startsWith('image/');
+  const kind = String((item.payload as any)?.snapshot?.kind || (item.payload as any)?.kind || '').toLowerCase();
+  const isLiveArtifact = item.item_type === 'artifact' && ['html', 'react', 'svg'].includes(kind);
 
   return (
     <article
@@ -132,11 +134,13 @@ export default function ArtifactCardTile({ item, onOpen }: Props) {
         {item.item_type === 'artifact' && <ArtifactPreviewBody item={item} />}
         {item.item_type === 'note' && <NotePreviewBody item={item} />}
         {item.item_type === 'upload' && <UploadPreviewBody item={item} />}
+        {isLiveArtifact && <span className="frame-tile-live">live html</span>}
 
-        <div className="frame-tile-actions" aria-hidden>
+        <div className="frame-tile-actions">
           <button
             type="button"
             className="frame-tile-action"
+            aria-label={`Open ${title}`}
             onClick={(e) => { e.stopPropagation(); onOpen?.(item); }}
           >
             <Maximize2 size={11} /> open

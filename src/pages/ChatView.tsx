@@ -58,6 +58,7 @@ import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/c
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import { looksLikeSimulationTurnRequest, withClientSimulationTurnDirective } from '@/lib/simulationTurnIntent';
 import CanvasPane from '@/components/canvas/CanvasPane';
 import {
   DEFAULT_CHAT_MODEL,
@@ -362,7 +363,7 @@ function agentTraceLine(data: any): string | null {
     return typeof data.text === 'string' ? data.text : `${tool} is running.`;
   }
   if (data.type === 'tool_start') {
-    if (data.tool === 'memory_read') return 'Checking Luca continuity and memory context.';
+    if (data.tool === 'memory_read') return 'Checking continuity and memory context.';
     if (data.tool === 'web_search' || data.tool === 'read_url') return null;
     return `Using ${tool}.`;
   }
@@ -608,6 +609,7 @@ export default function ChatView() {
   const updateThreadSelectedModel = useThreadStore((s) => s.updateThreadSelectedModel);
   const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
   const loadArtifacts = useArtifactStore((s) => s.loadForThread);
+  const addLocalArtifacts = useArtifactStore((s) => s.addLocalArtifacts);
   const artifactsByThread = useArtifactStore((s) => s.byThread);
   const canvasWidth = useCanvasStore((s) => s.width);
   const canvasIsOpen = useCanvasStore((s) => s.isOpen);
@@ -1995,6 +1997,10 @@ export default function ChatView() {
       const { supabase } = await import('@/integrations/supabase/client');
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
+      const edgeMessageText =
+        activeAgentId === 'luca' && effectiveRuntimeMode === 'agent' && looksLikeSimulationTurnRequest(messageText)
+          ? withClientSimulationTurnDirective(messageText)
+          : messageText;
       const resp = await fetch(`${supabaseUrl}/functions/v1/chat-multi`, {
         method: 'POST',
         headers: {
@@ -2004,7 +2010,7 @@ export default function ChatView() {
         },
           body: JSON.stringify({
             thread_id: tid,
-            message: messageText,
+            message: edgeMessageText,
             source_message_id: persistedUserMessage?.id,
             attachments: uploadedAttachments,
             model: selectedChatModel,
@@ -2234,8 +2240,9 @@ export default function ChatView() {
                     label_to_model: collectedLabelToModel,
                   };
                 }
+                const assistantMessageId = typeof data.message_id === 'string' ? data.message_id : crypto.randomUUID();
                 addMessage({
-                  id: typeof data.message_id === 'string' ? data.message_id : undefined,
+                  id: assistantMessageId,
                   thread_id: tid!, user_id: user.id, role: 'assistant',
                   content: fullContent, model: data.model || null, agent: activeMessageAgent,
                   thinking_content: fullThinking || null,
@@ -2245,6 +2252,17 @@ export default function ChatView() {
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
                   metadata: { ...(councilMetadata || {}), local_stream_stub: true },
                 } as any);
+                const localSimulationArtifacts = extractStreamingArtifacts(fullContent, { threadId: tid!, userId: user.id })
+                  .filter((artifact) => artifact.kind === 'simulation')
+                  .map((artifact) => ({
+                    ...artifact,
+                    id: artifact.id.replace(/^stream-/, `local-${assistantMessageId}-`),
+                    source_message_id: assistantMessageId,
+                    created_at: new Date().toISOString(),
+                  }));
+                if (localSimulationArtifacts.length > 0) {
+                  addLocalArtifacts(tid!, localSimulationArtifacts);
+                }
                 justStreamedRef.current = true;
                 if (tid) loadArtifacts(tid);
               } else if (data.type === 'error') {
@@ -2300,7 +2318,7 @@ export default function ChatView() {
       sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 

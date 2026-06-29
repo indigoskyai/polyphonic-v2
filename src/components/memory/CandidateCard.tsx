@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pill, Textarea, Select } from '@/components/ui/luca';
 import type { MemoryCandidate } from '@/stores/memoryCandidatesStore';
+import { useAgentScopeStore, type AgentScope } from '@/stores/agentScopeStore';
 
 interface Props {
   candidate: MemoryCandidate;
@@ -20,18 +21,37 @@ const MEMORY_TYPES = [
   { value: 'principle', label: 'principle' },
 ];
 
-function agentFromSource(source: Record<string, unknown> | null): string {
-  const a = (source?.agent as string | undefined)?.toLowerCase();
-  if (a === 'vektor' || a === 'anima' || a === 'mnemos') return a;
-  return 'luca';
+const BUILT_IN_AGENT_LABELS: Record<string, string> = {
+  luca: 'Luca',
+  vektor: 'Vektor',
+  anima: 'Anima',
+  mnemos: 'Mnemos',
+};
+
+function cleanString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function agentBadgeFor(candidate: MemoryCandidate, availableAgents: AgentScope[]): { id: string; label: string; tone: string } {
+  const source = candidate.source ?? {};
+  const id = cleanString(candidate.agent_id) ?? cleanString(source.agent_id) ?? cleanString(source.agent) ?? 'luca';
+  const configured = availableAgents.find((agent) => agent.id === id);
+  const label = configured?.name
+    ?? cleanString(source.agent_name)
+    ?? cleanString(source.agent_label)
+    ?? BUILT_IN_AGENT_LABELS[id]
+    ?? id;
+  const tone = id === 'luca' || id === 'vektor' || id === 'anima' || id === 'mnemos' ? id : '';
+  return { id, label, tone };
 }
 
 export default function CandidateCard({ candidate, onPin, onCommit, onEdit, onReject }: Props) {
+  const availableAgents = useAgentScopeStore((s) => s.availableAgents);
   const [editing, setEditing] = useState(false);
   const [draftContent, setDraftContent] = useState(candidate.content);
   const [draftType, setDraftType] = useState(candidate.memory_type);
 
-  const agent = agentFromSource(candidate.source);
+  const agent = agentBadgeFor(candidate, availableAgents);
   const isPin = candidate.candidate_type === 'pin';
 
   const startEdit = () => {
@@ -57,8 +77,8 @@ export default function CandidateCard({ candidate, onPin, onCommit, onEdit, onRe
   return (
     <article className="candidate">
       <header className="cand-header">
-        <span className="cand-agent-dot" data-agent={agent} aria-hidden="true" />
-        <span className="cand-agent">{agent}</span>
+        <span className="cand-agent-dot" data-agent={agent.tone || agent.id} aria-hidden="true" />
+        <span className="cand-agent" title={`Agent: ${agent.label}`}>{agent.label}</span>
         <span className="cand-type">{candidate.memory_type}</span>
         <span className="cand-conf">{candidate.confidence.toFixed(2)}</span>
       </header>

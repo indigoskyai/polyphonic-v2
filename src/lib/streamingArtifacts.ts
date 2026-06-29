@@ -1,4 +1,5 @@
 import type { Artifact, ArtifactKind } from '@/stores/artifactStore';
+import { simulationTitleFromContent } from '@/lib/simulationArtifacts';
 
 const KIND_MAP: Record<string, ArtifactKind> = {
   html: 'html',
@@ -8,6 +9,7 @@ const KIND_MAP: Record<string, ArtifactKind> = {
   tsx: 'react',
   markdown: 'markdown',
   md: 'markdown',
+  simulation: 'simulation',
 };
 
 const MIN_LINES = 30;
@@ -25,7 +27,9 @@ export function fenceKind(lang: string): ArtifactKind | null {
  * visibly complete markup.
  */
 export function isPromotableFence(lang: string, body: string): boolean {
-  if (!fenceKind(lang)) return false;
+  const kind = fenceKind(lang);
+  if (!kind) return false;
+  if (kind === 'simulation') return body.trim().length > 0;
   const lines = body.split('\n').length;
   return lines >= MIN_LINES || /<\/(html|svg|body)>/i.test(body);
 }
@@ -81,6 +85,7 @@ function titleFor(kind: ArtifactKind, body: string): string {
   if (kind === 'svg') return 'SVG preview';
   if (kind === 'mermaid') return 'Diagram';
   if (kind === 'react') return 'React preview';
+  if (kind === 'simulation') return simulationTitleFromContent(body);
   return 'Artifact';
 }
 

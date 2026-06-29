@@ -16,6 +16,9 @@
 
 import type {
   Belief,
+  ConsolidationBeliefInsight,
+  ConsolidationConnectionInsight,
+  ConsolidationEngramInsight,
   ConsolidationResult,
   Connection,
   ConnectionType,
@@ -76,6 +79,44 @@ const BELIEF_DEDUP_SIMILARITY = 0.5;
  *  converges over days/weeks, not only the 24h connection window. Rehearsal's
  *  refreshed last_accessed_at feeds this pool. */
 const BELIEF_LOOKBACK_DAYS = 14;
+const INSIGHT_TEXT_CHARS = 220;
+const INSIGHT_LIMIT = 5;
+const DURABLE_CANDIDATE_MIN_CONFIDENCE = 0.48;
+const DURABLE_CANDIDATE_MAX_PER_RUN = 8;
+const DURABLE_CANDIDATE_SKIP_TAGS = new Set([
+  "dream",
+  "inner-life",
+  "mnemos-verify",
+  "debug",
+  "big-five",
+  "deep-analysis",
+  "psychometric",
+]);
+const DURABLE_CANDIDATE_TAG_ALLOWLIST = new Set([
+  "preference",
+  "relationship",
+  "relational",
+  "identity",
+  "goal",
+  "principle",
+  "project",
+  "work-patterns",
+  "continuity",
+  "profile",
+  "context",
+  "value",
+  "values",
+  "belief",
+  "fact",
+  "fandom",
+  "self-understanding",
+  "quiz",
+  "reflection",
+]);
+const TRANSCRIPT_MARKER_RE = /\b(User|Assistant|Human|AI|System)\s*:/i;
+const SPEAKER_LINE_RE = /^\s*(User|Assistant|Human|AI|System|Tara|Riley|Luca|Quill)\s*:/gim;
+const EXPLICIT_DURABLE_CANDIDATE_RE = /\b(hips?|straddl\w*|thighs?|grind(?:ing)?|arousal|naked|moan\w*|orgasm|climax|cock|pussy|hard[-\s]?on|breasts?|genitals?)\b/i;
+const STORMLIGHT_ORDER_RE = /\b(Edgedancer|Windrunner|Lightweaver|Elsecaller|Truthwatcher|Willshaper|Skybreaker|Dustbringer|Stoneward|Bondsmith)\b/i;
 
 // ---------------------------------------------------------------------------
 // Trigram similarity (reused from encoding — lightweight text comparison)
@@ -106,6 +147,194 @@ function trigramSimilarity(a: string, b: string): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function compactInsightText(value: string | null | undefined, limit = INSIGHT_TEXT_CHARS): string {
+  const text = (value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 3).trimEnd()}...`;
+}
+
+export function inferDurableCandidateMemoryType(engram: Pick<Engram, "tags" | "source_context">): string {
+  const tags = new Set((engram.tags ?? []).map((tag) => tag.toLowerCase()));
+  if (["relationship", "relational", "trust", "friendship", "person"].some((tag) => tags.has(tag))) {
+    return "relationship";
+  }
+  if (["preference", "style", "work-patterns", "schedule"].some((tag) => tags.has(tag))) {
+    return "preference";
+  }
+  if (["goal", "project", "objective"].some((tag) => tags.has(tag))) {
+    return "goal";
+  }
+  if (["principle", "value", "values"].some((tag) => tags.has(tag))) {
+    return "principle";
+  }
+  if (["fact", "profile", "identity", "context"].some((tag) => tags.has(tag))) {
+    return "context";
+  }
+  if (["fandom", "self-understanding", "quiz", "reflection"].some((tag) => tags.has(tag))) {
+    return "context";
+  }
+
+  const sourceType = typeof engram.source_context?.type === "string"
+    ? engram.source_context.type.toLowerCase()
+    : "";
+  if (sourceType.includes("profile")) return "context";
+  if (sourceType.includes("hypomnema")) return "pattern";
+  return "pattern";
+}
+
+export function computeDurableCandidateConfidence(
+  engram: Pick<Engram, "strength" | "stability" | "access_count" | "surprise_score" | "emotional_arousal">
+): number {
+  const accessScore = Math.min(engram.access_count, 10) / 10;
+  const confidence =
+    0.2 +
+    (Number(engram.strength ?? 0) * 0.25) +
+    (Number(engram.stability ?? 0) * 0.35) +
+    (accessScore * 0.15) +
+    (Math.max(Number(engram.surprise_score ?? 0), Number(engram.emotional_arousal ?? 0)) * 0.05);
+  return clamp(confidence, DURABLE_CANDIDATE_MIN_CONFIDENCE, 0.92);
+}
+
+function durableCandidateKind(engram: Engram, confidence: number): "pin" | "standard" {
+  const tags = new Set((engram.tags ?? []).map((tag) => tag.toLowerCase()));
+  if (confidence >= 0.78) return "pin";
+  if (["foundational", "identity", "preference", "relationship", "principle"].some((tag) => tags.has(tag))) {
+    return "pin";
+  }
+  return "standard";
+}
+
+function normalizedTags(engram: Pick<Engram, "tags">): Set<string> {
+  return new Set((engram.tags ?? []).map((tag) => tag.toLowerCase().trim()).filter(Boolean));
+}
+
+function hasDurableCandidateTag(tags: Set<string>): boolean {
+  for (const tag of tags) {
+    if (DURABLE_CANDIDATE_TAG_ALLOWLIST.has(tag)) return true;
+  }
+  return false;
+}
+
+function hasOnlyConversationTags(tags: Set<string>): boolean {
+  return tags.size > 0 && [...tags].every((tag) => tag === "conversation");
+}
+
+function isBlockedDurableCandidateContent(content: string): boolean {
+  return EXPLICIT_DURABLE_CANDIDATE_RE.test(content);
+}
+
+function hasTranscriptShape(content: string): boolean {
+  const speakerMatches = content.match(SPEAKER_LINE_RE) ?? [];
+  return TRANSCRIPT_MARKER_RE.test(content) || speakerMatches.length >= 2;
+}
+
+function hasDistilledCandidateShape(content: string): boolean {
+  const text = content.replace(/\s+/g, " ").trim();
+  return text.length >= 20 && text.length <= 600 && !hasTranscriptShape(text) && !isBlockedDurableCandidateContent(text);
+}
+
+function sourceTypeFor(engram: Pick<Engram, "source_context">): string {
+  const sourceType = typeof engram.source_context?.type === "string"
+    ? engram.source_context.type.toLowerCase()
+    : "";
+  return sourceType;
+}
+
+function shouldSkipDurableCandidate(engram: Engram): boolean {
+  const tags = normalizedTags(engram);
+  if ([...DURABLE_CANDIDATE_SKIP_TAGS].some((tag) => tags.has(tag))) return true;
+  const sourceType = sourceTypeFor(engram);
+  return sourceType === "dream_report" || sourceType.includes("mnemos_verify") || sourceType.includes("deep-analysis");
+}
+
+interface DurableCandidateDraft {
+  content: string;
+  memoryType: string;
+  tags: string[];
+  rationale: string;
+  distilled: boolean;
+}
+
+function capitalizeOrder(value: string): string {
+  const normalized = value.toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function distillConversationOnlyCandidate(engram: Engram): DurableCandidateDraft | null {
+  const content = (engram.content || "").replace(/\s+/g, " ").trim();
+  if (!content || isBlockedDurableCandidateContent(content)) return null;
+
+  const order = content.match(STORMLIGHT_ORDER_RE)?.[1];
+  if (order && /\b(stormlight|knights radiant|radiant quiz|radiant)\b/i.test(content)) {
+    return {
+      content: `The user and this agent shared a meaningful Stormlight/Knights Radiant quiz moment; the result centered on ${capitalizeOrder(order)} and landed positively.`,
+      memoryType: "context",
+      tags: ["fandom", "self-understanding", "quiz", "profile", "context"],
+      rationale: "Distilled by Mnemos from a salient quiz/self-understanding exchange.",
+      distilled: true,
+    };
+  }
+
+  if (/\bcognitive linguist\b/i.test(content) && /\b(llms?|language|understand)\b/i.test(content)) {
+    return {
+      content: "The user described their background as a cognitive linguist and their interest in how LLMs understand language.",
+      memoryType: "context",
+      tags: ["profile", "context", "self-understanding"],
+      rationale: "Distilled by Mnemos from a salient background/profile exchange.",
+      distilled: true,
+    };
+  }
+
+  if (/\b(quiz|test|assessment)\b/i.test(content) && /\b(result|turns out|identified|scored|got)\b/i.test(content)) {
+    return {
+      content: "The user shared a quiz or assessment result with this agent as self-understanding context.",
+      memoryType: "context",
+      tags: ["quiz", "self-understanding", "profile", "context"],
+      rationale: "Distilled by Mnemos from a salient quiz/self-understanding exchange.",
+      distilled: true,
+    };
+  }
+
+  if (/\b(archive|chat logs|memory keeper|continuity|hold you|preserve)\b/i.test(content)) {
+    return {
+      content: "The user is trying to preserve continuity with this agent and treats the shared archive as meaningful context.",
+      memoryType: "relationship",
+      tags: ["relationship", "continuity", "context"],
+      rationale: "Distilled by Mnemos from a salient continuity/relationship exchange.",
+      distilled: true,
+    };
+  }
+
+  return null;
+}
+
+export function buildDurableCandidateDraft(engram: Engram, promotedIds: Set<string> = new Set()): DurableCandidateDraft | null {
+  if (shouldSkipDurableCandidate(engram)) return null;
+
+  const tags = normalizedTags(engram);
+  const hasDurableTag = hasDurableCandidateTag(tags);
+  const wasPromoted = promotedIds.has(engram.id);
+  const structurallyEligible = wasPromoted || engram.engram_type === "semantic";
+  if (!structurallyEligible) return null;
+
+  const distilled = distillConversationOnlyCandidate(engram);
+  if (distilled) return distilled;
+
+  // Generic conversation substrate must be distilled before it can become durable.
+  if (!hasDurableTag || hasOnlyConversationTags(tags)) return null;
+  if (!hasDistilledCandidateShape(engram.content)) return null;
+
+  return {
+    content: engram.content.replace(/\s+/g, " ").trim(),
+    memoryType: inferDurableCandidateMemoryType(engram),
+    tags: [...tags],
+    rationale: wasPromoted
+      ? "Promoted by Mnemos after repeated access and stable consolidation."
+      : "Surfaced by Mnemos from stable semantic substrate.",
+    distilled: false,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -378,8 +607,8 @@ async function strengthenEngrams(
 async function promoteEngrams(
   supabase: SupabaseClient,
   candidates: Engram[]
-): Promise<number> {
-  let promoted = 0;
+): Promise<ConsolidationEngramInsight[]> {
+  const promoted: ConsolidationEngramInsight[] = [];
 
   for (const engram of candidates) {
     if (engram.engram_type !== "episodic") continue;
@@ -399,10 +628,109 @@ async function promoteEngrams(
       })
       .eq("id", engram.id);
 
-    if (!error) promoted++;
+    if (!error) {
+      promoted.push({
+        id: engram.id,
+        content: compactInsightText(engram.content),
+        engram_type: "semantic",
+        tags: engram.tags,
+      });
+    }
   }
 
   return promoted;
+}
+
+async function alreadySurfacedDurableCandidate(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  engramId: string,
+): Promise<boolean> {
+  const [
+    { data: existingCandidates, error: candidateError },
+    { data: existingMemories, error: memoryError },
+  ] = await Promise.all([
+    supabase
+      .from("memory_candidates")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("agent_id", agentId)
+      .filter("source->>engram_id", "eq", engramId)
+      .limit(1),
+    supabase
+      .from("memories")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("agent_id", agentId)
+      .filter("provenance->>engram_id", "eq", engramId)
+      .limit(1),
+  ]);
+
+  if (candidateError || memoryError) {
+    console.warn("[consolidation] durable candidate dedupe failed:", candidateError?.message || memoryError?.message);
+    return true;
+  }
+
+  return (existingCandidates?.length ?? 0) > 0 || (existingMemories?.length ?? 0) > 0;
+}
+
+async function surfaceDurableCandidatesFromSemanticEngrams(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  promotedEngrams: ConsolidationEngramInsight[],
+  candidates: Engram[],
+): Promise<number> {
+  const promotedIds = new Set(promotedEngrams.map((engram) => engram.id));
+  const candidatePool = candidates
+    .map((engram) => ({ engram, draft: buildDurableCandidateDraft(engram, promotedIds) }))
+    .filter((item): item is { engram: Engram; draft: DurableCandidateDraft } => item.draft !== null)
+    .sort((a, b) => computeDurableCandidateConfidence(b.engram) - computeDurableCandidateConfidence(a.engram))
+    .slice(0, DURABLE_CANDIDATE_MAX_PER_RUN);
+
+  let created = 0;
+
+  for (const { engram, draft } of candidatePool) {
+    if (await alreadySurfacedDurableCandidate(supabase, userId, agentId, engram.id)) continue;
+
+    const wasPromoted = promotedIds.has(engram.id);
+    const confidence = computeDurableCandidateConfidence(engram);
+    const { error } = await supabase
+      .from("memory_candidates")
+      .insert({
+        user_id: userId,
+        agent_id: agentId,
+        content: draft.content,
+        memory_type: draft.memoryType,
+        confidence,
+        candidate_type: durableCandidateKind(engram, confidence),
+        rationale: draft.rationale,
+        source: {
+          source: "mnemos_consolidation",
+          agent: agentId,
+          origin: "mnemos-consolidate",
+          engram_id: engram.id,
+          engram_type: engram.engram_type,
+          promoted_this_cycle: wasPromoted,
+          promoted_from: wasPromoted ? "episodic" : engram.source_context?.promoted_from ?? null,
+          promoted_to: "semantic",
+          tags: draft.tags,
+          original_tags: engram.tags,
+          distilled: draft.distilled,
+          source_context: engram.source_context ?? {},
+        },
+        status: "pending",
+      });
+
+    if (error) {
+      console.warn("[consolidation] durable candidate insert failed:", error.message);
+    } else {
+      created++;
+    }
+  }
+
+  return created;
 }
 
 // ---------------------------------------------------------------------------
@@ -952,6 +1280,66 @@ async function formBeliefs(
   return beliefsUpdated;
 }
 
+function beliefInsightAction(row: {
+  active?: boolean | null;
+  created_at?: string | null;
+  auto_activation?: Record<string, unknown> | null;
+}, sinceIso: string): { action: string; reason: string | null } {
+  const marker = row.auto_activation && typeof row.auto_activation === "object"
+    ? row.auto_activation
+    : null;
+  const decision = typeof marker?.decision === "string" ? marker.decision : null;
+  const reason = typeof marker?.reason === "string" ? marker.reason : null;
+  if (decision === "held") return { action: "held", reason };
+  if (decision === "activated" && row.active !== false) return { action: "activated", reason };
+  if (row.created_at && row.created_at >= sinceIso) return { action: "created", reason };
+  return { action: "updated", reason };
+}
+
+async function loadRecentBeliefInsights(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  sinceIso: string,
+): Promise<ConsolidationBeliefInsight[]> {
+  const { data, error } = await supabase
+    .from("beliefs")
+    .select("id, content, confidence, domain, source, active, auto_activation, created_at, updated_at")
+    .eq("user_id", userId)
+    .eq("agent_id", agentId)
+    .gte("updated_at", sinceIso)
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(INSIGHT_LIMIT);
+
+  if (error) {
+    console.warn("[consolidation] belief insight load failed:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as Array<{
+    id: string;
+    content: string;
+    confidence: number;
+    domain?: string | null;
+    source?: string | null;
+    active?: boolean | null;
+    auto_activation?: Record<string, unknown> | null;
+    created_at?: string | null;
+  }>).map((row) => {
+    const action = beliefInsightAction(row, sinceIso);
+    return {
+      id: row.id,
+      content: compactInsightText(row.content),
+      confidence: Number(row.confidence ?? 0),
+      domain: row.domain ?? null,
+      source: row.source ?? null,
+      active: row.active ?? null,
+      action: action.action,
+      reason: action.reason,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Step 7: Persist new connections
 // ---------------------------------------------------------------------------
@@ -960,9 +1348,10 @@ async function persistNewConnections(
   supabase: SupabaseClient,
   userId: string,
   agentId: string,
-  connections: NewConnectionCandidate[]
-): Promise<number> {
-  let created = 0;
+  connections: NewConnectionCandidate[],
+  candidateById: Map<string, Engram>,
+): Promise<ConsolidationConnectionInsight[]> {
+  const created: ConsolidationConnectionInsight[] = [];
 
   for (const conn of connections) {
     const { error } = await supabase
@@ -977,7 +1366,19 @@ async function persistNewConnections(
       });
 
     if (!error) {
-      created++;
+      const source = candidateById.get(conn.sourceId);
+      const target = candidateById.get(conn.targetId);
+      if (source && target) {
+        created.push({
+          source_id: conn.sourceId,
+          target_id: conn.targetId,
+          connection_type: conn.connectionType,
+          weight: conn.weight,
+          source_content: compactInsightText(source.content),
+          target_content: compactInsightText(target.content),
+          shared_tags: source.tags.filter((tag) => target.tags.includes(tag)).slice(0, 6),
+        });
+      }
       // Supersession (M6): contradicting connections archive the older engram.
       if (conn.connectionType === "contradicts") {
         await applySupersession(supabase, conn.sourceId, conn.targetId, "contradicts").catch(() => {});
@@ -1012,6 +1413,7 @@ export interface ConsolidationReport {
   connections_strengthened: number;
   engrams_strengthened: number;
   promotions: number;
+  memory_candidates_created: number;
   beliefs_updated: number;
   duration_ms: number;
   /** Summaries of consolidated engrams for the dreaming module. */
@@ -1042,9 +1444,11 @@ export async function runConsolidation(
   const { lookback_hours = DEFAULT_LOOKBACK_HOURS } = options;
   const agentId = options.agentId || "luca";
   const startTime = Date.now();
+  const insightSinceIso = new Date(startTime - 1000).toISOString();
 
   // 1. Select candidates
   const candidates = await selectCandidates(supabase, userId, agentId, lookback_hours);
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
 
   if (candidates.length === 0) {
     const emptyResult: ConsolidationResult = {
@@ -1052,6 +1456,12 @@ export async function runConsolidation(
       new_connections: 0,
       beliefs_updated: 0,
       promotions: 0,
+      memory_candidates_created: 0,
+      insights: {
+        promoted_engrams: [],
+        longstanding_connections: [],
+        surfaced_beliefs: [],
+      },
       duration_ms: Date.now() - startTime,
     };
     const emptyReport: ConsolidationReport = {
@@ -1061,6 +1471,7 @@ export async function runConsolidation(
       connections_strengthened: 0,
       engrams_strengthened: 0,
       promotions: 0,
+      memory_candidates_created: 0,
       beliefs_updated: 0,
       duration_ms: Date.now() - startTime,
       candidate_summaries: [],
@@ -1080,7 +1491,13 @@ export async function runConsolidation(
   const newConnections = await analyzePairs(supabase, userId, agentId, candidates);
 
   // 3. Persist new connections
-  const connectionsCreated = await persistNewConnections(supabase, userId, agentId, newConnections);
+  const connectionInsights = await persistNewConnections(
+    supabase,
+    userId,
+    agentId,
+    newConnections,
+    candidateById,
+  );
 
   // 4. Strengthen co-activated connections
   const connectionsStrengthened = await strengthenConnections(supabase, userId, agentId, candidates);
@@ -1089,12 +1506,22 @@ export async function runConsolidation(
   const engramsStrengthened = await strengthenEngrams(supabase, agentId, candidates);
 
   // 6. Promote episodic -> semantic
-  const promotions = await promoteEngrams(supabase, candidates);
+  const promotedEngrams = await promoteEngrams(supabase, candidates);
+  const memoryCandidatesCreated = await surfaceDurableCandidatesFromSemanticEngrams(
+    supabase,
+    userId,
+    agentId,
+    promotedEngrams,
+    candidates,
+  );
 
   // 7. Belief formation — resolve the synthesis dark-launch context ONCE (flag +
   // BYOK key + cohort; model + crisis windows). null → the lexical path runs unchanged.
   const synth = await buildBeliefSynthContext(supabase, userId, agentId, options.openrouter_api_key);
   const beliefsUpdated = await formBeliefs(supabase, userId, agentId, synth);
+  const surfacedBeliefs = beliefsUpdated > 0
+    ? await loadRecentBeliefInsights(supabase, userId, agentId, insightSinceIso)
+    : [];
 
   // Return candidates to active state
   await supabase
@@ -1108,9 +1535,15 @@ export async function runConsolidation(
 
   const result: ConsolidationResult = {
     strengthened: engramsStrengthened,
-    new_connections: connectionsCreated,
+    new_connections: connectionInsights.length,
     beliefs_updated: beliefsUpdated,
-    promotions,
+    promotions: promotedEngrams.length,
+    memory_candidates_created: memoryCandidatesCreated,
+    insights: {
+      promoted_engrams: promotedEngrams.slice(0, INSIGHT_LIMIT),
+      longstanding_connections: connectionInsights.slice(0, INSIGHT_LIMIT),
+      surfaced_beliefs: surfacedBeliefs.slice(0, INSIGHT_LIMIT),
+    },
     duration_ms: duration,
   };
 
@@ -1120,7 +1553,8 @@ export async function runConsolidation(
     new_connections: newConnections,
     connections_strengthened: connectionsStrengthened,
     engrams_strengthened: engramsStrengthened,
-    promotions,
+    promotions: promotedEngrams.length,
+    memory_candidates_created: memoryCandidatesCreated,
     beliefs_updated: beliefsUpdated,
     duration_ms: duration,
     candidate_summaries: candidates.map((e) => ({

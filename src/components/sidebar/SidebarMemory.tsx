@@ -106,10 +106,9 @@ export default function SidebarMemory() {
       </div>
 
       <div className="sidebar-foot">
-        {/* MOCK: substrate health + last-decay timestamps until wired */}
-        <div className="sidebar-foot-row"><span>Substrate</span><span className="v">healthy</span></div>
-        <div className="sidebar-foot-row"><span>Last decay</span><span className="v">6h ago</span></div>
-        <div className="sidebar-foot-row"><span>Consolidating</span><span className="v">{engrams.filter(e => e.state === 'consolidating').length}</span></div>
+        <div className="sidebar-foot-row"><span>Engrams</span><span className="v">{counts.engrams}</span></div>
+        <div className="sidebar-foot-row"><span>Committed</span><span className="v">{counts.memories}</span></div>
+        <div className="sidebar-foot-row"><span>Candidates</span><span className="v">{counts.candidates}</span></div>
       </div>
     </div>
   );

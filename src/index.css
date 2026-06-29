@@ -2627,6 +2627,246 @@ html {
   width: 100%;
 }
 
+.landing-chrome-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-chrome-mark {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.064);
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.012);
+  color: rgba(244, 243, 240, 0.54);
+}
+
+.luca-download-trigger {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.072);
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 410;
+  line-height: 1;
+  letter-spacing: var(--track-body);
+  cursor: pointer;
+  transition:
+    border-color 220ms var(--ease-premium),
+    color 220ms var(--ease-premium),
+    background 220ms var(--ease-premium);
+}
+
+.luca-download-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.034);
+  color: var(--text-primary);
+}
+
+.luca-download-trigger:focus-visible {
+  outline: none;
+  border-color: rgba(244, 243, 240, 0.24);
+  box-shadow: 0 0 0 3px rgba(244, 243, 240, 0.055);
+}
+
+.luca-download-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: viewFadeIn 180ms var(--ease-out) both;
+}
+
+.luca-download-dialog {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  padding: 26px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.082);
+  background: rgba(17, 17, 21, 0.985);
+  box-shadow: 0 28px 90px -42px rgba(0, 0, 0, 0.82);
+  color: var(--text-primary);
+}
+
+.luca-download-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.018);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    border-color 180ms var(--ease-premium),
+    color 180ms var(--ease-premium),
+    background 180ms var(--ease-premium);
+}
+
+.luca-download-close:hover {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+}
+
+.luca-download-close:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.luca-download-mark {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.026);
+  color: rgba(244, 243, 240, 0.72);
+}
+
+.luca-download-copy {
+  padding-right: 20px;
+}
+
+.luca-download-eyebrow {
+  margin: 0 0 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 520;
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+  color: rgba(244, 243, 240, 0.56);
+}
+
+.luca-download-copy h2 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 470;
+  letter-spacing: -0.022em;
+  line-height: 1.14;
+  color: var(--text-primary);
+}
+
+.luca-download-copy p:not(.luca-download-eyebrow) {
+  margin: 11px 0 0;
+  max-width: 36rem;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.56;
+  color: var(--text-tertiary);
+}
+
+.luca-download-form {
+  display: grid;
+  gap: 11px;
+  margin-top: 23px;
+}
+
+.luca-download-form label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 520;
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+  color: var(--text-whisper);
+}
+
+.luca-download-form input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,255,255,0.078);
+  border-radius: 11px;
+  outline: none;
+  background: rgba(255,255,255,0.018);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: var(--track-body);
+  transition:
+    border-color 200ms var(--ease-premium),
+    background 200ms var(--ease-premium);
+}
+
+.luca-download-form input:focus {
+  border-color: rgba(244, 243, 240, 0.24);
+  background: rgba(255,255,255,0.028);
+  box-shadow: 0 0 0 3px rgba(244, 243, 240, 0.055);
+}
+
+.luca-download-form input::placeholder {
+  color: var(--text-whisper);
+}
+
+.luca-download-form button[type='submit'] {
+  height: 44px;
+  margin-top: 2px;
+  border: 1px solid rgba(255,255,255,0.42);
+  border-radius: 11px;
+  background: #e8e6e1;
+  color: #19191d;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 530;
+  letter-spacing: -0.004em;
+  cursor: pointer;
+  transition:
+    background 200ms var(--ease-premium),
+    opacity 200ms var(--ease-premium);
+}
+
+.luca-download-form button[type='submit']:not(:disabled):hover {
+  background: #f0eee9;
+}
+
+.luca-download-form button[type='submit']:disabled {
+  cursor: default;
+  opacity: 0.56;
+}
+
+.luca-download-status {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.024);
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.luca-download-status--success {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-body);
+}
+
 .landing-shell::after {
   content: '';
   position: fixed;
@@ -2655,6 +2895,10 @@ html {
     min-height var(--dur-normal) var(--ease-premium);
 }
 
+.landing-composer .landing-input-shell::before {
+  display: none;
+}
+
 .landing-composer .input-row {
   transition: padding var(--dur-normal) var(--ease-premium);
 }
@@ -2662,10 +2906,19 @@ html {
 .landing-composer .input-textarea {
   min-height: 54px;
   padding-block: 15px;
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   transition:
     min-height var(--dur-normal) var(--ease-premium),
     padding var(--dur-normal) var(--ease-premium),
     color var(--dur-fast) var(--ease-out);
+}
+
+.landing-composer .input-textarea::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .landing-composer .landing-input-shell.expanded .input-textarea {
@@ -2702,6 +2955,29 @@ html {
 }
 
 @media (max-width: 767px) {
+  .landing-chrome-actions {
+    gap: 7px;
+  }
+
+  .landing-chrome-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .luca-download-trigger {
+    width: 34px;
+    padding: 0;
+  }
+
+  .luca-download-trigger span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   /* Composer rides in normal flex flow at the bottom of the chat-view
      column. With `100dvh` on the shell and `interactive-widget=resizes-
      content` in the viewport meta, iOS Safari shrinks the layout when

@@ -11,7 +11,9 @@
 // difference: here we only match CLOSED fences, because the message is complete
 // at save time and a half-open block is not a real artifact.
 
-export type ArtifactKind = "html" | "svg" | "mermaid" | "react" | "markdown";
+import { simulationTitleFromContent } from "../simulation-artifact.ts";
+
+export type ArtifactKind = "html" | "svg" | "mermaid" | "react" | "markdown" | "simulation";
 
 const KIND_MAP: Record<string, ArtifactKind> = {
   html: "html",
@@ -21,6 +23,7 @@ const KIND_MAP: Record<string, ArtifactKind> = {
   tsx: "react",
   markdown: "markdown",
   md: "markdown",
+  simulation: "simulation",
 };
 
 const MIN_LINES = 30;
@@ -49,7 +52,11 @@ export function extractArtifactsFromContent(source: string): ExtractedArtifact[]
     const kind = KIND_MAP[lang];
     if (!kind) continue;
     const lines = body.split("\n").length;
-    if (lines < MIN_LINES && !/<\/(html|svg|body)>/i.test(body)) continue;
+    if (kind === "simulation") {
+      if (!body.trim()) continue;
+    } else if (lines < MIN_LINES && !/<\/(html|svg|body)>/i.test(body)) {
+      continue;
+    }
     out.push({ kind, title: titleFor(kind, body), content: body.replace(/\n$/, "") });
   }
   return out;
@@ -64,6 +71,7 @@ function titleFor(kind: ArtifactKind, body: string): string {
   if (kind === "svg") return "SVG preview";
   if (kind === "mermaid") return "Diagram";
   if (kind === "react") return "React preview";
+  if (kind === "simulation") return simulationTitleFromContent(body);
   return "Artifact";
 }
 

@@ -73,14 +73,15 @@ export function shouldDefaultSidebarVisible(mode: InterfaceMode): boolean {
 
 /**
  * Rail surface descriptors — single source of truth for what shows in the
- * primary nav per interface mode. Companion and Guided collapse to four
- * surfaces (Chat / Notebook / Memory / Agents); Studio shows the full
+ * primary nav per interface mode. Companion and Guided collapse to five
+ * surfaces (Chat / Notebook / Memory / Research / Agents); Studio shows the full
  * diagnostic map. Order matches render order in the Rail.
  */
 export type RailSurfaceIcon =
   | 'chat'
   | 'notebook'
   | 'memory'
+  | 'research'
   | 'agents'
   | 'mind'
   | 'projects'
@@ -99,12 +100,14 @@ const COMPANION_GUIDED_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
   { id: 'notebook', label: 'Notebook', path: '/notebook',        icon: 'notebook', guideId: 'rail-notebook', matchPaths: ['/notebook', '/journal'] },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
+  { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
   { id: 'agents',   label: 'Agents',   path: '/settings/agents', icon: 'agents',   guideId: 'rail-agents', matchPaths: ['/settings/agents', '/agents'] },
 ];
 
 const STUDIO_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
+  { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
   { id: 'mind',     label: 'Mind',     path: '/mind',            icon: 'mind',     guideId: 'rail-mind', matchPaths: ['/mind', '/dashboard', '/profile/identity', '/profile/revisions'] },
   { id: 'journal',  label: 'Journal',  path: '/journal',         icon: 'notebook', guideId: 'rail-journal' },
   { id: 'projects', label: 'Projects', path: '/projects',        icon: 'projects', guideId: 'rail-projects' },

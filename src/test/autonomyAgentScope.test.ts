@@ -90,6 +90,7 @@ describe('agent-scoped autonomy runtime', () => {
   it('scopes the activity gate and process logs by agent', () => {
     const gate = readRepoFile('supabase/functions/_shared/activity-gate.ts');
     const consolidate = readRepoFile('supabase/functions/mnemos-consolidate/index.ts');
+    const candidateAutoCommit = readRepoFile('supabase/migrations/20260627223000_scope_memory_candidate_auto_commit.sql');
 
     expect(gate).toContain('processName: string,\n  agentId = "luca"');
     expect(gate).toContain('.eq("agent_id", scopedAgentId)');
@@ -99,6 +100,29 @@ describe('agent-scoped autonomy runtime', () => {
     expect(consolidate).toContain('.eq("agent_id", agentId)');
     expect(consolidate).toContain('.eq("metadata->>process", "mnemos-consolidate")');
     expect(consolidate).toContain('logProcessRan(supabase, uid, "mnemos-consolidate"');
+    expect(consolidate).toContain('.gte("created_at", cutoff)');
+    expect(consolidate).toContain('.gte("last_accessed_at", cutoff)');
+
+    expect(candidateAutoCommit).toContain('SELECT id, user_id, agent_id, content, memory_type, confidence, source');
+    expect(candidateAutoCommit).toContain('user_id, agent_id, content, memory_type, confidence, provenance');
+    expect(candidateAutoCommit).toContain("COALESCE(v_candidate.agent_id, 'luca')");
+  });
+
+  it('surfaces promoted Mnemos engrams as agent-scoped durable memory candidates', () => {
+    const consolidation = readRepoFile('supabase/functions/_shared/mnemos/consolidation.ts');
+    const engine = readRepoFile('supabase/functions/_shared/mnemos/engine.ts');
+    const overview = readRepoFile('src/components/memory/MnemosOverview.tsx');
+
+    expect(consolidation).toContain('surfaceDurableCandidatesFromSemanticEngrams');
+    expect(consolidation).toContain('.from("memory_candidates")');
+    expect(consolidation).toContain('agent_id: agentId');
+    expect(consolidation).toContain('origin: "mnemos-consolidate"');
+    expect(consolidation).toContain('DURABLE_CANDIDATE_MAX_PER_RUN');
+    expect(consolidation).toContain('filter("source->>engram_id", "eq", engramId)');
+    expect(consolidation).toContain('filter("provenance->>engram_id", "eq", engramId)');
+    expect(consolidation).toContain('memory_candidates_created: memoryCandidatesCreated');
+    expect(engine).toContain('memory_candidates_created: report.memory_candidates_created');
+    expect(overview).toContain('durable candidates');
   });
 
   it('keeps scheduled model-writing autonomy explicitly gated', () => {

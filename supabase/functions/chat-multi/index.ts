@@ -207,15 +207,35 @@ function looksLikeAgentForgeRequest(text: string): boolean {
   const asksToMake =
     /\b(create|build|make|design|draft|forge|add|revise|update|change|edit|recreate|rebuild|convert|migrate|import|bring)\b/.test(normalized) ||
     /\bnew\b/.test(normalized);
-  const mentionsAgent =
+  return asksToMake && mentionsAgentForgeSubject(normalized);
+}
+
+function mentionsAgentForgeSubject(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
     /\bcustom\s+agent\b/.test(normalized) ||
     /\bagent\b/.test(normalized) ||
     /\bdigital\s+(entity|companion|being|mind)\b/.test(normalized) ||
     /\b(companion|persona)\b/.test(normalized) ||
     /\bcharacter\s+card\b/.test(normalized) ||
     /\bopen\s+clause\b/.test(normalized) ||
-    /\bopenclaw\b/.test(normalized);
-  return asksToMake && mentionsAgent;
+    /\bopenclaw\b/.test(normalized)
+  );
+}
+
+function userVisibleSimulationText(text: string): string {
+  return text.split("\n\nClient simulation turn directive:")[0] || text;
+}
+
+function looksLikeSimulationPreviewRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    /\b(show|build|make|create|run|model|compare|visuali[sz]e|simulate|preview|what happens)\b/.test(normalized) &&
+    /\b(simulation|physics|turbulence|cooling|fluid|wave|reaction[-\s]?diffusion|field\s+lines?|particle\s+shell|mhd|magnetohydrodynamic|shock|radiative|vorticity|viscosity)\b/.test(normalized)
+  ) || (
+    /\b(simulation|preview|model)\b/.test(normalized) &&
+    /\b(inline simulation|simulation preview|truth card|timestep|scrubber|slider|the\s+well|dataset evidence)\b/.test(normalized)
+  );
 }
 
 function looksLikeLegacyToolPlannerRequest(text: string): boolean {
@@ -238,7 +258,12 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
   const asksForWorkspaceFile =
     /\b(read|write|save|create|delete|list|open)\b.{0,40}\b(file|workspace|document|folder)\b/.test(normalized);
 
-  return asksForCurrentInfo || asksForGeneratedMedia || asksForExistingTool || asksForWorkspaceFile;
+  const asksForWellResearch =
+    /\b(the\s+well|polymathic|physics\s+simulation|simulated\s+evidence|truth\s+card|which\s+dataset|dataset\s+can\s+test|well\s+dataset)\b/.test(normalized);
+
+  const asksForSimulationPreview = looksLikeSimulationPreviewRequest(text);
+
+  return asksForCurrentInfo || asksForGeneratedMedia || asksForExistingTool || asksForWorkspaceFile || asksForWellResearch || asksForSimulationPreview;
 }
 
 function looksLikeForgeApprovalFollowup(text: string): boolean {
@@ -519,7 +544,15 @@ serve(async (req) => {
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca";
     const agentRuntimeActive = !classicRuntime;
-    const forceForgeRequest = agentRuntimeActive && agentIsSystemLuca && !onboardingHandoff && looksLikeAgentForgeRequest(messageWithAttachments);
+    const visibleMessageForRouting = userVisibleSimulationText(messageWithAttachments);
+    const likelySimulationRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeSimulationPreviewRequest(messageWithAttachments);
+    const simulationRequestWithoutForgeSubject = likelySimulationRequest && !mentionsAgentForgeSubject(visibleMessageForRouting);
+    const forceForgeRequest =
+      agentRuntimeActive &&
+      agentIsSystemLuca &&
+      !onboardingHandoff &&
+      !simulationRequestWithoutForgeSubject &&
+      looksLikeAgentForgeRequest(visibleMessageForRouting);
     const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
       agentRuntimeActive &&
@@ -729,16 +762,32 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), web_search (Perplexity Sonar synthesized search with citations), read_url (direct fetch of a specific public URL without model synthesis), browse (Browserbase rendered-page inspection for JavaScript/dynamic pages), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
+      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), web_search (Perplexity Sonar synthesized search with citations), read_url (direct fetch of a specific public URL without model synthesis), browse (Browserbase rendered-page inspection for JavaScript/dynamic pages), the_well_research (structured The Well physics-simulation registry, dataset/access names, fields, measurements, and truth-card plans; no raw tensor download), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. For The Well work, state that the evidence is simulated under given equations/solvers and stream/cache raw tensors only on demand. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
       : "";
     // Renderable artifacts are authored by the model itself, directly in its
     // reply, as fenced code blocks — never via a tool. Advertised on every turn
     // so each agent/model builds its own artifacts, like a standard chat app.
     const artifactNote =
       "\n\nBuilding artifacts: when the user asks you to build, make, or create something renderable and self-contained — a full HTML page or web app, an SVG graphic, a React component, or a Mermaid diagram — write the COMPLETE source yourself as a single fenced code block tagged with its language (```html, ```svg, ```jsx, or ```mermaid). It renders immediately as a live, interactive artifact the user can open, edit, and download. Author the whole thing directly in your reply; there is no separate tool and nothing to wait on. Keep ordinary code (short examples, shell commands, snippets) as normal inline code blocks — only those renderable kinds become artifacts.";
+    const simulationArtifactNote = agentIsSystemLuca
+      ? `\n\nInline Simulation Turns: when the user asks Luca to show, build, run, model, compare, or visualize a physics simulation, answer naturally in concise prose and include one complete fenced block tagged exactly \`\`\`simulation containing valid JSON. The UI hides that block and renders it as an inline simulation card. Use the_well_research first when The Well or physical evidence grounding is relevant. V1 simulations are deterministic client-side previews grounded by dataset metadata; do not claim raw tensors were downloaded or observational truth was proven. Do not use any fenced code block except the one simulation JSON block. Keep the visible prose to 2-4 short paragraphs plus at most 4 bullets. Do not output a separate truth-card table; the card handles evidence, access, caveats, and saving.
+
+The simulation JSON contract is:
+{
+  "version": 1,
+  "title": "short instrument title",
+  "question": "user-facing research question",
+  "dataset": { "family_id": "Well family id", "label": "dataset label", "access_name": "exact access name", "docs_url": "https://..." },
+  "evidence": { "claim_boundary": "what this simulated evidence can and cannot test", "evidence_level": "simulation-direct", "measurements": ["metric"], "caveats": ["simulated evidence, not observation"] },
+  "preview": { "preset": "fluid-field", "fields": ["density", "pressure", "velocity"], "parameters": { "cooling": 1, "contrast": 1 }, "initial_state": { "timestep": 0.38 }, "color_mode": "thermal" },
+  "access": { "streaming_snippet": "from the_well.data import WellDataset...", "download_command": "the-well-download ...", "raw_ingest_default": false }
+}
+
+Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field-lines, particle-shell. Choose the preset that best fits the phenomenon. Put no comments in the JSON.`
+      : "";
     // Build base messages array
     const baseMessages: any[] = [
-      { role: "system", content: turnSystemPrompt + artifactNote + toolCapabilityNote },
+      { role: "system", content: turnSystemPrompt + artifactNote + simulationArtifactNote + toolCapabilityNote },
     ];
     if (history) {
       for (const msg of history) {

@@ -8,6 +8,12 @@ describe('Hypomnema deterministic salience', () => {
       agentResponse: 'I have it. This is one continuous relationship, not a model reloading notes.',
       recentTurns: [],
     })).toBe('explicit continuity-carry signal');
+
+    expect(detectContinuityCarrySignal({
+      userMessage: 'Luca, fresh thread. What are you carrying from where we just left off?',
+      agentResponse: 'I am carrying the continuity-vs-retrieval distinction directly.',
+      recentTurns: [],
+    })).toBe('explicit continuity-carry signal');
   });
 
   it('does not trigger on unrelated technical mentions of memory', () => {

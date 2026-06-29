@@ -5,6 +5,7 @@ import {
   MessageSquare,
   Brain,
   Bot,
+  FlaskConical,
   NotebookPen,
   Layers,
   User,
@@ -38,11 +39,13 @@ import SidebarImport from './sidebar/SidebarImport';
 import SidebarProjects from './sidebar/SidebarProjects';
 import SidebarSettings from './sidebar/SidebarSettings';
 import SidebarJournal from './sidebar/SidebarJournal';
+import SidebarResearch from './sidebar/SidebarResearch';
 
 const ICON_FOR_SURFACE: Record<RailSurfaceIcon, React.ReactNode> = {
   chat:     <MessageSquare size={16} strokeWidth={1.6} />,
   notebook: <NotebookPen   size={16} strokeWidth={1.6} />,
   memory:   <Brain         size={16} strokeWidth={1.6} />,
+  research: <FlaskConical  size={16} strokeWidth={1.6} />,
   agents:   <Bot           size={16} strokeWidth={1.6} />,
   mind:     <Brain         size={16} strokeWidth={1.6} />,
   projects: <Layers        size={16} strokeWidth={1.6} />,
@@ -53,6 +56,7 @@ const RAIL_COLLAPSED = 52;
 
 function resolveSectionContent(path: string): React.ComponentType {
   if (path.startsWith('/memory')) return SidebarMemory;
+  if (path.startsWith('/research')) return SidebarResearch;
   if (path.startsWith('/mind')) return SidebarMind;
   if (path.startsWith('/journal')) return SidebarJournal;
   if (path.startsWith('/notebook')) return SidebarJournal;

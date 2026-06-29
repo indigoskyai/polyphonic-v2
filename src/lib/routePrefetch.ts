@@ -5,6 +5,7 @@ const prefetched = new Map<string, Promise<unknown>>();
 const routeLoaders: Record<string, RouteLoader> = {
   '/chat': () => import('@/pages/ChatView'),
   '/memory': () => import('@/pages/MemoryView'),
+  '/research': () => import('@/pages/ResearchView'),
   '/mind': () => import('@/pages/MindView'),
   '/journal': () => import('@/pages/JournalView'),
   '/import': () => import('@/pages/ImportView'),
@@ -84,6 +85,7 @@ export function prefetchCoreSettingsRoutes() {
 // hover/focus, but should not be parsed during the first companion/chat session.
 const lightPrimaryNavPaths = [
   '/chat',
+  '/research',
   '/journal',
   '/settings/agents',
 ];
@@ -113,6 +115,6 @@ export function prefetchPrimaryNavRoutes(options: { includeHeavy?: boolean } = {
 }
 
 export const navigationAuditRoutes = {
-  rail: ['/chat', '/memory', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
+  rail: ['/chat', '/memory', '/research', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
   settings: coreSettingsPaths,
 };

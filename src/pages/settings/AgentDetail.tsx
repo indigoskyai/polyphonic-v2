@@ -17,6 +17,7 @@ import StickySaveFooter from '@/components/settings/StickySaveFooter';
 import AgentPersonality from '@/components/settings/AgentPersonality';
 import AgentRightNowPanel from '@/components/settings/AgentRightNowPanel';
 import AgentMemoryOfYouPanel from '@/components/settings/AgentMemoryOfYouPanel';
+import AgentXChannel from '@/components/settings/AgentXChannel';
 import IdentityEditor from '@/components/identity/IdentityEditor';
 import { Section, InlinePill } from '@/components/settings/Section';
 import {
@@ -532,6 +533,16 @@ export default function AgentDetail() {
 
         <Section
           number="11"
+          name="Channels"
+          title="Public voice"
+          desc="Connect a bot-owned X account to this agent, set the posting policy, and fund posts through a credit ledger that can support subscription or $MNEMOS balances."
+          pill={<InlinePill variant="amber">X v1</InlinePill>}
+        >
+          <AgentXChannel agentId={agent.id} agentName={agent.name} />
+        </Section>
+
+        <Section
+          number="12"
           name="Keychain"
           title="Provider keys"
           desc="Provider API keys. Only the last three characters are shown."

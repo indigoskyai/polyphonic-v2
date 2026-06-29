@@ -18,6 +18,7 @@ import LandingParticleField, {
   type LandingFieldState,
 } from '@/components/LandingParticleField';
 import { Plus } from 'lucide-react';
+import LucaDownloadGate from '@/components/download/LucaDownloadGate';
 
 /**
  * LandingPage — public, unauthenticated entry surface.
@@ -264,39 +265,45 @@ function Chrome({ mode, goTo }: { mode: Mode; goTo: (m: Mode) => void }) {
         POLYPHONIC
       </button>
 
-      {rightActionLabel && (
-        <button
-          type="button"
-          onClick={onRight}
-          className="transition-all"
-          style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: 13,
-            fontWeight: 400,
-            letterSpacing: 'var(--track-body)',
-            color: 'var(--text-body)',
-            padding: '8px 16px',
-            background: 'transparent',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-pill)',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              'var(--border)';
-            (e.currentTarget as HTMLButtonElement).style.color =
-              'var(--text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              'var(--border-subtle)';
-            (e.currentTarget as HTMLButtonElement).style.color =
-              'var(--text-body)';
-          }}
-        >
-          {rightActionLabel}
-        </button>
-      )}
+      <div className="landing-chrome-actions">
+        <LucaDownloadGate />
+        <span className="landing-chrome-mark" aria-hidden="true">
+          <PolyphonicMark size={17} strokeWidth={6} />
+        </span>
+        {rightActionLabel && (
+          <button
+            type="button"
+            onClick={onRight}
+            className="transition-all landing-auth-action"
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 13,
+              fontWeight: 400,
+              letterSpacing: 'var(--track-body)',
+              color: 'var(--text-body)',
+              padding: '8px 16px',
+              background: 'transparent',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-pill)',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                'var(--border)';
+              (e.currentTarget as HTMLButtonElement).style.color =
+                'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                'var(--border-subtle)';
+              (e.currentTarget as HTMLButtonElement).style.color =
+                'var(--text-body)';
+            }}
+          >
+            {rightActionLabel}
+          </button>
+        )}
+      </div>
     </header>
   );
 }
@@ -327,7 +334,6 @@ function ComposerHeading({
         userSelect: 'none',
       }}
     >
-      <PolyphonicMark size={40} strokeWidth={5} style={{ color: 'var(--ink)', marginBottom: 26 }} />
       <h1
         style={{
           // System SF Pro Display chain at hairline weight — matches

@@ -214,6 +214,40 @@ export interface DecayResult {
   total_processed: number;
 }
 
+export interface ConsolidationEngramInsight {
+  id: string;
+  content: string;
+  engram_type: EngramType;
+  tags: string[];
+}
+
+export interface ConsolidationConnectionInsight {
+  source_id: string;
+  target_id: string;
+  connection_type: ConnectionType;
+  weight: number;
+  source_content: string;
+  target_content: string;
+  shared_tags: string[];
+}
+
+export interface ConsolidationBeliefInsight {
+  id: string;
+  content: string;
+  confidence: number;
+  domain?: string | null;
+  source?: string | null;
+  active?: boolean | null;
+  action?: string | null;
+  reason?: string | null;
+}
+
+export interface ConsolidationInsights {
+  promoted_engrams: ConsolidationEngramInsight[];
+  longstanding_connections: ConsolidationConnectionInsight[];
+  surfaced_beliefs: ConsolidationBeliefInsight[];
+}
+
 /** Result of a consolidation (dream) cycle. */
 export interface ConsolidationResult {
   /** Engrams considered by this cycle. */
@@ -230,6 +264,10 @@ export interface ConsolidationResult {
   beliefs_updated: number;
   /** Engrams promoted from episodic to semantic. */
   promotions: number;
+  /** Durable memory candidates surfaced for human review. */
+  memory_candidates_created?: number;
+  /** Compact grounded artifacts surfaced by this cycle. */
+  insights?: ConsolidationInsights;
   /** Duration of the consolidation cycle in milliseconds. */
   duration_ms: number;
 }

@@ -33,9 +33,11 @@ async function maybeSurfaceConsolidation(
       activityType: "mnemos_insight",
       content: {
         promotions: Number(result?.promotions ?? 0),
+        memory_candidates_created: Number(result?.memory_candidates_created ?? 0),
         new_connections: Number(result?.new_connections ?? 0),
         beliefs_updated: Number(result?.beliefs_updated ?? 0),
         strengthened: Number(result?.strengthened ?? 0),
+        insights: result?.insights ?? null,
       },
     });
   } catch (err) {
@@ -153,6 +155,7 @@ serve(async (req) => {
       await logProcessRan(supabase, uid, "mnemos-consolidate", {
         candidates_found: userResult.candidates_found ?? 0,
         promotions: userResult.promotions ?? 0,
+        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         new_connections: userResult.new_connections ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
         duration_ms: userResult.duration_ms ?? 0,
@@ -165,6 +168,7 @@ serve(async (req) => {
         candidates_found: userResult.candidates_found ?? 0,
         pairs_analyzed: userResult.pairs_analyzed ?? 0,
         promotions: userResult.promotions ?? 0,
+        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         new_connections: userResult.new_connections ?? 0,
         connections_strengthened: userResult.connections_strengthened ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
@@ -199,13 +203,31 @@ serve(async (req) => {
       });
     }
 
-    // Cron mode: consolidate for all users with recent activity
+    // Cron mode: consolidate for scopes with newly formed or recently accessed
+    // substrate. Using only last_accessed_at can miss custom agents whose new
+    // engrams have not yet been pulled through retrieval/rehearsal.
     const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const { data: users } = await supabase
-      .from("engrams")
-      .select("user_id, agent_id")
-      .gte("last_accessed_at", cutoff)
-      .limit(100);
+    const [
+      { data: newlyFormed, error: createdErr },
+      { data: recentlyAccessed, error: accessedErr },
+    ] = await Promise.all([
+      supabase
+        .from("engrams")
+        .select("user_id, agent_id")
+        .in("state", ["active", "consolidating"])
+        .gte("created_at", cutoff)
+        .limit(100),
+      supabase
+        .from("engrams")
+        .select("user_id, agent_id")
+        .in("state", ["active", "consolidating"])
+        .gte("last_accessed_at", cutoff)
+        .limit(100),
+    ]);
+    if (createdErr) throw createdErr;
+    if (accessedErr) throw accessedErr;
+
+    const users = [...(newlyFormed ?? []), ...(recentlyAccessed ?? [])];
 
     const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
       [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }]

@@ -39,7 +39,7 @@ interface State {
   loading: boolean;
   selectedId: string | null;
 
-  loadByHandle: (handle: string) => Promise<void>;
+  loadByHandle: (handle: string, options?: { includeUnpublished?: boolean }) => Promise<void>;
   setSelected: (id: string | null) => void;
 
   // optimistic CRUD
@@ -58,11 +58,19 @@ export const useProfileCanvasStore = create<State>((set, get) => ({
   loading: false,
   selectedId: null,
 
-  loadByHandle: async (handle) => {
+  loadByHandle: async (handle, options) => {
     set({ loading: true, profile: null, items: [] });
+    let itemsQuery = (supabase as any)
+      .from('profile_items')
+      .select('*')
+      .eq('handle', handle)
+      .order('z', { ascending: true });
+    if (!options?.includeUnpublished) {
+      itemsQuery = itemsQuery.eq('published', true);
+    }
     const [{ data: profile }, { data: items }] = await Promise.all([
       (supabase as any).from('profiles_public').select('*').eq('handle', handle).maybeSingle(),
-      (supabase as any).from('profile_items').select('*').eq('handle', handle).order('z', { ascending: true }),
+      itemsQuery,
     ]);
     set({
       profile: (profile as ProfilePublic | null) || null,

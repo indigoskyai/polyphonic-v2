@@ -45,6 +45,28 @@ Please check the Polyphonic Supabase edge function environment and confirm these
 Do not reveal secret values. Just confirm present/missing and update missing ones.
 ```
 
+### 2b. Deploy Luca private beta download gate
+
+Prompt Lovable:
+
+```text
+Please deploy the new public edge function `luca-download` for the Polyphonic website and confirm it is configured with JWT verification disabled from `supabase/config.toml`.
+
+Required private beta secrets:
+- LUCA_DOWNLOAD_PASSPHRASE
+- LUCA_DOWNLOAD_FILE_NAME, optional
+
+Preferred private-storage delivery:
+- Upload the latest notarized Luca Apple Silicon DMG to a private Supabase Storage bucket.
+- Set LUCA_DOWNLOAD_STORAGE_BUCKET and LUCA_DOWNLOAD_STORAGE_PATH.
+- Confirm SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are present so the function can create 15-minute signed URLs.
+
+Fallback delivery if private storage is not ready:
+- Set LUCA_DOWNLOAD_URL to the hosted DMG URL.
+
+Do not reveal secret values. Confirm only present/missing and the function deployment timestamp.
+```
+
 ### 3. Verify scheduled jobs and logs
 
 Prompt Lovable:

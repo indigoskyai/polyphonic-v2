@@ -56,6 +56,7 @@ const TrustPage = lazy(() => import("./pages/TrustPage"));
 const CreditsPage = lazy(() => import("./pages/CreditsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
 const MemoryView = lazy(() => import("./pages/MemoryView"));
+const ResearchView = lazy(() => import("./pages/ResearchView"));
 const MindView = lazy(() => import("./pages/MindView"));
 const JournalView = lazy(() => import("./pages/JournalView"));
 const ImportView = lazy(() => import("./pages/ImportView"));
@@ -430,6 +431,7 @@ const App = () => (
                 <Route path="/chat" element={<ProtectedRoute skipTokenGate><AppShell><ChatView /></AppShell></ProtectedRoute>} />
                 <Route path="/chat/:threadId" element={<ProtectedRoute skipTokenGate><AppShell><ChatView /></AppShell></ProtectedRoute>} />
                 <Route path="/memory" element={<ProtectedRoute><AppShell><MemoryView /></AppShell></ProtectedRoute>} />
+                <Route path="/research" element={<ProtectedRoute><AppShell><ResearchView /></AppShell></ProtectedRoute>} />
                 <Route path="/mind" element={<ProtectedRoute><AppShell><MindView /></AppShell></ProtectedRoute>} />
                 <Route path="/journal" element={<ProtectedRoute><AppShell><JournalView /></AppShell></ProtectedRoute>} />
                 <Route path="/import" element={<ProtectedRoute><AppShell><ImportView /></AppShell></ProtectedRoute>} />

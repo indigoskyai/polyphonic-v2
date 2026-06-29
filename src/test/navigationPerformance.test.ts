@@ -31,6 +31,7 @@ describe('navigation performance wiring', () => {
     expect(navigationAuditRoutes.rail).toEqual([
       '/chat',
       '/memory',
+      '/research',
       '/mind',
       '/journal',
       '/import',

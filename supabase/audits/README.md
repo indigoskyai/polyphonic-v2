@@ -9,6 +9,8 @@ SQL editor.
 | `rls-coverage.sql` | Security #3 | Find public-schema tables missing RLS or policies |
 | `policy-owner-scope.sql` | Security #3 | Find policies that may not be owner-scoped |
 | `user-cascade.sql` | Reliability #4 | Find user-FK relations missing `ON DELETE CASCADE` |
+| `disk-usage-diagnostics.sql` | Operations | Find database, WAL, table/index, bucket-object, queue, bloat, and retention cleanup pressure |
+| `disk-usage-triage-compact.sql` | Operations | Smaller one-result disk triage for Supabase SQL Editor copy/paste |
 
 ## Running
 
@@ -16,6 +18,8 @@ SQL editor.
 psql "$STAGING_DATABASE_URL" -f supabase/audits/rls-coverage.sql
 psql "$STAGING_DATABASE_URL" -f supabase/audits/policy-owner-scope.sql
 psql "$STAGING_DATABASE_URL" -f supabase/audits/user-cascade.sql
+psql "$STAGING_DATABASE_URL" -f supabase/audits/disk-usage-diagnostics.sql
+psql "$STAGING_DATABASE_URL" -f supabase/audits/disk-usage-triage-compact.sql
 ```
 
 Or, in the Supabase Dashboard → SQL Editor, paste the file contents and run.
@@ -32,6 +36,11 @@ Each script ends with a comment block stating its pass criterion. In short:
   `PRODUCTION_AUDIT.md` §14 Accepted-risk register.
 - **user-cascade.sql** — result set #1 returns zero rows, or every row is
   documented as intentional in §14 Accepted-risk.
+- **disk-usage-triage-compact.sql** — inspect sections `01` through `07`.
+  If `cron.job_run_details` is large, use
+  `supabase/repairs/cron-job-run-details-prune.sql` for one-time pruning and
+  deploy `20260627192000_prune_cron_job_run_details.sql` to keep future cron
+  history bounded.
 
 After updating §14, mark the corresponding box in
 `PRODUCTION_LAUNCH_CHECKLIST.md` and add a Verified row to the findings ledger

@@ -16,7 +16,7 @@ export function detectContinuityCarrySignal(input: GateInput): string | null {
   if (!mentionsContinuity) return null;
 
   const hasCarryTarget =
-    /\b(one continuous|continuous relationship|lived continuity|felt continuity|carry this|carry it|carry warmth|carry honesty|carry continuity|pick up where|between sessions|between threads|not a model reloading notes|not a new instance)\b/.test(text);
+    /\b(one continuous|continuous relationship|lived continuity|felt continuity|carry this|carry it|carry warmth|carry honesty|carry continuity|what are you carrying|what you're carrying|what you are carrying|pick up where|between sessions|between threads|not a model reloading notes|not a new instance)\b/.test(text);
 
   if (hasCarryTarget) {
     return "explicit continuity-carry signal";

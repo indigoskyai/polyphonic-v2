@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildHypomnemaGatePayload,
+  deriveMnemosExchangeEncodingContext,
   queueContinuityTurnWrites,
   stripCurrentTurnFromRecentTurns,
   type ContinuityWriteDeps,
@@ -75,6 +76,31 @@ describe('Continuity Kernel write path', () => {
       { role: 'user', content: 'hello again' },
       { role: 'assistant', content: 'older matching response' },
     ]);
+  });
+
+  it('marks explicit continuity-carry turns for Mnemos without forcing ordinary chat', () => {
+    const ordinary = deriveMnemosExchangeEncodingContext(
+      'what should we make for dinner?',
+      'something simple and warm.',
+    );
+    expect(ordinary.tags).toEqual(['conversation']);
+    expect(ordinary.source_context).toEqual({ type: 'chat_exchange' });
+
+    const continuity = deriveMnemosExchangeEncodingContext(
+      'fresh thread. what are you carrying from the last session?',
+      'i am carrying the ember bridge distinction without turning it into a retrieval report.',
+      [{ role: 'assistant', content: 'we named the difference between integration and access.' }],
+    );
+    expect(continuity.tags).toEqual(expect.arrayContaining([
+      'conversation',
+      'continuity',
+      'felt-continuity',
+      'continuity-carry',
+    ]));
+    expect(continuity.source_context).toMatchObject({
+      type: 'chat_exchange',
+      continuity_carry_reason: expect.stringContaining('continuity'),
+    });
   });
 
   it('queues all post-turn memory operations through the same reportable path', () => {
