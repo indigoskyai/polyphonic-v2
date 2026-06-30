@@ -571,6 +571,279 @@ export type Database = {
           },
         ]
       }
+      agent_social_channel_credentials: {
+        Row: {
+          access_token: string
+          agent_id: string
+          channel_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          platform: string
+          refresh_token: string | null
+          scope: string | null
+          token_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          agent_id: string
+          channel_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          platform?: string
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          agent_id?: string
+          channel_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          platform?: string
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_social_channel_credentials_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "agent_social_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_social_channels: {
+        Row: {
+          agent_id: string
+          billing: Json
+          connected_at: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          last_posted_at: string | null
+          platform: string
+          policy: Json
+          posting_enabled: boolean
+          profile_image_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          x_user_id: string | null
+          x_username: string | null
+        }
+        Insert: {
+          agent_id: string
+          billing?: Json
+          connected_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_posted_at?: string | null
+          platform?: string
+          policy?: Json
+          posting_enabled?: boolean
+          profile_image_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          x_user_id?: string | null
+          x_username?: string | null
+        }
+        Update: {
+          agent_id?: string
+          billing?: Json
+          connected_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_posted_at?: string | null
+          platform?: string
+          policy?: Json
+          posting_enabled?: boolean
+          profile_image_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          x_user_id?: string | null
+          x_username?: string | null
+        }
+        Relationships: []
+      }
+      agent_social_credit_ledger: {
+        Row: {
+          agent_id: string | null
+          amount_credits: number
+          amount_mnemos: number | null
+          channel_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          source: string
+          tx_signature: string | null
+          user_id: string
+          wallet_address: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          amount_credits: number
+          amount_mnemos?: number | null
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          source: string
+          tx_signature?: string | null
+          user_id: string
+          wallet_address?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          amount_credits?: number
+          amount_mnemos?: number | null
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          source?: string
+          tx_signature?: string | null
+          user_id?: string
+          wallet_address?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_social_credit_ledger_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "agent_social_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_social_oauth_states: {
+        Row: {
+          agent_id: string
+          code_verifier: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          platform: string
+          redirect_origin: string | null
+          redirect_path: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          code_verifier: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          platform?: string
+          redirect_origin?: string | null
+          redirect_path?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          code_verifier?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          platform?: string
+          redirect_origin?: string | null
+          redirect_path?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      agent_social_posts: {
+        Row: {
+          agent_id: string
+          approval_required: boolean
+          channel_id: string
+          cost_credits: number
+          created_at: string
+          external_post_id: string | null
+          failure_reason: string | null
+          id: string
+          media: Json
+          metadata: Json
+          platform: string
+          posted_at: string | null
+          scheduled_for: string | null
+          status: string
+          text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          approval_required?: boolean
+          channel_id: string
+          cost_credits?: number
+          created_at?: string
+          external_post_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          media?: Json
+          metadata?: Json
+          platform?: string
+          posted_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          text: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          approval_required?: boolean
+          channel_id?: string
+          cost_credits?: number
+          created_at?: string
+          external_post_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          media?: Json
+          metadata?: Json
+          platform?: string
+          posted_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_social_posts_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "agent_social_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           created_at: string
@@ -2885,6 +3158,120 @@ export type Database = {
         }
         Relationships: []
       }
+      research_evidence_cards: {
+        Row: {
+          access_plan: Json
+          agent_id: string
+          archived: boolean
+          artifact_id: string | null
+          caveats: Json
+          claim_boundary: string
+          created_at: string
+          dataset_id: string
+          dataset_label: string
+          evidence_level: string
+          id: string
+          measurements: Json
+          metadata: Json
+          project_id: string | null
+          question: string
+          raw_access: Json
+          result_summary: string | null
+          source_message_id: string | null
+          status: string
+          thread_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_plan?: Json
+          agent_id?: string
+          archived?: boolean
+          artifact_id?: string | null
+          caveats?: Json
+          claim_boundary: string
+          created_at?: string
+          dataset_id: string
+          dataset_label: string
+          evidence_level?: string
+          id?: string
+          measurements?: Json
+          metadata?: Json
+          project_id?: string | null
+          question: string
+          raw_access?: Json
+          result_summary?: string | null
+          source_message_id?: string | null
+          status?: string
+          thread_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_plan?: Json
+          agent_id?: string
+          archived?: boolean
+          artifact_id?: string | null
+          caveats?: Json
+          claim_boundary?: string
+          created_at?: string
+          dataset_id?: string
+          dataset_label?: string
+          evidence_level?: string
+          id?: string
+          measurements?: Json
+          metadata?: Json
+          project_id?: string | null
+          question?: string
+          raw_access?: Json
+          result_summary?: string | null
+          source_message_id?: string | null
+          status?: string
+          thread_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_evidence_cards_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_evidence_cards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_evidence_cards_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_evidence_cards_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_evidence_cards_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_tasks: {
         Row: {
           agent_id: string
@@ -3494,6 +3881,10 @@ export type Database = {
       }
     }
     Functions: {
+      agent_social_credit_balance: {
+        Args: { p_channel_id?: string; p_user_id: string }
+        Returns: number
+      }
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
       cleanup_daily_usage: { Args: never; Returns: number }
       cleanup_idempotency_keys: { Args: never; Returns: number }
