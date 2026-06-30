@@ -115,7 +115,7 @@ export default function PublicProfileSettings() {
     setClaiming(true);
     const result = await claimUserHandle(normalizedClaim, claimDisplayName.trim());
     setClaiming(false);
-    if (!result.ok) {
+    if (result.ok === false) {
       toast({ title: 'Handle not claimed', description: result.error });
       return;
     }
