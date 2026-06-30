@@ -473,44 +473,6 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_skill_denials: {
-        Row: {
-          agent_id: string
-          created_at: string
-          description: string | null
-          id: string
-          skill_name: string
-          source_skill_id: string | null
-          user_id: string
-        }
-        Insert: {
-          agent_id?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          skill_name: string
-          source_skill_id?: string | null
-          user_id: string
-        }
-        Update: {
-          agent_id?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          skill_name?: string
-          source_skill_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_skill_denials_source_skill_id_fkey"
-            columns: ["source_skill_id"]
-            isOneToOne: false
-            referencedRelation: "agent_skills"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       agent_skill_candidates: {
         Row: {
           agent_id: string
@@ -580,6 +542,44 @@ export type Database = {
             columns: ["source_thread_id"]
             isOneToOne: false
             referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_skill_denials: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string | null
+          id: string
+          skill_name: string
+          source_skill_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name: string
+          source_skill_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          skill_name?: string
+          source_skill_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_skill_denials_source_skill_id_fkey"
+            columns: ["source_skill_id"]
+            isOneToOne: false
+            referencedRelation: "agent_skills"
             referencedColumns: ["id"]
           },
         ]
