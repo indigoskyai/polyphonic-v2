@@ -18,12 +18,12 @@ import {
  *
  * All three have the same set of controls:
  *  - Attach files
- *  - Agent mode toggle
+ *  - Tools toggle
  *  - Ensemble mode toggle
  *  - Observer toggle
  *  - Voice / dictation
  *  - Thinking effort
- *  - Model picker (implicit — agent dropdown handles it for now)
+ *  - Model picker (implicit — target dropdown handles it for now)
  *  - Send
  *
  * They differ in WHERE controls live and how visible each one is.
@@ -60,7 +60,7 @@ export default function ComposerGallery() {
       <Variant
         letter="C"
         name="Hybrid (Codex/Claude style)"
-        description="Primary actions inline (Attach, Voice, Send). Secondary tools in a [+] menu (Agent, Ensemble, Observer). State indicators (current agent, mode) shown as chips next to + button. Most informative — you see your active mode at a glance."
+        description="Primary actions inline (Attach, Voice, Send). Secondary tools in a [+] menu (Tools, Ensemble, Observer). State indicators (current target, mode) shown as chips next to + button. Most informative — you see your active mode at a glance."
       >
         <HybridComposer />
       </Variant>
@@ -220,7 +220,7 @@ function SingleMenuComposer() {
           <MenuItem icon={<Paperclip size={15} />} label="Attach files" />
           <MenuItem icon={<ImageIcon size={15} />} label="Add image" />
           <MenuDivider />
-          <MenuItem icon={<PocketKnife size={15} />} label="Agent mode" toggle={agent} onClick={() => setAgent((v) => !v)} />
+          <MenuItem icon={<PocketKnife size={15} />} label="Tools" toggle={agent} onClick={() => setAgent((v) => !v)} />
           <MenuItem icon={<Boxes size={15} />} label="Ensemble" toggle={ensemble} onClick={() => setEnsemble((v) => !v)} />
           <MenuItem icon={<Eye size={15} />} label="Observer" toggle={observer} onClick={() => setObserver((v) => !v)} />
           <MenuDivider />
@@ -262,7 +262,7 @@ function InlineToolbarComposer() {
         <IconButton icon={<Paperclip size={16} />} label="Attach" />
         <PillButton
           icon={<PocketKnife size={14} />}
-          label="agent"
+          label="tools"
           active={agent}
           onClick={() => setAgent((v) => !v)}
         />
@@ -303,7 +303,7 @@ function HybridComposer() {
 
   // Build active-mode chip text
   const modeChips: string[] = [];
-  if (agent) modeChips.push('agent');
+  if (agent) modeChips.push('tools');
   if (ensemble) modeChips.push('ensemble');
   if (observer) modeChips.push('observer');
 
@@ -322,7 +322,7 @@ function HybridComposer() {
           <MenuItem icon={<Paperclip size={15} />} label="Attach files" />
           <MenuItem icon={<ImageIcon size={15} />} label="Add image" />
           <MenuDivider />
-          <MenuItem icon={<PocketKnife size={15} />} label="Agent mode" toggle={agent} onClick={() => setAgent((v) => !v)} />
+          <MenuItem icon={<PocketKnife size={15} />} label="Tools" toggle={agent} onClick={() => setAgent((v) => !v)} />
           <MenuItem icon={<Boxes size={15} />} label="Ensemble" toggle={ensemble} onClick={() => setEnsemble((v) => !v)} />
           <MenuItem icon={<Eye size={15} />} label="Observer" toggle={observer} onClick={() => setObserver((v) => !v)} />
         </PlusMenu>

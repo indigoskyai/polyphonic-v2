@@ -26,12 +26,93 @@ serve(async (req) => {
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401, corsHeaders);
 
-    const { action, skill_id, name } = await req.json();
-    if (!skill_id || !["rename", "delete", "reject"].includes(action)) {
+    const { action, skill_id, candidate_id, name } = await req.json();
+    if (!["rename", "delete", "reject", "approve_candidate", "reject_candidate"].includes(action)) {
       return json({ error: "Invalid skill action" }, 400, corsHeaders);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    if (action === "approve_candidate" || action === "reject_candidate") {
+      if (!candidate_id) return json({ error: "Missing candidate id" }, 400, corsHeaders);
+      const { data: candidate, error: candidateLoadError } = await supabase
+        .from("agent_skill_candidates")
+        .select("id, user_id, agent_id, name, description, trigger_keywords, content, source_thread_id")
+        .eq("id", candidate_id)
+        .eq("user_id", user.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (candidateLoadError) {
+        console.warn("[skills-manage] candidate load failed:", candidateLoadError);
+        return json({ error: "Could not load candidate" }, 500, corsHeaders);
+      }
+      if (!candidate) return json({ error: "Candidate not found" }, 404, corsHeaders);
+
+      if (action === "approve_candidate") {
+        const { error: upsertError } = await supabase
+          .from("agent_skills")
+          .upsert({
+            user_id: user.id,
+            agent_id: candidate.agent_id,
+            name: candidate.name,
+            description: candidate.description,
+            trigger_keywords: candidate.trigger_keywords || [],
+            content: candidate.content,
+            source_thread_id: candidate.source_thread_id,
+          }, { onConflict: "user_id,agent_id,name" });
+
+        if (upsertError) {
+          console.warn("[skills-manage] candidate approve failed:", upsertError);
+          return json({ error: "Could not approve candidate" }, 500, corsHeaders);
+        }
+
+        const { error: candidateUpdateError } = await supabase
+          .from("agent_skill_candidates")
+          .update({ status: "approved", reviewed_at: new Date().toISOString() })
+          .eq("id", candidate.id)
+          .eq("user_id", user.id);
+
+        if (candidateUpdateError) {
+          console.warn("[skills-manage] candidate approved but status update failed:", candidateUpdateError);
+          return json({ error: "Candidate was approved, but review status could not be updated" }, 500, corsHeaders);
+        }
+
+        return json({ ok: true, skill: candidate.name }, 200, corsHeaders);
+      }
+
+      const { error: denialError } = await supabase
+        .from("agent_skill_denials")
+        .upsert({
+          user_id: user.id,
+          agent_id: candidate.agent_id,
+          skill_name: candidate.name,
+          description: candidate.description,
+        }, { onConflict: "user_id,agent_id,skill_name" });
+
+      if (denialError) {
+        console.warn("[skills-manage] candidate denial write failed:", denialError);
+        return json({ error: "Could not reject candidate" }, 500, corsHeaders);
+      }
+
+      const { error: rejectError } = await supabase
+        .from("agent_skill_candidates")
+        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .eq("id", candidate.id)
+        .eq("user_id", user.id);
+
+      if (rejectError) {
+        console.warn("[skills-manage] candidate reject failed:", rejectError);
+        return json({ error: "Could not reject candidate" }, 500, corsHeaders);
+      }
+
+      return json({ ok: true }, 200, corsHeaders);
+    }
+
+    if (!skill_id) {
+      return json({ error: "Missing skill id" }, 400, corsHeaders);
+    }
+
     const { data: skill, error: loadError } = await supabase
       .from("agent_skills")
       .select("id, user_id, agent_id, name, description")

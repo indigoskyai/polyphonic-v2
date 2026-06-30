@@ -25,7 +25,7 @@ describe('getChatModelLabel', () => {
     expect(normalizeChatModelId('anthropic/claude-4.7-opus-20260416')).toBe('anthropic/claude-opus-4-7');
   });
 
-  it('falls back to the trailing slug when the id is unknown', () => {
-    expect(getChatModelLabel('some-provider/unknown-model')).toBe('unknown-model');
+  it('keeps unknown ids fully visible until the user replaces them', () => {
+    expect(getChatModelLabel('some-provider/unknown-model')).toBe('some-provider/unknown-model');
   });
 });

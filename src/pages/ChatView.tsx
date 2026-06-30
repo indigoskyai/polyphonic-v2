@@ -64,6 +64,7 @@ import {
   DEFAULT_CHAT_MODEL,
   defaultRuntimeForAgent,
   getChatModelLabel,
+  normalizeChatTargetPreference,
   normalizeThreadRuntimeMode,
 } from '@/lib/chatRuntime';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
@@ -357,7 +358,7 @@ function agentTraceLine(data: any): string | null {
   if (!data || typeof data !== 'object') return null;
   const tool = humanToolName(data.tool);
   if (data.type === 'agent_runtime') {
-    return data.status === 'starting' ? 'Preparing agent mode.' : `Agent mode ${data.status || 'updated'}.`;
+    return data.status === 'starting' ? 'Preparing Luca.' : `Luca ${data.status || 'updated'}.`;
   }
   if (data.type === 'tool_progress') {
     return typeof data.text === 'string' ? data.text : `${tool} is running.`;
@@ -626,39 +627,39 @@ export default function ChatView() {
     [artifactsByThread, currentThreadId],
   );
   const agents = useAgentSettingsStore((s) => s.agents);
+  const agentsLoading = useAgentSettingsStore((s) => s.loading);
   const loadAgentSettings = useAgentSettingsStore((s) => s.load);
   const currentThread = threads.find((t) => t.id === currentThreadId);
-  // Pending agent id: used when there's no thread yet (empty state). Once a
-  // thread exists, it always wins so the picker reflects the persisted value.
-  // Seed it synchronously from the persisted landing choice so a remount —
-  // e.g. "say hello" / "switch to agent" navigating to /chat — lands on the
-  // adopted agent immediately, without depending on effect ordering or the
-  // model-key probe resolving. Validated against the loaded agent list so a
-  // deleted agent falls back to luca. The very first login mount reads null
-  // here (settings not loaded yet) and is covered by the seed effect below.
-  const [pendingAgentId, setPendingAgentId] = useState<string>(() => {
-    const persisted = useSettingsStore.getState().landing_agent_id;
-    if (!persisted || persisted === 'luca') return 'luca';
-    const knownAgents = useAgentSettingsStore.getState().agents;
-    return knownAgents.some((a) => a.id === persisted) ? persisted : 'luca';
-  });
-  const activeAgentId = currentThread?.agent_id || pendingAgentId;
   const showThinking = useSettingsStore((s) => s.show_thinking);
   const showTimestamps = useSettingsStore((s) => s.show_timestamps);
   const defaultModel = useSettingsStore((s) => s.default_model);
   const defaultEffort = useSettingsStore((s) => s.reasoning_effort);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const setLastChatTarget = useSettingsStore((s) => s.setLastChatTarget);
   const settingsLoaded = useSettingsStore((s) => s.loaded);
-  const persistedLandingAgentId = useSettingsStore((s) => s.landing_agent_id);
+  const persistedLastTargetKind = useSettingsStore((s) => s.last_chat_target_kind);
+  const persistedLastTargetId = useSettingsStore((s) => s.last_chat_target_id);
+  const initialTarget = normalizeChatTargetPreference(
+    useSettingsStore.getState().last_chat_target_kind,
+    useSettingsStore.getState().last_chat_target_id || useSettingsStore.getState().landing_agent_id,
+    useSettingsStore.getState().default_model || DEFAULT_CHAT_MODEL,
+  );
+  const [pendingTargetKind, setPendingTargetKind] = useState<'agent' | 'model'>(initialTarget.kind);
+  const [pendingAgentId, setPendingAgentId] = useState<string>(() => {
+    if (initialTarget.kind !== 'agent') return 'luca';
+    if (initialTarget.id === 'luca') return 'luca';
+    const knownAgents = useAgentSettingsStore.getState().agents;
+    return knownAgents.some((a) => a.id === initialTarget.id) ? initialTarget.id : 'luca';
+  });
+  const [pendingChatModelId, setPendingChatModelId] = useState(() => (
+    initialTarget.kind === 'model' ? initialTarget.id : useSettingsStore.getState().default_model || DEFAULT_CHAT_MODEL
+  ));
+  const [agentSettingsLoadedForUser, setAgentSettingsLoadedForUser] = useState<string | null>(null);
+  const activeAgentId = currentThread?.agent_id || pendingAgentId;
 
-  // Remember the user's chosen landing agent so its shape + name greets them
-  // on login. Writes their own user_settings row (existing RLS) and no-ops
-  // gracefully if the column isn't live yet (pre-migration deploy) — the
-  // in-memory store still updates for the session. Luca stores null = the
-  // standard "polyphonic" landing.
-  const persistLandingAgent = useCallback((agentId: string) => {
-    void updateSetting('landing_agent_id', agentId === 'luca' ? null : agentId);
-  }, [updateSetting]);
+  const persistChatTarget = useCallback((target: ChatTarget) => {
+    void setLastChatTarget(target);
+  }, [setLastChatTarget]);
   // NOTE: ensemble is intentionally NOT read from settings here. The composer
   // toggle (⌘E / shift-click) is the sole source of truth so the visual state
   // always matches reality. The Settings page's `multi_model_enabled` row is
@@ -682,8 +683,6 @@ export default function ChatView() {
   const [ensembleArmed, setEnsembleArmed] = useState(false);
   const [ensembleLocked, setEnsembleLocked] = useState(false);
   const rawEnsembleActive = ensembleArmed || ensembleLocked;
-  const [agentModeArmed, setAgentModeArmed] = useState(false);
-  const [pendingChatModelId, setPendingChatModelId] = useState(() => useSettingsStore.getState().default_model || DEFAULT_CHAT_MODEL);
   const [modelKeyStatus, setModelKeyStatus] = useState<ModelKeyStatus>('checking');
   const accessTier = useMemo(
     () => resolveAccessTier({ user, modelKeyStatus, gateStatus: tokenGateStatus }),
@@ -691,12 +690,11 @@ export default function ChatView() {
   );
   const byokEnabled = accessTier === 'byok';
   const ensembleActive = byokEnabled && rawEnsembleActive;
-  const agentModeActive = byokEnabled && agentModeArmed && activeAgentId === 'luca';
   const threadRuntimeMode = currentThread
     ? normalizeThreadRuntimeMode(currentThread.runtime_mode, 'agent')
-    : defaultRuntimeForAgent(activeAgentId);
+    : (pendingTargetKind === 'model' ? 'classic' : defaultRuntimeForAgent(activeAgentId));
   const selectedChatModel = currentThread?.selected_model || pendingChatModelId || defaultModel || DEFAULT_CHAT_MODEL;
-  const classicChatActive = threadRuntimeMode === 'classic' && activeAgentId === 'luca' && !agentModeActive;
+  const classicChatActive = threadRuntimeMode === 'classic';
   const effectiveRuntimeMode = classicChatActive ? 'classic' : 'agent';
   const activeMessageAgent = classicChatActive ? null : activeAgentId;
   const memoryEnabled = currentThread?.memory_enabled !== false;
@@ -815,40 +813,50 @@ export default function ChatView() {
   }, []);
 
   useEffect(() => {
-    // Access tier isn't known until the model-key probe resolves. While it's
-    // still 'checking' (notably right after a fresh mount — e.g. the remount
-    // when "say hello" navigates to /chat), a BYOK user reads as non-byok for a
-    // beat. Acting on that transient would yank a just-adopted custom agent off
-    // the empty landing back to luca, racing the landing seed below. Wait until
-    // the tier is actually settled before forcing the non-byok fallback.
+    // Access tier isn't known until the model-key probe resolves. Wait until
+    // it settles before disarming BYOK-only composer extras.
     if (modelKeyStatus === 'checking') return;
     if (byokEnabled) return;
     if (ensembleArmed) setEnsembleArmed(false);
     if (ensembleLocked) setEnsembleLocked(false);
-    if (agentModeArmed) setAgentModeArmed(false);
-    if (!currentThreadId && activeAgentId !== 'luca') {
-      setPendingAgentId('luca');
-    }
-  }, [modelKeyStatus, byokEnabled, ensembleArmed, ensembleLocked, agentModeArmed, activeAgentId, currentThreadId]);
+  }, [modelKeyStatus, byokEnabled, ensembleArmed, ensembleLocked]);
 
-  // Keep the bare-/chat landing's hero agent in lockstep with the user's
-  // persisted landing choice. Reactive (not once) so switching agents from the
-  // mobile top bar — which persists landing_agent_id instead of navigating —
-  // morphs the field in place. Scoped to the empty landing only: never touches
-  // an open thread or a /chat/:id route. Validates the agent still exists so a
-  // deleted one quietly falls back to Luca. Every in-app switch that lands here
-  // also persists landing_agent_id, so this only ever confirms or corrects
-  // pendingAgentId — it can't fight the composer picker or the forge flow.
+  useEffect(() => {
+    if (!user?.id) {
+      setAgentSettingsLoadedForUser(null);
+      return;
+    }
+    let canceled = false;
+    setAgentSettingsLoadedForUser(null);
+    void loadAgentSettings(user.id).finally(() => {
+      if (!canceled) setAgentSettingsLoadedForUser(user.id);
+    });
+    return () => { canceled = true; };
+  }, [user?.id, loadAgentSettings]);
+
+  // Keep bare /chat in lockstep with the last chat target. Scoped to the empty
+  // landing only: existing thread routes always win from their persisted row.
   useEffect(() => {
     if (threadId || currentThreadId) return; // empty landing only
     if (!settingsLoaded) return;
-    const wantsCustom = !!persistedLandingAgentId && persistedLandingAgentId !== 'luca';
-    if (wantsCustom && agents.length === 0) return; // wait until agents load to validate
-    const target = wantsCustom && agents.some((a) => a.id === persistedLandingAgentId)
-      ? persistedLandingAgentId
-      : 'luca';
-    setPendingAgentId((prev) => (prev === target ? prev : target));
-  }, [settingsLoaded, persistedLandingAgentId, threadId, currentThreadId, agents]);
+    const target = normalizeChatTargetPreference(persistedLastTargetKind, persistedLastTargetId, defaultModel || DEFAULT_CHAT_MODEL);
+    if (target.kind === 'model') {
+      setPendingTargetKind('model');
+      setPendingAgentId('luca');
+      setPendingChatModelId(target.id);
+      return;
+    }
+
+    const wantsCustom = target.id !== 'luca';
+    if (wantsCustom && (agentsLoading || agentSettingsLoadedForUser !== user?.id)) return;
+    const persistedAgentStillExists = wantsCustom && agents.some((a) => a.id === target.id);
+    const agentId = persistedAgentStillExists ? target.id : 'luca';
+    if (wantsCustom && !persistedAgentStillExists) {
+      persistChatTarget({ kind: 'agent', id: 'luca' });
+    }
+    setPendingTargetKind('agent');
+    setPendingAgentId((prev) => (prev === agentId ? prev : agentId));
+  }, [settingsLoaded, persistedLastTargetKind, persistedLastTargetId, defaultModel, threadId, currentThreadId, agents, agentsLoading, agentSettingsLoadedForUser, user?.id, persistChatTarget]);
 
   useEffect(() => {
     if (!user) {
@@ -913,7 +921,7 @@ export default function ChatView() {
   const isCustomAgent = !!activeAgentId && activeAgentId !== 'luca';
   const heroShape = isCustomAgent
     ? shapeForAgent(activeAgentId, GENESIS_POOL)
-    : (ensembleActive ? 10 : agentModeActive ? 4 : 0);
+    : (ensembleActive ? 10 : 0);
   const heroLabel = isCustomAgent ? currentAgentLabel : 'polyphonic';
   const readonlyAgentPillLabel = activeAgentId === 'luca' ? 'luca' : currentAgentLabel.toLowerCase();
   const readonlyAgentPillTitle = activeAgentId === 'luca'
@@ -921,11 +929,10 @@ export default function ChatView() {
     : `${currentAgentLabel} is selected. Custom agents require your own OpenRouter key to reply.`;
   const handleAgentChange = useCallback(async (id: string) => {
     if (!id) return;
-    const selectingLucaAgent = id === 'luca';
-    if (id === activeAgentId && (!selectingLucaAgent || !classicChatActive)) return;
+    if (id === activeAgentId && !classicChatActive) return;
+    setPendingTargetKind('agent');
     setPendingAgentId(id);
-    persistLandingAgent(id);
-    setAgentModeArmed(selectingLucaAgent);
+    persistChatTarget({ kind: 'agent', id });
     setEnsembleArmed(false);
     setEnsembleLocked(false);
 
@@ -936,20 +943,9 @@ export default function ChatView() {
       return;
     }
 
-    if (selectingLucaAgent && activeAgentId === 'luca') {
-      try {
-        await updateThreadAgent(currentThreadId, 'luca');
-      } catch (err) {
-        setAttachmentError(err instanceof Error ? err.message : 'Could not switch to Luca');
-      }
-      return;
-    }
-
     if (!user) return;
     try {
-      const nextThreadId = await createThread(user.id, id, null, {
-        runtimeMode: selectingLucaAgent ? 'agent' : undefined,
-      });
+      const nextThreadId = await createThread(user.id, id);
       navigate(`/chat/${nextThreadId}`);
     } catch (err) {
       setAttachmentError(err instanceof Error ? err.message : 'Could not switch agents');
@@ -957,7 +953,7 @@ export default function ChatView() {
   }, [
     activeAgentId,
     classicChatActive,
-    persistLandingAgent,
+    persistChatTarget,
     currentThreadId,
     messages.length,
     user,
@@ -968,17 +964,17 @@ export default function ChatView() {
   const handleModelChange = useCallback(async (modelId: string) => {
     if (!modelId) return;
     if (modelId === selectedChatModel && classicChatActive) return;
+    setPendingTargetKind('model');
     setPendingChatModelId(modelId);
     setPendingAgentId('luca');
-    persistLandingAgent('luca');
+    persistChatTarget({ kind: 'model', id: modelId });
     void updateSetting('default_model', modelId);
-    setAgentModeArmed(false);
     setEnsembleArmed(false);
     setEnsembleLocked(false);
 
     if (!currentThreadId) return;
     try {
-      if (activeAgentId === 'luca' || messages.length === 0) {
+      if (messages.length === 0) {
         await updateThreadSelectedModel(currentThreadId, modelId);
         return;
       }
@@ -997,7 +993,7 @@ export default function ChatView() {
     currentThreadId,
     messages.length,
     navigate,
-    persistLandingAgent,
+    persistChatTarget,
     selectedChatModel,
     user,
     createThread,
@@ -1727,11 +1723,12 @@ export default function ChatView() {
     // context first, otherwise the stale thread keeps Luca's shape and its
     // message list hides the hero. Also persist this as the user's default
     // landing. The first message will create a thread under this agent.
+    setPendingTargetKind('agent');
     setPendingAgentId(agentId);
-    persistLandingAgent(agentId);
+    persistChatTarget({ kind: 'agent', id: agentId });
     useThreadStore.setState({ currentThreadId: null, messages: [] });
     navigate('/chat');
-  }, [navigate, persistLandingAgent]);
+  }, [navigate, persistChatTarget]);
 
   const sendGuardianMessage = useCallback(async () => {
     if (!input.trim() || !user || guardianStreaming || modelKeyMissing) return;
@@ -1739,7 +1736,7 @@ export default function ChatView() {
     const messageText = input.trim();
     let tid = currentThreadId;
     if (!tid) {
-      tid = await createThread(user.id, pendingAgentId, null, { runtimeMode: 'agent' });
+      tid = await createThread(user.id, pendingTargetKind === 'agent' ? pendingAgentId : 'luca', null, { runtimeMode: 'agent' });
       navigate(`/chat/${tid}`, { replace: true });
     }
 
@@ -1854,7 +1851,7 @@ export default function ChatView() {
       guardianAbortRef.current = null;
       loadThreads();
     }
-  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, createThread, pendingAgentId, navigate, loadThreads]);
+  }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, createThread, pendingTargetKind, pendingAgentId, navigate, loadThreads]);
 
   const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[]; hiddenHandoff?: boolean }) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
@@ -1871,6 +1868,9 @@ export default function ChatView() {
 
     const messageText = sourceText.trim() || 'Uploaded attachments.';
     inputCaptureRef.current = messageText;
+    persistChatTarget(classicChatActive
+      ? { kind: 'model', id: selectedChatModel }
+      : { kind: 'agent', id: activeAgentId });
     setComposerSending(true);
     if (composerSendTimeoutRef.current) {
       window.clearTimeout(composerSendTimeoutRef.current);
@@ -2322,7 +2322,7 @@ export default function ChatView() {
       sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, classicChatActive, persistChatTarget, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
@@ -2340,8 +2340,6 @@ export default function ChatView() {
   }, [landingAutosend, landingHiddenHandoff, user?.id, isStreaming, firstTurnHandoff, threadId, currentThreadId, input]);
 
   // Auto-disarm one-shot ensemble after a successful send (locked stays on).
-  // Agent Mode is sticky within the current thread until the user toggles it
-  // off or opens a fresh conversation.
   const prevStreamingRef = useRef(isStreaming);
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming && ensembleArmed) {
@@ -2349,24 +2347,6 @@ export default function ChatView() {
     }
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, ensembleArmed]);
-
-  const previousThreadForAgentModeRef = useRef<string | null>(currentThreadId ?? null);
-  useEffect(() => {
-    const nextThreadId = currentThreadId ?? null;
-    if (previousThreadForAgentModeRef.current === nextThreadId) return;
-    previousThreadForAgentModeRef.current = nextThreadId;
-
-    const enteredFreshChat = !nextThreadId || (messages.length === 0 && !isStreaming && !firstTurnHandoff);
-    if (agentModeArmed && enteredFreshChat) {
-      setAgentModeArmed(false);
-    }
-  }, [currentThreadId, messages.length, isStreaming, firstTurnHandoff, agentModeArmed]);
-
-  useEffect(() => {
-    if (activeAgentId !== 'luca' && agentModeArmed) {
-      setAgentModeArmed(false);
-    }
-  }, [activeAgentId, agentModeArmed]);
 
   useEffect(() => {
     if (classicChatActive && alcoveOpen) {
@@ -2672,7 +2652,7 @@ export default function ChatView() {
                   onBlur={() => { if (!alcoveOpen) setFocused(false); }}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to start chatting…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+                  placeholder={alcoveOpen ? 'Ask the Observer...' : modelKeyMissing ? 'Add a model key to start chatting…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
                 />
               </div>
               <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
@@ -3254,7 +3234,7 @@ export default function ChatView() {
               onBlur={() => { if (!alcoveOpen) setFocused(false); }}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={alcoveOpen ? (modelKeyMissing ? 'Add a model key to ask Observer…' : 'Ask the Observer...') : modelKeyMissing ? 'Add a model key to continue…' : agentModeActive ? 'Message Luca (agent)\u2026' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
+              placeholder={alcoveOpen ? (modelKeyMissing ? 'Add a model key to ask Observer…' : 'Ask the Observer...') : modelKeyMissing ? 'Add a model key to continue…' : ensembleActive ? 'Message Luca (ensemble)\u2026' : dynamicPlaceholder}
             />
           </div>
 

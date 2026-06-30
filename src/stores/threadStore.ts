@@ -242,8 +242,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   createThread: async (userId, agentId = 'luca', projectId = null, options = {}) => {
-    const runtimeMode = normalizeThreadRuntimeMode(options.runtimeMode, defaultRuntimeForAgent(agentId));
     const selectedModel = options.selectedModel ?? null;
+    const runtimeFallback = selectedModel ? 'classic' : defaultRuntimeForAgent(agentId);
+    const runtimeMode = normalizeThreadRuntimeMode(options.runtimeMode, runtimeFallback);
     const insertPayload: {
       user_id: string;
       agent_id: string;

@@ -12,6 +12,7 @@ import {
 } from "../_shared/agents/skills.ts";
 import { resolveScopeAgentId } from "../_shared/agent-scope.ts";
 import { resolveOpenRouterKeyForUser, resolveRoleModel } from "../_shared/model-backend.ts";
+import { claimContinuityJob, finishContinuityJob } from "../_shared/continuity/jobs.ts";
 
 type SkillDraft = {
   name?: string;
@@ -25,6 +26,8 @@ serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
+  let jobSupabase: any = null;
+  let jobId: string | null = null;
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -42,7 +45,8 @@ serve(async (req) => {
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401, corsHeaders);
 
-    const { thread_id, agent_id = "luca" } = await req.json();
+    const { thread_id, agent_id = "luca", source_message_id = null } = await req.json();
+    const sourceMessageId = typeof source_message_id === "string" ? source_message_id : null;
     if (!thread_id) return json({ error: "Missing thread_id" }, 400, corsHeaders);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -108,6 +112,21 @@ serve(async (req) => {
     const { apiKey } = await resolveOpenRouterKeyForUser(supabase, user.id);
     if (!apiKey) return json({ ok: true, skipped: "no_api_key" }, 200, corsHeaders);
 
+    if (sourceMessageId) {
+      const claim = await claimContinuityJob(supabase, {
+        userId: user.id,
+        agentId,
+        threadId: thread_id,
+        sourceMessageId,
+        jobName: "skills-distill",
+      });
+      if (!claim.claimed) {
+        return json({ ok: true, skipped: claim.reason }, 200, corsHeaders);
+      }
+      jobSupabase = supabase;
+      jobId = claim.id;
+    }
+
     const [{ data: existingSkills }, { data: denials }] = await Promise.all([
       supabase.from("agent_skills")
         .select("name, description")
@@ -163,36 +182,44 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.warn("[skills-distill] model failed:", response.status, await response.text());
+      await finishContinuityJob(supabase, jobId, "failed", `model_failed_${response.status}`);
       return json({ ok: true, skipped: "model_failed" }, 200, corsHeaders);
     }
 
     const data = await response.json();
     const raw = data?.choices?.[0]?.message?.content || "";
     const draft = parseSkillDraft(raw);
-    if (!draft) return json({ ok: true, skipped: "no_skill" }, 200, corsHeaders);
+    if (!draft) {
+      await finishContinuityJob(supabase, jobId, "completed");
+      return json({ ok: true, skipped: "no_skill" }, 200, corsHeaders);
+    }
     if ((draft.confidence ?? 0) < 0.65) {
+      await finishContinuityJob(supabase, jobId, "completed");
       return json({ ok: true, skipped: "low_confidence" }, 200, corsHeaders);
     }
 
     const name = normalizeSkillName(draft.name || draft.description || "luca-skill");
     if (name === "luca-skill") {
+      await finishContinuityJob(supabase, jobId, "completed");
       return json({ ok: true, skipped: "invalid_name" }, 200, corsHeaders);
     }
     if (isDenied(name, draft.description || "", denials || [])) {
+      await finishContinuityJob(supabase, jobId, "completed");
       return json({ ok: true, skipped: "denied" }, 200, corsHeaders);
     }
 
     const description = (draft.description || "").trim().slice(0, 240);
     const content = normalizeSkillMarkdown(draft.content || "");
     if (!description || !content) {
+      await finishContinuityJob(supabase, jobId, "completed");
       return json({ ok: true, skipped: "invalid_skill" }, 200, corsHeaders);
     }
 
     const triggerKeywords = deriveTriggerKeywords(name, description, draft.trigger_keywords || []);
 
-    const { error: upsertError } = await supabase
-      .from("agent_skills")
-      .upsert({
+    const { error: candidateError } = await supabase
+      .from("agent_skill_candidates")
+      .insert({
         user_id: user.id,
         agent_id: agentId,
         name,
@@ -200,15 +227,29 @@ serve(async (req) => {
         trigger_keywords: triggerKeywords,
         content,
         source_thread_id: thread_id,
-      }, { onConflict: "user_id,agent_id,name" });
+        source_message_id: sourceMessageId,
+        confidence: draft.confidence ?? 0,
+        status: "pending",
+      });
 
-    if (upsertError) {
-      console.warn("[skills-distill] upsert failed:", upsertError);
-      return json({ ok: false, error: "skill_write_failed" }, 500, corsHeaders);
+    if (candidateError) {
+      const message = String(candidateError.message || "").toLowerCase();
+      const duplicate = candidateError.code === "23505" || message.includes("duplicate key");
+      if (!duplicate) {
+        console.warn("[skills-distill] candidate insert failed:", candidateError);
+        await finishContinuityJob(supabase, jobId, "failed", candidateError);
+        return json({ ok: false, error: "candidate_write_failed" }, 500, corsHeaders);
+      }
+      await finishContinuityJob(supabase, jobId, "completed");
+      return json({ ok: true, skipped: "duplicate_candidate", candidate: name }, 200, corsHeaders);
     }
 
-    return json({ ok: true, skill: name }, 200, corsHeaders);
+    await finishContinuityJob(supabase, jobId, "completed");
+    return json({ ok: true, candidate: name }, 200, corsHeaders);
   } catch (err) {
+    if (jobSupabase && jobId) {
+      await finishContinuityJob(jobSupabase, jobId, "failed", err);
+    }
     console.error("[skills-distill] error:", err);
     return json({ ok: false, error: "Internal error" }, 500, corsHeaders);
   }

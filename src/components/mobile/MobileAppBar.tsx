@@ -2,7 +2,7 @@ import { Activity, Info, Menu } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatTargetPicker, type ChatTarget } from '@/components/composer/ChatTargetPicker';
-import { DEFAULT_CHAT_MODEL, getChatModelLabel, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
+import { DEFAULT_CHAT_MODEL, getChatModelLabel, normalizeChatTargetPreference, normalizeThreadRuntimeMode } from '@/lib/chatRuntime';
 import { getMobileSurfaceMeta } from '@/lib/mobileShell';
 import { useAuthStore } from '@/stores/authStore';
 import { useDrawerStore } from '@/stores/drawerStore';
@@ -52,12 +52,12 @@ export default function MobileAppBar() {
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const setActiveAgent = useAgentScopeStore((s) => s.setActiveAgent);
   const availableAgents = useAgentScopeStore((s) => s.availableAgents);
-  // On the chat surface, mirror the hero's source of truth (the persisted
-  // landing agent) instead of the cross-surface agent scope, so the top bar
-  // never says "Luca" while the hero shows the adopted landing agent.
   const landingAgentId = useSettingsStore((s) => s.landing_agent_id) || 'luca';
   const defaultModel = useSettingsStore((s) => s.default_model);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const setLastChatTarget = useSettingsStore((s) => s.setLastChatTarget);
+  const lastTargetKind = useSettingsStore((s) => s.last_chat_target_kind);
+  const lastTargetId = useSettingsStore((s) => s.last_chat_target_id);
 
   useEffect(() => {
     if (threads.length === 0) void loadThreads();
@@ -80,12 +80,16 @@ export default function MobileAppBar() {
       ? { ...baseMeta, title: 'Create', subtitle: 'Artifacts and work' }
       : baseMeta;
   const isChatSurface = location.pathname.startsWith('/chat');
-  const runtimeAgentId = isChatSurface ? (currentThread?.agent_id || landingAgentId) : activeAgentId;
+  const lastTarget = normalizeChatTargetPreference(lastTargetKind, lastTargetId || landingAgentId, defaultModel || DEFAULT_CHAT_MODEL);
+  const pendingModelTarget = isChatSurface && !currentThread && lastTarget.kind === 'model';
+  const runtimeAgentId = isChatSurface
+    ? (currentThread?.agent_id || (pendingModelTarget ? 'luca' : lastTarget.id))
+    : activeAgentId;
   const threadRuntimeMode = currentThread
     ? normalizeThreadRuntimeMode(currentThread.runtime_mode, 'agent')
-    : 'classic';
-  const selectedChatModel = currentThread?.selected_model || defaultModel || DEFAULT_CHAT_MODEL;
-  const classicChatActive = isChatSurface && runtimeAgentId === 'luca' && threadRuntimeMode === 'classic';
+    : (pendingModelTarget ? 'classic' : 'agent');
+  const selectedChatModel = currentThread?.selected_model || (pendingModelTarget ? lastTarget.id : defaultModel) || DEFAULT_CHAT_MODEL;
+  const classicChatActive = isChatSurface && threadRuntimeMode === 'classic';
   const activeAgentName = availableAgents.find((agent) => agent.id === runtimeAgentId)?.name || 'Luca';
   const activeThreadId = currentThreadId || routeThreadId;
   const activeChatTarget: ChatTarget = classicChatActive
@@ -100,16 +104,15 @@ export default function MobileAppBar() {
     const selectingLucaAgent = id === 'luca';
     if (id === runtimeAgentId && (!selectingLucaAgent || !classicChatActive)) return;
     setActiveAgent(id);
+    void setLastChatTarget({ kind: 'agent', id });
 
     if (!user || !isChatSurface) return;
 
     if (!activeThreadId) {
-      // Bare /chat landing: switch the hero's agent IN PLACE by persisting the
-      // landing choice — ChatView's empty-landing field follows landing_agent_id
-      // and morphs to the new agent. Do NOT spawn a blank thread + navigate:
+      // Bare /chat landing: switch the hero's target in place by persisting the
+      // last chat target. Do NOT spawn a blank thread + navigate:
       // that sets a route threadId, which flips the empty-state off and leaves a
       // black screen with only the composer (no particle field).
-      void updateSetting('landing_agent_id', id === 'luca' ? null : id);
       return;
     }
 
@@ -118,14 +121,7 @@ export default function MobileAppBar() {
       return;
     }
 
-    if (selectingLucaAgent && runtimeAgentId === 'luca') {
-      await updateThreadAgent(activeThreadId, 'luca');
-      return;
-    }
-
-    const nextThreadId = await createThread(user.id, id, null, {
-      runtimeMode: selectingLucaAgent ? 'agent' : undefined,
-    });
+    const nextThreadId = await createThread(user.id, id);
     navigate(`/chat/${nextThreadId}`);
   }, [
     activeThreadId,
@@ -136,7 +132,7 @@ export default function MobileAppBar() {
     navigate,
     runtimeAgentId,
     setActiveAgent,
-    updateSetting,
+    setLastChatTarget,
     updateThreadAgent,
     user,
   ]);
@@ -145,13 +141,13 @@ export default function MobileAppBar() {
     if (!modelId) return;
     if (modelId === selectedChatModel && classicChatActive) return;
     void updateSetting('default_model', modelId);
+    void setLastChatTarget({ kind: 'model', id: modelId });
     setActiveAgent('luca');
     if (!user || !isChatSurface) return;
     if (!activeThreadId) {
-      void updateSetting('landing_agent_id', null);
       return;
     }
-    if (runtimeAgentId === 'luca' || messages.length === 0) {
+    if (messages.length === 0) {
       await updateThreadSelectedModel(activeThreadId, modelId);
       return;
     }
@@ -167,9 +163,9 @@ export default function MobileAppBar() {
     isChatSurface,
     messages.length,
     navigate,
-    runtimeAgentId,
     selectedChatModel,
     setActiveAgent,
+    setLastChatTarget,
     updateSetting,
     updateThreadSelectedModel,
     user,

@@ -136,6 +136,7 @@ export function queueContinuityTurnWrites(
           opts.agentResponse,
           apiKey || undefined,
           stripCurrentTurnFromRecentTurns(opts.recentTurns || [], opts.userMessage, opts.agentResponse),
+          opts.sourceMessageId ?? null,
         )
       )),
     );
@@ -147,6 +148,7 @@ export function queueContinuityTurnWrites(
     () => dispatchFunction("observer-watch", {
       thread_id: opts.threadId,
       agent_id: agentId,
+      source_message_id: opts.sourceMessageId ?? null,
     }, opts.authHeader || "", deps),
   );
 
@@ -157,6 +159,7 @@ export function queueContinuityTurnWrites(
     () => dispatchFunction("mnemos-dialectic", {
       thread_id: opts.threadId,
       agent_id: agentId,
+      source_message_id: opts.sourceMessageId ?? null,
     }, opts.authHeader || "", deps),
   );
 
@@ -170,6 +173,7 @@ export function queueContinuityTurnWrites(
     () => dispatchFunction("skills-distill", {
       thread_id: opts.threadId,
       agent_id: agentId,
+      source_message_id: opts.sourceMessageId ?? null,
     }, opts.authHeader || "", deps),
   );
 
@@ -206,6 +210,7 @@ export async function encodeMnemosExchange(
   assistantResponse: string,
   apiKey?: string,
   recentTurns: Array<{ role: string; content: string }> = [],
+  sourceMessageId?: string | null,
 ): Promise<void> {
   const mnemos = new MnemosEngine(supabase as any, userId, agentId || "luca");
   const encoding = deriveMnemosExchangeEncodingContext(userMessage, assistantResponse, recentTurns);
@@ -214,7 +219,7 @@ export async function encodeMnemosExchange(
     {
       engram_type: "episodic",
       tags: encoding.tags,
-      source_context: { ...encoding.source_context, agent_id: agentId || "luca" },
+      source_context: { ...encoding.source_context, agent_id: agentId || "luca", source_message_id: sourceMessageId ?? null },
       api_key: apiKey,
     },
   );

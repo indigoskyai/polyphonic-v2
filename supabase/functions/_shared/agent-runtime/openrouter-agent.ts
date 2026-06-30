@@ -222,7 +222,7 @@ async function runOpenRouterAgentSdkTurn(
   };
   const runtimeTools = buildRuntimeTools(options, send, recordTrace);
 
-  recordTrace("Preparing agent mode.");
+  recordTrace("Preparing Luca.");
   send({
     type: "agent_runtime",
     runtime: "openrouter_agent_sdk",

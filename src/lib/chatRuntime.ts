@@ -1,4 +1,10 @@
 export type ThreadRuntimeMode = 'classic' | 'agent';
+export type ChatTargetKind = 'agent' | 'model';
+
+export interface ChatTargetPreference {
+  kind: ChatTargetKind;
+  id: string;
+}
 
 export interface ChatModelOption {
   id: string;
@@ -46,8 +52,25 @@ export function normalizeThreadRuntimeMode(
   return value === 'agent' || value === 'classic' ? value : fallback;
 }
 
+export function normalizeChatTargetKind(value: string | null | undefined): ChatTargetKind {
+  return value === 'model' ? 'model' : 'agent';
+}
+
+export function normalizeChatTargetPreference(
+  kind: string | null | undefined,
+  id: string | null | undefined,
+  fallbackModel: string = DEFAULT_CHAT_MODEL,
+): ChatTargetPreference {
+  const normalizedKind = normalizeChatTargetKind(kind);
+  const normalizedId = String(id || '').trim();
+  if (normalizedKind === 'model') {
+    return { kind: 'model', id: normalizedId || fallbackModel };
+  }
+  return { kind: 'agent', id: normalizedId || 'luca' };
+}
+
 export function defaultRuntimeForAgent(agentId: string | null | undefined): ThreadRuntimeMode {
-  return agentId && agentId !== 'luca' ? 'agent' : 'classic';
+  return 'agent';
 }
 
 const MODEL_ID_ALIASES: Record<string, string> = {
@@ -68,7 +91,7 @@ export function normalizeChatModelId(modelId: string | null | undefined): string
 
 export function getChatModelLabel(modelId: string | null | undefined): string {
   const id = normalizeChatModelId(modelId);
-  return CHAT_MODEL_OPTIONS.find((model) => model.id === id)?.name || id.split('/').pop() || id;
+  return CHAT_MODEL_OPTIONS.find((model) => model.id === id)?.name || id;
 }
 
 export function getModelFamily(modelId: string | null | undefined): string {

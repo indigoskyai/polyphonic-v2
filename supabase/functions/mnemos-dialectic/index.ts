@@ -23,6 +23,7 @@ import {
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { resolveOpenRouterKeyForUser, resolveRoleModel } from "../_shared/model-backend.ts";
 import { normalizeAgentId, resolveScopeAgentId } from "../_shared/agent-scope.ts";
+import { claimContinuityJob, finishContinuityJob } from "../_shared/continuity/jobs.ts";
 
 // Threshold above which an out-of-session revision deserves a proactive
 // nudge (notable activity surface). Revisions below this still persist and
@@ -36,6 +37,8 @@ serve(async (req) => {
   if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
   const __jobStart = Date.now();
+  let jobSupabase: any = null;
+  let jobId: string | null = null;
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -62,6 +65,7 @@ serve(async (req) => {
     const threadId = typeof body.thread_id === "string" ? body.thread_id : "";
     const hasRequestedAgentId = typeof body.agent_id === "string" && body.agent_id.trim().length > 0;
     const requestedAgentId = normalizeAgentId(body.agent_id);
+    const sourceMessageId = typeof body.source_message_id === "string" ? body.source_message_id : null;
     const force = body.force === true;
 
     if (!threadId) return json({ error: "Missing thread_id" }, 400, corsHeaders);
@@ -117,6 +121,21 @@ serve(async (req) => {
     const sourceMessageIds = history
       .map((m: { id: string }) => m.id)
       .filter(Boolean);
+
+    if (sourceMessageId) {
+      const claim = await claimContinuityJob(supabase, {
+        userId: user.id,
+        agentId,
+        threadId,
+        sourceMessageId,
+        jobName: "mnemos-dialectic",
+      });
+      if (!claim.claimed) {
+        return json({ ok: true, skipped: claim.reason }, 200, corsHeaders);
+      }
+      jobSupabase = supabase;
+      jobId = claim.id;
+    }
 
     const [identityDocs, notesRes, emotionalRes, memories] = await Promise.all([
       loadOrCreateLucaIdentity(supabase, user.id, agentId),
@@ -180,6 +199,7 @@ serve(async (req) => {
     if (!modelResponse.ok) {
       const errText = await modelResponse.text().catch(() => "");
       console.error("mnemos-dialectic model error:", modelResponse.status, errText.slice(0, 300));
+      await finishContinuityJob(supabase, jobId, "failed", `model_error_${modelResponse.status}`);
       return json({ ok: false, error: "model_error" }, 200, corsHeaders);
     }
 
@@ -201,6 +221,7 @@ serve(async (req) => {
       result.pending_revisions,
     );
 
+    await finishContinuityJob(supabase, jobId, "completed");
     await recordCronSuccess("mnemos-dialectic", Date.now() - __jobStart);
     return json({
       ok: true,
@@ -210,6 +231,9 @@ serve(async (req) => {
       urgent_surface: urgentSurfaced,
     }, 200, corsHeaders);
   } catch (err) {
+    if (jobSupabase && jobId) {
+      await finishContinuityJob(jobSupabase, jobId, "failed", err);
+    }
     await recordCronFailure("mnemos-dialectic", Date.now() - __jobStart, err);
     console.error("mnemos-dialectic error:", err);
     return json({ error: "Internal error", code: "internal_error" }, 500, getCorsHeaders(req));

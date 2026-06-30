@@ -30,12 +30,15 @@ export interface Settings {
   // Set when the user adopts a forged agent ("say hello") or picks one in
   // the agent switcher; cleared by selecting Luca again.
   landing_agent_id: string | null;
+  last_chat_target_kind: 'agent' | 'model';
+  last_chat_target_id: string;
 }
 
 interface SettingsState extends Settings {
   loaded: boolean;
   loadSettings: (userId: string) => Promise<void>;
   updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => Promise<void>;
+  setLastChatTarget: (target: { kind: 'agent' | 'model'; id: string }) => Promise<void>;
 }
 
 export const defaultSettings: Settings = {
@@ -68,6 +71,8 @@ export const defaultSettings: Settings = {
   elevenlabs_agent_id: null,
   voice_autospeak: false,
   landing_agent_id: null,
+  last_chat_target_kind: 'agent',
+  last_chat_target_id: 'luca',
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -101,6 +106,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       await supabase
         .from('user_settings')
         .update({ [key]: value })
+        .eq('user_id', user.id);
+    }
+  },
+
+  setLastChatTarget: async (target) => {
+    const kind = target.kind === 'model' ? 'model' : 'agent';
+    const id = target.id?.trim() || (kind === 'model' ? defaultSettings.default_model : 'luca');
+    const patch = {
+      last_chat_target_kind: kind,
+      last_chat_target_id: id,
+      landing_agent_id: kind === 'agent' ? (id === 'luca' ? null : id) : null,
+    } satisfies Partial<Settings>;
+    set(patch as any);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('user_settings')
+        .update(patch)
         .eq('user_id', user.id);
     }
   },

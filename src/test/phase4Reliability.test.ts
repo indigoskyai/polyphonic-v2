@@ -162,10 +162,11 @@ describe('Phase 4 reliability guardrails', () => {
     const kernel = readRepoFile('supabase/functions/_shared/continuity/kernel.ts');
 
     expect(chatView).not.toContain("if (currentThreadId) updateThreadAgent(currentThreadId, 'luca')");
-    expect(chatView).toContain("if (!currentThreadId && activeAgentId !== 'luca')");
+    expect(chatView).toContain("pendingTargetKind === 'model' ? 'classic' : defaultRuntimeForAgent(activeAgentId)");
+    expect(chatView).toContain("persistChatTarget({ kind: 'agent', id })");
     expect(chatView).toContain('const handleAgentChange = useCallback');
     expect(chatView).toContain('if (messages.length === 0)');
-    expect(chatView).toContain('const nextThreadId = await createThread(user.id, id, null, {');
+    expect(chatView).toContain('const nextThreadId = await createThread(user.id, id)');
     expect(chatView).toContain('navigate(`/chat/${nextThreadId}`)');
 
     expect(kernel).toContain('.select("id, role, content, agent, created_at, kind, metadata")');

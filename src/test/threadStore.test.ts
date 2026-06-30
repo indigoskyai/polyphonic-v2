@@ -52,7 +52,7 @@ const makeThread = (overrides: Partial<ReturnType<typeof useThreadStore.getState
 	  agent_id: 'luca',
 	  primary_agent_id: 'luca',
 	  participating_agent_ids: ['luca'],
-	  runtime_mode: 'classic' as const,
+	  runtime_mode: 'agent' as const,
 	  selected_model: null,
 	  memory_enabled: true,
 	  continuity_summary: null,
@@ -72,7 +72,7 @@ describe('threadStore thread list helpers', () => {
 	      agent_id: 'luca',
 	      primary_agent_id: 'luca',
 	      participating_agent_ids: ['luca'],
-	      runtime_mode: 'classic' as const,
+	      runtime_mode: 'agent' as const,
 	      selected_model: null,
 	      memory_enabled: true,
 	      continuity_summary: null,
@@ -108,7 +108,7 @@ describe('threadStore.createThread project scoping', () => {
 	      agent_id: 'luca',
 	      primary_agent_id: 'luca',
 	      participating_agent_ids: ['luca'],
-	      runtime_mode: 'classic',
+	      runtime_mode: 'agent',
 	      memory_enabled: true,
 	    });
 	  });
@@ -139,7 +139,7 @@ describe('threadStore.createThread project scoping', () => {
 	      agent_id: 'luca',
 	      primary_agent_id: 'luca',
 	      participating_agent_ids: ['luca'],
-	      runtime_mode: 'classic',
+	      runtime_mode: 'agent',
 	      memory_enabled: true,
 	      project_id: 'project-1',
 	    });

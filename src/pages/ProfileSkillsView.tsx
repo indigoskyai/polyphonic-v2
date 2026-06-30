@@ -22,6 +22,19 @@ type AgentSkill = {
   updated_at: string;
 };
 
+type AgentSkillCandidate = {
+  id: string;
+  name: string;
+  description: string;
+  trigger_keywords: string[] | null;
+  content: string;
+  confidence: number;
+  source_thread_id: string | null;
+  source_message_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 function relTime(value?: string | null) {
   if (!value) return 'never';
   const ms = Date.now() - new Date(value).getTime();
@@ -43,21 +56,36 @@ export default function ProfileSkillsView() {
   const activeAgentId = useAgentScopeStore((s) => s.activeAgentId);
   const activeAgentName = useAgentScopeStore((s) => s.availableAgents.find((a) => a.id === s.activeAgentId)?.name ?? 'Luca');
   const [skills, setSkills] = useState<AgentSkill[]>([]);
+  const [candidates, setCandidates] = useState<AgentSkillCandidate[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     if (!user) return;
-    const { data, error } = await supabase
-      .from('agent_skills')
-      .select('id, name, description, trigger_keywords, content, source_thread_id, use_count, last_used_at, created_at, updated_at')
-      .eq('user_id', user.id)
-      .eq('agent_id', activeAgentId)
-      .order('updated_at', { ascending: false });
+    const [skillsRes, candidatesRes] = await Promise.all([
+      supabase
+        .from('agent_skills')
+        .select('id, name, description, trigger_keywords, content, source_thread_id, use_count, last_used_at, created_at, updated_at')
+        .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('agent_skill_candidates')
+        .select('id, name, description, trigger_keywords, content, confidence, source_thread_id, source_message_id, created_at, updated_at')
+        .eq('user_id', user.id)
+        .eq('agent_id', activeAgentId)
+        .eq('status', 'pending')
+        .order('updated_at', { ascending: false }),
+    ]);
 
-    if (error) {
-      toast({ title: 'Could not load skills', description: error.message, variant: 'destructive' });
+    if (skillsRes.error || candidatesRes.error) {
+      toast({
+        title: 'Could not load self-model',
+        description: skillsRes.error?.message || candidatesRes.error?.message,
+        variant: 'destructive',
+      });
     } else {
-      setSkills((data || []) as AgentSkill[]);
+      setSkills((skillsRes.data || []) as AgentSkill[]);
+      setCandidates((candidatesRes.data || []) as AgentSkillCandidate[]);
     }
     setLoading(false);
   }
@@ -80,7 +108,7 @@ export default function ProfileSkillsView() {
         ),
         right: (
           <>
-            <span>{skills.length} entries</span>
+            <span>{skills.length} entries · {candidates.length} pending</span>
             <span>{time}</span>
           </>
         ),
@@ -99,24 +127,27 @@ export default function ProfileSkillsView() {
       </div>
 
       <div className="set-body">
-        {/*
-          Section 01 — Pending review.
-          Placeholder. Once `skills-distill` is updated to write candidates
-          instead of writing directly into `agent_skills`, this section
-          surfaces drafts awaiting approval. Hidden when zero pending.
-
-          For now: shown with an empty state so the structure is visible.
-        */}
+        {/* Section 01 — Pending review. Skills distillation writes here first; approval promotes entries into the active self-model. */}
         <Section
           number="01"
           name="Pending review"
           title="Candidate entries"
           desc={`Drafts the distiller proposes from your recent threads. Approve to commit them into ${activeAgentName}'s active self-model, or reject so they don't get recreated.`}
-          pill={<InlinePill variant="amber">Pipeline TBD</InlinePill>}
+          pill={<InlinePill variant="amber">{candidates.length} pending</InlinePill>}
         >
-          <EmptyState>
-            No candidates pending review. The candidate pipeline will land drafts here for approval before they enter the active self-model.
-          </EmptyState>
+          {loading ? (
+            <p style={{ color: 'var(--text-ghost)', fontSize: 13 }}>Loading…</p>
+          ) : candidates.length === 0 ? (
+            <EmptyState>
+              No candidates pending review. When {activeAgentName} forms a repeatable pattern from a thread, the distiller will land it here before it enters the active self-model.
+            </EmptyState>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {candidates.map((candidate) => (
+                <CandidateCard key={candidate.id} candidate={candidate} onChanged={load} />
+              ))}
+            </div>
+          )}
         </Section>
 
         {/* Section 02 — Living self-model (active entries) */}
@@ -156,6 +187,189 @@ export default function ProfileSkillsView() {
         </Section>
       </div>
     </SettingsPage>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CandidateCard — pending distiller draft awaiting approval.
+// ─────────────────────────────────────────────────────────────────────────────
+function CandidateCard({ candidate, onChanged }: { candidate: AgentSkillCandidate; onChanged: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const keywords = useMemo(() => (candidate.trigger_keywords || []).slice(0, 6), [candidate.trigger_keywords]);
+
+  async function runAction(action: 'approve_candidate' | 'reject_candidate') {
+    setBusy(true);
+    const { error, data } = await supabase.functions.invoke('skills-manage', {
+      body: { action, candidate_id: candidate.id },
+    });
+    setBusy(false);
+    if (error || data?.error) {
+      toast({
+        title: action === 'approve_candidate' ? 'Candidate approval failed' : 'Candidate rejection failed',
+        description: error?.message || data?.error || 'Unknown error',
+        variant: 'destructive',
+      });
+      return;
+    }
+    onChanged();
+    toast({ title: action === 'approve_candidate' ? 'Candidate approved' : 'Candidate rejected' });
+  }
+
+  return (
+    <div
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border-faint)',
+        borderRadius: 'var(--radius-md, 10px)',
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto auto',
+          gap: 14,
+          alignItems: 'center',
+          width: '100%',
+          padding: '14px 16px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+              letterSpacing: 'var(--track-mono)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {candidate.name}
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12.5,
+              color: 'var(--text-tertiary)',
+              marginTop: 4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {candidate.description}
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 3,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            color: 'var(--text-whisper)',
+            letterSpacing: 'var(--track-folio)',
+            textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          <span>{Math.round((candidate.confidence || 0) * 100)}% confidence</span>
+          <span>{relTime(candidate.updated_at)}</span>
+        </div>
+        <ChevronDown
+          size={15}
+          strokeWidth={1.6}
+          style={{
+            color: 'var(--text-tertiary)',
+            transition: 'transform 200ms var(--ease-out)',
+            transform: expanded ? 'rotate(-180deg)' : 'rotate(0)',
+          }}
+        />
+      </button>
+
+      {expanded && (
+        <div
+          style={{
+            borderTop: '1px solid var(--border-faint)',
+            padding: '16px 16px 18px',
+            background: 'var(--canvas)',
+          }}
+        >
+          {keywords.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {keywords.map((k) => (
+                <span
+                  key={k}
+                  style={{
+                    border: '1px solid var(--border-faint)',
+                    borderRadius: 999,
+                    color: 'var(--text-tertiary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    letterSpacing: 'var(--track-folio)',
+                    padding: '3px 9px',
+                    textTransform: 'lowercase',
+                  }}
+                >
+                  {k}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 13.5,
+              lineHeight: 1.65,
+              color: 'var(--text-body)',
+              maxWidth: 720,
+            }}
+          >
+            <RichBody source={candidate.content} />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginTop: 18,
+              paddingTop: 14,
+              borderTop: '1px solid var(--border-faint)',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <ActionButton
+              onClick={() => runAction('approve_candidate')}
+              disabled={busy}
+              icon={<Check size={13} />}
+              label="Approve"
+            />
+            <ActionButton
+              onClick={() => runAction('reject_candidate')}
+              disabled={busy}
+              icon={<X size={13} />}
+              label="Reject"
+              tone="danger"
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

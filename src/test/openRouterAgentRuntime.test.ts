@@ -62,29 +62,29 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).not.toContain('terminal');
   });
 
-  it('keeps agent runtime opt-in from the unified chat target picker so normal chat stays fast', () => {
+  it('keeps Luca as one full agent runtime from the unified chat target picker', () => {
     const source = readRepoFile('src/pages/ChatView.tsx');
     const modesDropdown = readRepoFile('src/components/composer/ModesDropdown.tsx');
     const targetPicker = readRepoFile('src/components/composer/ChatTargetPicker.tsx');
 
-    expect(source).toContain('const [agentModeArmed, setAgentModeArmed] = useState(false)');
-	    expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");
-	    expect(source).toContain('runtime_mode: effectiveRuntimeMode');
-	    expect(source).toContain('model: selectedChatModel');
-    // Agent runtime is opt-in via the unified target picker; the composer
-    // ModesDropdown now only carries optional reply modes like Ensemble.
+    expect(source).toContain("pendingTargetKind === 'model' ? 'classic' : defaultRuntimeForAgent(activeAgentId)");
+    expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");
+    expect(source).toContain('runtime_mode: effectiveRuntimeMode');
+    expect(source).toContain('model: selectedChatModel');
+    expect(source).toContain("persistChatTarget({ kind: 'agent', id })");
+    expect(source).toContain("persistChatTarget({ kind: 'model', id: modelId })");
+    expect(source).toContain("persistChatTarget({ kind: 'agent', id: 'luca' })");
+    expect(source).toContain('agentSettingsLoadedForUser');
     expect(source).toContain('<ChatTargetPicker');
-    expect(source).toContain('setAgentModeArmed(selectingLucaAgent)');
     expect(targetPicker).toContain("sectionHeader('Agents')");
     expect(source).toContain('<ModesDropdown');
+    expect(source).not.toContain('agentModeArmed');
+    expect(source).not.toContain('setAgentModeArmed');
     expect(source).not.toContain('agentModeArmed={agentModeArmed}');
     expect(source).not.toContain('onToggleAgentMode={() => setAgentModeArmed');
     expect(modesDropdown).not.toContain('Agent runtime');
     expect(modesDropdown).toContain('Ensemble');
-    expect(source).toContain("Message Luca (agent)");
-    expect(source).toContain('previousThreadForAgentModeRef');
-    expect(source).toContain('enteredFreshChat');
-    expect(source).not.toContain('prevStreamingRef.current && !isStreaming && agentModeArmed');
+    expect(source).not.toContain('Message Luca (agent)');
   });
 
   it('surfaces agent runtime tool events and parses SSE blocks robustly', () => {

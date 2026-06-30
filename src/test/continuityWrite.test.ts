@@ -106,7 +106,8 @@ describe('Continuity Kernel write path', () => {
   it('queues all post-turn memory operations through the same reportable path', () => {
     const fetchCalls: FetchCall[] = [];
     const finalized: string[] = [];
-	    const encoded: string[] = [];
+    const encoded: string[] = [];
+    const encodedSourceIds: Array<string | null | undefined> = [];
     const metadata: string[][] = [];
 
     const deps: ContinuityWriteDeps = {
@@ -127,8 +128,9 @@ describe('Continuity Kernel write path', () => {
       finalizePendingRevisions: async (_supabase, _apiKey, revisions) => {
         finalized.push(...revisions.map((r) => r.id));
       },
-	      encodeMnemosExchange: async (_supabase, _userId, agentId, userMessage) => {
+	      encodeMnemosExchange: async (_supabase, _userId, agentId, userMessage, _agentResponse, _apiKey, _recentTurns, sourceMessageId) => {
 	        encoded.push(`${agentId}:${userMessage}`);
+        encodedSourceIds.push(sourceMessageId);
       },
       updateThreadAgentMetadata: async (_supabase, _threadId, primary, participants) => {
         metadata.push([primary, ...participants]);
@@ -162,6 +164,7 @@ describe('Continuity Kernel write path', () => {
     expect(report.operations.every((op) => op.status === 'queued')).toBe(true);
     expect(finalized).toEqual(['rev1']);
 	    expect(encoded).toEqual(['luca:remember this']);
+    expect(encodedSourceIds).toEqual(['a1']);
     expect(metadata[0]).toEqual(['luca', 'luca', 'anima']);
     expect(fetchCalls.map((c) => c.url)).toEqual([
       'https://example.supabase.co/functions/v1/observer-watch',
@@ -169,6 +172,9 @@ describe('Continuity Kernel write path', () => {
       'https://example.supabase.co/functions/v1/skills-distill',
       'https://example.supabase.co/functions/v1/hypomnema-gate',
     ]);
+    expect(fetchCalls[0].body.source_message_id).toBe('a1');
+    expect(fetchCalls[1].body.source_message_id).toBe('a1');
+    expect(fetchCalls[2].body.source_message_id).toBe('a1');
     expect(fetchCalls.at(-1)?.auth).toBe('Bearer service-role');
     expect(fetchCalls.at(-1)?.body.chain_write).toHaveLength(2);
 	  });

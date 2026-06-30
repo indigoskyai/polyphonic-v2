@@ -252,8 +252,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
       // of falling back to Luca. Deterministic: no render race.
       await loadSettings(user.id);
       if (cancelled) return;
-      const landing = useSettingsStore.getState().landing_agent_id;
-      await loadAgentScopes(user.id, landing);
+      const settings = useSettingsStore.getState();
+      const scopedAgent = settings.last_chat_target_kind === 'agent'
+        ? settings.last_chat_target_id
+        : settings.landing_agent_id;
+      await loadAgentScopes(user.id, scopedAgent);
     })();
     return () => { cancelled = true; };
   }, [user, loadSettings, loadAgentScopes]);
