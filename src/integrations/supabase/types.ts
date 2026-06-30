@@ -473,6 +473,79 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_skill_candidates: {
+        Row: {
+          agent_id: string
+          confidence: number
+          content: string
+          created_at: string
+          description: string
+          id: string
+          name: string
+          reviewed_at: string | null
+          source_message_id: string | null
+          source_thread_id: string | null
+          status: string
+          trigger_keywords: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          confidence?: number
+          content: string
+          created_at?: string
+          description: string
+          id?: string
+          name: string
+          reviewed_at?: string | null
+          source_message_id?: string | null
+          source_thread_id?: string | null
+          status?: string
+          trigger_keywords?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          confidence?: number
+          content?: string
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          reviewed_at?: string | null
+          source_message_id?: string | null
+          source_thread_id?: string | null
+          status?: string
+          trigger_keywords?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_skill_candidates_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_skill_candidates_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_skill_candidates_source_thread_id_fkey"
+            columns: ["source_thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_skill_denials: {
         Row: {
           agent_id: string
@@ -1237,6 +1310,70 @@ export type Database = {
             columns: ["target_id"]
             isOneToOne: false
             referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      continuity_turn_jobs: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          error: string | null
+          id: string
+          job_name: string
+          metadata: Json
+          source_message_id: string
+          started_at: string
+          status: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          completed_at?: string | null
+          error?: string | null
+          id?: string
+          job_name: string
+          metadata?: Json
+          source_message_id: string
+          started_at?: string
+          status?: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          error?: string | null
+          id?: string
+          job_name?: string
+          metadata?: Json
+          source_message_id?: string
+          started_at?: string
+          status?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "continuity_turn_jobs_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "continuity_turn_jobs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "continuity_turn_jobs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
@@ -3723,6 +3860,8 @@ export type Database = {
           interface_density: string
           interface_mode: string
           landing_agent_id: string | null
+          last_chat_target_id: string
+          last_chat_target_kind: string
           multi_model_enabled: boolean | null
           observer_models: string[] | null
           onboarding_completed_at: string | null
@@ -3753,6 +3892,8 @@ export type Database = {
           interface_density?: string
           interface_mode?: string
           landing_agent_id?: string | null
+          last_chat_target_id?: string
+          last_chat_target_kind?: string
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
           onboarding_completed_at?: string | null
@@ -3783,6 +3924,8 @@ export type Database = {
           interface_density?: string
           interface_mode?: string
           landing_agent_id?: string | null
+          last_chat_target_id?: string
+          last_chat_target_kind?: string
           multi_model_enabled?: boolean | null
           observer_models?: string[] | null
           onboarding_completed_at?: string | null
