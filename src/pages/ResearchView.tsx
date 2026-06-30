@@ -155,7 +155,7 @@ export default function ResearchView() {
               The Well Registry
             </h1>
             <p style={{ margin: '14px 0 0', maxWidth: 760, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.65 }}>
-              Luca maps the physics catalog, ranks evidence sources, and fetches raw simulation tensors only when a question needs them.
+              Luca maps the physics catalog, ranks evidence sources, and keeps raw simulation data out of memory unless a future compute run is explicitly configured.
             </p>
           </div>
           <div style={boundaryStyle}>

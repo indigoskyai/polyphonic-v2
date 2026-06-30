@@ -39,7 +39,7 @@ serve(async (req) => {
       ok: true,
       source: "the_well",
       raw_ingest_default: false,
-      ingest_boundary: "catalog_metadata_first_raw_tensors_on_demand",
+      ingest_boundary: "catalog_metadata_first_raw_deferred",
       stats: getWellCatalogStats(),
       selected: serializeDataset(primary),
       matches: matches.map(serializeDataset),

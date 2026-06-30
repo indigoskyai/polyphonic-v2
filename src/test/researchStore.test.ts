@@ -13,7 +13,7 @@ describe('research evidence card helpers', () => {
     const access = buildWellRawAccess(dataset);
 
     expect(access.raw_ingest_default).toBe(false);
-    expect(access.ingest_boundary).toBe('catalog_metadata_first_raw_tensors_on_demand');
+    expect(access.ingest_boundary).toBe('catalog_metadata_first_raw_deferred');
     expect(access.dataset_name).toBe('turbulent_radiative_layer_2D');
     expect(access.streaming_snippet).toContain('well_base_path="hf://datasets/polymathic-ai/"');
     expect(access.download_command).toContain('--dataset turbulent_radiative_layer_2D --split train');

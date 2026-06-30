@@ -103,6 +103,7 @@ export interface AccountExportChunkRef {
   storage_bucket: string;
   storage_path: string;
   sha256: string;
+  inline_payload?: string;
 }
 
 export interface ChunkedEncryptedArchive {

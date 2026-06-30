@@ -57,7 +57,7 @@ type SupabaseAdmin = ReturnType<typeof createClient<LooseDatabase>>;
 const MAX_BUNDLED_ASSETS = 80;
 const MAX_SINGLE_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BUNDLED_ASSET_BYTES = 35 * 1024 * 1024;
-const BUNDLE_STORAGE_ASSETS = Deno.env.get("ACCOUNT_PORTABILITY_BUNDLE_ASSETS") === "true";
+const BUNDLE_STORAGE_ASSETS = Deno.env.get("ACCOUNT_PORTABILITY_BUNDLE_ASSETS") !== "false";
 
 export interface AuthContext {
   admin: SupabaseAdmin;
@@ -311,12 +311,21 @@ async function createChunkedAccountExport(
         storage_bucket: ACCOUNT_PORTABILITY_BUCKET,
         storage_path: chunkPath,
         sha256: await sha256Text(chunkText),
+        inline_payload: chunkText,
       });
       chunkIndex += 1;
     }
   }
 
-  const assets = deferredAssets([...refs.values()], warnings);
+  if (BUNDLE_STORAGE_ASSETS) {
+    for (const ref of await listWorkspaceStorageRefs(admin, userId, warnings)) {
+      refs.set(`${ref.bucket}/${ref.path}`, ref);
+    }
+  }
+  const assetRefs = uniqueRefs([...refs.values()]);
+  const assets = BUNDLE_STORAGE_ASSETS
+    ? await downloadAssets(admin, assetRefs, warnings)
+    : deferredAssets(assetRefs, warnings);
   const archive: ChunkedEncryptedArchive = {
     format: ACCOUNT_EXPORT_FORMAT,
     version: ACCOUNT_EXPORT_VERSION,
@@ -1154,14 +1163,23 @@ async function downloadArchiveChunk(
   admin: SupabaseAdmin,
   ref: AccountExportChunkRef,
 ): Promise<EncryptedArchiveChunk> {
-  const { data, error } = await admin.storage.from(ref.storage_bucket).download(ref.storage_path);
-  if (error || !data) throw new Error(`Could not read export chunk ${ref.index}: ${error?.message || "missing"}`);
-  const text = await data.text();
+  const text = typeof ref.inline_payload === "string" && ref.inline_payload.length > 0
+    ? ref.inline_payload
+    : await downloadArchiveChunkText(admin, ref);
   const actualHash = await sha256Text(text);
   if (actualHash !== ref.sha256) throw new Error(`Export chunk ${ref.index} failed integrity check`);
   const parsed = JSON.parse(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`Export chunk ${ref.index} is invalid`);
   return parsed as EncryptedArchiveChunk;
+}
+
+async function downloadArchiveChunkText(
+  admin: SupabaseAdmin,
+  ref: AccountExportChunkRef,
+): Promise<string> {
+  const { data, error } = await admin.storage.from(ref.storage_bucket).download(ref.storage_path);
+  if (error || !data) throw new Error(`Could not read export chunk ${ref.index}: ${error?.message || "missing"}`);
+  return data.text();
 }
 
 function archiveShellPayload(archive: ChunkedEncryptedArchive): AccountExportPayload {

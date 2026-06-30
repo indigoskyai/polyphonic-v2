@@ -146,8 +146,8 @@ function SimulationInstrument({
   const minHeight = fill ? 0 : undefined;
   const datasetName = compactDatasetName(payload);
   const evidenceLevel = payload.evidence.evidence_level.replace(/-/g, ' ');
-  const primaryCaveat = payload.evidence.caveats[0] || 'Preview is qualitative until raw tensors are explicitly analyzed.';
-  const rawIngest = payload.access.raw_ingest_default ? 'raw ingest on' : 'raw on demand';
+  const primaryCaveat = payload.evidence.caveats[0] || 'Preview is qualitative until a separate raw-data analysis pipeline is configured.';
+  const rawIngest = payload.access.raw_ingest_default ? 'raw ingest on' : 'metadata first';
 
   return (
     <section

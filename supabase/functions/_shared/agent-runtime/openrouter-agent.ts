@@ -12,6 +12,7 @@ import {
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
 import { persistArtifactsFromContent } from "../artifacts/extract.ts";
+import { recordIdempotentResponse } from "../idempotency.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -42,6 +43,7 @@ export interface OpenRouterAgentRuntimeOptions {
   mcpTools?: McpToolRegistration[];
   corsHeaders: Record<string, string>;
   requestId: string;
+  idempotencyKey?: string | null;
 }
 
 interface RuntimeToolCall {
@@ -175,6 +177,14 @@ export function openRouterAgentSdkStream(options: OpenRouterAgentRuntimeOptions)
           code: "agent_runtime_error",
           request_id: options.requestId,
         });
+        if (options.idempotencyKey) {
+          await recordIdempotentResponse(options.supabase as any, options.idempotencyKey, options.userId, "chat-send", {
+            ok: false,
+            status: "error",
+            error: "agent_runtime_error",
+            message: err instanceof Error ? err.message : "OpenRouter Agent SDK runtime failed",
+          });
+        }
       } finally {
         clearInterval(heartbeat);
         controller.close();
@@ -404,14 +414,20 @@ async function runOpenRouterAgentSdkTurn(
     });
   }
 
-  send({
+  const donePayload = {
     type: "done",
     runtime: "openrouter_agent_sdk",
     model: usedModel,
     tokens_used: tokensUsed,
     tool_call_count: toolCalls.size,
     message_id: insertedMessage?.id ?? null,
-  });
+  };
+
+  if (options.idempotencyKey) {
+    await recordIdempotentResponse(options.supabase as any, options.idempotencyKey, options.userId, "chat-send", donePayload);
+  }
+
+  send(donePayload);
 }
 
 function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEvent, recordTrace: TraceRecorder) {

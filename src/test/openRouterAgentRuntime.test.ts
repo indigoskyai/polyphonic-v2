@@ -15,6 +15,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');
     expect(source).toContain('openRouterAgentSdkStream({');
+    expect(source).toContain('idempotencyKey,');
     expect(source).toContain('agent_mode: agentMode');
     expect(source).toContain('const sdkRuntimeRequested');
     expect(source).toContain('const shouldRunLegacyToolPlanner');
@@ -51,6 +52,8 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     expect(source).toContain('agent_tool_result');
     expect(source).toContain('thread_id: options.threadId');
     expect(source).toContain('queueContinuityTurnWrites');
+    expect(source).toContain('recordIdempotentResponse');
+    expect(source).toContain('options.idempotencyKey');
     expect(source).toContain('the current agent');
     expect(source).not.toContain("Read Luca's current Polyphonic continuity packet");
 

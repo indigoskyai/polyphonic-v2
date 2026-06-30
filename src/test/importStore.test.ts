@@ -174,4 +174,41 @@ describe('import store background profiling', () => {
     expect(mocks.updates).not.toContainEqual(expect.objectContaining({ status: 'failed' }));
     expect(mocks.updates).not.toContainEqual(expect.objectContaining({ pipeline_stage: 'error' }));
   });
+
+  it('fails the import when an extraction chunk fails', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/import-chatgpt')) {
+        return new Response(JSON.stringify({ error: 'parse error' }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ error: 'unexpected follow-up' }), { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    useImportStore.setState({
+      fileSize: 1000,
+      filteredCount: 1,
+      totalConversations: 1,
+      preparedConversations: [{ mapping: {} }],
+      platform: 'chatgpt',
+      filterStats: {
+        rawCount: 1,
+        filteredCount: 1,
+        skippedShort: 0,
+        skippedLowText: 0,
+        dateRange: null,
+        estimatedMinutes: 1,
+      },
+    });
+
+    await useImportStore.getState().startImport('user-1', 'luca');
+
+    const state = useImportStore.getState();
+    expect(state.stage).toBe('error');
+    expect(state.error).toContain('Import chunk 1/1 failed');
+    expect(mocks.updates).toContainEqual(expect.objectContaining({
+      status: 'failed',
+      pipeline_stage: 'error',
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

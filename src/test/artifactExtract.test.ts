@@ -61,6 +61,11 @@ describe('extractArtifactsFromContent — model-authored artifacts', () => {
     expect(out[0].kind).toBe('simulation');
     expect(out[0].title).toBe('Cooling Turbulence Probe');
   });
+
+  it('does not persist malformed simulation payload fences', () => {
+    expect(extractArtifactsFromContent(fence('simulation', '{'))).toHaveLength(0);
+    expect(extractArtifactsFromContent(fence('simulation', JSON.stringify({ version: 1, title: 'Missing fields' })))).toHaveLength(0);
+  });
 });
 
 describe('persistArtifactsFromContent (shared by classic + agent runtimes)', () => {

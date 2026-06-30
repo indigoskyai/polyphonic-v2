@@ -2938,8 +2938,28 @@ export default function ChatView() {
 
             // B.3 — agent_error branch: render errored card with divider above
             if (msg.kind === 'agent_error') {
-              const md = (msg.metadata as any) || {};
-              const agent = (md.agent || msg.agent || 'luca') as 'luca' | 'vektor' | 'anima';
+              const md = ((msg.metadata as Record<string, unknown> | null) || {});
+              const errorStatus = typeof md.error_status === 'string' ? md.error_status : null;
+              if (errorStatus === 'dismissed' || errorStatus === 'retried') return null;
+              const agent = typeof md.agent === 'string' ? md.agent : (msg.agent || 'luca');
+              const resolveErrorCard = (status: 'dismissed' | 'retried') => {
+                const nextMeta = {
+                  ...md,
+                  error_status: status,
+                  error_resolved_at: new Date().toISOString(),
+                };
+                patchMessage(msg.id, { metadata: nextMeta });
+                if (user?.id) {
+                  supabase
+                    .from('messages')
+                    .update({ metadata: nextMeta })
+                    .eq('id', msg.id)
+                    .eq('user_id', user.id)
+                    .then(({ error }) => {
+                      if (error) console.warn('[chat] failed to resolve error card', error);
+                    });
+                }
+              };
               return (
                 <div key={msg.id} className="msg-row" style={{ animation: `msgEnter var(--dur-settle) var(--ease-premium) both`, animationDelay: `${Math.min(Math.max(i - Math.max(0, messages.length - 6), 0) * 30, 90)}ms` }}>
                   <div className="msg-sidehead">
@@ -2955,10 +2975,11 @@ export default function ChatView() {
                   <div className="msg-body">
                     <AgentErroredCard
                       agent={agent}
-                      message={md.message || msg.content}
-                      detail={md.detail}
+                      message={typeof md.message === 'string' ? md.message : msg.content}
+                      detail={typeof md.detail === 'string' ? md.detail : undefined}
                       occurredAt={msg.created_at}
                       onRetry={() => {
+                        resolveErrorCard('retried');
                         const retryText = typeof md.retry_text === 'string' ? md.retry_text : null;
                         const retryAttachments = Array.isArray(md.retry_attachments)
                           ? md.retry_attachments as PersistedAttachment[]
@@ -2984,6 +3005,7 @@ export default function ChatView() {
                         const rid = (msg.metadata as any)?.request_id;
                         if (rid) navigator.clipboard?.writeText(rid).catch(() => {});
                       }}
+                      onDismiss={() => resolveErrorCard('dismissed')}
                     />
                   </div>
                 </div>

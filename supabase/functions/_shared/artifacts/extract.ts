@@ -11,7 +11,7 @@
 // difference: here we only match CLOSED fences, because the message is complete
 // at save time and a half-open block is not a real artifact.
 
-import { simulationTitleFromContent } from "../simulation-artifact.ts";
+import { parseSimulationArtifactContent, simulationTitleFromContent } from "../simulation-artifact.ts";
 
 export type ArtifactKind = "html" | "svg" | "mermaid" | "react" | "markdown" | "simulation";
 
@@ -53,7 +53,8 @@ export function extractArtifactsFromContent(source: string): ExtractedArtifact[]
     if (!kind) continue;
     const lines = body.split("\n").length;
     if (kind === "simulation") {
-      if (!body.trim()) continue;
+      const parsed = parseSimulationArtifactContent(body);
+      if (!parsed.ok) continue;
     } else if (lines < MIN_LINES && !/<\/(html|svg|body)>/i.test(body)) {
       continue;
     }

@@ -35,7 +35,7 @@ export const SIMULATION_TURN_DIRECTIVE = `Client simulation turn directive:
   }
 }
 - Allowed preview.preset values: wave-scattering, reaction-diffusion, fluid-field, field-lines, particle-shell.
-- Use The Well metadata/evidence boundaries. Do not claim raw tensors were downloaded unless the user explicitly asked for a compute run.`;
+- Use The Well metadata/evidence boundaries. Do not claim raw tensors were downloaded or analyzed in this V1 path.`;
 
 const SIMULATION_INTENT_RE = /\b(show|build|make|create|run|model|compare|visuali[sz]e|simulate|preview|what happens)\b[\s\S]{0,220}\b(simulation|physics|turbulence|cooling|fluid|wave|reaction[-\s]?diffusion|field lines?|particle shell|mhd|magnetohydrodynamic|shock|radiative|vorticity|viscosity)\b/i;
 const SIMULATION_OBJECT_RE = /\b(inline simulation|simulation preview|truth card|timestep|scrubber|slider|The Well|dataset evidence)\b/i;

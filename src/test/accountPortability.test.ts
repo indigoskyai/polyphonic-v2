@@ -143,6 +143,16 @@ describe('account portability archive', () => {
     });
   });
 
+  it('keeps downloaded chunked archives self-contained with encrypted inline chunks', () => {
+    const server = read('supabase/functions/_shared/account-portability/server.ts');
+    const archive = read('supabase/functions/_shared/account-portability/archive.ts');
+
+    expect(archive).toContain('inline_payload?: string');
+    expect(server).toContain('inline_payload: chunkText');
+    expect(server).toContain('ref.inline_payload');
+    expect(server).toContain('downloadArchiveChunkText');
+  });
+
   it('redacts operational secrets without removing real message references', () => {
     const config = PORTABLE_TABLE_BY_NAME.get('crisis_events');
     expect(config).toBeTruthy();
@@ -373,7 +383,9 @@ describe('account portability edge safety', () => {
     expect(store).toContain('parseResponsePayload(responseText)');
     expect(store).toContain('pollImportJob(data.job_id)');
     expect(server).toContain('ACCOUNT_PORTABILITY_BUNDLE_ASSETS');
-    expect(server).toContain('deferredAssets(uniqueRefs(refs), warnings)');
+    expect(server).toContain('Deno.env.get("ACCOUNT_PORTABILITY_BUNDLE_ASSETS") !== "false"');
+    expect(server).toContain('downloadAssets(admin, assetRefs, warnings)');
+    expect(server).toContain('deferredAssets(assetRefs, warnings)');
     expect(server).toContain('asset binary deferred');
     expect(server).toContain('MAX_TOTAL_BUNDLED_ASSET_BYTES');
     expect(server).toContain('Storage asset size unknown; not bundled');

@@ -14,7 +14,7 @@ describe('The Well runtime integration', () => {
 
     expect(source).toContain('from "../_shared/the-well-catalog.ts"');
     expect(source).toContain('raw_ingest_default: false');
-    expect(source).toContain('catalog_metadata_first_raw_tensors_on_demand');
+    expect(source).toContain('catalog_metadata_first_raw_deferred');
     expect(source).toContain('rankWellDatasets(query, limit)');
     expect(source).toContain('serializeDataset(primary)');
     expect(sharedCatalog).toContain('export const THE_WELL_CATALOG');
@@ -47,7 +47,7 @@ describe('The Well runtime integration', () => {
 
     expect(chatMulti).toContain('asksForWellResearch');
     expect(chatMulti).toContain('the_well_research (structured The Well physics-simulation registry');
-    expect(chatMulti).toContain('stream/cache raw tensors only on demand');
+    expect(chatMulti).toContain('returns catalog/access metadata, not raw tensor analysis');
     expect(chatMulti).toContain('the\\s+well|polymathic|physics\\s+simulation');
   });
 });

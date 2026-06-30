@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { Pill } from '@/components/ui/luca';
 
-type Agent = 'luca' | 'vektor' | 'anima';
-
 interface Props {
-  agent: Agent;
+  agent: string;
   message: string;
   detail?: string;
   occurredAt: string;
   onRetry: () => void;
   onViewLogs: () => void;
+  onDismiss?: () => void;
 }
 
 function formatTime(iso: string): string {
@@ -17,12 +16,15 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function AgentErroredCard({ agent, message, detail, occurredAt, onRetry, onViewLogs }: Props) {
+export default function AgentErroredCard({ agent, message, detail, occurredAt, onRetry, onViewLogs, onDismiss }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const agentLabel = agent
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
   return (
     <>
       <div className="error-event">
-        {agent} encountered an error mid-response
+        {agentLabel} encountered an error mid-response
       </div>
       <div className="aec-card" role="alert">
         <header className="aec-header">
@@ -31,7 +33,7 @@ export default function AgentErroredCard({ agent, message, detail, occurredAt, o
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span className="aec-title">{agent}: runtime error</span>
+          <span className="aec-title">{agentLabel}: runtime error</span>
           <span className="aec-time">{formatTime(occurredAt)}</span>
         </header>
         <div className="aec-message">{message}</div>
@@ -45,6 +47,7 @@ export default function AgentErroredCard({ agent, message, detail, occurredAt, o
             </Pill>
           )}
           <Pill size="sm" variant="ghost" onClick={onViewLogs}>View logs</Pill>
+          {onDismiss && <Pill size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Pill>}
           <Pill size="sm" variant="primary" onClick={onRetry}>Retry</Pill>
         </div>
       </div>

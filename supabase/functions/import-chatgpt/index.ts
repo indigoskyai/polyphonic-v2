@@ -59,6 +59,10 @@ function getMemorySignature(value: string): string {
 }
 
 function extractJsonFromResponse(response: string): unknown {
+  const controlCharPattern = new RegExp(
+    `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
+    "g",
+  );
   let cleaned = response
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/g, "")
@@ -90,7 +94,7 @@ function extractJsonFromResponse(response: string): unknown {
     cleaned = cleaned
       .replace(/,\s*}/g, "}")
       .replace(/,\s*]/g, "]")
-      .replace(new RegExp("[\\u0000-\\u001F\\u007F]", "g"), "");
+      .replace(controlCharPattern, "");
     return JSON.parse(cleaned);
   }
 }

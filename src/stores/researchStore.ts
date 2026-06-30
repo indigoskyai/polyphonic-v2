@@ -120,7 +120,7 @@ export function buildWellRawAccess(dataset: WellDatasetFamily) {
   return {
     source: 'the_well',
     raw_ingest_default: false,
-    ingest_boundary: 'catalog_metadata_first_raw_tensors_on_demand',
+    ingest_boundary: 'catalog_metadata_first_raw_deferred',
     hf_base_path: THE_WELL_HF_BASE,
     dataset_name: datasetName,
     preferred_split: 'train',
@@ -287,7 +287,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       access_plan: [
         `Use the inline simulation artifact as the preview workspace: ${payload.title}.`,
         `Access only the selected Well split and variant: ${payload.dataset.access_name}.`,
-        'Keep raw tensors out of memory by default; stream or cache only for an explicit analysis step.',
+        'Keep raw tensors out of memory by default; V1 stores catalog metadata and access recipes, not raw tensor payloads.',
         'Record exact fields, timestep window, parameters, and measurements before treating the result as evidence.',
       ],
       measurements: payload.evidence.measurements,
@@ -295,7 +295,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       raw_access: {
         source: 'the_well',
         raw_ingest_default: false,
-        ingest_boundary: 'catalog_metadata_first_raw_tensors_on_demand',
+        ingest_boundary: 'catalog_metadata_first_raw_deferred',
         dataset_name: payload.dataset.access_name,
         streaming_snippet: payload.access.streaming_snippet,
         download_command: payload.access.download_command,
