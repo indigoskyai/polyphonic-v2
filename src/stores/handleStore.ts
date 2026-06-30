@@ -16,8 +16,8 @@ interface HandleState {
   loading: boolean;
   load: (userId: string) => Promise<void>;
   checkAvailable: (handle: string) => Promise<boolean>;
-  claimUserHandle: (handle: string, displayName: string) => Promise<{ ok: true; error?: never } | { ok: false; error: string }>;
-  claimAgentHandle: (handle: string, agentId: string, displayName: string) => Promise<{ ok: true; error?: never } | { ok: false; error: string }>;
+  claimUserHandle: (handle: string, displayName: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  claimAgentHandle: (handle: string, agentId: string, displayName: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const HANDLE_RX = /^[a-z0-9_]{3,24}$/;
