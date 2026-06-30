@@ -17,13 +17,13 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="canonical" href="https://polyphonic.chat/" />
 
-    <!-- Warm the artifact-canvas runtime CDNs (Babel / Tailwind / esm.sh) at idle
-         priority so the first React artifact opens fast. Safe if never used. -->
+    <!-- Warm the artifact-canvas runtime CDNs at idle priority so the first
+         React artifact opens fast. Tailwind loads inside artifact iframes when
+         needed; eager prefetching its script is CORS-noisy in local/prod smoke. -->
     <link rel="preconnect" href="https://esm.sh" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
     <link rel="prefetch" as="script" crossorigin href="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js" />
-    <link rel="prefetch" as="script" crossorigin href="https://cdn.tailwindcss.com" />
 
     <title>Polyphonic</title>
     <meta name="description" content="A private AI workspace for continuous conversation, memory, and agent collaboration." />
