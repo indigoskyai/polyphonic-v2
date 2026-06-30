@@ -9,6 +9,8 @@ Set these on the production Supabase project:
 
 - `LUCA_DOWNLOAD_PASSPHRASE` — the private beta passphrase.
 - `LUCA_DOWNLOAD_FILE_NAME` — optional, defaults to `Luca.dmg`.
+- `LUCA_DOWNLOAD_DISABLED` — optional emergency pause switch. Set to `true`
+  to stop issuing download links without redeploying.
 
 Use one of these delivery modes:
 
@@ -23,6 +25,10 @@ Store the notarized DMG in a private Supabase Storage bucket, then set:
 
 The edge function creates a 15-minute signed download URL after the passphrase is
 accepted.
+
+Failed passphrase attempts are lightly throttled in-process to prevent a broken
+or public form from hammering the function. Treat this as a beta safety rail,
+not a replacement for private storage and a non-guessable passphrase.
 
 ### Fallback: external URL
 

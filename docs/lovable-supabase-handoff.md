@@ -55,6 +55,7 @@ Please deploy the new public edge function `luca-download` for the Polyphonic we
 Required private beta secrets:
 - LUCA_DOWNLOAD_PASSPHRASE
 - LUCA_DOWNLOAD_FILE_NAME, optional
+- LUCA_DOWNLOAD_DISABLED, optional emergency pause switch (`true` disables downloads)
 
 Preferred private-storage delivery:
 - Upload the latest notarized Luca Apple Silicon DMG to a private Supabase Storage bucket.
@@ -65,6 +66,39 @@ Fallback delivery if private storage is not ready:
 - Set LUCA_DOWNLOAD_URL to the hosted DMG URL.
 
 Do not reveal secret values. Confirm only present/missing and the function deployment timestamp.
+```
+
+### 2c. Deploy agent X/social connection and autopilot functions
+
+Prompt Lovable:
+
+```text
+Please deploy and verify the Polyphonic agent X/social edge-function slice.
+
+Functions to deploy:
+- supabase/functions/agent-social-x-oauth-start
+- supabase/functions/agent-social-x-oauth-callback
+- supabase/functions/agent-social-x-channel
+- supabase/functions/agent-social-x-autopilot
+- shared module supabase/functions/_shared/social-x.ts
+
+Migration/cron to apply:
+- supabase/migrations/20260629113000_agent_social_x_autopilot_cron.sql
+
+Required secrets:
+- X_CLIENT_ID
+- SOCIAL_TOKEN_ENCRYPTION_KEY
+
+Optional secrets:
+- X_CLIENT_SECRET, if the X app is configured as confidential
+- X_REDIRECT_URI, if production should override the default edge-function callback URL
+
+Please confirm only present/missing, not secret values. After deployment, confirm:
+- OAuth start returns an authorization URL.
+- OAuth callback can store encrypted credentials.
+- agent-social-x-channel can read channel health for an authenticated user.
+- agent-social-x-autopilot respects policy/approval gates and either creates a draft or reports a clear blocked/skipped reason.
+- recent cron/job logs for agent-social-x-autopilot show no repeated failures.
 ```
 
 ### 3. Verify scheduled jobs and logs

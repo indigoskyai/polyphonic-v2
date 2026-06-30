@@ -8,6 +8,15 @@ type DownloadRequest = {
 };
 
 const SIGNED_URL_TTL_SECONDS = 15 * 60;
+const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 5;
+
+type AttemptBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const failedAttempts = new Map<string, AttemptBucket>();
 
 function json(payload: Record<string, unknown>, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(payload), {
@@ -22,6 +31,43 @@ function json(payload: Record<string, unknown>, status: number, corsHeaders: Rec
 
 function normalize(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clientKey(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = forwarded || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "unknown-ip";
+  const ua = req.headers.get("user-agent") || "unknown-agent";
+  return `${ip}:${ua.slice(0, 120)}`;
+}
+
+function readAttemptBucket(key: string): AttemptBucket {
+  const now = Date.now();
+  const current = failedAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    const fresh = { count: 0, resetAt: now + FAILED_ATTEMPT_WINDOW_MS };
+    failedAttempts.set(key, fresh);
+    return fresh;
+  }
+  return current;
+}
+
+function retryAfterSeconds(bucket: AttemptBucket): number {
+  return Math.max(1, Math.ceil((bucket.resetAt - Date.now()) / 1000));
+}
+
+function recordFailedAttempt(key: string): AttemptBucket {
+  const bucket = readAttemptBucket(key);
+  bucket.count += 1;
+  failedAttempts.set(key, bucket);
+  return bucket;
+}
+
+function clearFailedAttempts(key: string) {
+  failedAttempts.delete(key);
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -116,8 +162,22 @@ serve(async (req) => {
 
   try {
     const expectedPassphrase = normalize(Deno.env.get("LUCA_DOWNLOAD_PASSPHRASE"));
+    const disabled = normalize(Deno.env.get("LUCA_DOWNLOAD_DISABLED"));
+    if (disabled === "1" || disabled.toLowerCase() === "true") {
+      return json({ ok: false, error: "Luca beta downloads are temporarily paused." }, 503, corsHeaders);
+    }
     if (!expectedPassphrase) {
       return json({ ok: false, error: "Luca download gate is not configured." }, 503, corsHeaders);
+    }
+
+    const key = clientKey(req);
+    const bucket = readAttemptBucket(key);
+    if (bucket.count >= MAX_FAILED_ATTEMPTS) {
+      return json(
+        { ok: false, error: "Too many attempts. Try again shortly.", retryAfterSeconds: retryAfterSeconds(bucket) },
+        429,
+        corsHeaders,
+      );
     }
 
     let body: DownloadRequest;
@@ -135,9 +195,20 @@ serve(async (req) => {
 
     const allowed = await passphraseMatches(passphrase, expectedPassphrase);
     if (!allowed) {
+      const failed = recordFailedAttempt(key);
+      console.warn("[luca-download] failed passphrase attempt", { count: failed.count, retryAfterSeconds: retryAfterSeconds(failed) });
+      await sleep(350);
+      if (failed.count >= MAX_FAILED_ATTEMPTS) {
+        return json(
+          { ok: false, error: "Too many attempts. Try again shortly.", retryAfterSeconds: retryAfterSeconds(failed) },
+          429,
+          corsHeaders,
+        );
+      }
       return json({ ok: false, error: "That passphrase did not unlock the beta download." }, 401, corsHeaders);
     }
 
+    clearFailedAttempts(key);
     const resolved = await resolveDownloadUrl();
     return json({ ok: true, ...resolved }, 200, corsHeaders);
   } catch (err) {

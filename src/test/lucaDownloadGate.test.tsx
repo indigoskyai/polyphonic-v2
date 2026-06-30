@@ -87,6 +87,9 @@ describe('Luca private beta download gate', () => {
     expect(component).toContain("'luca-download'");
     expect(component).not.toContain('LUCA_DOWNLOAD_PASSPHRASE');
     expect(edge).toContain('LUCA_DOWNLOAD_PASSPHRASE');
+    expect(edge).toContain('MAX_FAILED_ATTEMPTS');
+    expect(edge).toContain('LUCA_DOWNLOAD_DISABLED');
+    expect(edge).toContain('retryAfterSeconds');
     expect(edge).toContain('LUCA_DOWNLOAD_STORAGE_BUCKET');
     expect(edge).toContain('createSignedUrl');
     expect(config).toMatch(/\[functions\.luca-download\]\s+verify_jwt = false/);
