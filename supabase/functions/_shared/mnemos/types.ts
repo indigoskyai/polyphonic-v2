@@ -264,7 +264,7 @@ export interface ConsolidationResult {
   beliefs_updated: number;
   /** Engrams promoted from episodic to semantic. */
   promotions: number;
-  /** Durable memory candidates surfaced for human review. */
+  /** Durable memory_candidates surfaced from the engram substrate this run. */
   memory_candidates_created?: number;
   /** Compact grounded artifacts surfaced by this cycle. */
   insights?: ConsolidationInsights;

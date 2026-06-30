@@ -117,6 +117,7 @@ export default function MnemosOverview() {
         title: 'Consolidation finished',
         description: `${candidatesFound} engrams reviewed · ${promoted} promoted · ${durableCandidates} durable candidates · ${linked} linked · ${beliefsUpdated} beliefs updated`,
       });
+
     } catch (err) {
       toast({
         title: 'Could not consolidate',
@@ -139,12 +140,12 @@ export default function MnemosOverview() {
       {/* Hero stat strip */}
       <div className="s-stat-strip">
         <div className="s-stat">
-          <span className="s-stat-label">Committed</span>
+          <span className="s-stat-label">Committed memories</span>
           <span className="s-stat-value">{stats.committed}</span>
-          <span className="s-stat-delta">{stats.candidates} pending</span>
+          <span className="s-stat-delta">{stats.candidates} pending commit</span>
         </div>
         <div className="s-stat">
-          <span className="s-stat-label">Engrams</span>
+          <span className="s-stat-label">Mnemos engrams</span>
           <span className="s-stat-value">{stats.engrams}</span>
           <span className="s-stat-delta">{stats.active} active · {stats.semantic} semantic</span>
         </div>
@@ -154,11 +155,12 @@ export default function MnemosOverview() {
           <span className="s-stat-delta">{stats.semantic} semantic engrams</span>
         </div>
         <div className="s-stat">
-          <span className="s-stat-label">Connections</span>
+          <span className="s-stat-label">Substrate connections</span>
           <span className="s-stat-value">{stats.connections}</span>
           <span className="s-stat-delta">{stats.linkedEngrams} linked engrams</span>
         </div>
       </div>
+
 
       {/* Two-column: distribution + pending candidates */}
       <div className="s-panel-grid">

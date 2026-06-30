@@ -158,6 +158,7 @@ serve(async (req) => {
         memory_candidates_created: userResult.memory_candidates_created ?? 0,
         new_connections: userResult.new_connections ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
+        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         duration_ms: userResult.duration_ms ?? 0,
       }, agentId);
 
@@ -173,8 +174,10 @@ serve(async (req) => {
         connections_strengthened: userResult.connections_strengthened ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
         strengthened: userResult.strengthened ?? 0,
+        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         duration_ms: userResult.duration_ms ?? 0,
       });
+
 
       await maybeSurfaceConsolidation(supabase, supabaseUrl, supabaseServiceKey, uid, agentId, userResult);
       return userResult;
@@ -228,10 +231,10 @@ serve(async (req) => {
     if (accessedErr) throw accessedErr;
 
     const users = [...(newlyFormed ?? []), ...(recentlyAccessed ?? [])];
-
     const uniqueScopes = [...new Map((users ?? []).map((u: { user_id: string; agent_id?: string | null }) =>
       [`${u.user_id}:${u.agent_id || "luca"}`, { userId: u.user_id, agentId: u.agent_id || "luca" }]
     )).values()];
+
     const results: Record<string, unknown> = {};
 
     for (const scope of uniqueScopes) {

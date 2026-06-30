@@ -90,7 +90,7 @@ describe('agent-scoped autonomy runtime', () => {
   it('scopes the activity gate and process logs by agent', () => {
     const gate = readRepoFile('supabase/functions/_shared/activity-gate.ts');
     const consolidate = readRepoFile('supabase/functions/mnemos-consolidate/index.ts');
-    const candidateAutoCommit = readRepoFile('supabase/migrations/20260627223000_scope_memory_candidate_auto_commit.sql');
+    const candidateAutoCommit = readRepoFile('supabase/migrations/20260628002851_a6cb05f4-acb3-4939-be83-6e3a783c35c1.sql');
 
     expect(gate).toContain('processName: string,\n  agentId = "luca"');
     expect(gate).toContain('.eq("agent_id", scopedAgentId)');
@@ -118,8 +118,10 @@ describe('agent-scoped autonomy runtime', () => {
     expect(consolidation).toContain('agent_id: agentId');
     expect(consolidation).toContain('origin: "mnemos-consolidate"');
     expect(consolidation).toContain('DURABLE_CANDIDATE_MAX_PER_RUN');
-    expect(consolidation).toContain('filter("source->>engram_id", "eq", engramId)');
-    expect(consolidation).toContain('filter("provenance->>engram_id", "eq", engramId)');
+    expect(consolidation).toContain('.select("source, content")');
+    expect(consolidation).toContain('.select("provenance, content")');
+    expect(consolidation).toContain('usedEngramIds.has(engram.id)');
+    expect(consolidation).toContain('domainKeyForTags(draft.tags)');
     expect(consolidation).toContain('memory_candidates_created: memoryCandidatesCreated');
     expect(engine).toContain('memory_candidates_created: report.memory_candidates_created');
     expect(overview).toContain('durable candidates');

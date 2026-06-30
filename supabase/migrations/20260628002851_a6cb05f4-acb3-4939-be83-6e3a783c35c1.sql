@@ -1,6 +1,3 @@
--- Keep stale memory-candidate auto-commit scoped to the originating agent.
--- The original Luca-era function inserted memories without agent_id, which
--- defaults custom-agent candidates into Luca's memory bucket.
 CREATE OR REPLACE FUNCTION public.auto_commit_stale_memory_candidates()
 RETURNS integer
 LANGUAGE plpgsql
@@ -16,6 +13,8 @@ BEGIN
     FROM public.memory_candidates
     WHERE status = 'pending'
       AND created_at < (now() - interval '48 hours')
+      -- TEMPORARY: hold Mnemos-bridge candidates for manual review until
+      -- durable-candidate quality is verified. Other sources auto-commit normally.
       AND COALESCE(source->>'source', '') <> 'mnemos_consolidation'
     LIMIT 200
   LOOP
@@ -27,7 +26,8 @@ BEGIN
       v_candidate.content,
       v_candidate.memory_type,
       LEAST(GREATEST(v_candidate.confidence * 0.7, 0), 1),
-      COALESCE(v_candidate.source, '{}'::jsonb) || jsonb_build_object('auto_committed', true, 'candidate_id', v_candidate.id)
+      COALESCE(v_candidate.source, '{}'::jsonb)
+        || jsonb_build_object('auto_committed', true, 'candidate_id', v_candidate.id)
     );
 
     UPDATE public.memory_candidates
@@ -40,3 +40,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.auto_commit_stale_memory_candidates() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.auto_commit_stale_memory_candidates() TO service_role;
