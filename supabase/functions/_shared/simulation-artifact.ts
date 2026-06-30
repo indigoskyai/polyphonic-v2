@@ -48,8 +48,8 @@ export interface SimulationArtifactPayload {
 }
 
 export type SimulationParseResult =
-  | { ok: true; payload: SimulationArtifactPayload }
-  | { ok: false; error: string; details?: string[] };
+  | { ok: true; payload: SimulationArtifactPayload; error?: never; details?: never }
+  | { ok: false; payload?: never; error: string; details?: string[] };
 
 export function isSimulationPreset(value: unknown): value is SimulationPreset {
   return typeof value === "string" && (SIMULATION_PRESETS as readonly string[]).includes(value);
