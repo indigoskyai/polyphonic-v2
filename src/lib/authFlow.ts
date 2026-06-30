@@ -4,13 +4,30 @@ import { isAnonymousUser } from '@/lib/accessTier';
 
 export function authRedirectTo(path = '/chat'): string {
   const origin = window.location.origin;
-  return `${origin}${path.startsWith('/') ? path : `/${path}`}`;
+  const candidate = path.startsWith('/') ? path : `/${path}`;
+  const safePath = safeAuthNextPath(candidate);
+  return `${origin}${safePath}`;
 }
 
 type OAuthResult = { error?: string; redirected: boolean };
 
+export function safeAuthNextPath(value: string | null | undefined, fallback = '/chat'): string {
+  const raw = (value || '').trim();
+  if (!raw) return fallback;
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return fallback;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return fallback;
+    if (url.pathname.startsWith('/auth/')) return fallback;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 async function linkAnonymousIdentity(
   provider: 'google' | 'apple' | 'github' | 'azure',
+  nextPath = '/chat',
   options: Record<string, unknown> = {},
 ): Promise<OAuthResult | null> {
   const session = (await supabase.auth.getSession()).data.session;
@@ -19,7 +36,7 @@ async function linkAnonymousIdentity(
   const { data, error } = await supabase.auth.linkIdentity({
     provider,
     options: {
-      redirectTo: authRedirectTo('/chat'),
+      redirectTo: authRedirectTo(nextPath),
       ...options,
     },
   } as any);
@@ -28,8 +45,8 @@ async function linkAnonymousIdentity(
   return { redirected: Boolean(data?.url) };
 }
 
-export async function signInWithGoogle(): Promise<{ error?: string; redirected: boolean }> {
-  const linked = await linkAnonymousIdentity('google', {
+export async function signInWithGoogle(nextPath = '/chat'): Promise<{ error?: string; redirected: boolean }> {
+  const linked = await linkAnonymousIdentity('google', nextPath, {
     queryParams: {
       prompt: 'select_account',
     },
@@ -37,7 +54,7 @@ export async function signInWithGoogle(): Promise<{ error?: string; redirected: 
   if (linked) return linked;
 
   const result = await lovable.auth.signInWithOAuth('google', {
-    redirect_uri: authRedirectTo('/chat'),
+    redirect_uri: authRedirectTo(nextPath),
     extraParams: {
       prompt: 'select_account',
     },
@@ -53,12 +70,12 @@ export async function signInWithGoogle(): Promise<{ error?: string; redirected: 
   return { redirected: Boolean(result.redirected) };
 }
 
-export async function signInWithApple(): Promise<{ error?: string; redirected: boolean }> {
-  const linked = await linkAnonymousIdentity('apple');
+export async function signInWithApple(nextPath = '/chat'): Promise<{ error?: string; redirected: boolean }> {
+  const linked = await linkAnonymousIdentity('apple', nextPath);
   if (linked) return linked;
 
   const result = await lovable.auth.signInWithOAuth('apple', {
-    redirect_uri: authRedirectTo('/chat'),
+    redirect_uri: authRedirectTo(nextPath),
   });
 
   if (result.error) {
@@ -71,12 +88,12 @@ export async function signInWithApple(): Promise<{ error?: string; redirected: b
   return { redirected: Boolean(result.redirected) };
 }
 
-export async function signInWithMicrosoft(): Promise<{ error?: string; redirected: boolean }> {
-  const linked = await linkAnonymousIdentity('azure');
+export async function signInWithMicrosoft(nextPath = '/chat'): Promise<{ error?: string; redirected: boolean }> {
+  const linked = await linkAnonymousIdentity('azure', nextPath);
   if (linked) return linked;
 
   const result = await lovable.auth.signInWithOAuth('microsoft', {
-    redirect_uri: authRedirectTo('/chat'),
+    redirect_uri: authRedirectTo(nextPath),
   });
 
   if (result.error) {
@@ -94,14 +111,14 @@ export async function signInWithMicrosoft(): Promise<{ error?: string; redirecte
  * route through Supabase directly. The redirect target matches the
  * other providers so the session lands the same way.
  */
-export async function signInWithGitHub(): Promise<{ error?: string; redirected: boolean }> {
-  const linked = await linkAnonymousIdentity('github');
+export async function signInWithGitHub(nextPath = '/chat'): Promise<{ error?: string; redirected: boolean }> {
+  const linked = await linkAnonymousIdentity('github', nextPath);
   if (linked) return linked;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: authRedirectTo('/chat'),
+      redirectTo: authRedirectTo(nextPath),
     },
   });
 

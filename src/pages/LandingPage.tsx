@@ -4,6 +4,7 @@ import PolyphonicMark from '@/components/PolyphonicMark';
 import { supabase } from '@/integrations/supabase/client';
 import {
   authRedirectTo,
+  safeAuthNextPath,
   signInWithGoogle,
   signInWithApple,
   signInWithMicrosoft,
@@ -56,6 +57,7 @@ interface LandingPageProps {
 export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const authNextPath = safeAuthNextPath(searchParams.get('next'));
   const setSidebarVisible = useSidebarStore((s) => s.setVisible);
   const setGuideOpen = useLucaGuideStore((s) => s.setOpen);
   const sendGuideMessage = useLucaGuideStore((s) => s.send);
@@ -199,8 +201,8 @@ export default function LandingPage({ initialMode = 'idle' }: LandingPageProps) 
               error={composerError}
             />
           )}
-          {mode === 'signin' && <SignInCard goTo={goTo} navigate={navigate} />}
-          {mode === 'signup' && <SignUpCard goTo={goTo} />}
+          {mode === 'signin' && <SignInCard goTo={goTo} navigate={navigate} authNextPath={authNextPath} />}
+          {mode === 'signup' && <SignUpCard goTo={goTo} authNextPath={authNextPath} />}
           {mode === 'forgot' && <ForgotCard goTo={goTo} />}
           {mode === 'sent' && <SignupSentCard goTo={goTo} />}
         </div>
@@ -988,9 +990,11 @@ const GitHubGlyph = (
 function SignInCard({
   goTo,
   navigate,
+  authNextPath,
 }: {
   goTo: (m: Mode) => void;
   navigate: (path: string) => void;
+  authNextPath: string;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1004,10 +1008,10 @@ function SignInCard({
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) setError(error.message);
-    else navigate('/chat');
+    else navigate(authNextPath);
   };
 
-  const oauth = useOAuthHandlers({ setError, setLoading, navigate });
+  const oauth = useOAuthHandlers({ setError, setLoading, navigate, authNextPath });
 
   return (
     <AuthShell title="Welcome back." subtitle="Sign in to continue.">
@@ -1094,7 +1098,7 @@ function SignInCard({
  * Sign Up
  * ────────────────────────────────────────────────────────────────────── */
 
-function SignUpCard({ goTo }: { goTo: (m: Mode) => void }) {
+function SignUpCard({ goTo, authNextPath }: { goTo: (m: Mode) => void; authNextPath: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -1126,19 +1130,19 @@ function SignUpCard({ goTo }: { goTo: (m: Mode) => void }) {
     const { error } = currentUser && isAnonymousUser(currentUser)
       ? await supabase.auth.updateUser(
           { email, password },
-          { emailRedirectTo: authRedirectTo('/chat') },
+          { emailRedirectTo: authRedirectTo(authNextPath) },
         )
       : await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: authRedirectTo('/chat') },
+          options: { emailRedirectTo: authRedirectTo(authNextPath) },
         });
     setLoading(false);
     if (error) setError(error.message);
     else goTo('sent');
   };
 
-  const oauth = useOAuthHandlers({ setError, setLoading });
+  const oauth = useOAuthHandlers({ setError, setLoading, authNextPath });
 
   const subtitle = stashedPrompt
     ? `We saved your message — finish setup to continue with Luca.`
@@ -1412,10 +1416,12 @@ function useOAuthHandlers({
   setError,
   setLoading,
   navigate,
+  authNextPath = '/chat',
 }: {
   setError: (s: string) => void;
   setLoading: (b: boolean) => void;
   navigate?: (path: string) => void;
+  authNextPath?: string;
 }) {
   const run = useCallback(
     async (
@@ -1429,17 +1435,17 @@ function useOAuthHandlers({
         setLoading(false);
         return;
       }
-      if (!redirected && navigate) navigate('/chat');
+      if (!redirected && navigate) navigate(authNextPath);
     },
-    [setError, setLoading, navigate]
+    [setError, setLoading, navigate, authNextPath]
   );
 
   return useMemo(
     () => ({
-      google: () => run(signInWithGoogle),
-      apple: () => run(signInWithApple),
-      microsoft: () => run(signInWithMicrosoft),
-      github: () => run(signInWithGitHub),
+      google: () => run(() => signInWithGoogle(authNextPath)),
+      apple: () => run(() => signInWithApple(authNextPath)),
+      microsoft: () => run(() => signInWithMicrosoft(authNextPath)),
+      github: () => run(() => signInWithGitHub(authNextPath)),
     }),
     [run]
   );

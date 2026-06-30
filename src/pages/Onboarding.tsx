@@ -196,9 +196,9 @@ export default function Onboarding() {
     try {
       const mode = applyOnboardingPreferences(preferences);
       setSidebarVisible(mode === 'studio');
-      await markOnboarded(user.id, undefined, { interfaceMode: mode, preferences });
       const threadId = await createThread(user.id, 'luca', null, { runtimeMode: 'agent' });
       stashChatHandoff(buildOnboardingHandoffPrompt(preferences), { hidden: true });
+      await markOnboarded(user.id, undefined, { interfaceMode: mode, preferences });
       navigate(`/chat/${threadId}`, { replace: true });
     } catch (err) {
       console.error('[Onboarding] Luca handoff failed', err);

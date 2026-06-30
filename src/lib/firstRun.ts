@@ -9,7 +9,9 @@ import type { InterfaceMode, OnboardingPreferences } from '@/lib/interfaceMode';
  * OAuth signups create profile display names automatically, so display_name
  * is not a valid onboarding signal. The durable marker lives on user_settings.
  */
-export async function isFirstRun(userId: string): Promise<boolean> {
+export type FirstRunState = 'first' | 'not_first' | 'unknown';
+
+export async function getFirstRunState(userId: string): Promise<FirstRunState> {
   const settled = await Promise.allSettled([
     supabase.from('threads').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -26,17 +28,25 @@ export async function isFirstRun(userId: string): Promise<boolean> {
     || Boolean(threadRes?.error)
     || Boolean(messageRes?.error);
 
-  // If the activity reads fail, do not trap a signed-in user in onboarding.
-  // They can still re-enter with ?onboarding=1.
-  if (activityCheckFailed) return false;
-
   const completedAt = (settingsRes?.data as { onboarding_completed_at?: string | null } | null)?.onboarding_completed_at;
-  if (completedAt) return false;
+  if (completedAt) return 'not_first';
+
+  const settingsCheckFailed =
+    settled[2].status === 'rejected'
+    || Boolean(settingsRes?.error);
+
+  // If any core setup read fails, do not trap a signed-in user in onboarding,
+  // but keep the distinction available for recovery UI and diagnostics.
+  if (activityCheckFailed || settingsCheckFailed) return 'unknown';
 
   const threadCount = threadRes?.count ?? 0;
   const messageCount = messageRes?.count ?? 0;
 
-  return threadCount === 0 && messageCount === 0;
+  return threadCount === 0 && messageCount === 0 ? 'first' : 'not_first';
+}
+
+export async function isFirstRun(userId: string): Promise<boolean> {
+  return (await getFirstRunState(userId)) === 'first';
 }
 
 /**

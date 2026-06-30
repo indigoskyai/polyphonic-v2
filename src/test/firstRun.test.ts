@@ -106,9 +106,10 @@ describe('first-run onboarding gate', () => {
   });
 
   it('fails open when activity checks cannot be read', async () => {
-    const { isFirstRun } = await import('@/lib/firstRun');
+    const { getFirstRunState, isFirstRun } = await import('@/lib/firstRun');
     dbMock.state.threadError = { message: 'network failure' };
 
+    await expect(getFirstRunState('user-1')).resolves.toBe('unknown');
     await expect(isFirstRun('user-1')).resolves.toBe(false);
   });
 

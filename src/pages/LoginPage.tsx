@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authRedirectTo, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
+import { authRedirectTo, safeAuthNextPath, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = safeAuthNextPath(searchParams.get('next'));
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setError(error.message);
-    else navigate('/chat');
+    else navigate(nextPath);
     setLoading(false);
   };
 
@@ -40,14 +42,14 @@ export default function LoginPage() {
     setError('');
     setInfo('');
     setLoading(true);
-    const { error, redirected } = await signInWithGoogle();
+    const { error, redirected } = await signInWithGoogle(nextPath);
     if (error) {
       setError(error);
       setLoading(false);
       return;
     }
     if (!redirected) {
-      navigate('/chat');
+      navigate(nextPath);
     }
   };
 
@@ -55,14 +57,14 @@ export default function LoginPage() {
     setError('');
     setInfo('');
     setLoading(true);
-    const { error, redirected } = await signInWithApple();
+    const { error, redirected } = await signInWithApple(nextPath);
     if (error) {
       setError(error);
       setLoading(false);
       return;
     }
     if (!redirected) {
-      navigate('/chat');
+      navigate(nextPath);
     }
   };
 

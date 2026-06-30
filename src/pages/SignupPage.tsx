@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authRedirectTo, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
+import { authRedirectTo, safeAuthNextPath, signInWithGoogle, signInWithApple } from '@/lib/authFlow';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -10,6 +10,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = safeAuthNextPath(searchParams.get('next'));
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +20,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: authRedirectTo('/chat') },
+      options: { emailRedirectTo: authRedirectTo(nextPath) },
     });
     if (error) setError(error.message);
     else setSent(true);
@@ -28,28 +30,28 @@ export default function SignupPage() {
   const handleGoogle = async () => {
     setError('');
     setLoading(true);
-    const { error, redirected } = await signInWithGoogle();
+    const { error, redirected } = await signInWithGoogle(nextPath);
     if (error) {
       setError(error);
       setLoading(false);
       return;
     }
     if (!redirected) {
-      navigate('/chat');
+      navigate(nextPath);
     }
   };
 
   const handleApple = async () => {
     setError('');
     setLoading(true);
-    const { error, redirected } = await signInWithApple();
+    const { error, redirected } = await signInWithApple(nextPath);
     if (error) {
       setError(error);
       setLoading(false);
       return;
     }
     if (!redirected) {
-      navigate('/chat');
+      navigate(nextPath);
     }
   };
 

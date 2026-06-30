@@ -26,7 +26,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { authRedirectTo, signInWithApple, signInWithGoogle } from '@/lib/authFlow';
+import { authRedirectTo, safeAuthNextPath, signInWithApple, signInWithGoogle } from '@/lib/authFlow';
 
 describe('authFlow', () => {
   beforeEach(() => {
@@ -42,13 +42,20 @@ describe('authFlow', () => {
     expect(authRedirectTo('reset-password')).toBe(`${window.location.origin}/reset-password`);
   });
 
+  it('keeps protected same-app destinations and rejects unsafe auth next paths', () => {
+    expect(safeAuthNextPath('/settings/models?tab=providers')).toBe('/settings/models?tab=providers');
+    expect(safeAuthNextPath('https://evil.example')).toBe('/chat');
+    expect(safeAuthNextPath('//evil.example')).toBe('/chat');
+    expect(safeAuthNextPath('/auth/login?next=/settings')).toBe('/chat');
+  });
+
   it('starts Google OAuth with the app chat redirect and account chooser', async () => {
     mocks.signInWithOAuth.mockResolvedValue({ error: null, redirected: true });
 
-    await expect(signInWithGoogle()).resolves.toEqual({ redirected: true });
+    await expect(signInWithGoogle('/settings/models?tab=providers')).resolves.toEqual({ redirected: true });
 
     expect(mocks.signInWithOAuth).toHaveBeenCalledWith('google', {
-      redirect_uri: `${window.location.origin}/chat`,
+      redirect_uri: `${window.location.origin}/settings/models?tab=providers`,
       extraParams: { prompt: 'select_account' },
     });
   });
