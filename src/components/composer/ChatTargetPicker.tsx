@@ -51,6 +51,7 @@ function modelLab(modelId: string): string {
 function groupModelsByLab() {
   const grouped = new Map<string, ChatModelOption[]>();
   for (const model of CHAT_MODEL_OPTIONS) {
+    if (model.featured) continue;
     const lab = modelLab(model.id);
     grouped.set(lab, [...(grouped.get(lab) ?? []), model]);
   }
@@ -58,6 +59,10 @@ function groupModelsByLab() {
     ...LAB_ORDER.filter((lab) => grouped.has(lab)).map((lab) => [lab, grouped.get(lab)!] as const),
     ...[...grouped.entries()].filter(([lab]) => !LAB_ORDER.includes(lab)),
   ];
+}
+
+function featuredModels(): ChatModelOption[] {
+  return CHAT_MODEL_OPTIONS.filter((m) => m.featured);
 }
 
 function normalizeAgentName(agent: Pick<AgentConfig, 'id' | 'name'> | undefined, fallbackId: string): string {
