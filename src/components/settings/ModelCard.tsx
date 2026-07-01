@@ -124,7 +124,13 @@ export function ModelCard({ name, id, flags = [], active, onToggle }: ModelCardP
       <div style={{ display: 'flex', gap: 4 }}>
         {flags.map((flag, i) => {
           const flagStyles =
-            flag.variant === 'reasoning'
+            flag.variant === 'new'
+              ? {
+                  color: 'var(--blue-accent)',
+                  borderColor: 'color-mix(in srgb, var(--blue-accent) 45%, transparent)',
+                  background: 'color-mix(in srgb, var(--blue-accent) 10%, transparent)',
+                }
+              : flag.variant === 'reasoning'
               ? {
                   color: 'var(--amber-soft)',
                   borderColor: 'color-mix(in srgb, var(--amber-soft) 18%, transparent)',
