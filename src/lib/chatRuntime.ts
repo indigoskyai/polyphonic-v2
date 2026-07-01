@@ -9,12 +9,14 @@ export interface ChatTargetPreference {
 export interface ChatModelOption {
   id: string;
   name: string;
-  flags: { label: string; variant?: 'reasoning' | 'multimodal' | 'default' }[];
+  flags: { label: string; variant?: 'reasoning' | 'multimodal' | 'default' | 'new' }[];
+  featured?: boolean;
 }
 
 export const DEFAULT_CHAT_MODEL = 'moonshotai/kimi-k2.6';
 
 export const CHAT_MODEL_OPTIONS: ChatModelOption[] = [
+  { id: 'anthropic/claude-fable-5', name: 'Claude Fable 5', featured: true, flags: [{ label: 'Just released', variant: 'new' }, { label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'moonshotai/kimi-k2.6', name: 'Kimi K2.6', flags: [{ label: 'Default', variant: 'default' }, { label: 'Multimodal', variant: 'multimodal' }] },
   { id: 'anthropic/claude-opus-4.8', name: 'Claude Opus 4.8', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
   { id: 'anthropic/claude-opus-4-7', name: 'Claude Opus 4.7', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
