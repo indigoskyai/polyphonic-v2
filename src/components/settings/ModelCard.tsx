@@ -11,7 +11,7 @@ import React from 'react';
 
 interface ModelFlag {
   label: string;
-  variant?: 'default' | 'reasoning' | 'multimodal';
+  variant?: 'default' | 'reasoning' | 'multimodal' | 'new';
 }
 
 interface ModelCardProps {
