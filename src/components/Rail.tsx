@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import PolyphonicMark from '@/components/PolyphonicMark';
 import {
   MessageSquare,
+  MessagesSquare,
   Brain,
   Bot,
   FlaskConical,
@@ -43,6 +44,7 @@ import SidebarResearch from './sidebar/SidebarResearch';
 
 const ICON_FOR_SURFACE: Record<RailSurfaceIcon, React.ReactNode> = {
   chat:     <MessageSquare size={16} strokeWidth={1.6} />,
+  groups:   <MessagesSquare size={16} strokeWidth={1.6} />,
   notebook: <NotebookPen   size={16} strokeWidth={1.6} />,
   memory:   <Brain         size={16} strokeWidth={1.6} />,
   research: <FlaskConical  size={16} strokeWidth={1.6} />,

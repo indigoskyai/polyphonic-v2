@@ -66,7 +66,7 @@ const ProfileIdentityView = lazy(() => import("./pages/ProfileIdentityView"));
 const ProfileSkillsView = lazy(() => import("./pages/ProfileSkillsView"));
 const ProfileRevisionsView = lazy(() => import("./pages/ProfileRevisionsView"));
 const ProfileScheduleView = lazy(() => import("./pages/ProfileScheduleView"));
-const GroupSession = lazy(() => import("./pages/GroupSession"));
+const GroupsView = lazy(() => import("./pages/GroupsView"));
 const CheckpointsView = lazy(() => import("./pages/CheckpointsView"));
 const WorkspaceView = lazy(() => import("./pages/WorkspaceView"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -445,7 +445,9 @@ const App = () => (
                 <Route path="/profile/skills" element={<ProtectedRoute><AppShell><ProfileSkillsView /></AppShell></ProtectedRoute>} />
                 <Route path="/profile/revisions" element={<ProtectedRoute><AppShell><ProfileRevisionsView /></AppShell></ProtectedRoute>} />
                 <Route path="/profile/schedule" element={<ProtectedRoute><AppShell><ProfileScheduleView /></AppShell></ProtectedRoute>} />
-                <Route path="/group" element={<ProtectedRoute><AppShell><GroupSession /></AppShell></ProtectedRoute>} />
+                <Route path="/groups" element={<ProtectedRoute><AppShell><GroupsView /></AppShell></ProtectedRoute>} />
+                <Route path="/groups/:roomId" element={<ProtectedRoute><AppShell><GroupsView /></AppShell></ProtectedRoute>} />
+                <Route path="/group" element={<Navigate to="/groups" replace />} />
                 <Route path="/checkpoints" element={<ProtectedRoute><AppShell><CheckpointsView /></AppShell></ProtectedRoute>} />
                 <Route path="/workspace" element={<ProtectedRoute><AppShell><WorkspaceView /></AppShell></ProtectedRoute>} />
                 <Route path="/canvas/:artifactId" element={<ProtectedRoute><AppShell><CanvasPanel /></AppShell></ProtectedRoute>} />

@@ -73,12 +73,13 @@ export function shouldDefaultSidebarVisible(mode: InterfaceMode): boolean {
 
 /**
  * Rail surface descriptors — single source of truth for what shows in the
- * primary nav per interface mode. Companion and Guided collapse to five
- * surfaces (Chat / Notebook / Memory / Research / Agents); Studio shows the full
+ * primary nav per interface mode. Companion and Guided collapse to six
+ * surfaces (Chat / Groups / Notebook / Memory / Research / Agents); Studio shows the full
  * diagnostic map. Order matches render order in the Rail.
  */
 export type RailSurfaceIcon =
   | 'chat'
+  | 'groups'
   | 'notebook'
   | 'memory'
   | 'research'
@@ -98,6 +99,7 @@ export interface RailSurface {
 
 const COMPANION_GUIDED_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
+  { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
   { id: 'notebook', label: 'Notebook', path: '/notebook',        icon: 'notebook', guideId: 'rail-notebook', matchPaths: ['/notebook', '/journal'] },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
   { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
@@ -106,6 +108,7 @@ const COMPANION_GUIDED_SURFACES: RailSurface[] = [
 
 const STUDIO_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
+  { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
   { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
   { id: 'mind',     label: 'Mind',     path: '/mind',            icon: 'mind',     guideId: 'rail-mind', matchPaths: ['/mind', '/dashboard', '/profile/identity', '/profile/revisions'] },

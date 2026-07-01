@@ -68,6 +68,16 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const { error: groupCleanupErr } = await admin.rpc("anonymize_group_room_user", {
+      p_user_id: userId,
+    });
+    if (groupCleanupErr) {
+      return jsonResponse(
+        { error: groupCleanupErr.message || "Could not prepare group room data for account deletion." },
+        500,
+      );
+    }
+
     const { error: deleteErr } = await admin.auth.admin.deleteUser(userId);
     if (deleteErr) {
       return jsonResponse(

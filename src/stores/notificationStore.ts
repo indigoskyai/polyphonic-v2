@@ -37,8 +37,12 @@ export function notificationMatchesAgent(row: AgentScopedRow | null | undefined,
   return normalizeNotificationAgentId(row?.agent_id) === normalizeNotificationAgentId(agentId);
 }
 
+export function isGroupRoomActivity(row: { source?: string | null } | null | undefined): boolean {
+  return row?.source === 'group-room';
+}
+
 export function filterActivityForAgent(activity: ActivityEntry[], agentId: string): ActivityEntry[] {
-  return activity.filter((entry) => notificationMatchesAgent(entry, agentId));
+  return activity.filter((entry) => isGroupRoomActivity(entry) || notificationMatchesAgent(entry, agentId));
 }
 
 export function filterInitiationsForAgent(initiations: ThoughtInitiation[], agentId: string): ThoughtInitiation[] {
@@ -219,7 +223,7 @@ export function selectUnreadCountForAgent(s: NotificationState, agentId: string)
   const seenMs = s.lastSeenAt ? new Date(s.lastSeenAt).getTime() : 0;
   const unreadActivity = s.activity.filter(
     (a) =>
-      notificationMatchesAgent(a, agentId) &&
+      (isGroupRoomActivity(a) || notificationMatchesAgent(a, agentId)) &&
       new Date(a.created_at).getTime() > seenMs &&
       !s.readIds.has(a.id),
   ).length;

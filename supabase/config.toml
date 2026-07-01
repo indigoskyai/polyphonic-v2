@@ -79,6 +79,24 @@ project_id = "kknchdnrujzheulqzowv"
     verify_jwt = false
   [functions.generate-image]
     verify_jwt = false
+  [functions.group-agent-request]
+    verify_jwt = false
+  [functions.group-memory-action]
+    verify_jwt = false
+  [functions.group-message-delete]
+    verify_jwt = false
+  [functions.group-message-send]
+    verify_jwt = false
+  [functions.group-room-accept-invite]
+    verify_jwt = false
+  [functions.group-room-agent-save]
+    verify_jwt = false
+  [functions.group-room-create]
+    verify_jwt = false
+  [functions.group-room-invite]
+    verify_jwt = false
+  [functions.group-room-member-update]
+    verify_jwt = false
   [functions.import-chatgpt]
     verify_jwt = false
   [functions.journal-cron]

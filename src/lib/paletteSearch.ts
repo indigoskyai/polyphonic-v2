@@ -145,11 +145,11 @@ export function buildQuickActions(handlers: NavigationHandlers): PaletteResult[]
     {
       id: 'qa-group',
       scope: 'settings',
-      title: 'Open group session',
-      subtitle: 'Multi-agent voice room',
+      title: 'Open groups',
+      subtitle: 'Shared rooms',
       glyph: 'agent-vektor',
       hint: 'ACTION ↵',
-      onActivate: () => handlers.navigate('/group'),
+      onActivate: () => handlers.navigate('/groups'),
     },
     {
       id: 'qa-settings',

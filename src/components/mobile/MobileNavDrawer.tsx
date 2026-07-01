@@ -9,6 +9,7 @@ import {
   CircleUserRound,
   FolderKanban,
   MessageCircle,
+  MessagesSquare,
   NotebookPen,
   Plus,
   Search,
@@ -26,12 +27,10 @@ import { useNotificationStore, selectPendingInitiationsCount } from '@/stores/no
 import { useThreadStore, type Thread } from '@/stores/threadStore';
 import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
 
-// Primary surfaces — mirrors the desktop nav rail (Chat, Memory, Mind, Journal,
-// Projects, Profile). The old mobile list carried Group (a dev-only mock),
-// Workspace and Checkpoints — none of which are in the web nav — and was
-// missing Journal.
+// Primary surfaces — mirrors the desktop nav rail.
 const STUDIO_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
+  { label: 'Groups', path: '/groups', icon: MessagesSquare },
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Mind', path: '/mind', icon: Brain },
   { label: 'Journal', path: '/journal', icon: NotebookPen },
@@ -39,12 +38,13 @@ const STUDIO_ROUTES = [
   { label: 'Profile', path: '/profile', icon: CircleUserRound },
 ];
 
-// Four-surface mobile nav for companion + guided: Chat / Notebook / Memory /
-// Agents — mirrors the desktop Rail's getRailSurfaces() output. Notebook
+// Mobile nav for companion + guided mirrors the desktop Rail's
+// getRailSurfaces() output. Notebook
 // points at /notebook directly so the URL, drawer label, and page header all
 // say "Notebook" (instead of /journal redirect chain showing "Journal").
 const SIMPLE_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
+  { label: 'Groups', path: '/groups', icon: MessagesSquare },
   { label: 'Notebook', path: '/notebook', icon: NotebookPen },
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Agents', path: '/settings/agents', icon: Bot },

@@ -4,6 +4,7 @@ const prefetched = new Map<string, Promise<unknown>>();
 
 const routeLoaders: Record<string, RouteLoader> = {
   '/chat': () => import('@/pages/ChatView'),
+  '/groups': () => import('@/pages/GroupsView'),
   '/memory': () => import('@/pages/MemoryView'),
   '/research': () => import('@/pages/ResearchView'),
   '/mind': () => import('@/pages/MindView'),
@@ -39,6 +40,7 @@ const coreSettingsPaths = [
 
 function normalizedPath(path: string): string | null {
   if (path.startsWith('/chat/')) return '/chat';
+  if (path.startsWith('/groups/')) return '/groups';
   if (path.startsWith('/projects/')) return '/projects';
   if (path.startsWith('/settings/agents/')) return '/settings/agents';
   const match = Object.keys(routeLoaders)
@@ -85,6 +87,7 @@ export function prefetchCoreSettingsRoutes() {
 // hover/focus, but should not be parsed during the first companion/chat session.
 const lightPrimaryNavPaths = [
   '/chat',
+  '/groups',
   '/research',
   '/journal',
   '/settings/agents',
@@ -115,6 +118,6 @@ export function prefetchPrimaryNavRoutes(options: { includeHeavy?: boolean } = {
 }
 
 export const navigationAuditRoutes = {
-  rail: ['/chat', '/memory', '/research', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
+  rail: ['/chat', '/groups', '/memory', '/research', '/mind', '/journal', '/import', '/projects', '/profile', '/settings/help', '/settings/agents'],
   settings: coreSettingsPaths,
 };

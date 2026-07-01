@@ -283,6 +283,14 @@ export default function NotificationsDrawer() {
       updateInitiationStatus(item.id, 'delivered');
     }
     close();
+    if (item.kind === 'activity') {
+      const content = (item.raw as ActivityEntry).content;
+      const roomId = content && typeof content.room_id === 'string' ? content.room_id : null;
+      if ((item.raw as ActivityEntry).source === 'group-room' && roomId) {
+        navigate(`/groups/${roomId}`);
+        return;
+      }
+    }
     navigate('/chat');
   };
 

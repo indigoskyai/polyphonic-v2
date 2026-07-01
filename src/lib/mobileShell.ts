@@ -96,8 +96,8 @@ export function getMobileSurfaceMeta(
     return { title: 'Canvas', subtitle: 'Artifact view', contextAction: 'activity' };
   }
 
-  if (pathname.startsWith('/group')) {
-    return { title: 'Group', subtitle: 'Council session', contextAction: 'activity' };
+  if (pathname.startsWith('/groups') || pathname.startsWith('/group')) {
+    return { title: 'Groups', subtitle: 'Shared rooms', contextAction: 'activity' };
   }
 
   if (pathname.startsWith('/checkpoints')) {
