@@ -303,6 +303,66 @@ export function ChatTargetPicker({
             );
           })}
 
+          {featuredModels().length > 0 && (
+            <div>
+              {sectionHeader('Just released')}
+              {featuredModels().map((model) => {
+                const modelId = normalizeChatModelId(model.id);
+                const isActive = activeTarget.kind === 'model' && normalizeChatModelId(activeTarget.id) === modelId;
+                return (
+                  <button
+                    key={`featured-${model.id}`}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={isActive}
+                    onClick={() => {
+                      onSelectModel(model.id);
+                      setOpen(false);
+                    }}
+                    style={itemStyle(isActive)}
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.background = 'var(--overlay-hover)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: 'var(--blue-accent)',
+                        boxShadow: '0 0 8px color-mix(in srgb, var(--blue-accent) 60%, transparent)',
+                        flexShrink: 0,
+                      }}
+                      aria-hidden="true"
+                    />
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {model.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: 'var(--blue-accent)',
+                        fontFamily: 'var(--font-mono)',
+                        letterSpacing: 'var(--track-meta)',
+                        textTransform: 'uppercase',
+                        padding: '1px 6px',
+                        border: '1px solid color-mix(in srgb, var(--blue-accent) 45%, transparent)',
+                        background: 'color-mix(in srgb, var(--blue-accent) 10%, transparent)',
+                        borderRadius: 999,
+                        flexShrink: 0,
+                      }}
+                    >
+                      New
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {modelGroups.map(([lab, models]) => (
             <div key={lab}>
               {sectionHeader(LAB_LABELS[lab] || lab)}
