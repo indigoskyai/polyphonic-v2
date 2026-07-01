@@ -1931,6 +1931,473 @@ export type Database = {
         }
         Relationships: []
       }
+      group_agent_jobs: {
+        Row: {
+          agent_id: string
+          agent_owner_user_id: string | null
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          request_kind: string
+          requester_user_id: string | null
+          response_message_id: string | null
+          room_id: string
+          started_at: string | null
+          status: string
+          trigger_message_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          agent_owner_user_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          request_kind?: string
+          requester_user_id?: string | null
+          response_message_id?: string | null
+          room_id: string
+          started_at?: string | null
+          status?: string
+          trigger_message_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          agent_owner_user_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          request_kind?: string
+          requester_user_id?: string | null
+          response_message_id?: string | null
+          room_id?: string
+          started_at?: string | null
+          status?: string
+          trigger_message_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_agent_jobs_response_message_id_fkey"
+            columns: ["response_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_agent_jobs_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_agent_jobs_trigger_message_id_fkey"
+            columns: ["trigger_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_memory_candidates: {
+        Row: {
+          agent_id: string | null
+          content: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          metadata: Json
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          room_id: string
+          source_message_id: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+          visibility: string
+        }
+        Insert: {
+          agent_id?: string | null
+          content: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          metadata?: Json
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          room_id: string
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          visibility?: string
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          metadata?: Json
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          room_id?: string
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_memory_candidates_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_memory_candidates_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_message_mentions: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          room_id: string
+          target_agent_id: string | null
+          target_agent_owner_user_id: string | null
+          target_kind: string
+          target_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          room_id: string
+          target_agent_id?: string | null
+          target_agent_owner_user_id?: string | null
+          target_kind: string
+          target_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          room_id?: string
+          target_agent_id?: string | null
+          target_agent_owner_user_id?: string | null
+          target_kind?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_message_mentions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_message_mentions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_messages: {
+        Row: {
+          attachments: Json
+          content: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          metadata: Json
+          reply_to_id: string | null
+          role: string
+          room_id: string
+          sender_agent_id: string | null
+          sender_agent_owner_user_id: string | null
+          sender_user_id: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          metadata?: Json
+          reply_to_id?: string | null
+          role: string
+          room_id: string
+          sender_agent_id?: string | null
+          sender_agent_owner_user_id?: string | null
+          sender_user_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          metadata?: Json
+          reply_to_id?: string | null
+          role?: string
+          room_id?: string
+          sender_agent_id?: string | null
+          sender_agent_owner_user_id?: string | null
+          sender_user_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_room_agents: {
+        Row: {
+          added_at: string
+          added_by_user_id: string | null
+          agent_id: string
+          avatar_color: string | null
+          display_name: string
+          id: string
+          mention_policy: string
+          owner_user_id: string
+          removed_at: string | null
+          room_id: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          added_at?: string
+          added_by_user_id?: string | null
+          agent_id: string
+          avatar_color?: string | null
+          display_name: string
+          id?: string
+          mention_policy?: string
+          owner_user_id: string
+          removed_at?: string | null
+          room_id: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          added_at?: string
+          added_by_user_id?: string | null
+          agent_id?: string
+          avatar_color?: string | null
+          display_name?: string
+          id?: string
+          mention_policy?: string
+          owner_user_id?: string
+          removed_at?: string | null
+          room_id?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_room_agents_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_room_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          expires_at: string | null
+          history_policy: string
+          id: string
+          invitee_handle: string | null
+          invitee_user_id: string | null
+          inviter_user_id: string | null
+          room_id: string
+          status: string
+          token_hash: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          history_policy?: string
+          id?: string
+          invitee_handle?: string | null
+          invitee_user_id?: string | null
+          inviter_user_id?: string | null
+          room_id: string
+          status?: string
+          token_hash?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          history_policy?: string
+          id?: string
+          invitee_handle?: string | null
+          invitee_user_id?: string | null
+          inviter_user_id?: string | null
+          room_id?: string
+          status?: string
+          token_hash?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_room_invites_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_room_members: {
+        Row: {
+          can_see_history_before_join: boolean
+          created_at: string
+          display_snapshot: Json
+          id: string
+          joined_at: string
+          last_read_message_id: string | null
+          left_at: string | null
+          muted: boolean
+          notification_prefs: Json
+          role: string
+          room_id: string
+          state: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_see_history_before_join?: boolean
+          created_at?: string
+          display_snapshot?: Json
+          id?: string
+          joined_at?: string
+          last_read_message_id?: string | null
+          left_at?: string | null
+          muted?: boolean
+          notification_prefs?: Json
+          role?: string
+          room_id: string
+          state?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_see_history_before_join?: boolean
+          created_at?: string
+          display_snapshot?: Json
+          id?: string
+          joined_at?: string
+          last_read_message_id?: string | null
+          left_at?: string | null
+          muted?: boolean
+          notification_prefs?: Json
+          role?: string
+          room_id?: string
+          state?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_room_members_last_read_message_fk"
+            columns: ["last_read_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_room_members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_rooms: {
+        Row: {
+          created_at: string
+          description: string | null
+          history_policy: string
+          id: string
+          owner_user_id: string | null
+          state: string
+          title: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          history_policy?: string
+          id?: string
+          owner_user_id?: string | null
+          state?: string
+          title?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          history_policy?: string
+          id?: string
+          owner_user_id?: string | null
+          state?: string
+          title?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       handles: {
         Row: {
           created_at: string
@@ -4028,7 +4495,19 @@ export type Database = {
         Args: { p_channel_id?: string; p_user_id: string }
         Returns: number
       }
+      anonymize_group_room_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
+      can_manage_group_room: {
+        Args: { p_room_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      can_read_group_message: {
+        Args: { p_created_at: string; p_room_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       cleanup_daily_usage: { Args: never; Returns: number }
       cleanup_idempotency_keys: { Args: never; Returns: number }
       cognitive_memory_stats: {
@@ -4072,6 +4551,10 @@ export type Database = {
       invoke_edge_function: {
         Args: { function_name: string; payload?: Json }
         Returns: number
+      }
+      is_group_room_member: {
+        Args: { p_room_id: string; p_user_id?: string }
+        Returns: boolean
       }
       is_handle_owner: { Args: { p_handle: string }; Returns: boolean }
       mark_activity_seen: { Args: never; Returns: undefined }
