@@ -142,11 +142,19 @@ export function ModelPicker({ activeModelId, onChange, variant = 'composer' }: M
                     key={flag.label}
                     style={{
                       fontSize: 9,
-                      color: flag.variant === 'default' ? 'var(--blue-accent)' : 'var(--text-whisper)',
+                      color: flag.variant === 'new'
+                        ? 'var(--blue-accent)'
+                        : flag.variant === 'default'
+                        ? 'var(--blue-accent)'
+                        : 'var(--text-whisper)',
                       fontFamily: 'var(--font-mono)',
                       letterSpacing: 'var(--track-meta)',
                       textTransform: 'uppercase',
                       flexShrink: 0,
+                      padding: flag.variant === 'new' ? '1px 6px' : undefined,
+                      border: flag.variant === 'new' ? '1px solid color-mix(in srgb, var(--blue-accent) 45%, transparent)' : undefined,
+                      borderRadius: flag.variant === 'new' ? 999 : undefined,
+                      background: flag.variant === 'new' ? 'color-mix(in srgb, var(--blue-accent) 10%, transparent)' : undefined,
                     }}
                   >
                     {flag.label}
