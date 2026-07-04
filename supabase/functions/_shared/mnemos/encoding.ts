@@ -231,6 +231,7 @@ function extractExtendedAffect(content: string): { dominance: number; social: nu
 interface DiscoveredConnection {
   targetId: string;
   connectionType: ConnectionType;
+  formedBy: Connection["formed_by"];
   weight: number;
 }
 
@@ -253,6 +254,7 @@ async function discoverConnections(
     connections.push({
       targetId,
       connectionType: "extends",
+      formedBy: "explicit",
       weight: DEFAULT_CONNECTION_WEIGHT,
     });
   }
@@ -277,11 +279,10 @@ async function discoverConnections(
 
     const sim = trigramSimilarity(content, candidate.content);
     if (sim >= SIMILARITY_THRESHOLD) {
-      // Determine connection type heuristically
-      const connType: ConnectionType = sim > 0.6 ? "parallels" : "extends";
       connections.push({
         targetId: candidate.id,
-        connectionType: connType,
+        connectionType: "co_occurs",
+        formedBy: "heuristic",
         weight: clamp(sim, 0.1, 1.0),
       });
     }
@@ -413,6 +414,7 @@ export async function encode(
     emotional_valence: emotionalValence,
     emotional_arousal: emotionalArousal,
     surprise_score: surpriseScore,
+    affect_source: "heuristic",
     source_context: context.source_context ?? {},
     tags: context.tags ?? [],
     state: "active" as const,
@@ -474,6 +476,7 @@ export async function encode(
       source_id: engram.id,
       target_id: disc.targetId,
       connection_type: disc.connectionType,
+      formed_by: disc.formedBy,
       weight: disc.weight,
     };
 

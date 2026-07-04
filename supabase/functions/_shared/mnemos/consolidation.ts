@@ -62,6 +62,9 @@ const MAX_CANDIDATES = 100;
 /** Maximum pairs to analyze per cycle (controls quadratic blowup). */
 const MAX_PAIRS = 500;
 
+/** Maximum co-occurrence edges to send to the classifier in one consolidation run. */
+const CONNECTION_CLASSIFIER_BATCH = 24;
+
 /** Similarity threshold for discovering new connections during consolidation. */
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.2;
 
@@ -427,6 +430,7 @@ interface NewConnectionCandidate {
   sourceId: string;
   targetId: string;
   connectionType: ConnectionType;
+  formedBy: Connection["formed_by"];
   weight: number;
 }
 
@@ -481,13 +485,11 @@ async function analyzePairs(
       const similarity = trigramSimilarity(a.content, b.content);
       if (similarity < CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
 
-      // Determine connection type from similarity and content relationship
-      const connectionType = inferConnectionType(a, b, similarity);
-
       newConnections.push({
         sourceId: a.id,
         targetId: b.id,
-        connectionType,
+        connectionType: inferConnectionType(a, b, similarity),
+        formedBy: "heuristic",
         weight: clamp(similarity, 0.1, DEFAULT_CONNECTION_WEIGHT),
       });
     }
@@ -500,24 +502,10 @@ async function analyzePairs(
  * Infer a connection type between two engrams based on their properties.
  */
 function inferConnectionType(a: Engram, b: Engram, similarity: number): ConnectionType {
-  // High similarity suggests parallel memories
-  if (similarity > 0.5) return "parallels";
-
-  // Same tags suggest extension
-  const sharedTags = a.tags.filter((t) => b.tags.includes(t));
-  if (sharedTags.length > 0) return "extends";
-
-  // Opposite emotional valence might indicate contradiction
-  if (
-    Math.sign(a.emotional_valence) !== Math.sign(b.emotional_valence) &&
-    Math.abs(a.emotional_valence) > 0.3 &&
-    Math.abs(b.emotional_valence) > 0.3
-  ) {
-    return "contradicts";
-  }
-
-  // Default: the memories support each other (general relationship)
-  return "supports";
+  void a;
+  void b;
+  void similarity;
+  return "co_occurs";
 }
 
 // ---------------------------------------------------------------------------
@@ -1444,6 +1432,7 @@ async function persistNewConnections(
         source_id: conn.sourceId,
         target_id: conn.targetId,
         connection_type: conn.connectionType,
+        formed_by: conn.formedBy,
         weight: conn.weight,
       });
 
@@ -1469,6 +1458,112 @@ async function persistNewConnections(
   }
 
   return created;
+}
+
+const CLASSIFIABLE_CONNECTION_TYPES: ConnectionType[] = [
+  "supports",
+  "contradicts",
+  "causes",
+  "extends",
+  "parallels",
+  "synthesizes",
+  "grounds",
+];
+
+async function classifyCoOccurrenceConnections(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
+  connections: NewConnectionCandidate[],
+  candidateById: Map<string, Engram>,
+  apiKey?: string,
+): Promise<number> {
+  if (!apiKey) return 0;
+  const batch = connections
+    .filter((conn) => conn.connectionType === "co_occurs" && conn.formedBy === "heuristic")
+    .slice(0, CONNECTION_CLASSIFIER_BATCH)
+    .map((conn, index) => {
+      const source = candidateById.get(conn.sourceId);
+      const target = candidateById.get(conn.targetId);
+      if (!source || !target) return null;
+      return {
+        index,
+        source_id: conn.sourceId,
+        target_id: conn.targetId,
+        source: compactInsightText(source.content, 360),
+        target: compactInsightText(target.content, 360),
+        shared_tags: source.tags.filter((tag) => target.tags.includes(tag)).slice(0, 8),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  if (batch.length === 0) return 0;
+
+  try {
+    const model = await resolveRoleModel(supabase, userId, agentId, "mechanical");
+    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 900,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: [
+              "Classify memory-graph edges conservatively.",
+              "Only upgrade co_occurs when the relation is explicit in the two snippets.",
+              "Allowed types: supports, contradicts, causes, extends, parallels, synthesizes, grounds.",
+              "If uncertain, return co_occurs with low confidence.",
+              "Return JSON: {\"classifications\":[{\"index\":0,\"type\":\"extends\",\"confidence\":0.82,\"reason\":\"...\"}]}",
+            ].join("\n"),
+          },
+          { role: "user", content: JSON.stringify({ pairs: batch }) },
+        ],
+      }),
+      signal: AbortSignal.timeout(60_000),
+    }));
+
+    if (!response.ok) {
+      console.warn("[consolidation] connection classifier failed:", response.status, response.statusText);
+      return 0;
+    }
+
+    const data = await response.json();
+    const raw = data?.choices?.[0]?.message?.content;
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const classifications = Array.isArray(parsed?.classifications) ? parsed.classifications : [];
+    let upgraded = 0;
+
+    for (const item of classifications) {
+      const index = Number(item?.index);
+      const type = String(item?.type || "");
+      const confidence = Number(item?.confidence ?? 0);
+      const pair = batch.find((candidate) => candidate.index === index);
+      if (!pair || confidence < 0.72 || !CLASSIFIABLE_CONNECTION_TYPES.includes(type as ConnectionType)) {
+        continue;
+      }
+
+      const { error } = await supabase
+        .from("connections")
+        .update({ connection_type: type, formed_by: "classifier" })
+        .eq("user_id", userId)
+        .eq("agent_id", agentId)
+        .eq("source_id", pair.source_id)
+        .eq("target_id", pair.target_id)
+        .eq("connection_type", "co_occurs")
+        .eq("formed_by", "heuristic");
+
+      if (!error) upgraded++;
+    }
+
+    return upgraded;
+  } catch (err) {
+    console.warn("[consolidation] connection classifier skipped:", (err as Error).message);
+    return 0;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1582,6 +1677,14 @@ export async function runConsolidation(
     agentId,
     newConnections,
     candidateById,
+  );
+  await classifyCoOccurrenceConnections(
+    supabase,
+    userId,
+    agentId,
+    newConnections,
+    candidateById,
+    options.openrouter_api_key,
   );
 
   // 4. Strengthen co-activated connections

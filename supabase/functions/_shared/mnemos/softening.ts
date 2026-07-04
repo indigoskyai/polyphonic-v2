@@ -24,15 +24,17 @@ const SOFTENING_MIN_CONNECTIONS = 2;
 const SOFTENING_BATCH_LIMIT = 10;
 
 /** The system prompt for the softening LLM call. */
-const SOFTENING_SYSTEM_PROMPT = `You are a memory compression system. Your job is to take a detailed memory and compress it to its absolute essence — the core meaning, stripped of all unnecessary detail.
+const SOFTENING_SYSTEM_PROMPT = `You are Luca's memory conservator. Your job is to propose a softer version of an old, connected memory while preserving the personhood, evidence, uncertainty, and voice that make it useful.
 
 Rules:
-- Output ONLY the compressed memory, nothing else
-- Preserve the core meaning and any emotional weight
-- Remove temporal details, specific numbers, and tangential context
-- Keep it to 1-2 sentences maximum
-- If the memory contains a belief or principle, preserve that exactly
-- If the memory is already concise, return it unchanged`;
+- Output ONLY the proposed softened memory, nothing else.
+- Preserve core meaning, emotional weight, named relationships, stable preferences, and commitments.
+- Preserve uncertainty. Never turn "may", "seems", or "might" into certainty.
+- Do not flatten the user into a generic summary.
+- Do not erase provenance-bearing facts unless they are tangential.
+- Keep it to 1-2 sentences maximum.
+- If the memory contains a belief, boundary, promise, or principle, preserve it exactly enough to remain reviewable.
+- If the memory is already concise, return it unchanged.`;
 
 /**
  * Result of a softening operation on a single engram.
@@ -42,6 +44,20 @@ export interface SofteningResult {
   original_content: string;
   softened_content: string;
   original_hash: string;
+  dry_run: boolean;
+  proposal_id?: string;
+  applied: boolean;
+  validator_result: SofteningValidation;
+}
+
+export interface SofteningValidation {
+  valid: boolean;
+  reasons: string[];
+}
+
+export interface SofteningOptions {
+  dryRun?: boolean;
+  model?: string;
 }
 
 /**
@@ -112,7 +128,8 @@ async function findSofteningCandidates(
  */
 async function compressContent(
   content: string,
-  openrouterApiKey: string
+  openrouterApiKey: string,
+  model = "anthropic/claude-haiku-4.5",
 ): Promise<string> {
   const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -121,7 +138,7 @@ async function compressContent(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-haiku-4.5",
+      model,
       messages: [
         { role: "system", content: SOFTENING_SYSTEM_PROMPT },
         { role: "user", content: `Compress this memory to its essence:\n\n${content}` },
@@ -147,6 +164,43 @@ async function compressContent(
   return compressed;
 }
 
+function contentWords(value: string): Set<string> {
+  return new Set((value.toLowerCase().match(/[a-z0-9][a-z0-9'-]{3,}/g) ?? [])
+    .filter((word) => !["that", "this", "with", "from", "have", "they", "them", "user", "assistant", "memory"].includes(word)));
+}
+
+function preservesUncertainty(original: string, softened: string): boolean {
+  const uncertain = /\b(may|might|could|seems|seemed|appears|appeared|possibly|probably|maybe|unclear|uncertain)\b/i.test(original);
+  const absolute = /\b(always|never|definitely|certainly|proved|proves|must)\b/i.test(softened);
+  return !uncertain || !absolute;
+}
+
+export function validateSofteningProposal(original: string, softened: string): SofteningValidation {
+  const reasons: string[] = [];
+  const proposed = softened.trim();
+  if (!proposed) reasons.push("empty_proposal");
+  if (proposed.length >= original.trim().length) reasons.push("not_shorter");
+  if (proposed.length < 30) reasons.push("too_short");
+  if (!preservesUncertainty(original, proposed)) reasons.push("certainty_inflation");
+  if (/\b(the user had an? (important|meaningful) experience|something happened|important things?)\b/i.test(proposed)) {
+    reasons.push("generic_flattening");
+  }
+
+  const originalWords = contentWords(original);
+  const proposedWords = contentWords(proposed);
+  if (originalWords.size >= 6) {
+    let overlap = 0;
+    for (const word of proposedWords) {
+      if (originalWords.has(word)) overlap++;
+    }
+    if (overlap / Math.max(1, Math.min(originalWords.size, proposedWords.size)) < 0.25) {
+      reasons.push("low_content_overlap");
+    }
+  }
+
+  return { valid: reasons.length === 0, reasons };
+}
+
 /**
  * Run the softening cycle: find low-strength but connected engrams,
  * compress their content via LLM, and update them in place.
@@ -158,6 +212,7 @@ export async function runSofteningCycle(
   userId: string,
   openrouterApiKey: string,
   agentId = "luca",
+  options: SofteningOptions = {},
 ): Promise<SofteningResult[]> {
   const candidates = await findSofteningCandidates(supabase, userId, agentId);
 
@@ -171,10 +226,89 @@ export async function runSofteningCycle(
 
     try {
       const originalHash = simpleHash(engram.content);
-      const softened = await compressContent(engram.content, openrouterApiKey);
+      const model = options.model ?? "anthropic/claude-haiku-4.5";
+      const softened = await compressContent(engram.content, openrouterApiKey, model);
+      const validator = validateSofteningProposal(engram.content, softened);
 
       // Don't "soften" if the LLM returned something longer
-      if (softened.length >= engram.content.length) continue;
+      if (!validator.valid) {
+        const { data: proposal } = await supabase
+          .from("mnemos_softening_proposals")
+          .insert({
+            user_id: userId,
+            agent_id: agentId,
+            engram_id: engram.id,
+            original_content: engram.content,
+            proposed_content: softened,
+            original_hash: originalHash,
+            reason: "validator rejected proposal",
+            validator_result: validator,
+            model,
+            dry_run: true,
+            status: "rejected",
+            rejected_at: new Date().toISOString(),
+          })
+          .select("id")
+          .maybeSingle();
+        results.push({
+          engram_id: engram.id,
+          original_content: engram.content,
+          softened_content: softened,
+          original_hash: originalHash,
+          dry_run: true,
+          proposal_id: proposal?.id,
+          applied: false,
+          validator_result: validator,
+        });
+        continue;
+      }
+
+      const dryRun = options.dryRun !== false;
+      const { data: proposal, error: proposalError } = await supabase
+        .from("mnemos_softening_proposals")
+        .insert({
+          user_id: userId,
+          agent_id: agentId,
+          engram_id: engram.id,
+          original_content: engram.content,
+          proposed_content: softened,
+          original_hash: originalHash,
+          reason: "low-strength connected engram eligible for softening",
+          validator_result: validator,
+          model,
+          dry_run: dryRun,
+          status: dryRun ? "proposed" : "applied",
+          applied_at: dryRun ? null : new Date().toISOString(),
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (proposalError) {
+        console.error(`Softening: failed to record proposal for ${engram.id} — ${proposalError.message}`);
+        continue;
+      }
+
+      if (dryRun) {
+        await supabase.from("continuity_events").insert({
+          user_id: userId,
+          agent_id: agentId,
+          event_type: "softening_proposed",
+          subject_type: "engram",
+          subject_id: engram.id,
+          metadata: { proposal_id: proposal?.id ?? null, original_hash: originalHash },
+        });
+        results.push({
+          engram_id: engram.id,
+          original_content: engram.content,
+          softened_content: softened,
+          original_hash: originalHash,
+          dry_run: true,
+          proposal_id: proposal?.id,
+          applied: false,
+          validator_result: validator,
+        });
+        continue;
+      }
 
       const { error: updateError } = await supabase
         .from("engrams")
@@ -184,6 +318,7 @@ export async function runSofteningCycle(
             ...engram.source_context,
             softened_from_hash: originalHash,
             softened_at: new Date().toISOString(),
+            softening_proposal_id: proposal?.id ?? null,
             original_length: engram.content.length,
           },
           updated_at: new Date().toISOString(),
@@ -201,6 +336,18 @@ export async function runSofteningCycle(
         original_content: engram.content,
         softened_content: softened,
         original_hash: originalHash,
+        dry_run: false,
+        proposal_id: proposal?.id,
+        applied: true,
+        validator_result: validator,
+      });
+      await supabase.from("continuity_events").insert({
+        user_id: userId,
+        agent_id: agentId,
+        event_type: "softening_applied",
+        subject_type: "engram",
+        subject_id: engram.id,
+        metadata: { proposal_id: proposal?.id ?? null, original_hash: originalHash },
       });
     } catch (err) {
       console.error(`Softening: LLM compression failed for engram ${engram.id} —`, err);

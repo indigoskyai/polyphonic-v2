@@ -30,6 +30,7 @@ describe('navigation performance wiring', () => {
   it('prefetches high-frequency rail and settings route chunks', () => {
     expect(navigationAuditRoutes.rail).toEqual([
       '/chat',
+      '/groups',
       '/memory',
       '/research',
       '/mind',

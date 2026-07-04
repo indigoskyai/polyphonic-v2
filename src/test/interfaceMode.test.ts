@@ -103,12 +103,12 @@ describe('interface mode onboarding', () => {
 describe('Rail surface gating', () => {
   it('exposes the simplified companion surfaces, including Research', () => {
     const surfaces = getRailSurfaces('companion');
-    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'notebook', 'memory', 'research', 'agents']);
+    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'groups', 'notebook', 'memory', 'research', 'agents']);
   });
 
   it('exposes the same simplified surfaces in guided mode', () => {
     const surfaces = getRailSurfaces('guided');
-    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'notebook', 'memory', 'research', 'agents']);
+    expect(surfaces.map((s) => s.id)).toEqual(['chat', 'groups', 'notebook', 'memory', 'research', 'agents']);
   });
 
   it('exposes the full diagnostic map in studio mode (including Mind/Journal/Projects/Profile)', () => {

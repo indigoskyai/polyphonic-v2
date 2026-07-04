@@ -177,6 +177,15 @@ describe('Continuity Kernel write path', () => {
     expect(fetchCalls[2].body.source_message_id).toBe('a1');
     expect(fetchCalls.at(-1)?.auth).toBe('Bearer service-role');
     expect(fetchCalls.at(-1)?.body.chain_write).toHaveLength(2);
+    expect(report.operations).toContainEqual(expect.objectContaining({
+      name: 'mnemos_encode',
+      status: 'queued',
+      detail: expect.objectContaining({
+        decision: 'queued',
+        agent_ids: ['luca'],
+        source_message_id: 'a1',
+      }),
+    }));
 	  });
 
 	  it('keeps Classic Chat writes quiet except shared and model-family Mnemos encoding', () => {
@@ -339,6 +348,39 @@ describe('Continuity Kernel write path', () => {
       name: 'hypomnema_gate',
       status: 'skipped',
       reason: 'no service role',
+    }));
+  });
+
+  it('does not silently attribute missing agent context to Luca', () => {
+    const encoded: string[] = [];
+    const report = queueContinuityTurnWrites({
+      supabase: supabaseStub,
+      userId: 'u1',
+      threadId: 't1',
+      userMessage: 'this has no agent context',
+      agentResponse: 'that should not become Luca memory.',
+      pendingRevisions: [],
+    }, {
+      env: () => undefined,
+      encodeMnemosExchange: async (_supabase, _userId, agentId) => {
+        encoded.push(agentId);
+      },
+      updateThreadAgentMetadata: async () => {},
+      log: () => {},
+      warn: () => {},
+    });
+
+    expect(encoded).toEqual([]);
+    expect(report.agentId).toBe('');
+    expect(report.operations).toContainEqual(expect.objectContaining({
+      name: 'mnemos_encode',
+      status: 'skipped',
+      reason: 'no agent id',
+    }));
+    expect(report.operations).toContainEqual(expect.objectContaining({
+      name: 'thread_agent_metadata',
+      status: 'skipped',
+      reason: 'no agent id',
     }));
   });
 });

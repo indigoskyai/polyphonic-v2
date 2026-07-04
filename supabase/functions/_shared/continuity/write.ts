@@ -12,6 +12,19 @@ type SupabaseLike = {
 
 export type ContinuityWriteStatus = "queued" | "skipped" | "error";
 
+export type MnemosEncodeDecision = "queued" | "encoded" | "skipped" | "failed";
+
+export interface MnemosEncodeOperationDetail {
+  decision: MnemosEncodeDecision;
+  agent_id: string;
+  salience?: number;
+  skip_reason?: string;
+  force_reason?: string;
+  engram_id?: string | null;
+  source_message_id?: string | null;
+  error?: string;
+}
+
 export interface ContinuityWriteOperation {
   name:
     | "pending_revisions"
@@ -23,6 +36,7 @@ export interface ContinuityWriteOperation {
     | "thread_agent_metadata";
   status: ContinuityWriteStatus;
   reason?: string;
+  detail?: Record<string, unknown>;
 }
 
 export interface ContinuityObserverContribution {
@@ -65,7 +79,17 @@ export interface ContinuityWriteDeps {
   log?: (message: string, detail?: unknown) => void;
   warn?: (message: string, detail?: unknown) => void;
   finalizePendingRevisions?: typeof finalizePendingRevisions;
-  encodeMnemosExchange?: typeof encodeMnemosExchange;
+  encodeMnemosExchange?: (
+    supabase: SupabaseLike,
+    userId: string,
+    agentId: string,
+    userMessage: string,
+    assistantResponse: string,
+    apiKey?: string,
+    recentTurns?: Array<{ role: string; content: string }>,
+    sourceMessageId?: string | null,
+    threadId?: string | null,
+  ) => Promise<unknown> | unknown;
   updateThreadAgentMetadata?: typeof updateThreadAgentMetadata;
 }
 
@@ -73,10 +97,10 @@ export function queueContinuityTurnWrites(
   opts: ContinuityWriteOptions,
   deps: ContinuityWriteDeps = {},
 ): ContinuityWriteReport {
-    const agentId = opts.agentId || "luca";
+    const agentId = normalizeRequiredAgentId(opts.agentId);
     const runtimeProfile = opts.runtimeProfile === "classic" ? "classic" : "agent";
     const quietClassic = runtimeProfile === "classic";
-    const memoryAgentIds = normalizeMemoryAgentIds(agentId, opts.memoryAgentIds);
+    const memoryAgentIds = agentId ? normalizeMemoryAgentIds(agentId, opts.memoryAgentIds) : [];
     const operations: ContinuityWriteOperation[] = [];
   const log = deps.log || ((message: string, detail?: unknown) => console.log(message, detail ?? ""));
   const warn = deps.warn || ((message: string, detail?: unknown) => console.warn(message, detail ?? ""));
@@ -90,6 +114,7 @@ export function queueContinuityTurnWrites(
     enabled: boolean,
     reason: string,
     work: () => Promise<unknown> | unknown,
+    detail?: Record<string, unknown>,
   ) => {
     if (!enabled) {
       record({ name, status: "skipped", reason });
@@ -99,7 +124,7 @@ export function queueContinuityTurnWrites(
       Promise.resolve(work()).catch((err) => {
         warn(`[continuity.write] ${name} failed`, err);
       });
-      record({ name, status: "queued" });
+      record({ name, status: "queued", detail });
     } catch (err) {
       record({ name, status: "error", reason: err instanceof Error ? err.message : String(err) });
       warn(`[continuity.write] ${name} failed`, err);
@@ -125,8 +150,8 @@ export function queueContinuityTurnWrites(
 
     queue(
       "mnemos_encode",
-      hasTurn,
-      "empty turn",
+      hasTurn && memoryAgentIds.length > 0,
+      !hasTurn ? "empty turn" : "no agent id",
       () => Promise.all(memoryAgentIds.map((memoryAgentId) =>
         (deps.encodeMnemosExchange || encodeMnemosExchange)(
           opts.supabase,
@@ -137,14 +162,20 @@ export function queueContinuityTurnWrites(
           apiKey || undefined,
           stripCurrentTurnFromRecentTurns(opts.recentTurns || [], opts.userMessage, opts.agentResponse),
           opts.sourceMessageId ?? null,
+          opts.threadId,
         )
       )),
+      {
+        decision: "queued",
+        agent_ids: memoryAgentIds,
+        source_message_id: opts.sourceMessageId ?? null,
+      },
     );
 
     queue(
       "observer_watch",
-      !quietClassic && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
-      quietClassic ? "classic quiet runtime" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
+      !quietClassic && hasTurn && Boolean(agentId) && agentId !== "observer" && Boolean(opts.authHeader),
+      quietClassic ? "classic quiet runtime" : !agentId ? "no agent id" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("observer-watch", {
       thread_id: opts.threadId,
       agent_id: agentId,
@@ -154,8 +185,8 @@ export function queueContinuityTurnWrites(
 
     queue(
       "mnemos_dialectic",
-      !quietClassic && dialecticEnabled && hasTurn && agentId !== "observer" && Boolean(opts.authHeader),
-      quietClassic ? "classic quiet runtime" : !dialecticEnabled ? "dialectic disabled" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
+      !quietClassic && dialecticEnabled && hasTurn && Boolean(agentId) && agentId !== "observer" && Boolean(opts.authHeader),
+      quietClassic ? "classic quiet runtime" : !dialecticEnabled ? "dialectic disabled" : !agentId ? "no agent id" : agentId === "observer" ? "observer self-thread" : opts.authHeader ? "empty turn" : "no auth header",
     () => dispatchFunction("mnemos-dialectic", {
       thread_id: opts.threadId,
       agent_id: agentId,
@@ -184,11 +215,11 @@ export function queueContinuityTurnWrites(
     () => dispatchHypomnemaGate(opts, deps),
   );
 
-    const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)];
+    const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)].filter(Boolean);
     queue(
       "thread_agent_metadata",
-      !quietClassic && Boolean(opts.threadId),
-      quietClassic ? "classic quiet runtime" : "no thread id",
+      !quietClassic && Boolean(opts.threadId) && Boolean(agentId),
+      quietClassic ? "classic quiet runtime" : !agentId ? "no agent id" : "no thread id",
     () => (deps.updateThreadAgentMetadata || updateThreadAgentMetadata)(
       opts.supabase,
       opts.threadId,
@@ -197,7 +228,7 @@ export function queueContinuityTurnWrites(
     ),
   );
 
-  const report = { userId: opts.userId, threadId: opts.threadId, agentId, operations };
+  const report = { userId: opts.userId, threadId: opts.threadId, agentId: agentId ?? "", operations };
   log("[continuity.write] queued turn finalization", summarizeWriteReport(report));
   return report;
 }
@@ -211,18 +242,82 @@ export async function encodeMnemosExchange(
   apiKey?: string,
   recentTurns: Array<{ role: string; content: string }> = [],
   sourceMessageId?: string | null,
-): Promise<void> {
-  const mnemos = new MnemosEngine(supabase as any, userId, agentId || "luca");
+  threadId?: string | null,
+): Promise<MnemosEncodeOperationDetail> {
+  const resolvedAgentId = normalizeRequiredAgentId(agentId);
+  if (!resolvedAgentId) {
+    return {
+      decision: "failed",
+      agent_id: "",
+      source_message_id: sourceMessageId ?? null,
+      error: "missing agent id",
+    };
+  }
+
+  const mnemos = new MnemosEngine(supabase as any, userId, resolvedAgentId);
   const encoding = deriveMnemosExchangeEncodingContext(userMessage, assistantResponse, recentTurns);
-  await mnemos.encode(
-    `User: ${userMessage}\nAssistant: ${assistantResponse.slice(0, 500)}`,
-    {
-      engram_type: "episodic",
-      tags: encoding.tags,
-      source_context: { ...encoding.source_context, agent_id: agentId || "luca", source_message_id: sourceMessageId ?? null },
-      api_key: apiKey,
+  try {
+    const result = await mnemos.encode(
+      `User: ${userMessage}\nAssistant: ${assistantResponse.slice(0, 500)}`,
+      {
+        engram_type: "episodic",
+        tags: encoding.tags,
+        source_context: { ...encoding.source_context, agent_id: resolvedAgentId, source_message_id: sourceMessageId ?? null },
+        api_key: apiKey,
+      },
+    );
+    const detail: MnemosEncodeOperationDetail = {
+      decision: result.skipped ? "skipped" : "encoded",
+      agent_id: resolvedAgentId,
+      salience: result.salience,
+      skip_reason: result.skip_reason,
+      force_reason: result.skip_reason?.startsWith("forcing_tag:") ? result.skip_reason : undefined,
+      engram_id: result.engram?.id ?? null,
+      source_message_id: sourceMessageId ?? null,
+    };
+    await recordContinuityEncodeEvent(supabase, userId, resolvedAgentId, threadId ?? null, detail);
+    return detail;
+  } catch (err) {
+    const detail: MnemosEncodeOperationDetail = {
+      decision: "failed",
+      agent_id: resolvedAgentId,
+      source_message_id: sourceMessageId ?? null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+    await recordContinuityEncodeEvent(supabase, userId, resolvedAgentId, threadId ?? null, detail).catch(() => {});
+    return detail;
+  }
+}
+
+async function recordContinuityEncodeEvent(
+  supabase: SupabaseLike,
+  userId: string,
+  agentId: string,
+  threadId: string | null,
+  detail: MnemosEncodeOperationDetail,
+): Promise<void> {
+  const eventType = detail.decision === "encoded"
+    ? "encode_encoded"
+    : detail.decision === "skipped"
+      ? "encode_skipped"
+      : detail.decision === "failed"
+        ? "encode_failed"
+        : "encode_queued";
+  await supabase.from("continuity_events").insert({
+    user_id: userId,
+    agent_id: agentId,
+    thread_id: threadId,
+    event_type: eventType,
+    subject_type: "engram",
+    subject_id: detail.engram_id ?? null,
+    metadata: {
+      salience: detail.salience ?? null,
+      skip_reason: detail.skip_reason ?? null,
+      force_reason: detail.force_reason ?? null,
+      source_message_id: detail.source_message_id ?? null,
+      error: detail.error ?? null,
     },
-  );
+  });
 }
 
 export function deriveMnemosExchangeEncodingContext(
@@ -291,8 +386,16 @@ function normalizeMemoryAgentIds(agentId: string, memoryAgentIds?: string[]): st
   return [...new Set(ids.length > 0 ? ids : [agentId])];
 }
 
+function normalizeRequiredAgentId(agentId: string | null | undefined): string | null {
+  const normalized = String(agentId ?? "").trim();
+  return normalized || null;
+}
+
 export function buildHypomnemaGatePayload(opts: ContinuityWriteOptions): Record<string, unknown> {
-  const agentId = opts.agentId || "luca";
+  const agentId = normalizeRequiredAgentId(opts.agentId);
+  if (!agentId) {
+    throw new Error("missing agent id");
+  }
   const chainTargets: Array<Record<string, unknown>> = [
     {
       agent_id: agentId,

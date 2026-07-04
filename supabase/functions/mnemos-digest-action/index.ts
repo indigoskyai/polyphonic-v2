@@ -57,6 +57,7 @@ serve(async (req) => {
   const now = new Date().toISOString();
   let update: Record<string, unknown> = {
     reviewed_at: now,
+    reviewed_by: "user",
     review_note: patch?.review_note ?? null,
   };
 
@@ -125,6 +126,15 @@ serve(async (req) => {
     summary: (updated.content ?? "").slice(0, 160),
     content: { engram_id, action, digest_id: engram.digest_id },
     source: "user",
+  });
+
+  await supabase.from("continuity_events").insert({
+    user_id: auth.userId,
+    agent_id: engram.agent_id || "luca",
+    event_type: action === "reject" ? "digest_rejected" : action === "edit" ? "digest_distilled" : "digest_accepted",
+    subject_type: "engram",
+    subject_id: engram_id,
+    metadata: { action, digest_id: engram.digest_id },
   });
 
   return json({ ok: true, engram: updated }, 200, cors);

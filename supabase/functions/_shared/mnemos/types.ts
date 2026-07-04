@@ -21,7 +21,8 @@ export type ConnectionType =
   | "extends"
   | "parallels"
   | "synthesizes"
-  | "grounds";
+  | "grounds"
+  | "co_occurs";
 
 export type ConfidenceTier =
   | "conviction"
@@ -55,7 +56,13 @@ export interface Engram {
   // Lifecycle
   state: EngramState;
   last_accessed_at: string;
+  last_rehearsed_at?: string | null;
   access_count: number;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  review_decision?: string | null;
+  review_note?: string | null;
+  affect_source?: "model" | "heuristic" | "unknown";
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +75,7 @@ export interface Connection {
   source_id: string;
   target_id: string;
   connection_type: ConnectionType;
+  formed_by?: "explicit" | "heuristic" | "classifier" | "manual" | "import" | "unknown";
   weight: number;
   created_at: string;
 }

@@ -71,6 +71,47 @@ describe('DigestEngramCard', () => {
     expect(screen.queryByTitle('Agent: Luca')).not.toBeInTheDocument();
   });
 
+  it('separates Luca suggestions from final review attribution', () => {
+    render(
+      <DigestEngramCard
+        engram={digestEngram({
+          digest_suggestion_action: 'distill',
+          digest_suggestion_reason: 'High continuity value but should be shortened.',
+          digest_suggestion_confidence: 0.82,
+          digest_suggested_by: 'luca',
+          reviewed_at: '2026-06-28T21:00:00.000Z',
+          reviewed_by: 'user',
+          review_decision: 'confirmed',
+        })}
+        onConfirm={vi.fn()}
+        onReject={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/confirmed by user/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Luca suggests/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Luca preview suggestions on unreviewed digest rows', () => {
+    render(
+      <DigestEngramCard
+        engram={digestEngram({
+          digest_suggestion_action: 'keep',
+          digest_suggestion_reason: 'Strong signal for durable continuity.',
+          digest_suggestion_confidence: 0.76,
+          digest_suggested_by: 'luca',
+        })}
+        onConfirm={vi.fn()}
+        onReject={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Luca suggests keep/i)).toBeInTheDocument();
+    expect(screen.getByText(/Strong signal for durable continuity/i)).toBeInTheDocument();
+  });
+
   it('labels durable candidates by their scoped agent, not the Mnemos source', () => {
     useAgentScopeStore.setState({
       activeAgentId: 'quill',

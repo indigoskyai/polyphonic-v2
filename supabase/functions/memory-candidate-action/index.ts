@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
+import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 
 type Action = "pin" | "commit" | "edit" | "reject";
 
@@ -114,6 +115,31 @@ serve(async (req) => {
     if (memErr) {
       console.error("[memory-candidate-action] memories insert failed:", memErr);
       return json({ error: `memories insert: ${memErr.message}` }, 500, corsHeaders);
+    }
+
+    const source = (candidate.source ?? {}) as Record<string, unknown>;
+    if (typeof source.engram_id !== "string") {
+      try {
+        const mnemos = new MnemosEngine(admin as any, userId, candidate.agent_id || "luca");
+        await mnemos.encode(candidate.content, {
+          engram_type: "semantic",
+          tags: [
+            String(candidate.memory_type || "memory"),
+            action === "pin" ? "pinned" : "committed",
+            "manual",
+          ],
+          source_context: {
+            ...source,
+            type: "manual",
+            source: "memory_candidate_action",
+            candidate_id: candidate.id,
+            committed_via: action,
+            legacy_memory_compat: true,
+          },
+        });
+      } catch (err) {
+        console.warn("[memory-candidate-action] mnemos compatibility encode failed:", err);
+      }
     }
 
     const newStatus = action === "pin" ? "pinned" : "committed";

@@ -84,13 +84,19 @@ export const DEFAULT_MIN_ACTIVATION = 0.1;
 export const DEFAULT_RETRIEVAL_LIMIT = 20;
 
 /** Weight of strength in the activation formula. */
-export const ACTIVATION_STRENGTH_WEIGHT = 0.4;
+export const ACTIVATION_STRENGTH_WEIGHT = 0.35;
 
 /** Weight of recency in the activation formula. */
-export const ACTIVATION_RECENCY_WEIGHT = 0.3;
+export const ACTIVATION_RECENCY_WEIGHT = 0.2;
 
 /** Weight of relevance (semantic similarity) in the activation formula. */
-export const ACTIVATION_RELEVANCE_WEIGHT = 0.3;
+export const ACTIVATION_RELEVANCE_WEIGHT = 0.25;
+
+/** Weight of accessibility in the activation formula. */
+export const ACTIVATION_ACCESSIBILITY_WEIGHT = 0.2;
+
+/** Accessibility-backed floor for faint but still reachable traces. */
+export const TRACE_FLOOR = 0.4;
 
 /** Default spreading activation depth. */
 export const DEFAULT_SPREAD_DEPTH = 2;

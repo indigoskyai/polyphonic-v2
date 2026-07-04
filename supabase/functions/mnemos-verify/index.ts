@@ -114,6 +114,11 @@ serve(async (req) => {
   const stages: Record<string, unknown> = {};
   const issues: string[] = [];
 
+  stages.config = {
+    belief_llm_synthesis_enabled: (Deno.env.get("BELIEF_LLM_SYNTHESIS_ENABLED") || "").trim().toLowerCase() === "true",
+    belief_synthesis_autoactivate: (Deno.env.get("BELIEF_SYNTHESIS_AUTOACTIVATE") || "").trim().toLowerCase() === "true",
+  };
+
   // ---------------------------------------------------------------------
   // Stage 1: Encoding (salience gate)
   // ---------------------------------------------------------------------

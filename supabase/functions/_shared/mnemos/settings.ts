@@ -3,9 +3,11 @@
  *
  * Cron edge functions fetch these to gate processing and tune behavior:
  * - mnemos_enabled: master switch — skip user entirely when false
+ * - full_cognition_enabled: explicit opt-in for background cognition jobs
  * - decay_rate (0–100): multiplier on elapsed hours during decay (50 = 1.0×)
  * - dream_frequency: hourly | 6h | daily | weekly — gates consolidation cadence
  * - consolidation_enabled: skip consolidation when false (decay still runs)
+ * - softening_enabled / softening_dry_run: audited lossy-compression controls
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
@@ -15,16 +17,22 @@ export type DreamFrequency = "hourly" | "6h" | "daily" | "weekly";
 
 export interface MemorySettings {
   mnemos_enabled: boolean;
+  full_cognition_enabled: boolean;
   decay_rate: number;
   dream_frequency: DreamFrequency;
   consolidation_enabled: boolean;
+  softening_enabled: boolean;
+  softening_dry_run: boolean;
 }
 
 export const DEFAULT_SETTINGS: MemorySettings = {
   mnemos_enabled: true,
+  full_cognition_enabled: false,
   decay_rate: 50,
   dream_frequency: "daily",
   consolidation_enabled: true,
+  softening_enabled: false,
+  softening_dry_run: true,
 };
 
 export async function getMemorySettings(
@@ -33,16 +41,19 @@ export async function getMemorySettings(
 ): Promise<MemorySettings> {
   const { data } = await supabase
     .from("memory_settings")
-    .select("mnemos_enabled, decay_rate, dream_frequency, consolidation_enabled")
+    .select("mnemos_enabled, full_cognition_enabled, decay_rate, dream_frequency, consolidation_enabled, softening_enabled, softening_dry_run")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (!data) return DEFAULT_SETTINGS;
   return {
     mnemos_enabled: data.mnemos_enabled ?? DEFAULT_SETTINGS.mnemos_enabled,
+    full_cognition_enabled: data.full_cognition_enabled ?? DEFAULT_SETTINGS.full_cognition_enabled,
     decay_rate: data.decay_rate ?? DEFAULT_SETTINGS.decay_rate,
     dream_frequency: (data.dream_frequency as DreamFrequency) ?? DEFAULT_SETTINGS.dream_frequency,
     consolidation_enabled: data.consolidation_enabled ?? DEFAULT_SETTINGS.consolidation_enabled,
+    softening_enabled: data.softening_enabled ?? DEFAULT_SETTINGS.softening_enabled,
+    softening_dry_run: data.softening_dry_run ?? DEFAULT_SETTINGS.softening_dry_run,
   };
 }
 

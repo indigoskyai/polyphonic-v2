@@ -9,6 +9,8 @@ import {
   computeDurableCandidateConfidence,
   inferDurableCandidateMemoryType,
 } from "../../supabase/functions/_shared/mnemos/consolidation";
+import { computeSeedActivation } from "../../supabase/functions/_shared/mnemos/retrieval";
+import { validateSofteningProposal } from "../../supabase/functions/_shared/mnemos/softening";
 import type { Engram } from "../../supabase/functions/_shared/mnemos/types";
 
 describe("mnemos salience gate", () => {
@@ -217,5 +219,74 @@ describe("mnemos durable candidate bridge", () => {
     }));
 
     expect(draft).toBeNull();
+  });
+});
+
+describe("mnemos retrieval activation", () => {
+  const engram = (overrides: Partial<Engram> = {}): Engram => ({
+    id: "engram-1",
+    user_id: "user-1",
+    agent_id: "agent-1",
+    content: "The user values quiet continuity work.",
+    engram_type: "semantic",
+    strength: 0.8,
+    stability: 0.75,
+    accessibility: 0.7,
+    emotional_valence: 0.2,
+    emotional_arousal: 0.2,
+    surprise_score: 0.2,
+    source_context: {},
+    tags: ["continuity"],
+    state: "active",
+    last_accessed_at: "2026-06-28T00:00:00.000Z",
+    access_count: 4,
+    created_at: "2026-06-28T00:00:00.000Z",
+    updated_at: "2026-06-28T00:00:00.000Z",
+    ...overrides,
+  });
+
+  it("lets accessibility matter when ranking otherwise similar engrams", () => {
+    const lowStrengthAccessible = engram({
+      id: "accessible",
+      strength: 0.34,
+      accessibility: 0.95,
+      last_accessed_at: "2026-06-28T00:00:00.000Z",
+    });
+    const highStrengthInaccessible = engram({
+      id: "inaccessible",
+      strength: 0.46,
+      accessibility: 0.02,
+      last_accessed_at: "2026-06-28T00:00:00.000Z",
+    });
+
+    expect(computeSeedActivation(lowStrengthAccessible, 0.5))
+      .toBeGreaterThan(computeSeedActivation(highStrengthInaccessible, 0.5));
+  });
+});
+
+describe("mnemos softening conservator", () => {
+  const original = "Riley said the Knights Radiant quiz result seemed meaningful because Edgedancer matched his care for ordinary continuity and overlooked people.";
+
+  it("rejects proposals that flatten specific content", () => {
+    const result = validateSofteningProposal(original, "The user had an important experience.");
+
+    expect(result.valid).toBe(false);
+    expect(result.reasons).toContain("generic_flattening");
+  });
+
+  it("rejects proposals that convert uncertainty into certainty", () => {
+    const result = validateSofteningProposal(original, "The Knights Radiant quiz definitely proves Riley is an Edgedancer.");
+
+    expect(result.valid).toBe(false);
+    expect(result.reasons).toContain("certainty_inflation");
+  });
+
+  it("accepts shorter proposals that preserve concrete anchors", () => {
+    const result = validateSofteningProposal(
+      original,
+      "Riley linked the Knights Radiant quiz to Edgedancer, continuity, and care for overlooked people.",
+    );
+
+    expect(result.valid).toBe(true);
   });
 });

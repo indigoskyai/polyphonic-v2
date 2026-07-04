@@ -20,16 +20,22 @@ type DreamFreq = 'hourly' | '6h' | 'daily' | 'weekly';
 
 interface MemorySettings {
   mnemos_enabled: boolean;
+  full_cognition_enabled: boolean;
   decay_rate: number;
   dream_frequency: DreamFreq;
   consolidation_enabled: boolean;
+  softening_enabled: boolean;
+  softening_dry_run: boolean;
 }
 
 const DEFAULTS: MemorySettings = {
   mnemos_enabled: true,
+  full_cognition_enabled: false,
   decay_rate: 50,
   dream_frequency: 'daily',
   consolidation_enabled: true,
+  softening_enabled: false,
+  softening_dry_run: true,
 };
 
 /**
@@ -58,16 +64,19 @@ export default function MemorySettingsPanel() {
     (async () => {
       const { data } = await supabase
         .from('memory_settings')
-        .select('mnemos_enabled, decay_rate, dream_frequency, consolidation_enabled')
+        .select('mnemos_enabled, full_cognition_enabled, decay_rate, dream_frequency, consolidation_enabled, softening_enabled, softening_dry_run')
         .eq('user_id', user.id)
         .maybeSingle();
       if (cancelled) return;
       if (data) {
         setSettings({
           mnemos_enabled: data.mnemos_enabled ?? DEFAULTS.mnemos_enabled,
+          full_cognition_enabled: data.full_cognition_enabled ?? DEFAULTS.full_cognition_enabled,
           decay_rate: data.decay_rate ?? DEFAULTS.decay_rate,
           dream_frequency: (data.dream_frequency as DreamFreq) ?? DEFAULTS.dream_frequency,
           consolidation_enabled: data.consolidation_enabled ?? DEFAULTS.consolidation_enabled,
+          softening_enabled: data.softening_enabled ?? DEFAULTS.softening_enabled,
+          softening_dry_run: data.softening_dry_run ?? DEFAULTS.softening_dry_run,
         });
       } else {
         // Row should exist via trigger but backfill defensively
@@ -188,6 +197,16 @@ export default function MemorySettingsPanel() {
         <Toggle on={settings.mnemos_enabled} onChange={() => update('mnemos_enabled', !settings.mnemos_enabled)} />
       </SettingRow>
 
+      <SettingRow
+        label="Full cognition"
+        description="Opt in to background Mnemos cognition: dreaming, rehearsal, digest review, and belief maintenance"
+      >
+        <Toggle
+          on={settings.full_cognition_enabled}
+          onChange={() => update('full_cognition_enabled', !settings.full_cognition_enabled)}
+        />
+      </SettingRow>
+
       <SettingRow label="Memory decay rate" description="How quickly older memories fade (50 = baseline)">
         <div className="flex items-center gap-3 shrink-0">
           <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Slow</span>
@@ -233,6 +252,20 @@ export default function MemorySettingsPanel() {
         <Toggle
           on={settings.consolidation_enabled}
           onChange={() => update('consolidation_enabled', !settings.consolidation_enabled)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Enable softening" description="Allow Mnemos to propose compressed forms for old connected memories">
+        <Toggle
+          on={settings.softening_enabled}
+          onChange={() => update('softening_enabled', !settings.softening_enabled)}
+        />
+      </SettingRow>
+
+      <SettingRow label="Softening dry run" description="Store softening proposals for review without changing memory content">
+        <Toggle
+          on={settings.softening_dry_run}
+          onChange={() => update('softening_dry_run', !settings.softening_dry_run)}
         />
       </SettingRow>
 

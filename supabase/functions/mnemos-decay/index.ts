@@ -28,6 +28,9 @@ serve(async (req) => {
       if (!settings.mnemos_enabled) {
         return { skipped: true, reason: "mnemos_disabled" };
       }
+      if (!settings.full_cognition_enabled) {
+        return { skipped: true, reason: "full_cognition_disabled" };
+      }
       const engine = new MnemosEngine(supabase, uid, agentId);
       return engine.decay({
         min_hours_since_access: 1,

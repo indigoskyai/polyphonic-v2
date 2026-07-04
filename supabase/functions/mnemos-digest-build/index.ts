@@ -20,6 +20,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { authenticateUser } from "../_shared/openclaw/auth.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
+import { getMemorySettings } from "../_shared/mnemos/settings.ts";
 
 const MAX_ENGRAMS_PER_DIGEST = 30;
 
@@ -27,7 +28,36 @@ interface EngramRow {
   id: string;
   engram_type: string;
   surprise_score: number | null;
+  emotional_arousal: number | null;
+  emotional_valence: number | null;
+  strength: number | null;
+  stability: number | null;
+  tags: string[] | null;
   created_at: string;
+}
+
+const SENSITIVE_DIGEST_TAGS = new Set([
+  "crisis",
+  "self_harm",
+  "suicide",
+  "trauma",
+  "abuse",
+  "medical",
+  "legal",
+  "financial",
+  "identity",
+  "boundary",
+]);
+
+function digestPriority(row: EngramRow): number {
+  const surprise = Math.max(0, Math.min(1, Number(row.surprise_score ?? 0)));
+  const arousal = Math.max(0, Math.min(1, Math.abs(Number(row.emotional_arousal ?? 0))));
+  const valence = Math.max(0, Math.min(1, Math.abs(Number(row.emotional_valence ?? 0))));
+  const strength = Math.max(0, Math.min(1, Number(row.strength ?? 0)));
+  const stability = Math.max(0, Math.min(1, Number(row.stability ?? 0)));
+  const tags = (row.tags ?? []).map((tag) => tag.toLowerCase());
+  const sensitive = tags.some((tag) => SENSITIVE_DIGEST_TAGS.has(tag)) ? 0.25 : 0;
+  return (surprise * 0.34) + (arousal * 0.22) + (valence * 0.12) + (strength * 0.18) + (stability * 0.14) + sensitive;
 }
 
 async function buildForUser(supabase: SupabaseClient, userId: string) {
@@ -35,33 +65,34 @@ async function buildForUser(supabase: SupabaseClient, userId: string) {
 }
 
 async function buildForAgent(supabase: SupabaseClient, userId: string, agentId: string) {
-  // Skip if user disabled mnemos
-  const { data: settings } = await supabase
-    .from("memory_settings")
-    .select("mnemos_enabled")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (settings && settings.mnemos_enabled === false) {
+  const settings = await getMemorySettings(supabase, userId);
+  if (!settings.mnemos_enabled) {
     return { skipped: true, reason: "mnemos_disabled" };
+  }
+  if (!settings.full_cognition_enabled) {
+    return { skipped: true, reason: "full_cognition_disabled" };
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  // Pick today's unreviewed engrams (active or consolidating) by recency window
+  // Pick today's unreviewed engrams (active or consolidating) by a deterministic
+  // composite priority instead of surprise alone.
   const { data: engrams, error } = await supabase
     .from("engrams")
-    .select("id, engram_type, surprise_score, created_at")
+    .select("id, engram_type, surprise_score, emotional_arousal, emotional_valence, strength, stability, tags, created_at")
     .eq("user_id", userId)
     .eq("agent_id", agentId)
     .is("reviewed_at", null)
     .in("state", ["active", "consolidating"])
     .gte("created_at", since)
-    .order("surprise_score", { ascending: false, nullsFirst: false })
-    .limit(MAX_ENGRAMS_PER_DIGEST);
+    .order("created_at", { ascending: false })
+    .limit(MAX_ENGRAMS_PER_DIGEST * 4);
 
   if (error) throw error;
-  const rows = (engrams ?? []) as EngramRow[];
+  const rows = ((engrams ?? []) as EngramRow[])
+    .sort((a, b) => digestPriority(b) - digestPriority(a))
+    .slice(0, MAX_ENGRAMS_PER_DIGEST);
 
   // Upsert today's digest row
   const { data: digestRow, error: digestErr } = await supabase

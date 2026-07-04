@@ -16,6 +16,7 @@ import type {
 } from "./types.ts";
 
 import {
+  ACTIVATION_ACCESSIBILITY_WEIGHT,
   ACTIVATION_RECENCY_WEIGHT,
   ACTIVATION_RELEVANCE_WEIGHT,
   ACTIVATION_STRENGTH_WEIGHT,
@@ -23,7 +24,7 @@ import {
   DEFAULT_RETRIEVAL_LIMIT,
   DEFAULT_SPREAD_DEPTH,
   SPREAD_DECAY_FACTOR,
-  STABILITY_GROWTH_FACTOR,
+  TRACE_FLOOR,
 } from "./constants.ts";
 
 import type { MnemosEngine } from "./engine.ts";
@@ -43,6 +44,7 @@ const SPREAD_WEIGHTS: Record<ConnectionType, number> = {
   parallels: 0.7,
   synthesizes: 1.0,
   grounds: 0.8,
+  co_occurs: 0.4,
 };
 
 // ---------------------------------------------------------------------------
@@ -50,18 +52,21 @@ const SPREAD_WEIGHTS: Record<ConnectionType, number> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Compute activation score for a seed engram based on strength, recency,
- * and semantic relevance (similarity score from the database).
+ * Compute activation score for a seed engram based on strength, accessibility,
+ * recency, and semantic relevance (similarity score from the database).
  */
-function computeSeedActivation(engram: Engram, similarity: number): number {
+export function computeSeedActivation(engram: Engram, similarity: number): number {
   const hoursSinceAccess =
     (Date.now() - new Date(engram.last_accessed_at).getTime()) / 3_600_000;
 
   // Recency decays exponentially — more recent = higher score
   const recency = Math.exp(-0.01 * hoursSinceAccess);
+  const accessibility = Math.min(1, Math.max(0, engram.accessibility ?? 0));
+  const effectiveStrength = Math.max(engram.strength ?? 0, TRACE_FLOOR * accessibility);
 
   const activation =
-    ACTIVATION_STRENGTH_WEIGHT * engram.strength +
+    ACTIVATION_STRENGTH_WEIGHT * effectiveStrength +
+    ACTIVATION_ACCESSIBILITY_WEIGHT * accessibility +
     ACTIVATION_RECENCY_WEIGHT * recency +
     ACTIVATION_RELEVANCE_WEIGHT * similarity;
 
@@ -155,8 +160,35 @@ export async function retrieve(
 
   // ── Step 5: Reconsolidate — update accessibility trace ─────────────────
   await reconsolidate(supabase, results);
+  await logRecallHits(supabase, userId, agentId, results);
 
   return results;
+}
+
+async function logRecallHits(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
+  supabase: { from: (table: string) => any },
+  userId: string,
+  agentId: string,
+  results: ActivationResult[],
+): Promise<void> {
+  if (results.length === 0) return;
+  const rows = results.slice(0, 10).map((result) => ({
+    user_id: userId,
+    agent_id: agentId,
+    event_type: "recall_hit",
+    subject_type: "engram",
+    subject_id: result.engram.id,
+    metadata: {
+      activation: result.activation,
+      path: result.path,
+      connection_depth: result.spread_chain?.length ?? 0,
+    },
+  }));
+  const { error } = await supabase.from("continuity_events").insert(rows);
+  if (error) {
+    console.warn("[mnemos.retrieve] recall ledger insert failed:", error.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -313,39 +345,19 @@ async function reconsolidate(
 ): Promise<void> {
   if (results.length === 0) return;
 
-  const now = new Date().toISOString();
+  const ids = [...new Set(results.map((r) => r.engram.id).filter(Boolean))];
+  const first = results[0]?.engram;
+  if (!first || ids.length === 0) return;
 
-  // Batch update — one query per engram (Supabase doesn't support
-  // batch upsert with computed columns easily, so we fire in parallel).
-  const updates = results.map((r) => {
-    const newStability = Math.min(
-      1.0,
-      r.engram.stability + STABILITY_GROWTH_FACTOR * (1 - r.engram.stability),
-    );
-    const newAccessibility = Math.min(1.0, r.engram.accessibility + 0.1);
-    // Canonical reconsolidation also strengthens the long-lived storage trace on a
-    // successful retrieval (+0.05). Without it, strength is one-way-down (decay only),
-    // so a recalled memory never gains durability — part of why so much sits weak/unread.
-    const newStrength = Math.min(1.0, r.engram.strength + 0.05);
-
-    return supabase
-      .from("engrams")
-      .update({
-        last_accessed_at: now,
-        access_count: r.engram.access_count + 1,
-        strength: newStrength,
-        stability: newStability,
-        accessibility: newAccessibility,
-        // Move dormant engrams back to active on access
-        ...(r.engram.state === "dormant" ? { state: "active" } : {}),
-      })
-      .eq("id", r.engram.id)
-      .eq("user_id", r.engram.user_id)
-      .eq("agent_id", r.engram.agent_id);
+  const { error } = await supabase.rpc("mnemos_reconsolidate", {
+    p_engram_ids: ids,
+    p_user_id: first.user_id,
+    p_agent_id: first.agent_id,
   });
 
-  // Fire all updates concurrently — don't block on individual results
-  await Promise.allSettled(updates);
+  if (error) {
+    console.warn("[mnemos.retrieve] reconsolidation rpc failed:", error.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +486,7 @@ function seedToEngram(
   return {
     id: seed.id,
     user_id: seed.user_id,
-    agent_id: seed.agent_id || "luca",
+    agent_id: requireSeedAgentId(seed),
     content: seed.content,
     engram_type: seed.engram_type,
     strength: seed.strength ?? 0.5,
@@ -491,4 +503,11 @@ function seedToEngram(
     created_at: seed.created_at ?? new Date().toISOString(),
     updated_at: seed.updated_at ?? new Date().toISOString(),
   };
+}
+
+function requireSeedAgentId(seed: { agent_id?: unknown; id?: unknown }): string {
+  if (typeof seed.agent_id === "string" && seed.agent_id.trim()) {
+    return seed.agent_id;
+  }
+  throw new Error(`match_engrams returned seed without agent_id: ${String(seed.id ?? "unknown")}`);
 }

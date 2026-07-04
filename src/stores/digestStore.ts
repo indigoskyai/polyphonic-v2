@@ -38,7 +38,14 @@ export interface DigestEngram {
   state: string;
   digest_id: string | null;
   reviewed_at: string | null;
+  reviewed_by: string | null;
   review_decision: string | null;
+  digest_suggestion_action: 'keep' | 'release' | 'distill' | null;
+  digest_suggestion_reason: string | null;
+  digest_suggestion_confidence: number | null;
+  digest_suggested_by: string | null;
+  digest_suggestion_model: string | null;
+  digest_suggestion_generated_at: string | null;
   created_at: string;
 }
 
@@ -172,14 +179,14 @@ export const useDigestStore = create<DigestState>((set, get) => ({
 
   confirm: async (id) => {
     const prev = get().engrams;
-    set({ engrams: prev.map((e) => e.id === id ? { ...e, review_decision: 'confirmed', reviewed_at: new Date().toISOString() } : e) });
+    set({ engrams: prev.map((e) => e.id === id ? { ...e, review_decision: 'confirmed', reviewed_by: 'user', reviewed_at: new Date().toISOString() } : e) });
     try { await callAction(id, 'confirm'); }
     catch { set({ engrams: prev }); }
   },
 
   reject: async (id) => {
     const prev = get().engrams;
-    set({ engrams: prev.map((e) => e.id === id ? { ...e, review_decision: 'rejected', reviewed_at: new Date().toISOString() } : e) });
+    set({ engrams: prev.map((e) => e.id === id ? { ...e, review_decision: 'rejected', reviewed_by: 'user', reviewed_at: new Date().toISOString() } : e) });
     try { await callAction(id, 'reject'); }
     catch { set({ engrams: prev }); }
   },

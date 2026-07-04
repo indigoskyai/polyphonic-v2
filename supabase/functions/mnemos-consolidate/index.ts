@@ -97,6 +97,10 @@ serve(async (req) => {
         console.log("[mnemos-consolidate] skipped", { user_id: uid, reason: "mnemos_disabled", force });
         return { skipped: true, reason: "mnemos_disabled" };
       }
+      if (!settings.full_cognition_enabled) {
+        console.log("[mnemos-consolidate] skipped", { user_id: uid, reason: "full_cognition_disabled", force });
+        return { skipped: true, reason: "full_cognition_disabled" };
+      }
       if (!settings.consolidation_enabled) {
         console.log("[mnemos-consolidate] skipped", { user_id: uid, reason: "consolidation_disabled", force });
         return { skipped: true, reason: "consolidation_disabled" };
@@ -158,7 +162,6 @@ serve(async (req) => {
         memory_candidates_created: userResult.memory_candidates_created ?? 0,
         new_connections: userResult.new_connections ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
-        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         duration_ms: userResult.duration_ms ?? 0,
       }, agentId);
 
@@ -174,7 +177,6 @@ serve(async (req) => {
         connections_strengthened: userResult.connections_strengthened ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
         strengthened: userResult.strengthened ?? 0,
-        memory_candidates_created: userResult.memory_candidates_created ?? 0,
         duration_ms: userResult.duration_ms ?? 0,
       });
 

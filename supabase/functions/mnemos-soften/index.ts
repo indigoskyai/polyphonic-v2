@@ -4,6 +4,8 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { requireServiceRole } from "../_shared/serviceRoleGuard.ts";
 import { recordCronSuccess, recordCronFailure } from "../_shared/cronHealth.ts";
 import { runSofteningCycle } from "../_shared/mnemos/softening.ts";
+import { getMemorySettings } from "../_shared/mnemos/settings.ts";
+import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -22,24 +24,37 @@ serve(async (req) => {
     const userId = body.user_id;
     const requestedAgentId = typeof body.agent_id === "string" ? body.agent_id : null;
 
-    // Get OpenRouter API key for LLM compression
-    let apiKey: string | null = null;
-    if (userId) {
-      const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
-      if (userKeyData) apiKey = userKeyData;
-    }
-    // No platform fallback — user must have their own key
-
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No API key configured. User must add their OpenRouter key in Settings." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     if (userId) {
       const agentId = requestedAgentId || "luca";
-      const results = await runSofteningCycle(supabase, userId, apiKey, agentId);
+      const settings = await getMemorySettings(supabase, userId);
+      if (!settings.mnemos_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: "mnemos_disabled" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!settings.full_cognition_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: "full_cognition_disabled" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!settings.softening_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: "softening_disabled" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: userKeyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
+      const apiKey = (userKeyData as string | null) ?? null;
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: "No API key configured. User must add their OpenRouter key in Settings." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const model = await resolveRoleModel(supabase, userId, agentId, "mechanical");
+      const results = await runSofteningCycle(supabase, userId, apiKey, agentId, {
+        dryRun: settings.softening_dry_run,
+        model,
+      });
       await recordCronSuccess("mnemos-soften", Date.now() - __jobStart);
       return new Response(JSON.stringify({ success: true, agent_id: agentId, softened: results.length, results }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -61,11 +76,31 @@ serve(async (req) => {
 
     for (const scope of uniqueScopes) {
       try {
-        let userApiKey = apiKey;
+        const settings = await getMemorySettings(supabase, scope.userId);
+        if (!settings.mnemos_enabled) {
+          allResults[`${scope.userId}:${scope.agentId}`] = { skipped: true, reason: "mnemos_disabled" };
+          continue;
+        }
+        if (!settings.full_cognition_enabled) {
+          allResults[`${scope.userId}:${scope.agentId}`] = { skipped: true, reason: "full_cognition_disabled" };
+          continue;
+        }
+        if (!settings.softening_enabled) {
+          allResults[`${scope.userId}:${scope.agentId}`] = { skipped: true, reason: "softening_disabled" };
+          continue;
+        }
         const { data: keyData } = await supabase.rpc("decrypt_user_api_key", { p_user_id: scope.userId });
-        if (keyData) userApiKey = keyData;
+        const userApiKey = (keyData as string | null) ?? null;
+        if (!userApiKey) {
+          allResults[`${scope.userId}:${scope.agentId}`] = { skipped: true, reason: "no_api_key" };
+          continue;
+        }
 
-        const results = await runSofteningCycle(supabase, scope.userId, userApiKey!, scope.agentId);
+        const model = await resolveRoleModel(supabase, scope.userId, scope.agentId, "mechanical");
+        const results = await runSofteningCycle(supabase, scope.userId, userApiKey, scope.agentId, {
+          dryRun: settings.softening_dry_run,
+          model,
+        });
         allResults[`${scope.userId}:${scope.agentId}`] = { softened: results.length };
       } catch (e) {
         allResults[`${scope.userId}:${scope.agentId}`] = { error: (e as Error).message };

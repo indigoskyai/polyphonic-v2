@@ -143,3 +143,50 @@ Do not delete rows. The repair SQL should only update rows with direct provenanc
 - Proactive outreach remains gated separately by `proactive_autonomy`.
 - `luca-pulse` queued work should preserve `agent_id` instead of defaulting activity to Luca.
 - Non-observer custom agents can queue dialectic/belief work.
+
+### 5. Deploy Polyphonic Mnemos repair contracts
+
+Prompt Lovable:
+
+```text
+Please deploy the Polyphonic Mnemos repair slice.
+
+Apply this migration first:
+- supabase/migrations/20260704120000_mnemos_repair_contracts.sql
+
+Deploy these edge functions/shared modules:
+- supabase/functions/_shared/mnemos/constants.ts
+- supabase/functions/_shared/mnemos/types.ts
+- supabase/functions/_shared/mnemos/encoding.ts
+- supabase/functions/_shared/mnemos/retrieval.ts
+- supabase/functions/_shared/mnemos/consolidation.ts
+- supabase/functions/_shared/mnemos/settings.ts
+- supabase/functions/_shared/mnemos/softening.ts
+- supabase/functions/_shared/continuity/write.ts
+- supabase/functions/mnemos-consolidate/index.ts
+- supabase/functions/mnemos-decay/index.ts
+- supabase/functions/mnemos-digest-build/index.ts
+- supabase/functions/mnemos-digest-action/index.ts
+- supabase/functions/mnemos-digest-suggest/index.ts
+- supabase/functions/mnemos-soften/index.ts
+- supabase/functions/mnemos-verify/index.ts
+- supabase/functions/memory-candidate-action/index.ts
+
+Confirm these flags/secrets without revealing values:
+- BELIEF_LLM_SYNTHESIS_ENABLED=true
+- BELIEF_SYNTHESIS_AUTOACTIVATE, if intentionally enabled
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_ANON_KEY
+
+After deployment, confirm:
+- memory_settings.full_cognition_enabled exists and defaults false
+- mnemos_cohort() returns only users with BYOK plus full_cognition_enabled=true
+- mnemos_run_rehearsal_cohort() no longer updates last_accessed_at or accessibility
+- mnemos_reconsolidate(uuid[], uuid, text) exists
+- connections allows connection_type='co_occurs' and has formed_by
+- digest review writes reviewed_by
+- mnemos_softening_proposals and continuity_events exist
+
+Do not rewrite git history or change repository visibility from this prompt. The historical UUID/username/email exposure needs a separate explicit Riley approval for history rewrite or privatization.
+```

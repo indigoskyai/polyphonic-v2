@@ -29,6 +29,13 @@ function rationaleFor(e: DigestEngram): string {
   return reasons.join(' · ');
 }
 
+function suggestionLabel(action: DigestEngram['digest_suggestion_action']): string {
+  if (action === 'keep') return 'Luca suggests keep';
+  if (action === 'release') return 'Luca suggests release';
+  if (action === 'distill') return 'Luca suggests distill';
+  return '';
+}
+
 const BUILT_IN_AGENT_LABELS: Record<string, string> = {
   luca: 'Luca',
   vektor: 'Vektor',
@@ -91,12 +98,23 @@ export default function DigestEngramCard({ engram, onConfirm, onReject, onEdit }
 
       <p className="mn-cand-reason">{rationaleFor(engram)}</p>
 
+      {engram.digest_suggestion_action && !reviewed && (
+        <p className="mn-cand-reason">
+          {suggestionLabel(engram.digest_suggestion_action)}
+          {typeof engram.digest_suggestion_confidence === 'number' && (
+            <> ({Math.round(engram.digest_suggestion_confidence * 100)}%)</>
+          )}
+          {engram.digest_suggestion_reason ? `: ${engram.digest_suggestion_reason}` : ''}
+        </p>
+      )}
+
       <div className="mn-cand-actions">
         {reviewed ? (
           <span className="mn-cand-decision" data-decision={decision}>
             {decision === 'confirmed' && '✓ confirmed'}
             {decision === 'rejected' && '× discarded'}
             {decision === 'edited' && '✎ edited'}
+            {engram.reviewed_by ? ` by ${engram.reviewed_by}` : ''}
           </span>
         ) : editing ? (
           <>
