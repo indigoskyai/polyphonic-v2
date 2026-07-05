@@ -2995,6 +2995,7 @@ export type Database = {
           id: string
           recorded_at: string | null
           social: number | null
+          source_context: Json
           temporal: number | null
           user_id: string
           valence: number | null
@@ -3007,6 +3008,7 @@ export type Database = {
           id?: string
           recorded_at?: string | null
           social?: number | null
+          source_context?: Json
           temporal?: number | null
           user_id: string
           valence?: number | null
@@ -3019,6 +3021,7 @@ export type Database = {
           id?: string
           recorded_at?: string | null
           social?: number | null
+          source_context?: Json
           temporal?: number | null
           user_id?: string
           valence?: number | null
