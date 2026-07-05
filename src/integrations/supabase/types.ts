@@ -1317,42 +1317,6 @@ export type Database = {
           },
         ]
       }
-      continuity_events: {
-        Row: {
-          agent_id: string
-          created_at: string
-          event_type: string
-          id: string
-          metadata: Json
-          subject_id: string | null
-          subject_type: string | null
-          thread_id: string | null
-          user_id: string
-        }
-        Insert: {
-          agent_id?: string
-          created_at?: string
-          event_type: string
-          id?: string
-          metadata?: Json
-          subject_id?: string | null
-          subject_type?: string | null
-          thread_id?: string | null
-          user_id: string
-        }
-        Update: {
-          agent_id?: string
-          created_at?: string
-          event_type?: string
-          id?: string
-          metadata?: Json
-          subject_id?: string | null
-          subject_type?: string | null
-          thread_id?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       continuity_turn_jobs: {
         Row: {
           agent_id: string
@@ -1845,8 +1809,8 @@ export type Database = {
         Row: {
           access_count: number | null
           accessibility: number
-          agent_id: string
           affect_source: string
+          agent_id: string
           content: string
           created_at: string | null
           digest_id: string | null
@@ -1881,8 +1845,8 @@ export type Database = {
         Insert: {
           access_count?: number | null
           accessibility?: number
-          agent_id?: string
           affect_source?: string
+          agent_id?: string
           content: string
           created_at?: string | null
           digest_id?: string | null
@@ -1917,8 +1881,8 @@ export type Database = {
         Update: {
           access_count?: number | null
           accessibility?: number
-          agent_id?: string
           affect_source?: string
+          agent_id?: string
           content?: string
           created_at?: string | null
           digest_id?: string | null
@@ -4761,8 +4725,8 @@ export type Database = {
         Returns: boolean
       }
       mnemos_reconsolidate: {
-        Args: { p_child_ids: string[]; p_merged_id: string; p_summary: string }
-        Returns: Json
+        Args: { p_agent_id: string; p_engram_ids: string[]; p_user_id: string }
+        Returns: number
       }
       mnemos_rehearse_scope: {
         Args: {
