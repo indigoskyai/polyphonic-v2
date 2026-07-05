@@ -1317,6 +1317,42 @@ export type Database = {
           },
         ]
       }
+      continuity_events: {
+        Row: {
+          agent_id: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          subject_id: string | null
+          subject_type: string | null
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          subject_id?: string | null
+          subject_type?: string | null
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          subject_id?: string | null
+          subject_type?: string | null
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       continuity_turn_jobs: {
         Row: {
           agent_id: string
@@ -3093,6 +3129,77 @@ export type Database = {
           values_json?: Json
         }
         Relationships: []
+      }
+      mnemos_softening_proposals: {
+        Row: {
+          accepted_at: string | null
+          agent_id: string
+          applied_at: string | null
+          created_at: string
+          dry_run: boolean
+          engram_id: string
+          id: string
+          model: string | null
+          original_content: string
+          original_hash: string
+          proposed_content: string
+          reason: string | null
+          rejected_at: string | null
+          source: string
+          status: string
+          updated_at: string
+          user_id: string
+          validator_result: Json
+        }
+        Insert: {
+          accepted_at?: string | null
+          agent_id?: string
+          applied_at?: string | null
+          created_at?: string
+          dry_run?: boolean
+          engram_id: string
+          id?: string
+          model?: string | null
+          original_content: string
+          original_hash: string
+          proposed_content: string
+          reason?: string | null
+          rejected_at?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          validator_result?: Json
+        }
+        Update: {
+          accepted_at?: string | null
+          agent_id?: string
+          applied_at?: string | null
+          created_at?: string
+          dry_run?: boolean
+          engram_id?: string
+          id?: string
+          model?: string | null
+          original_content?: string
+          original_hash?: string
+          proposed_content?: string
+          reason?: string | null
+          rejected_at?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validator_result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mnemos_softening_proposals_engram_id_fkey"
+            columns: ["engram_id"]
+            isOneToOne: false
+            referencedRelation: "engrams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       observer_chat_messages: {
         Row: {
