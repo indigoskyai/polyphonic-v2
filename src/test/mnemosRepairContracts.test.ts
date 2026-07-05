@@ -16,6 +16,7 @@ function functionBody(source: string, name: string): string {
 describe('Polyphonic Mnemos repair contracts', () => {
   const migration = () => readRepoFile('supabase/migrations/20260704120000_mnemos_repair_contracts.sql');
   const followup = () => readRepoFile('supabase/migrations/20260705130000_mnemos_e2e_repair_followup.sql');
+  const rescue = () => readRepoFile('supabase/migrations/20260705140000_mnemos_missing_review_tables.sql');
 
   it('adds explicit full cognition consent with a default-off contract', () => {
     const source = migration();
@@ -74,12 +75,15 @@ describe('Polyphonic Mnemos repair contracts', () => {
   it('adds dry-run softening proposals and continuity ledger events', () => {
     const source = migration();
     const exposure = followup();
+    const rescueSource = rescue();
     const soften = readRepoFile('supabase/functions/mnemos-soften/index.ts');
     const softening = readRepoFile('supabase/functions/_shared/mnemos/softening.ts');
 
     expect(source).toContain('CREATE TABLE IF NOT EXISTS public.mnemos_softening_proposals');
     expect(source).toContain('softening_dry_run boolean NOT NULL DEFAULT true');
     expect(source).toContain('CREATE TABLE IF NOT EXISTS public.continuity_events');
+    expect(rescueSource).toContain('CREATE TABLE IF NOT EXISTS public.mnemos_softening_proposals');
+    expect(rescueSource).toContain('CREATE TABLE IF NOT EXISTS public.continuity_events');
     expect(exposure).toContain('GRANT SELECT ON TABLE public.mnemos_softening_proposals TO authenticated');
     expect(exposure).toContain('GRANT SELECT ON TABLE public.continuity_events TO authenticated');
     expect(soften).toContain('softening_dry_run');
