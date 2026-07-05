@@ -1271,6 +1271,7 @@ export type Database = {
           agent_id: string
           connection_type: string
           created_at: string | null
+          formed_by: string
           id: string
           source_id: string
           target_id: string
@@ -1281,6 +1282,7 @@ export type Database = {
           agent_id?: string
           connection_type: string
           created_at?: string | null
+          formed_by?: string
           id?: string
           source_id: string
           target_id: string
@@ -1291,6 +1293,7 @@ export type Database = {
           agent_id?: string
           connection_type?: string
           created_at?: string | null
+          formed_by?: string
           id?: string
           source_id?: string
           target_id?: string
@@ -1806,10 +1809,17 @@ export type Database = {
         Row: {
           access_count: number | null
           accessibility: number
+          affect_source: string
           agent_id: string
           content: string
           created_at: string | null
           digest_id: string | null
+          digest_suggested_by: string | null
+          digest_suggestion_action: string | null
+          digest_suggestion_confidence: number | null
+          digest_suggestion_generated_at: string | null
+          digest_suggestion_model: string | null
+          digest_suggestion_reason: string | null
           embedding: string | null
           embedding_model: string | null
           emotional_arousal: number | null
@@ -1817,10 +1827,12 @@ export type Database = {
           engram_type: string
           id: string
           last_accessed_at: string | null
+          last_rehearsed_at: string | null
           rehearse_count: number
           review_decision: string | null
           review_note: string | null
           reviewed_at: string | null
+          reviewed_by: string | null
           source_context: Json | null
           stability: number
           state: string
@@ -1833,10 +1845,17 @@ export type Database = {
         Insert: {
           access_count?: number | null
           accessibility?: number
+          affect_source?: string
           agent_id?: string
           content: string
           created_at?: string | null
           digest_id?: string | null
+          digest_suggested_by?: string | null
+          digest_suggestion_action?: string | null
+          digest_suggestion_confidence?: number | null
+          digest_suggestion_generated_at?: string | null
+          digest_suggestion_model?: string | null
+          digest_suggestion_reason?: string | null
           embedding?: string | null
           embedding_model?: string | null
           emotional_arousal?: number | null
@@ -1844,10 +1863,12 @@ export type Database = {
           engram_type: string
           id?: string
           last_accessed_at?: string | null
+          last_rehearsed_at?: string | null
           rehearse_count?: number
           review_decision?: string | null
           review_note?: string | null
           reviewed_at?: string | null
+          reviewed_by?: string | null
           source_context?: Json | null
           stability?: number
           state?: string
@@ -1860,10 +1881,17 @@ export type Database = {
         Update: {
           access_count?: number | null
           accessibility?: number
+          affect_source?: string
           agent_id?: string
           content?: string
           created_at?: string | null
           digest_id?: string | null
+          digest_suggested_by?: string | null
+          digest_suggestion_action?: string | null
+          digest_suggestion_confidence?: number | null
+          digest_suggestion_generated_at?: string | null
+          digest_suggestion_model?: string | null
+          digest_suggestion_reason?: string | null
           embedding?: string | null
           embedding_model?: string | null
           emotional_arousal?: number | null
@@ -1871,10 +1899,12 @@ export type Database = {
           engram_type?: string
           id?: string
           last_accessed_at?: string | null
+          last_rehearsed_at?: string | null
           rehearse_count?: number
           review_decision?: string | null
           review_note?: string | null
           reviewed_at?: string | null
+          reviewed_by?: string | null
           source_context?: Json | null
           stability?: number
           state?: string
@@ -2809,8 +2839,11 @@ export type Database = {
           created_at: string
           decay_rate: number
           dream_frequency: string
+          full_cognition_enabled: boolean
           last_consolidated_at: string | null
           mnemos_enabled: boolean
+          softening_dry_run: boolean
+          softening_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -2819,8 +2852,11 @@ export type Database = {
           created_at?: string
           decay_rate?: number
           dream_frequency?: string
+          full_cognition_enabled?: boolean
           last_consolidated_at?: string | null
           mnemos_enabled?: boolean
+          softening_dry_run?: boolean
+          softening_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -2829,8 +2865,11 @@ export type Database = {
           created_at?: string
           decay_rate?: number
           dream_frequency?: string
+          full_cognition_enabled?: boolean
           last_consolidated_at?: string | null
           mnemos_enabled?: boolean
+          softening_dry_run?: boolean
+          softening_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -4684,6 +4723,10 @@ export type Database = {
           p_tags: string[]
         }
         Returns: boolean
+      }
+      mnemos_reconsolidate: {
+        Args: { p_agent_id: string; p_engram_ids: string[]; p_user_id: string }
+        Returns: number
       }
       mnemos_rehearse_scope: {
         Args: {
