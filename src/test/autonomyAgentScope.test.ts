@@ -271,7 +271,7 @@ describe('agent-scoped autonomy runtime', () => {
 
     expect(verify).toContain('agentId = normalizeAgentId(body?.agent_id)');
     expect(verify).toContain('new MnemosEngine(supabase, userId, agentId)');
-    expect(verify).toContain('source_context: { type: "mnemos_verify", label: beat.label, agent_id: agentId }');
+    expect(verify).toContain('source_context: { type: "mnemos_verify", run_id: runId, label: beat.label, agent_id: agentId }');
     expect(verify).toContain('.eq("agent_id", agentId)');
   });
 

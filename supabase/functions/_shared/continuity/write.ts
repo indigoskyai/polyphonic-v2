@@ -215,17 +215,22 @@ export function queueContinuityTurnWrites(
     () => dispatchHypomnemaGate(opts, deps),
   );
 
-    const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)].filter(Boolean);
+    const participating = [agentId, ...(opts.observers || []).map((o) => o.agentId)]
+      .filter((id): id is string => Boolean(id));
+    const metadataAgentId = agentId;
     queue(
       "thread_agent_metadata",
-      !quietClassic && Boolean(opts.threadId) && Boolean(agentId),
-      quietClassic ? "classic quiet runtime" : !agentId ? "no agent id" : "no thread id",
-    () => (deps.updateThreadAgentMetadata || updateThreadAgentMetadata)(
-      opts.supabase,
-      opts.threadId,
-      agentId,
-      participating,
-    ),
+      !quietClassic && Boolean(opts.threadId) && Boolean(metadataAgentId),
+      quietClassic ? "classic quiet runtime" : !metadataAgentId ? "no agent id" : "no thread id",
+    () => {
+      if (!metadataAgentId) return Promise.resolve();
+      return (deps.updateThreadAgentMetadata || updateThreadAgentMetadata)(
+        opts.supabase,
+        opts.threadId,
+        metadataAgentId,
+        participating,
+      );
+    },
   );
 
   const report = { userId: opts.userId, threadId: opts.threadId, agentId: agentId ?? "", operations };

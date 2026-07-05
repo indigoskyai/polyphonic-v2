@@ -15,6 +15,7 @@ function functionBody(source: string, name: string): string {
 
 describe('Polyphonic Mnemos repair contracts', () => {
   const migration = () => readRepoFile('supabase/migrations/20260704120000_mnemos_repair_contracts.sql');
+  const followup = () => readRepoFile('supabase/migrations/20260705130000_mnemos_e2e_repair_followup.sql');
 
   it('adds explicit full cognition consent with a default-off contract', () => {
     const source = migration();
@@ -72,15 +73,34 @@ describe('Polyphonic Mnemos repair contracts', () => {
 
   it('adds dry-run softening proposals and continuity ledger events', () => {
     const source = migration();
+    const exposure = followup();
     const soften = readRepoFile('supabase/functions/mnemos-soften/index.ts');
     const softening = readRepoFile('supabase/functions/_shared/mnemos/softening.ts');
 
     expect(source).toContain('CREATE TABLE IF NOT EXISTS public.mnemos_softening_proposals');
     expect(source).toContain('softening_dry_run boolean NOT NULL DEFAULT true');
     expect(source).toContain('CREATE TABLE IF NOT EXISTS public.continuity_events');
+    expect(exposure).toContain('GRANT SELECT ON TABLE public.mnemos_softening_proposals TO authenticated');
+    expect(exposure).toContain('GRANT SELECT ON TABLE public.continuity_events TO authenticated');
     expect(soften).toContain('softening_dry_run');
     expect(softening).toContain('validateSofteningProposal');
     expect(softening).toContain('status: dryRun ? "proposed" : "applied"');
+  });
+
+  it('keeps mnemos-verify bounded, observable, and cleanup-safe by default', () => {
+    const source = followup();
+    const verify = readRepoFile('supabase/functions/mnemos-verify/index.ts');
+    const encoding = readRepoFile('supabase/functions/_shared/mnemos/encoding.ts');
+
+    expect(source).toContain("ADD COLUMN IF NOT EXISTS source_context jsonb NOT NULL DEFAULT '{}'::jsonb");
+    expect(encoding).toContain('source_context: state.source_context ?? sourceContext');
+    expect(verify).toContain('const runDecayCycle = body.run_decay_cycle === true');
+    expect(verify).toContain('const runConsolidation = body.run_consolidation === true');
+    expect(verify).toContain('source_context: { type: "mnemos_verify", run_id: runId, label: beat.label, agent_id: agentId }');
+    expect(verify).toContain('surprise_score: beat.surprise_score');
+    expect(verify).toContain('cleanupVerifierArtifacts');
+    expect(verify).toContain('.contains("source_context", { type: "mnemos_verify", run_id: runId })');
+    expect(verify).toContain('run_consolidation must be true');
   });
 
   it('surfaces belief synthesis health without changing clamp bounds', () => {

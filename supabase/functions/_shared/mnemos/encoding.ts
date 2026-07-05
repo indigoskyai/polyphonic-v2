@@ -510,7 +510,7 @@ export async function encode(
     temporal: extendedAffect.temporal,
   };
 
-  await recordEmotionalSnapshot(client, userId, agentId, emotionalState);
+  await recordEmotionalSnapshot(client, userId, agentId, emotionalState, context.source_context ?? {});
 
   return {
     engram,
@@ -534,7 +534,8 @@ async function recordEmotionalSnapshot(
   client: { from: (table: string) => any },
   userId: string,
   agentId: string,
-  state: EmotionalState
+  state: EmotionalState,
+  sourceContext: Record<string, unknown> = {},
 ): Promise<void> {
   await client.from("mnemos_emotional_state").insert({
     user_id: userId,
@@ -545,6 +546,7 @@ async function recordEmotionalSnapshot(
     certainty: state.certainty,
     social: state.social,
     temporal: state.temporal,
+    source_context: state.source_context ?? sourceContext,
   });
   // Non-fatal: emotional state recording is best-effort
 }

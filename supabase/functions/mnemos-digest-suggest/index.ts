@@ -10,10 +10,12 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { authenticateUser } from "../_shared/openclaw/auth.ts";
 import { getMemorySettings } from "../_shared/mnemos/settings.ts";
+import {
+  normalizeDigestSuggestions,
+  type DigestSuggestionAction,
+} from "../_shared/mnemos/digest-suggestions.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { withModelRetry } from "../_shared/modelRetry.ts";
-
-type SuggestAction = "keep" | "release" | "distill";
 
 interface Body {
   user_id?: string;
@@ -29,7 +31,7 @@ interface DigestEngram {
   emotional_arousal: number | null;
 }
 
-const ACTIONS = new Set<SuggestAction>(["keep", "release", "distill"]);
+const ACTIONS = new Set<DigestSuggestionAction>(["keep", "release", "distill"]);
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -82,11 +84,12 @@ serve(async (req) => {
     let updated = 0;
     for (const suggestion of suggestions) {
       const engram = engrams.find((row) => row.id === suggestion.id);
-      if (!engram || !ACTIONS.has(suggestion.action) || suggestion.confidence < 0 || suggestion.confidence > 1) continue;
+      const action = suggestion.action as DigestSuggestionAction;
+      if (!engram || !ACTIONS.has(action) || suggestion.confidence < 0 || suggestion.confidence > 1) continue;
       const { error: updateErr } = await supabase
         .from("engrams")
         .update({
-          digest_suggestion_action: suggestion.action,
+          digest_suggestion_action: action,
           digest_suggestion_reason: suggestion.reason.slice(0, 500),
           digest_suggestion_confidence: suggestion.confidence,
           digest_suggested_by: "luca",
@@ -147,14 +150,7 @@ async function suggestDigestActions(apiKey: string, model: string, engrams: Dige
   if (!response.ok) throw new Error(`suggestion model failed: ${response.status} ${response.statusText}`);
   const data = await response.json();
   const raw = data?.choices?.[0]?.message?.content;
-  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-  const suggestions = Array.isArray(parsed?.suggestions) ? parsed.suggestions : [];
-  return suggestions.map((item: any) => ({
-    id: String(item?.id ?? ""),
-    action: String(item?.action ?? "") as SuggestAction,
-    confidence: Number(item?.confidence ?? 0),
-    reason: String(item?.reason ?? ""),
-  }));
+  return normalizeDigestSuggestions(raw);
 }
 
 function json(payload: unknown, status: number, cors: Record<string, string>) {

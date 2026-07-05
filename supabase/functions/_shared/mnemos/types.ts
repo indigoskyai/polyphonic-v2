@@ -108,6 +108,7 @@ export interface EmotionalState {
   certainty: number;  // uncertain to certain (0..1)
   social: number;     // isolated to connected (-1..1)
   temporal: number;   // past-focused to future-focused (-1..1)
+  source_context?: Record<string, unknown>;
   recorded_at?: string;
 }
 
