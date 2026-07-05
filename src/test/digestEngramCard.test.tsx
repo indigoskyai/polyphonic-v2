@@ -25,7 +25,14 @@ function digestEngram(overrides: Partial<DigestEngram> = {}): DigestEngram {
     reviewed_at: null,
     review_decision: null,
     reviewed_by: null,
+    digest_suggestion_action: null,
+    digest_suggestion_reason: null,
+    digest_suggestion_confidence: null,
+    digest_suggested_by: null,
+    digest_suggestion_model: null,
+    digest_suggestion_generated_at: null,
     created_at: '2026-06-27T20:00:00.000Z',
+
 
     ...overrides,
   };
