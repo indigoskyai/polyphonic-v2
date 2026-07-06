@@ -25,6 +25,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { authenticateUser } from "../_shared/openclaw/auth.ts";
 import { MnemosEngine } from "../_shared/mnemos/engine.ts";
 import { isSubstrateAgentId, normalizeAgentId } from "../_shared/agent-scope.ts";
+import { runSofteningCycle } from "../_shared/mnemos/softening.ts";
 import {
   computeDecayedValues,
   determineState,
@@ -46,6 +47,7 @@ interface Body {
   agent_id?: string;
   run_decay_cycle?: boolean;
   run_consolidation?: boolean;
+  run_service_checks?: boolean;
 }
 
 interface CleanupReport {
@@ -53,10 +55,12 @@ interface CleanupReport {
   engrams_deleted: number;
   connections_deleted: number;
   emotional_snapshots_deleted: number;
+  softening_proposals_deleted: number;
+  continuity_events_deleted: number;
   errors: string[];
 }
 
-type SupabaseAdminClient = { from: (table: string) => any };
+type SupabaseAdminClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
 
 const FIXTURES: Beat[] = [
   // Low-signal — should be filtered.
@@ -118,6 +122,7 @@ serve(async (req) => {
   const cleanup = body.cleanup !== false;
   const runDecayCycle = body.run_decay_cycle === true;
   const runConsolidation = body.run_consolidation === true;
+  const runServiceChecks = body.run_service_checks === true;
   const agentId = normalizeAgentId(body?.agent_id);
 
   if (!isSubstrateAgentId(agentId)) {
@@ -148,6 +153,7 @@ serve(async (req) => {
       cleanup,
       run_decay_cycle: runDecayCycle,
       run_consolidation: runConsolidation,
+      run_service_checks: runServiceChecks,
       belief_llm_synthesis_enabled: (Deno.env.get("BELIEF_LLM_SYNTHESIS_ENABLED") || "").trim().toLowerCase() === "true",
       belief_synthesis_autoactivate: (Deno.env.get("BELIEF_SYNTHESIS_AUTOACTIVATE") || "").trim().toLowerCase() === "true",
     };
@@ -285,6 +291,25 @@ serve(async (req) => {
       issues.push("salience.gate: low-signal small-talk encoded");
     }
     stages.dialectic_gate = dialecticChecks;
+
+    // ---------------------------------------------------------------------
+    // Stage 5: Service-role-only paths on disposable fixtures
+    // ---------------------------------------------------------------------
+    if (runServiceChecks) {
+      try {
+        const serviceChecks = await runDisposableServiceChecks(supabase, userId, agentId, runId);
+        stages.service_checks = serviceChecks.stage;
+        createdEngramIds.push(...serviceChecks.createdEngramIds);
+        for (const issue of serviceChecks.issues) issues.push(issue);
+      } catch (e) {
+        issues.push(`service_checks: ${(e as Error).message}`);
+      }
+    } else {
+      stages.service_checks = {
+        skipped: true,
+        reason: "run_service_checks must be true for disposable service-path verification",
+      };
+    }
   } catch (e) {
     status = 500;
     issues.push(`verify.unhandled: ${(e as Error).message}`);
@@ -300,6 +325,8 @@ serve(async (req) => {
         engrams_deleted: 0,
         connections_deleted: 0,
         emotional_snapshots_deleted: 0,
+        softening_proposals_deleted: 0,
+        continuity_events_deleted: 0,
         errors: [`cleanup threw: ${(e as Error).message}`],
       };
     }
@@ -324,6 +351,217 @@ serve(async (req) => {
   );
 });
 
+async function runDisposableServiceChecks(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  requestedAgentId: string,
+  runId: string,
+): Promise<{ stage: Record<string, unknown>; createdEngramIds: string[]; issues: string[] }> {
+  const safeAgent = requestedAgentId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 24) || "luca";
+  const serviceAgentId = `${safeAgent}-verify-${runId.slice(0, 8)}`;
+  const oldIso = new Date(Date.now() - 96 * 3600_000).toISOString();
+  const targetId = crypto.randomUUID();
+  const supportAId = crypto.randomUUID();
+  const supportBId = crypto.randomUUID();
+  const targetContent = `Mnemos verifier softening target ${runId}: Riley prefers compact audit trails that preserve evidence, uncertainty, and voice while avoiding decorative filler.`;
+  const createdEngramIds = [targetId, supportAId, supportBId];
+  const issues: string[] = [];
+
+  const sourceContext = (label: string) => ({
+    type: "mnemos_verify",
+    run_id: runId,
+    label,
+    service_check: true,
+    cleanup_required: true,
+    agent_id: serviceAgentId,
+  });
+
+  const { error: insertErr } = await supabase.from("engrams").insert([
+    {
+      id: targetId,
+      user_id: userId,
+      agent_id: serviceAgentId,
+      content: targetContent,
+      engram_type: "semantic",
+      strength: 0.28,
+      stability: 0.2,
+      accessibility: 0.72,
+      emotional_valence: 0.1,
+      emotional_arousal: 0.2,
+      surprise_score: 0.8,
+      source_context: sourceContext("service_softening_target"),
+      tags: ["mnemos_verify", "service_check", "continuity"],
+      state: "active",
+      last_accessed_at: oldIso,
+      created_at: oldIso,
+      updated_at: oldIso,
+      access_count: 1,
+    },
+    {
+      id: supportAId,
+      user_id: userId,
+      agent_id: serviceAgentId,
+      content: `Mnemos verifier support A ${runId}: compact audit trails keep reasoning inspectable without losing nuance.`,
+      engram_type: "semantic",
+      strength: 0.62,
+      stability: 0.32,
+      accessibility: 0.66,
+      emotional_valence: 0.2,
+      emotional_arousal: 0.2,
+      surprise_score: 0.7,
+      source_context: sourceContext("service_support_a"),
+      tags: ["mnemos_verify", "service_check", "continuity"],
+      state: "active",
+      last_accessed_at: oldIso,
+      created_at: oldIso,
+      updated_at: oldIso,
+      access_count: 1,
+    },
+    {
+      id: supportBId,
+      user_id: userId,
+      agent_id: serviceAgentId,
+      content: `Mnemos verifier support B ${runId}: durable memory should keep provenance visible and avoid generic flattening.`,
+      engram_type: "semantic",
+      strength: 0.64,
+      stability: 0.34,
+      accessibility: 0.68,
+      emotional_valence: 0.2,
+      emotional_arousal: 0.2,
+      surprise_score: 0.7,
+      source_context: sourceContext("service_support_b"),
+      tags: ["mnemos_verify", "service_check", "continuity"],
+      state: "active",
+      last_accessed_at: oldIso,
+      created_at: oldIso,
+      updated_at: oldIso,
+      access_count: 1,
+    },
+  ]);
+  if (insertErr) throw new Error(`service fixture insert failed: ${insertErr.message}`);
+
+  const { error: connErr } = await supabase.from("connections").insert([
+    {
+      user_id: userId,
+      agent_id: serviceAgentId,
+      source_id: targetId,
+      target_id: supportAId,
+      connection_type: "co_occurs",
+      formed_by: "explicit",
+      weight: 0.6,
+    },
+    {
+      user_id: userId,
+      agent_id: serviceAgentId,
+      source_id: targetId,
+      target_id: supportBId,
+      connection_type: "co_occurs",
+      formed_by: "explicit",
+      weight: 0.6,
+    },
+  ]);
+  if (connErr) throw new Error(`service fixture connection insert failed: ${connErr.message}`);
+
+  const stage: Record<string, unknown> = {
+    service_agent_id: serviceAgentId,
+    fixture_engram_ids: createdEngramIds,
+  };
+
+  const { data: keyData, error: keyError } = await supabase.rpc("decrypt_user_api_key", { p_user_id: userId });
+  const apiKey = (keyData as string | null) ?? null;
+  if (keyError || !apiKey) {
+    stage.softening = { skipped: true, reason: keyError?.message ?? "no_api_key" };
+  } else {
+    try {
+      const softeningResults = await runSofteningCycle(supabase, userId, apiKey, serviceAgentId, {
+        dryRun: true,
+      });
+      const { data: proposals } = await supabase
+        .from("mnemos_softening_proposals")
+        .select("id, status, dry_run, applied_at, validator_result")
+        .eq("user_id", userId)
+        .eq("agent_id", serviceAgentId)
+        .eq("engram_id", targetId);
+      const { data: afterSoftening } = await supabase
+        .from("engrams")
+        .select("content")
+        .eq("id", targetId)
+        .maybeSingle();
+      const originalUnchanged = afterSoftening?.content === targetContent;
+      if (softeningResults.length === 0) issues.push("service_checks.softening: no proposal/result created");
+      if (!originalUnchanged) issues.push("service_checks.softening: dry-run mutated original engram");
+      stage.softening = {
+        results: softeningResults.length,
+        proposals: proposals ?? [],
+        original_unchanged: originalUnchanged,
+      };
+    } catch (e) {
+      issues.push(`service_checks.softening: ${(e as Error).message}`);
+      stage.softening = { error: (e as Error).message };
+    }
+  }
+
+  const { data: beforeRehearsal } = await supabase
+    .from("engrams")
+    .select("last_accessed_at, last_rehearsed_at, rehearse_count, stability, accessibility")
+    .eq("id", targetId)
+    .maybeSingle();
+  const { data: rehearseCount, error: rehearseErr } = await supabase.rpc("mnemos_rehearse_scope", {
+    p_user_id: userId,
+    p_agent_id: serviceAgentId,
+    p_budget: 10,
+    p_value_floor: 0.1,
+  });
+  const { data: afterRehearsal } = await supabase
+    .from("engrams")
+    .select("last_accessed_at, last_rehearsed_at, rehearse_count, stability, accessibility")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (rehearseErr) issues.push(`service_checks.rehearsal: ${rehearseErr.message}`);
+  if (!afterRehearsal?.last_rehearsed_at) issues.push("service_checks.rehearsal: last_rehearsed_at was not set");
+  if (beforeRehearsal?.last_accessed_at !== afterRehearsal?.last_accessed_at) {
+    issues.push("service_checks.rehearsal: last_accessed_at changed");
+  }
+  if (beforeRehearsal?.accessibility !== afterRehearsal?.accessibility) {
+    issues.push("service_checks.rehearsal: accessibility changed");
+  }
+  stage.rehearsal = {
+    rpc_count: rehearseCount ?? 0,
+    before: beforeRehearsal,
+    after: afterRehearsal,
+  };
+
+  const { data: beforeDecay } = await supabase
+    .from("engrams")
+    .select("strength, stability, accessibility, state")
+    .eq("id", targetId)
+    .maybeSingle();
+  const serviceEngine = new MnemosEngine(supabase, userId, serviceAgentId);
+  const decayResult = await serviceEngine.decay({
+    min_hours_since_access: 0,
+    archive_below_threshold: false,
+    rate_multiplier: 1,
+  });
+  const { data: afterDecay } = await supabase
+    .from("engrams")
+    .select("strength, stability, accessibility, state")
+    .eq("id", targetId)
+    .maybeSingle();
+  const decayChanged =
+    beforeDecay?.strength !== afterDecay?.strength ||
+    beforeDecay?.accessibility !== afterDecay?.accessibility ||
+    beforeDecay?.stability !== afterDecay?.stability;
+  if (!decayChanged) issues.push("service_checks.decay: target fixture did not change");
+  stage.decay = {
+    result: decayResult,
+    before: beforeDecay,
+    after: afterDecay,
+    changed: decayChanged,
+  };
+
+  return { stage, createdEngramIds, issues };
+}
+
 async function cleanupVerifierArtifacts(
   supabase: SupabaseAdminClient,
   userId: string,
@@ -337,6 +575,8 @@ async function cleanupVerifierArtifacts(
     engrams_deleted: 0,
     connections_deleted: 0,
     emotional_snapshots_deleted: 0,
+    softening_proposals_deleted: 0,
+    continuity_events_deleted: 0,
     errors: [],
   };
 
@@ -356,6 +596,31 @@ async function cleanupVerifierArtifacts(
 
   const engramIds = [...ids];
   if (engramIds.length > 0) {
+    const { data: deletedProposals, error: proposalError } = await supabase
+      .from("mnemos_softening_proposals")
+      .delete()
+      .eq("user_id", userId)
+      .in("engram_id", engramIds)
+      .select("id");
+    if (proposalError) {
+      report.errors.push(`softening proposal cleanup failed: ${proposalError.message}`);
+    } else {
+      report.softening_proposals_deleted = deletedProposals?.length ?? 0;
+    }
+
+    const { data: deletedEvents, error: eventError } = await supabase
+      .from("continuity_events")
+      .delete()
+      .eq("user_id", userId)
+      .gte("created_at", runStartedAt)
+      .in("subject_id", engramIds)
+      .select("id");
+    if (eventError) {
+      report.errors.push(`continuity event cleanup failed: ${eventError.message}`);
+    } else {
+      report.continuity_events_deleted = deletedEvents?.length ?? 0;
+    }
+
     for (const column of ["source_id", "target_id"]) {
       const { data: deletedConnections, error: connectionError } = await supabase
         .from("connections")

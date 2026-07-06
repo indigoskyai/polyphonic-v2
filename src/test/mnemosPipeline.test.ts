@@ -72,6 +72,35 @@ describe("mnemos salience gate", () => {
     expect(cold.encode).toBe(true);
     expect(warm.encode).toBe(false);
   });
+
+  it("dampens tiny mundane chat even when novelty is high", () => {
+    const d = computeEncodingSalience({
+      surprise: 1,
+      emotionalArousal: 0.3,
+      emotionalValence: 0,
+      tags: ["conversation"],
+      content: "User: hey\nAssistant: hey.",
+      sourceType: "chat_exchange",
+      existingEngramCount: 500,
+    });
+
+    expect(d.encode).toBe(false);
+    expect(d.reason).toBe("mundane_chat");
+  });
+
+  it("does not dampen short durable preference markers", () => {
+    const d = computeEncodingSalience({
+      surprise: 0.9,
+      emotionalArousal: 0.3,
+      emotionalValence: 0,
+      tags: ["conversation"],
+      content: "User: remember cedar mode\nAssistant: noted.",
+      sourceType: "chat_exchange",
+      existingEngramCount: 500,
+    });
+
+    expect(d.encode).toBe(true);
+  });
 });
 
 describe("mnemos dual-trace decay", () => {

@@ -383,6 +383,8 @@ export async function encode(
     emotionalArousal,
     emotionalValence,
     tags: context.tags ?? [],
+    content,
+    sourceType,
     existingEngramCount: existingEngramCount ?? 0,
     forceEncode,
   });

@@ -32,6 +32,10 @@ export interface SalienceInputs {
   emotionalArousal: number;  // 0..1 (we treat |arousal|)
   emotionalValence: number;  // -1..1
   tags?: readonly string[];
+  /** Candidate text, used only for tiny mundane-chat dampening. */
+  content?: string;
+  /** Source hint such as chat_exchange/manual/import. */
+  sourceType?: string;
   /** Total active+consolidating engrams the user already has. */
   existingEngramCount?: number;
   /** Caller-provided override (e.g. crisis path) — always encode if true. */
@@ -85,6 +89,15 @@ export function computeEncodingSalience(input: SalienceInputs): SalienceDecision
     input.existingEngramCount < BOOTSTRAP_ENGRAM_THRESHOLD;
   const threshold = inBootstrap ? BOOTSTRAP_SALIENCE_THRESHOLD : ENCODING_SALIENCE_THRESHOLD;
 
+  if (isMundaneChatExchange(input.content, tags, input.sourceType)) {
+    return {
+      encode: false,
+      score: Math.min(score, 0.05),
+      threshold,
+      reason: "mundane_chat",
+    };
+  }
+
   if (score >= threshold) {
     return {
       encode: true,
@@ -105,4 +118,44 @@ export function computeEncodingSalience(input: SalienceInputs): SalienceDecision
 function clamp01(n: number): number {
   if (Number.isNaN(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+const MUNDANE_CHAT_TOKENS = new Set([
+  "a", "ah", "alright", "awesome", "cool", "fine", "good", "got", "great",
+  "ha", "haha", "hello", "hey", "hi", "it", "just", "k", "lol", "nice",
+  "ok", "okay", "sure", "sounds", "saying", "thank", "thanks", "ty", "yeah",
+  "yep", "yes", "yo", "you",
+]);
+
+const DURABLE_MARKER_RE = /\b(remember|important|lasting|durable|preference|prefer|decision|decided|promise|boundary|always|never|from now on|do not forget|don't forget)\b/i;
+const SPEAKER_MARKER_RE = /\b(user|assistant|human|ai|system)\s*:/i;
+
+function isMundaneChatExchange(
+  content: string | undefined,
+  tags: readonly string[],
+  sourceType: string | undefined,
+): boolean {
+  if (!content) return false;
+  if (DURABLE_MARKER_RE.test(content)) return false;
+
+  const source = (sourceType ?? "").toLowerCase();
+  const tagSet = new Set(tags.map((tag) => tag.toLowerCase()));
+  const chatLike =
+    source.includes("chat") ||
+    source.includes("conversation") ||
+    tagSet.has("conversation") ||
+    SPEAKER_MARKER_RE.test(content);
+  if (!chatLike) return false;
+
+  const stripped = content
+    .toLowerCase()
+    .replace(/\b(user|assistant|human|ai|system)\s*:/g, " ")
+    .replace(/[^a-z0-9'\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) return true;
+
+  const tokens = stripped.split(" ").filter(Boolean);
+  if (tokens.length > 8) return false;
+  return tokens.every((token) => MUNDANE_CHAT_TOKENS.has(token.replace(/^'+|'+$/g, "")));
 }

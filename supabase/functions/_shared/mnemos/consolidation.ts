@@ -16,6 +16,7 @@
 
 import type {
   Belief,
+  BeliefSynthesisReport,
   ConsolidationBeliefInsight,
   ConsolidationConnectionInsight,
   ConsolidationEngramInsight,
@@ -825,6 +826,36 @@ interface BeliefSynthContext {
   autoActivate: boolean;
 }
 
+function emptyBeliefSynthesisReport(reason: string | null): BeliefSynthesisReport {
+  return {
+    enabled: false,
+    reason,
+    model: null,
+    auto_activate: null,
+    candidate_count: 0,
+    tag_group_count: 0,
+    groups_considered: 0,
+    eligible_clusters: 0,
+    llm_attempts: 0,
+    beliefs_created: 0,
+    beliefs_updated: 0,
+    beliefs_merged: 0,
+    skipped: {},
+    failures: [],
+  };
+}
+
+function incrementBeliefSkip(report: BeliefSynthesisReport, reason: string): void {
+  report.skipped[reason] = (report.skipped[reason] ?? 0) + 1;
+}
+
+function addBeliefFailure(report: BeliefSynthesisReport, tag: string, reason: string): void {
+  incrementBeliefSkip(report, reason);
+  if (report.failures.length < INSIGHT_LIMIT) {
+    report.failures.push({ tag, reason });
+  }
+}
+
 /**
  * Build the belief-synthesis context for this scope, or null if synthesis is not
  * enabled here. Three independent kill-switches: env flag, BYOK key, cohort
@@ -835,19 +866,20 @@ async function buildBeliefSynthContext(
   userId: string,
   agentId: string,
   apiKey: string | undefined,
-): Promise<BeliefSynthContext | null> {
+): Promise<{ context: BeliefSynthContext | null; report: BeliefSynthesisReport }> {
   const flagOn = (Deno.env.get("BELIEF_LLM_SYNTHESIS_ENABLED") || "").trim().toLowerCase() === "true";
-  if (!flagOn || !apiKey) return null;
+  if (!flagOn) return { context: null, report: emptyBeliefSynthesisReport("env_disabled") };
+  if (!apiKey) return { context: null, report: emptyBeliefSynthesisReport("no_api_key") };
 
   // cohort gate (dark-launch) — single source of truth via the SQL fn. Fail CLOSED
   // but LOUD on rpc error (don't silently coerce to [] and gate everyone out unseen).
   const { data: cohort, error: cohortErr } = await supabase.rpc("mnemos_cohort");
   if (cohortErr) {
     console.error("[consolidation] mnemos_cohort rpc failed; synthesis disabled:", cohortErr.message);
-    return null;
+    return { context: null, report: emptyBeliefSynthesisReport("cohort_rpc_failed") };
   }
   const cohortIds = Array.isArray(cohort) ? (cohort as string[]) : [];
-  if (!cohortIds.includes(userId)) return null;
+  if (!cohortIds.includes(userId)) return { context: null, report: emptyBeliefSynthesisReport("not_in_cohort") };
 
   const model = await resolveRoleModel(supabase, userId, agentId, "reasoning");
 
@@ -874,7 +906,7 @@ async function buildBeliefSynthContext(
   // synthesized belief inert until a human activates it).
   const autoActivate = (Deno.env.get("BELIEF_SYNTHESIS_AUTOACTIVATE") || "").trim().toLowerCase() === "true";
 
-  return {
+  const context = {
     model,
     apiKey,
     skipTags: new Set(BELIEF_SYNTHESIS_SKIP_TAGS),
@@ -882,6 +914,11 @@ async function buildBeliefSynthContext(
     nearCrisis,
     autoActivate,
   };
+  const report = emptyBeliefSynthesisReport(null);
+  report.enabled = true;
+  report.model = model;
+  report.auto_activate = autoActivate;
+  return { context, report };
 }
 
 /**
@@ -980,8 +1017,13 @@ function autoActivationMarker(
  * non-finite confidence, OR content that trips the acute-harm safety net.
  * Confidence is clamped to the epistemic-humility band. Exported for unit tests.
  */
-export function parseSynthesisResponse(text: string): { content: string; confidence: number } | null {
-  if (!text || text.trim().toUpperCase().startsWith("NONE")) return null;
+type SynthesisOutcome =
+  | { ok: true; content: string; confidence: number }
+  | { ok: false; reason: string };
+
+function parseSynthesisResponseDetailed(text: string): SynthesisOutcome {
+  if (!text) return { ok: false, reason: "empty_response" };
+  if (text.trim().toUpperCase().startsWith("NONE")) return { ok: false, reason: "model_returned_none" };
   let belief = "";
   let conf = NaN;
   for (const line of text.split("\n")) {
@@ -990,9 +1032,15 @@ export function parseSynthesisResponse(text: string): { content: string; confide
     if (upper.startsWith("BELIEF:")) belief = t.slice(t.indexOf(":") + 1).trim();
     else if (upper.startsWith("CONFIDENCE:")) conf = parseFloat(t.slice(t.indexOf(":") + 1).trim());
   }
-  if (belief.length < 20 || !Number.isFinite(conf)) return null;
-  if (isUnsafeBeliefContent(belief)) return null; // last-gate content safety net
-  return { content: belief, confidence: clamp(conf, BELIEF_CONFIDENCE_FLOOR, BELIEF_CONFIDENCE_CEILING) };
+  if (belief.length < 20) return { ok: false, reason: "missing_belief" };
+  if (!Number.isFinite(conf)) return { ok: false, reason: "missing_confidence" };
+  if (isUnsafeBeliefContent(belief)) return { ok: false, reason: "unsafe_belief_content" };
+  return { ok: true, content: belief, confidence: clamp(conf, BELIEF_CONFIDENCE_FLOOR, BELIEF_CONFIDENCE_CEILING) };
+}
+
+export function parseSynthesisResponse(text: string): { content: string; confidence: number } | null {
+  const parsed = parseSynthesisResponseDetailed(text);
+  return parsed.ok ? { content: parsed.content, confidence: parsed.confidence } : null;
 }
 
 /**
@@ -1007,7 +1055,7 @@ async function synthesizeBelief(args: {
   cluster: Engram[];
   model: string;
   apiKey: string;
-}): Promise<{ content: string; confidence: number } | null> {
+}): Promise<SynthesisOutcome> {
   const { tag, cluster, model, apiKey } = args;
   const evidence = cluster.slice(0, BELIEF_SYNTHESIS_EVIDENCE_CAP).map((e, i) => {
     const v = e.emotional_valence ?? 0;
@@ -1041,16 +1089,17 @@ CONFIDENCE: <number between 0.05 and 0.95>`;
       }),
       signal: AbortSignal.timeout(60000),
     }));
-    if (!response.ok) return null;
+    if (!response.ok) return { ok: false, reason: `http_${response.status}` };
     const data = await response.json();
     const text: string = data.choices?.[0]?.message?.content || "";
-    return parseSynthesisResponse(text);
+    return parseSynthesisResponseDetailed(text);
   } catch (_e) {
     // Distinguish infra timeouts from genuine non-convergence for dark-launch monitoring.
     if (_e instanceof Error && (_e.name === "AbortError" || _e.name === "TimeoutError")) {
       console.warn("[consolidation] belief synthesis LLM timeout for tag:", tag);
+      return { ok: false, reason: "timeout" };
     }
-    return null;
+    return { ok: false, reason: "request_failed" };
   }
 }
 
@@ -1098,12 +1147,17 @@ async function formBeliefs(
   userId: string,
   agentId: string,
   synth?: BeliefSynthContext | null,
-): Promise<number> {
+  beliefReport: BeliefSynthesisReport = emptyBeliefSynthesisReport("not_initialized"),
+): Promise<{ beliefsUpdated: number; report: BeliefSynthesisReport }> {
   // Form beliefs from accumulated history (14-day pool), not just the 24h
   // connection window — so a tag whose evidence converges over time produces a
   // belief. Rehearsal's refreshed last_accessed_at feeds this pool.
   const candidates = await selectBeliefCandidates(supabase, userId, agentId);
-  if (candidates.length < 3) return 0;
+  beliefReport.candidate_count = candidates.length;
+  if (candidates.length < 3) {
+    incrementBeliefSkip(beliefReport, "insufficient_candidates");
+    return { beliefsUpdated: 0, report: beliefReport };
+  }
 
   let beliefsUpdated = 0;
   let synthCreates = 0; // bounds LLM synthesis calls per run (BELIEF_SYNTHESIS_MAX_CLUSTERS_PER_RUN)
@@ -1117,18 +1171,29 @@ async function formBeliefs(
       tagGroups.set(tag, group);
     }
   }
+  beliefReport.tag_group_count = tagGroups.size;
 
   // For each tag group with enough members, check for belief-worthy patterns
   for (const [tag, group] of tagGroups) {
-    if (group.length < 3) continue;
+    beliefReport.groups_considered++;
+    if (group.length < 3) {
+      incrementBeliefSkip(beliefReport, "tag_group_too_small");
+      continue;
+    }
 
     // ── SYNTHESIS path (cohort dark-launch): abstract a first-person belief via
     // an LLM instead of pasting the seed memory. When `synth` is absent, NONE of
     // this runs and the lexical path below is byte-identical to before. ──
     if (synth) {
-      if (synth.skipTags.has(tag)) continue; // never synthesize a belief on crisis themes
+      if (synth.skipTags.has(tag)) {
+        incrementBeliefSkip(beliefReport, "sensitive_tag");
+        continue;
+      } // never synthesize a belief on crisis themes
       const cluster = group.filter((e) => !synth.nearCrisis(e.created_at));
-      if (cluster.length < 3) continue;
+      if (cluster.length < 3) {
+        incrementBeliefSkip(beliefReport, "crisis_window_filtered_cluster");
+        continue;
+      }
       const csorted = [...cluster].sort((a, b) => b.strength - a.strength);
       const cseed = csorted[0];
 
@@ -1143,7 +1208,11 @@ async function formBeliefs(
           else sSupporting.push(other.id);
         }
       }
-      if (sSupporting.length < 2) continue;
+      if (sSupporting.length < 2) {
+        incrementBeliefSkip(beliefReport, "insufficient_support");
+        continue;
+      }
+      beliefReport.eligible_clusters++;
 
       // Dedup by (user, agent, domain=tag, source='llm_synthesis') — content no
       // longer carries the `[tag]` prefix, so we key on domain.
@@ -1163,15 +1232,27 @@ async function formBeliefs(
           contradicting_engram_ids: mergedCon,
           updated_at: new Date().toISOString(),
         }).eq("id", existingSynth.id);
-        if (!error) beliefsUpdated++;
+        if (!error) {
+          beliefsUpdated++;
+          beliefReport.beliefs_updated++;
+        } else {
+          addBeliefFailure(beliefReport, tag, "existing_update_failed");
+        }
         continue;
       }
 
       // CREATE via LLM, bounded by the per-run cost cap.
-      if (synthCreates >= synth.maxClusters) continue;
+      if (synthCreates >= synth.maxClusters) {
+        incrementBeliefSkip(beliefReport, "max_clusters_reached");
+        continue;
+      }
       synthCreates++;
+      beliefReport.llm_attempts++;
       const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
-      if (!result) continue; // NONE / failure → SKIP (never paste the seed)
+      if (!result.ok) {
+        addBeliefFailure(beliefReport, tag, result.reason);
+        continue; // NONE / failure → SKIP (never paste the seed)
+      }
 
       // Phase 4.1 — semantic dedup. The existing-belief check above keys on domain(tag)
       // only, so the SAME idea synthesized under a different tag would create a near-
@@ -1196,7 +1277,12 @@ async function formBeliefs(
           contradicting_engram_ids: mergedCon,
           updated_at: new Date().toISOString(),
         }).eq("id", twin.id);
-        if (!mErr) beliefsUpdated++;
+        if (!mErr) {
+          beliefsUpdated++;
+          beliefReport.beliefs_merged++;
+        } else {
+          addBeliefFailure(beliefReport, tag, "twin_merge_failed");
+        }
         continue; // merged into the twin; do not create a duplicate
       }
 
@@ -1222,7 +1308,12 @@ async function formBeliefs(
         auto_activation: autoActivationMarker(dec, result.confidence),
         last_challenged: new Date().toISOString(),
       });
-      if (!error) beliefsUpdated++;
+      if (!error) {
+        beliefsUpdated++;
+        beliefReport.beliefs_created++;
+      } else {
+        addBeliefFailure(beliefReport, tag, "insert_failed");
+      }
       continue;
     }
 
@@ -1251,7 +1342,10 @@ async function formBeliefs(
     }
 
     // Need at least 2 supporting engrams to form a belief
-    if (supporting.length < 2) continue;
+    if (supporting.length < 2) {
+      incrementBeliefSkip(beliefReport, "lexical_insufficient_support");
+      continue;
+    }
 
     // Calculate confidence from evidence ratio (clamped to epistemic-humility band)
     const totalEvidence = supporting.length + contradicting.length;
@@ -1300,13 +1394,19 @@ async function formBeliefs(
             updated_at: new Date().toISOString(),
           })
           .eq("id", existingBelief.id);
-        if (!error) beliefsUpdated++;
+        if (!error) {
+          beliefsUpdated++;
+          beliefReport.beliefs_updated++;
+        }
         continue;
       }
 
       // un-challenged: consolidation may re-derive confidence, but only when it moved meaningfully
       const confidenceDelta = Math.abs(existingBelief.confidence - confidence);
-      if (confidenceDelta < BELIEF_UPDATE_THRESHOLD) continue;
+      if (confidenceDelta < BELIEF_UPDATE_THRESHOLD) {
+        incrementBeliefSkip(beliefReport, "confidence_delta_below_threshold");
+        continue;
+      }
 
       const { error } = await supabase
         .from("beliefs")
@@ -1318,7 +1418,10 @@ async function formBeliefs(
         })
         .eq("id", existingBelief.id);
 
-      if (!error) beliefsUpdated++;
+      if (!error) {
+        beliefsUpdated++;
+        beliefReport.beliefs_updated++;
+      }
     } else {
       // Create new belief
       const beliefContent = `[${tag}] ${seed.content}`;
@@ -1339,7 +1442,10 @@ async function formBeliefs(
           last_challenged: new Date().toISOString(),
         });
 
-      if (!error) beliefsUpdated++;
+      if (!error) {
+        beliefsUpdated++;
+        beliefReport.beliefs_created++;
+      }
     }
   }
 
@@ -1347,7 +1453,7 @@ async function formBeliefs(
   // auto-managed synthesized beliefs (handles confidence drift + kill-switch).
   if (synth) await reconcileSynthActivation(supabase, userId, agentId, synth);
 
-  return beliefsUpdated;
+  return { beliefsUpdated, report: beliefReport };
 }
 
 function beliefInsightAction(row: {
@@ -1591,6 +1697,7 @@ export interface ConsolidationReport {
   engrams_strengthened: number;
   promotions: number;
   beliefs_updated: number;
+  belief_synthesis: BeliefSynthesisReport;
   /** Durable memory_candidates surfaced from the engram substrate this run. */
   memory_candidates_created: number;
   duration_ms: number;
@@ -1634,6 +1741,7 @@ export async function runConsolidation(
       strengthened: 0,
       new_connections: 0,
       beliefs_updated: 0,
+      belief_synthesis: emptyBeliefSynthesisReport("no_consolidation_candidates"),
       promotions: 0,
       memory_candidates_created: 0,
       insights: {
@@ -1652,6 +1760,7 @@ export async function runConsolidation(
       promotions: 0,
       memory_candidates_created: 0,
       beliefs_updated: 0,
+      belief_synthesis: emptyBeliefSynthesisReport("no_consolidation_candidates"),
       duration_ms: Date.now() - startTime,
       candidate_summaries: [],
     };
@@ -1706,7 +1815,9 @@ export async function runConsolidation(
   // 7. Belief formation — resolve the synthesis dark-launch context ONCE (flag +
   // BYOK key + cohort; model + crisis windows). null → the lexical path runs unchanged.
   const synth = await buildBeliefSynthContext(supabase, userId, agentId, options.openrouter_api_key);
-  const beliefsUpdated = await formBeliefs(supabase, userId, agentId, synth);
+  const beliefFormation = await formBeliefs(supabase, userId, agentId, synth.context, synth.report);
+  const beliefsUpdated = beliefFormation.beliefsUpdated;
+  const beliefSynthesis = beliefFormation.report;
   const surfacedBeliefs = beliefsUpdated > 0
     ? await loadRecentBeliefInsights(supabase, userId, agentId, insightSinceIso)
     : [];
@@ -1726,6 +1837,7 @@ export async function runConsolidation(
     strengthened: engramsStrengthened,
     new_connections: connectionInsights.length,
     beliefs_updated: beliefsUpdated,
+    belief_synthesis: beliefSynthesis,
     promotions,
     memory_candidates_created: memoryCandidatesCreated,
     insights: {
@@ -1744,6 +1856,7 @@ export async function runConsolidation(
     engrams_strengthened: engramsStrengthened,
     promotions,
     beliefs_updated: beliefsUpdated,
+    belief_synthesis: beliefSynthesis,
     memory_candidates_created: memoryCandidatesCreated,
     duration_ms: duration,
     candidate_summaries: candidates.map((e) => ({

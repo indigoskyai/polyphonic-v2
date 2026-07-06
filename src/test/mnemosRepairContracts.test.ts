@@ -100,8 +100,14 @@ describe('Polyphonic Mnemos repair contracts', () => {
     expect(encoding).toContain('source_context: state.source_context ?? sourceContext');
     expect(verify).toContain('const runDecayCycle = body.run_decay_cycle === true');
     expect(verify).toContain('const runConsolidation = body.run_consolidation === true');
+    expect(verify).toContain('const runServiceChecks = body.run_service_checks === true');
     expect(verify).toContain('source_context: { type: "mnemos_verify", run_id: runId, label: beat.label, agent_id: agentId }');
     expect(verify).toContain('surprise_score: beat.surprise_score');
+    expect(verify).toContain('runDisposableServiceChecks');
+    expect(verify).toContain('runSofteningCycle');
+    expect(verify).toContain('mnemos_rehearse_scope');
+    expect(verify).toContain('softening_proposals_deleted');
+    expect(verify).toContain('continuity_events_deleted');
     expect(verify).toContain('cleanupVerifierArtifacts');
     expect(verify).toContain('.contains("source_context", { type: "mnemos_verify", run_id: runId })');
     expect(verify).toContain('for (const column of ["source_id", "target_id"])');
@@ -129,5 +135,9 @@ describe('Polyphonic Mnemos repair contracts', () => {
     expect(constants).toContain('BELIEF_CONFIDENCE_FLOOR = 0.05');
     expect(constants).toContain('BELIEF_CONFIDENCE_CEILING = 0.95');
     expect(consolidation).toContain('clamp(conf, BELIEF_CONFIDENCE_FLOOR, BELIEF_CONFIDENCE_CEILING)');
+    expect(consolidation).toContain('belief_synthesis');
+    expect(consolidation).toContain('model_returned_none');
+    expect(consolidation).toContain('insufficient_support');
+    expect(consolidation).toContain('llm_attempts');
   });
 });

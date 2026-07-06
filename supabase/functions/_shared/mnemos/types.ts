@@ -251,6 +251,23 @@ export interface ConsolidationBeliefInsight {
   reason?: string | null;
 }
 
+export interface BeliefSynthesisReport {
+  enabled: boolean;
+  reason: string | null;
+  model?: string | null;
+  auto_activate?: boolean | null;
+  candidate_count: number;
+  tag_group_count: number;
+  groups_considered: number;
+  eligible_clusters: number;
+  llm_attempts: number;
+  beliefs_created: number;
+  beliefs_updated: number;
+  beliefs_merged: number;
+  skipped: Record<string, number>;
+  failures: Array<{ tag: string; reason: string }>;
+}
+
 export interface ConsolidationInsights {
   promoted_engrams: ConsolidationEngramInsight[];
   longstanding_connections: ConsolidationConnectionInsight[];
@@ -275,6 +292,8 @@ export interface ConsolidationResult {
   promotions: number;
   /** Durable memory_candidates surfaced from the engram substrate this run. */
   memory_candidates_created?: number;
+  /** Belief synthesis/formation diagnostics for observability. */
+  belief_synthesis?: BeliefSynthesisReport;
   /** Compact grounded artifacts surfaced by this cycle. */
   insights?: ConsolidationInsights;
   /** Duration of the consolidation cycle in milliseconds. */

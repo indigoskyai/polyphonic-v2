@@ -162,6 +162,7 @@ serve(async (req) => {
         memory_candidates_created: userResult.memory_candidates_created ?? 0,
         new_connections: userResult.new_connections ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
+        belief_synthesis: userResult.belief_synthesis ?? null,
         duration_ms: userResult.duration_ms ?? 0,
       }, agentId);
 
@@ -177,6 +178,7 @@ serve(async (req) => {
         connections_strengthened: userResult.connections_strengthened ?? 0,
         beliefs_updated: userResult.beliefs_updated ?? 0,
         strengthened: userResult.strengthened ?? 0,
+        belief_synthesis: userResult.belief_synthesis ?? null,
         duration_ms: userResult.duration_ms ?? 0,
       });
 
