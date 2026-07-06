@@ -104,7 +104,16 @@ describe('Polyphonic Mnemos repair contracts', () => {
     expect(verify).toContain('surprise_score: beat.surprise_score');
     expect(verify).toContain('cleanupVerifierArtifacts');
     expect(verify).toContain('.contains("source_context", { type: "mnemos_verify", run_id: runId })');
+    expect(verify).toContain('for (const column of ["source_id", "target_id"])');
+    expect(verify).toContain('.in(column, engramIds)');
     expect(verify).toContain('run_consolidation must be true');
+  });
+
+  it('keeps digest suggestion model formatting failures non-fatal', () => {
+    const digestSuggest = readRepoFile('supabase/functions/mnemos-digest-suggest/index.ts');
+    expect(digestSuggest).toContain('normalizeDigestSuggestions(raw)');
+    expect(digestSuggest).toContain('mnemos-digest-suggest parse failed');
+    expect(digestSuggest).toContain('return []');
   });
 
   it('surfaces belief synthesis health without changing clamp bounds', () => {

@@ -150,7 +150,12 @@ async function suggestDigestActions(apiKey: string, model: string, engrams: Dige
   if (!response.ok) throw new Error(`suggestion model failed: ${response.status} ${response.statusText}`);
   const data = await response.json();
   const raw = data?.choices?.[0]?.message?.content;
-  return normalizeDigestSuggestions(raw);
+  try {
+    return normalizeDigestSuggestions(raw);
+  } catch (err) {
+    console.warn("mnemos-digest-suggest parse failed:", (err as Error).message);
+    return [];
+  }
 }
 
 function json(payload: unknown, status: number, cors: Record<string, string>) {

@@ -356,16 +356,17 @@ async function cleanupVerifierArtifacts(
 
   const engramIds = [...ids];
   if (engramIds.length > 0) {
-    const idList = engramIds.join(",");
-    const { data: deletedConnections, error: connectionError } = await supabase
-      .from("connections")
-      .delete()
-      .or(`source_id.in.(${idList}),target_id.in.(${idList})`)
-      .select("id");
-    if (connectionError) {
-      report.errors.push(`connection cleanup failed: ${connectionError.message}`);
-    } else {
-      report.connections_deleted = deletedConnections?.length ?? 0;
+    for (const column of ["source_id", "target_id"]) {
+      const { data: deletedConnections, error: connectionError } = await supabase
+        .from("connections")
+        .delete()
+        .in(column, engramIds)
+        .select("id");
+      if (connectionError) {
+        report.errors.push(`connection cleanup failed (${column}): ${connectionError.message}`);
+      } else {
+        report.connections_deleted += deletedConnections?.length ?? 0;
+      }
     }
 
     const { data: deletedEngrams, error: engramError } = await supabase
