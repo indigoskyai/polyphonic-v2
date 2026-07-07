@@ -1774,7 +1774,7 @@ html {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 0.5px;
+  padding: 1px;
   opacity: 0.85;
   transition: opacity 0.8s var(--ease-out);
   pointer-events: none;
