@@ -144,6 +144,7 @@ describe('Continuity Kernel read path', () => {
         block: "\n## what i'm sitting with\n\n- (yesterday) i'm still carrying Riley's concern about fragmentation.",
         count: 1,
         rendered: 1,
+        items: [],
       }),
       functionalMemories: async () => [
         {
@@ -293,7 +294,7 @@ describe('Continuity Kernel read path', () => {
           created_at: '2026-05-04T00:00:00.000Z',
         },
       ],
-      hypomnema: async () => ({ block: '', count: 0, rendered: 0 }),
+      hypomnema: async () => ({ block: '', count: 0, rendered: 0, items: [] }),
       functionalMemories: async () => [],
       mnemos: async () => [],
       skills: async () => [],
@@ -323,6 +324,7 @@ describe('Continuity Kernel read path', () => {
         block: "\n## what i'm sitting with\n\n- (today) the memory system needs simplification.",
         count: 1,
         rendered: 1,
+        items: [],
       }),
       functionalMemories: async () => {
         throw new Error('memory rpc unavailable');
@@ -361,7 +363,7 @@ describe('Continuity Kernel read path', () => {
       history: async () => [],
       identity: async () => ({ soulMd: '', selfModel: '', userModel: '', convictions: '' }),
       pendingRevisions: async () => [],
-      hypomnema: async () => ({ block: '', count: 0, rendered: 0 }),
+      hypomnema: async () => ({ block: '', count: 0, rendered: 0, items: [] }),
       functionalMemories: async () => [],
       mnemos: async () => [result],
       skills: async () => [],
@@ -603,6 +605,7 @@ describe('Continuity Kernel read path', () => {
         block: "\n## what i'm sitting with\n\n- (today) the OpenClaw material is excluded. the ember bridge distinction is still live.",
         count: 1,
         rendered: 1,
+        items: [],
       }),
       functionalMemories: async () => [],
       mnemos: async () => [
