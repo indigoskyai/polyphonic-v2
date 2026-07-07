@@ -287,29 +287,30 @@ export default function ContinuityTraceDrawer() {
     setError(null);
     if (!messageId) return;
     setLoading(true);
-    supabase
-      .from('continuity_turn_traces')
-      .select('id,user_id,thread_id,user_message_id,assistant_message_id,agent_id,model,runtime_mode,status,context_summary,write_summary,created_at,updated_at')
-      .eq('assistant_message_id', messageId)
-      .maybeSingle()
-      .then(({ data, error: traceError }) => {
+    (async () => {
+      try {
+        const { data, error: traceError } = await supabase
+          .from('continuity_turn_traces')
+          .select('id,user_id,thread_id,user_message_id,assistant_message_id,agent_id,model,runtime_mode,status,context_summary,write_summary,created_at,updated_at')
+          .eq('assistant_message_id', messageId)
+          .maybeSingle();
         if (!alive) return;
         if (traceError) {
           setError(traceError.message || 'Trace could not be loaded.');
-          return;
+        } else {
+          setTrace((data as TraceRow | null) || null);
         }
-        setTrace((data as TraceRow | null) || null);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (alive) setError(err instanceof Error ? err.message : 'Trace could not be loaded.');
-      })
-      .finally(() => {
+      } finally {
         if (alive) setLoading(false);
-      });
+      }
+    })();
     return () => {
       alive = false;
     };
   }, [messageId]);
+
 
   const context = trace?.context_summary || null;
   const layers = useMemo(() => orderedLayers(context?.layers || []), [context?.layers]);
