@@ -1755,7 +1755,7 @@ html {
 .input-shell {
   position: relative;
   background: var(--surface-1);
-  border: 0.5px solid var(--border-faint);
+  border: 1px solid var(--border-faint);
   border-radius: var(--radius-lg);
   overflow: hidden;
   /* Top-edge inset highlight — suggests light from above, makes the composer
