@@ -4016,7 +4016,8 @@ html {
 /* ── Textarea ── */
 .textarea-base {
   width: 100%;
-  background: var(--surface-1);
+  background: var(--input-bg);
+
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 10px 12px;
