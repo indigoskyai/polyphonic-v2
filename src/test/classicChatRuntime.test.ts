@@ -46,9 +46,9 @@ describe('Chat runtime targets', () => {
     expect(source).toContain('if (classicChatActive) openCompanionFilePicker();');
     expect(source).toContain('!classicChatActive && (');
     expect(source).toContain('normalizeStreamComparableContent');
-    expect(source).toContain('messageMatchesActiveStream');
     expect(source).toContain('shouldHideStreamingMirror');
-    expect(source).toContain('msg.metadata?.local_stream_stub === true');
+    expect(source).toContain('completedStreamMessageIdRef');
+    expect(readRepoFile('src/lib/streamingMirror.ts')).toContain('local_stream_stub');
   });
 
   it('keeps chat-multi classic mode direct and quiet', () => {

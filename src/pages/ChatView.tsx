@@ -58,6 +58,10 @@ import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/c
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
+import {
+  normalizeStreamComparableContent,
+  shouldHideStreamingMirrorMessage,
+} from '@/lib/streamingMirror';
 import { looksLikeSimulationTurnRequest, withClientSimulationTurnDirective } from '@/lib/simulationTurnIntent';
 import CanvasPane from '@/components/canvas/CanvasPane';
 import {
@@ -285,10 +289,6 @@ function getAgentDisplayName(agentId: string | null | undefined, names: Map<stri
   if (fromStore) return fromStore;
   if (agentId === 'guardian' || agentId === 'observer') return 'Observer';
   return agentId.charAt(0).toUpperCase() + agentId.slice(1);
-}
-
-function normalizeStreamComparableContent(value: string | null | undefined) {
-  return (value || '').trim().replace(/\s+/g, ' ');
 }
 
 function LucaOnlyPill({
@@ -909,6 +909,7 @@ export default function ChatView() {
   // (where the bubble unmounted before the canonical row was visible).
   const [lingeringStream, setLingeringStream] = useState<string | null>(null);
   const typewriterSettledRef = useRef(false);
+  const completedStreamMessageIdRef = useRef<string | null>(null);
   const agentNameById = useMemo(
     () => new Map(agents.map((agent) => [agent.id, agent.name])),
     [agents]
@@ -1035,21 +1036,33 @@ export default function ChatView() {
   // row pops in seamlessly.
   useEffect(() => {
     if (!lingeringStream || typewriterSettledRef.current === false) return;
-    const recentAssistant = [...messages].reverse().find((m) =>
-      m.role === 'assistant' &&
-      (m.agent ?? null) === (activeMessageAgent ?? null) &&
-      Date.now() - new Date(m.created_at).getTime() < 60_000
+    const activeStreamNorm = normalizeStreamComparableContent(lingeringStream);
+    const completedStreamMessageId = completedStreamMessageIdRef.current;
+    const recentAssistant = [...messages].reverse().find((m, offset) =>
+      shouldHideStreamingMirrorMessage({
+        message: m,
+        isLast: offset === 0,
+        isStreaming: false,
+        lingeringStream,
+        activeStreamNorm,
+        activeMessageAgent,
+        completedStreamMessageId,
+      })
     );
     if (recentAssistant) {
       setLingeringStream(null);
     }
-    // Safety net: even if a canonical never arrives, force-clear after 4s so
-    // the bubble doesn't stick around indefinitely.
-    const timeout = setTimeout(() => {
-      if (typewriterSettledRef.current) setLingeringStream(null);
-    }, 4000);
-    return () => clearTimeout(timeout);
   }, [lingeringStream, messages, activeMessageAgent]);
+
+  // Hard safety net independent of the typewriter callback. If the settle
+  // signal is missed, do not leave a dim streaming shell beside the saved row.
+  useEffect(() => {
+    if (!lingeringStream || isStreaming) return;
+    const timeout = setTimeout(() => {
+      setLingeringStream(null);
+    }, 2500);
+    return () => clearTimeout(timeout);
+  }, [lingeringStream, isStreaming]);
 
   // Auto-speak finished assistant messages via ElevenLabs TTS when the user
   // has enabled "Auto-speak replies" in Voice settings. Triggers once per
@@ -1986,6 +1999,7 @@ export default function ChatView() {
     }
 
     // Stream response
+    completedStreamMessageIdRef.current = null;
     setStreaming(true);
     setStreamingContent('');
     setStreamingThinking('');
@@ -2212,6 +2226,9 @@ export default function ChatView() {
                 }
                 setStreamingThinking(fullThinking);
               } else if (data.type === 'done') {
+                if (typeof data.message_id === 'string') {
+                  completedStreamMessageIdRef.current = data.message_id;
+                }
                 if (data.duplicate) {
                   if (tid) {
                     void loadMessages(tid);
@@ -2243,6 +2260,7 @@ export default function ChatView() {
                   };
                 }
                 const assistantMessageId = typeof data.message_id === 'string' ? data.message_id : crypto.randomUUID();
+                completedStreamMessageIdRef.current = assistantMessageId;
                 addMessage({
                   id: assistantMessageId,
                   thread_id: tid!, user_id: user.id, role: 'assistant',
@@ -2840,18 +2858,16 @@ export default function ChatView() {
             // bubble is still mounted. The canonical row can land before
             // the typewriter clears, and its position may race with other
             // local rows, so content/local-stub matching closes that gap.
-            const streamingAssistantActive = isStreaming || lingeringStream != null;
-            const messageMatchesActiveStream =
-              activeStreamNorm.length > 0 &&
-              normalizeStreamComparableContent(msg.content) === activeStreamNorm;
-            const isRecentSameAssistant =
-              Date.now() - new Date(msg.created_at).getTime() < 60_000 &&
-              msg.role === 'assistant' &&
-              (msg.agent ?? null) === (activeMessageAgent ?? null);
             const shouldHideStreamingMirror =
-              streamingAssistantActive &&
-              isRecentSameAssistant &&
-              (i === messages.length - 1 || messageMatchesActiveStream || msg.metadata?.local_stream_stub === true);
+              shouldHideStreamingMirrorMessage({
+                message: msg,
+                isLast: i === messages.length - 1,
+                isStreaming,
+                lingeringStream,
+                activeStreamNorm,
+                activeMessageAgent,
+                completedStreamMessageId: completedStreamMessageIdRef.current,
+              });
             if (shouldHideStreamingMirror) return null;
 
             const forgeProposal = getForgeProposalMetadata(msg);
