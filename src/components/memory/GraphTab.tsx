@@ -764,15 +764,17 @@ export default function GraphTab() {
         ref={containerRef}
         style={{
           flex: 1, position: 'relative', minHeight: 0,
-          margin: '0 36px 24px',
+          width: '100%',
           maxWidth: 'calc(1280px - 72px)',
-          width: 'auto',
-          alignSelf: 'center',
-          marginLeft: 'auto', marginRight: 'auto',
+          margin: '0 auto',
+          padding: '0 36px 24px',
+          boxSizing: 'border-box',
           borderTop: '1px solid var(--hairline)',
           overflow: 'hidden',
+          alignSelf: 'stretch',
         }}
       >
+
         {/* Eyebrow + filter pills */}
         <div
           style={{
