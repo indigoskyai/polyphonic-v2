@@ -252,7 +252,7 @@ export function ChatTargetPicker({
             background: 'var(--bg-elevated, #15161a)',
             border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
             borderRadius: 10,
-            boxShadow: '0 12px 32px rgba(0,0,0,0.55)',
+            boxShadow: '0 1px 1px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.14), 0 8px 16px rgba(0,0,0,0.18), 0 24px 48px rgba(0,0,0,0.28), 0 48px 96px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.04)',
             zIndex: 9999,
             animation: 'viewFadeIn 0.12s var(--ease-out)',
           }}
