@@ -87,8 +87,11 @@ interface ContinuityInspectPayload {
   diagnostics?: ContinuityDiagnosticRow[];
 }
 
-function relativeTime(iso: string): string {
-  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '—';
+  const diff = Math.max(0, Date.now() - t);
   const mins = Math.round(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -99,9 +102,17 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-function absTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+function absTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return '—';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '—';
+  }
 }
+
 
 function computeThreadNumber(threads: { id: string; created_at: string }[], id: string): string {
   const sorted = [...threads].sort((a, b) => (a.created_at > b.created_at ? 1 : -1));
