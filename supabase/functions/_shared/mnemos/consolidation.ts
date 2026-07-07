@@ -1250,9 +1250,11 @@ async function formBeliefs(
       beliefReport.llm_attempts++;
       const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
       if (!result.ok) {
-        addBeliefFailure(beliefReport, tag, result.reason);
+        const failure = result as { ok: false; reason: string };
+        addBeliefFailure(beliefReport, tag, failure.reason);
         continue; // NONE / failure → SKIP (never paste the seed)
       }
+
 
       // Phase 4.1 — semantic dedup. The existing-belief check above keys on domain(tag)
       // only, so the SAME idea synthesized under a different tag would create a near-
