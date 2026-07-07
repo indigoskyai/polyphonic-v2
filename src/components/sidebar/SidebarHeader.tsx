@@ -28,9 +28,10 @@ export default function SidebarHeader({ folio: _folio, title, eyebrow }: Props) 
     >
       <div
         style={{
-          fontFamily: 'var(--font-grotesque)',
-          fontSize: 20,
-          fontWeight: 'var(--weight-light)',
+          fontFamily: 'var(--font-serif)',
+          fontSize: 26,
+          fontWeight: 400,
+          fontStyle: 'italic',
           color: 'var(--ink)',
           letterSpacing: 'var(--track-display)',
           lineHeight: 1.0,
