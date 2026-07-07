@@ -156,13 +156,13 @@ export function ChatTargetPicker({
     <div
       key={`section-${label}`}
       style={{
-        padding: '9px 10px 5px',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9,
+        padding: '11px 10px 5px',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 11,
         lineHeight: 1,
         color: 'var(--text-whisper)',
-        letterSpacing: 'var(--track-meta)',
-        textTransform: 'uppercase',
+        letterSpacing: '0.01em',
+        fontWeight: 500,
       }}
     >
       {label}
@@ -188,11 +188,10 @@ export function ChatTargetPicker({
   });
 
   const mutedBadgeStyle: CSSProperties = {
-    fontSize: 9,
+    fontSize: 11,
     color: 'var(--text-whisper)',
-    fontFamily: 'var(--font-mono)',
-    letterSpacing: 'var(--track-meta)',
-    textTransform: 'uppercase',
+    fontFamily: 'var(--font-sans)',
+    letterSpacing: '0.005em',
     flexShrink: 0,
   };
 
@@ -343,12 +342,11 @@ export function ChatTargetPicker({
                     </span>
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 10,
                         color: 'var(--blue-accent)',
-                        fontFamily: 'var(--font-mono)',
-                        letterSpacing: 'var(--track-meta)',
-                        textTransform: 'uppercase',
-                        padding: '1px 6px',
+                        fontFamily: 'var(--font-sans)',
+                        letterSpacing: '0.005em',
+                        padding: '2px 8px',
                         border: '1px solid color-mix(in srgb, var(--blue-accent) 45%, transparent)',
                         background: 'color-mix(in srgb, var(--blue-accent) 10%, transparent)',
                         borderRadius: 999,
