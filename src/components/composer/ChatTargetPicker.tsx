@@ -156,13 +156,13 @@ export function ChatTargetPicker({
     <div
       key={`section-${label}`}
       style={{
-        padding: '9px 10px 5px',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9,
+        padding: '11px 10px 5px',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 11,
         lineHeight: 1,
         color: 'var(--text-whisper)',
-        letterSpacing: 'var(--track-meta)',
-        textTransform: 'uppercase',
+        letterSpacing: '0.01em',
+        fontWeight: 500,
       }}
     >
       {label}
