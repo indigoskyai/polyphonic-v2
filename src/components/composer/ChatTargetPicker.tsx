@@ -188,11 +188,10 @@ export function ChatTargetPicker({
   });
 
   const mutedBadgeStyle: CSSProperties = {
-    fontSize: 9,
+    fontSize: 11,
     color: 'var(--text-whisper)',
-    fontFamily: 'var(--font-mono)',
-    letterSpacing: 'var(--track-meta)',
-    textTransform: 'uppercase',
+    fontFamily: 'var(--font-sans)',
+    letterSpacing: '0.005em',
     flexShrink: 0,
   };
 
