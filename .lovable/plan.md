@@ -1,34 +1,52 @@
-# Deploy Polyphonic account portability backend
+## Goal
 
-All code is already present in the working tree (migration, 5 edge functions, `_shared/account-portability/{archive,server}.ts`, `/settings/portability` route, `AccountPortabilityPanel`, store, tests). This is a deploy + verification pass — no code changes.
+Remove the lighter-than-background fill on cards, panels, and section wrappers throughout the app so surfaces read as a single flat canvas separated only by hairline borders (Vercel-style). Preserve subtle fills on interactive form controls (inputs, textareas, selects) and on true overlays (modals, popovers, tooltips, drawers) where elevation is semantic.
 
-## Steps
+## Approach
 
-1. **Apply migration** `supabase/migrations/20260616000000_account_portability.sql` via the migration tool.
-   - Creates `account_portability_jobs`, `account_portability_row_map`, private `account-portability` storage bucket, RLS policies, storage object policies scoped to `auth.uid()::text = (storage.foldername(name))[1]`, and service-role full access.
+The lighter card tone is driven by a small set of global CSS variables in `src/index.css` plus a handful of hardcoded rgba fills. Rather than hunt every component, I'll flatten the tokens at the source and add a dedicated input token so form fields keep their current fill.
 
-2. **Deploy edge functions** (one call, bundles shared code automatically):
-   - `account-export-create`
-   - `account-import-preview`
-   - `account-import-apply`
-   - `account-import-rollback`
-   - `account-portability-status`
+### 1. Token remap in `src/index.css` (`:root` + AMOLED `@media` block)
 
-3. **Secrets check.** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are already present (confirmed in `<secrets>` block). No action.
+- Introduce `--input-bg: #121216` (current `--surface-1`) as the dedicated field fill.
+- Repoint card/panel surface tokens to canvas so they disappear into the background:
+  - `--surface-1`, `--surface-2` → `var(--canvas)` (cards, hover-on-cards, data rows)
+  - `--bg-elevated`, `--bg-surface`, `--bg-surface-hover`, `--surface-raised`, `--surface-muted` → `var(--canvas)` / transparent
+  - `--card`, `--card-hover`, `--card-bg` → `transparent`
+- Keep elevated tokens intact for true overlays: `--surface-3` (modals/popovers), `--surface-4` (tooltips), `--surface-5` (top elevation), `--bg-glass`.
+- shadcn HSL bridge: point `--card` HSL to match `--background` so shadcn `Card` also flattens; keep `--popover` elevated.
+- Mirror the same remap inside the AMOLED `@media (prefers-color-scheme)` override block (lines ~1106–1112) so the pure-black variant stays consistent.
 
-4. **Verification (smoke tests via `supabase--curl_edge_functions`):**
-   - Unauth call to each of the 5 functions with `Authorization: Bearer invalid` → expect `401`.
-   - Auth call to `account-portability-status` (preview-session token) → expect `200`, returns only signed-in user's jobs.
-   - Auth call to `account-import-preview` with a payload encrypted via the shared archive helper → expect `200` with preview body, and no rows written (verify via `supabase--read_query` count of `account_portability_jobs` before/after).
-   - Auth call to `account-import-apply` with the same archive → expect `200`, row_map entries scoped to the calling user_id.
-   - Auth call to `account-import-rollback` with that job id → expect deletion limited to mapped rows (verify `account_portability_row_map` empties for that job).
-   - `supabase--read_query` on `storage.buckets` → confirm `account-portability` row has `public = false`.
-   - Browser-side: navigate to `/settings/portability` and confirm the panel renders inside the settings shell.
+### 2. Input/field carve-out
 
-5. **Report.** Migration result, function deploy result, all verification outcomes, scanner state (no new findings expected since RLS + GRANTs already in migration).
+- Update the small number of input/textarea/select rules that read from `--surface-1`/`--bg-elevated` to read from `--input-bg` (currently `--bg-elevated` is used by the native `select` around line 710, and shadcn inputs pull from `--input`). Point the shadcn `--input` HSL at `#121216` so all form controls retain a subtle fill.
+- Composer, search bars, and dictation inputs already use their own classes — spot-verify they resolve to `--input-bg` after remap.
+
+### 3. Hardcoded fill audit
+
+Sweep for card-style fills that bypass tokens and neutralize them (set to `transparent` or `var(--canvas)`), keeping borders:
+- `rgba(220, 219, 216, 0.0..)` card fills in `src/index.css`
+- `background: var(--surface-1|2)` usages in component CSS/JSX
+- Inline `style={{ background: ... }}` on panel/card wrappers under `src/components/**` and `src/pages/**` (Journal note cards, Projects brief/threads panels, Research panels, settings sections, drawer bodies)
+
+Scope of edits: CSS token values + a targeted find/replace pass on component-level card backgrounds. No layout, spacing, typography, or border changes.
+
+### 4. Preserve
+
+- Hairline/border tokens untouched — they're the only separator now, so `--hairline`, `--border-faint`, `--border-subtle`, `--border` stay as-is.
+- Modals, popovers, tooltips, dropdowns, drawers, command palette, toasts keep their elevated surface (`--surface-3`+) so overlays still read above content.
+- Input/textarea/select fills preserved via `--input-bg`.
+- Hover/active overlays (`--overlay-hover`, `--overlay-active`) stay — they're translucent white ticks, not surface fills.
+
+### 5. Verify
+
+- Build + typecheck.
+- Playwright screenshots on `/journal`, `/projects/:id`, `/research`, `/mind`, `/settings`, and a chat thread; compare against uploaded screenshots to confirm cards flatten and only hairlines separate sections.
+- Confirm form fields, modals, popovers, tooltips still have visible fill.
+- Confirm no horizontal scroll / no new console errors.
 
 ## Out of scope
 
-- Existing ChatGPT/Claude `chat_imports` flow is untouched.
-- No edits to `agent_configs`, `app_config`, or `cron_health` policies.
-- No frontend changes — code already on disk.
+- Any change to borders, radii, spacing, or typography.
+- Backend, edge functions, chat runtime, Mnemos, Continuity Trace wiring.
+- The already-verified Research + Continuity Trace commits.

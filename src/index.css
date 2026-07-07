@@ -12,25 +12,32 @@
    ====================================================================== */
 
 :root {
-  /* Surfaces v4 — temperature-locked, B = R × 1.20 ratio */
-  --floor:     #08080a;   /* outer chrome, rail, scene nav — the black floor UNDER the panels (unchanged) */
-  --canvas:    #0e0e11;   /* left panel + main card surface — Mnemos surface (parity with mnemos.html --bg) */
-  --surface-1: #121216;   /* cards, inputs, data rows */
-  --surface-2: #16161a;   /* hover state on cards */
-  --surface-3: #1a1a1f;   /* modals, popovers, segment selected */
-  --surface-4: #1e1e24;   /* tooltips on overlays */
-  --surface-5: #222229;   /* top elevation */
+  /* Surfaces v5 — flat canvas. Cards & panels share the canvas fill and are
+     separated only by hairline borders (Vercel-style). Only true overlays
+     (modals, popovers, tooltips) sit on a raised surface. Form fields keep
+     a distinct fill via --input-bg. */
+  --floor:     #08080a;   /* outer chrome, rail, scene nav — the black floor UNDER the panels */
+  --canvas:    #0e0e11;   /* app background AND cards/panels/data rows — flat */
+  --surface-1: var(--canvas);          /* was #121216 — flattened to canvas */
+  --surface-2: rgba(255, 255, 255, 0.030); /* hover/selected as translucent overlay */
+  --surface-3: #17171a;   /* modals, popovers, segment selected (overlays only) */
+  --surface-4: #1b1b21;   /* tooltips on overlays */
+  --surface-5: #1f1f26;   /* top elevation */
 
-  /* Legacy surface aliases — kept for backward compat */
+  /* Dedicated form-field fill — inputs/textareas/selects stay lighter than canvas */
+  --input-bg:  #121216;
+
+  /* Legacy surface aliases — kept for backward compat, now flat */
   --bg-void:          var(--canvas);
   --bg-deep:          var(--floor);
   --bg-primary:       var(--canvas);
-  --bg-elevated:      var(--surface-1);
-  --bg-surface:       var(--surface-1);
+  --bg-elevated:      var(--canvas);
+  --bg-surface:       var(--canvas);
   --bg-surface-hover: var(--surface-2);
   --bg-glass:         rgba(14, 14, 17, 0.88);
   --surface-raised:   var(--surface-2);
-  --surface-muted:    rgba(255, 255, 255, 0.025);
+  --surface-muted:    transparent;
+
 
   /* Text hierarchy (warm cream, 10 tiers) */
   --ink:             rgba(244, 243, 240, 0.93);  /* HIGHEST — brightness cap */
@@ -103,10 +110,11 @@
      under a semantic name so call sites read as "armed" rather than "luca". */
   --accent-soft: #60a5fa;
 
-  /* Legacy card surfaces */
-  --card:           rgba(220, 219, 216, 0.03);
-  --card-hover:     rgba(220, 219, 216, 0.045);
-  --card-bg:        rgba(220, 219, 216, 0.018);
+  /* Legacy card surfaces — flattened; cards are canvas + hairline border */
+  --card:           transparent;
+  --card-hover:     var(--overlay-hover);
+  --card-bg:        transparent;
+
 
   /* Agent identity — monochrome cream defaults */
   --agent-luca:     rgba(244, 243, 240, 0.72);
@@ -362,7 +370,7 @@
   :root {
     --background: 240 7% 4%;
     --foreground: 40 10% 93%;
-    --card: 240 7% 7%;
+    --card: 240 7% 4%;
     --card-foreground: 40 10% 93%;
     --popover: 240 7% 7%;
     --popover-foreground: 40 10% 93%;
@@ -707,9 +715,10 @@ html {
   color: var(--text-secondary);
 }
 .effort-select option {
-  background: var(--bg-elevated);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
+
 
 @keyframes g-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 
@@ -1104,12 +1113,14 @@ html {
   :root {
     --floor: #000000;
     --canvas: #000000;
-    --surface-1: #0b0b0d;
-    --surface-2: #111114;
-    --surface-3: #17171a;
+    --surface-1: var(--canvas);
+    --surface-2: rgba(255, 255, 255, 0.035);
+    --surface-3: #0f0f12;
     --bg-deep: #000000;
     --bg-primary: #000000;
-    --bg-elevated: var(--surface-1);
+    --bg-elevated: var(--canvas);
+    --input-bg: #0b0b0d;
+
     --message-max-width: 100dvw;
     /* Mobile contrast lift — raise the faint text tiers toward WCAG AA on
        small screens (varied lighting / glare hurt legibility most here),
@@ -3989,7 +4000,8 @@ html {
   -webkit-appearance: none;
   height: 32px;
   width: 100%;
-  background: var(--surface-1);
+  background: var(--input-bg);
+
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0 32px 0 12px;
@@ -4001,12 +4013,13 @@ html {
   transition: border-color 180ms var(--ease-out);
 }
 .select-native:focus { border-color: var(--border-focus); }
-.select-native option { background: var(--surface-2); color: var(--text-primary); }
+.select-native option { background: var(--input-bg); color: var(--text-primary); }
 
 /* ── Textarea ── */
 .textarea-base {
   width: 100%;
-  background: var(--surface-1);
+  background: var(--input-bg);
+
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 10px 12px;
@@ -4021,7 +4034,8 @@ html {
 }
 .textarea-base:focus {
   border-color: var(--border-focus);
-  background: var(--surface-2);
+  background: var(--input-bg);
+
 }
 .textarea-base--mono {
   font-family: var(--font-mono);
@@ -12482,14 +12496,15 @@ html {
   flex: 1;
   display: flex; align-items: center; gap: 10px;
   height: 38px; padding: 0 14px;
-  background: var(--surface-1);
+  background: var(--input-bg);
   border: 1px solid var(--border-faint);
   border-radius: 999px;
   font-family: var(--font-sans); font-size: 12.5px;
   color: var(--text-soft);
   transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
-.s-search:focus-within { border-color: var(--border-soft); background: var(--surface-2); }
+.s-search:focus-within { border-color: var(--border-soft); background: var(--input-bg); }
+
 .s-search-glyph { color: var(--text-whisper); font-size: 13px; }
 .s-search input {
   flex: 1; background: transparent; border: none; outline: none;
