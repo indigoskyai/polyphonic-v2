@@ -30,7 +30,8 @@ import { shouldShowStudioNavigation } from '@/lib/interfaceMode';
 // Primary surfaces — mirrors the desktop nav rail.
 const STUDIO_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
-  { label: 'Groups', path: '/groups', icon: MessagesSquare },
+  // { label: 'Groups', path: '/groups', icon: MessagesSquare }, // hidden — WIP
+
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Mind', path: '/mind', icon: Brain },
   { label: 'Journal', path: '/journal', icon: NotebookPen },
