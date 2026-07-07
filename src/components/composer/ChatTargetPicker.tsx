@@ -342,12 +342,11 @@ export function ChatTargetPicker({
                     </span>
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 10,
                         color: 'var(--blue-accent)',
-                        fontFamily: 'var(--font-mono)',
-                        letterSpacing: 'var(--track-meta)',
-                        textTransform: 'uppercase',
-                        padding: '1px 6px',
+                        fontFamily: 'var(--font-sans)',
+                        letterSpacing: '0.005em',
+                        padding: '2px 8px',
                         border: '1px solid color-mix(in srgb, var(--blue-accent) 45%, transparent)',
                         background: 'color-mix(in srgb, var(--blue-accent) 10%, transparent)',
                         borderRadius: 999,
