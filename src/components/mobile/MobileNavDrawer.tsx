@@ -45,7 +45,8 @@ const STUDIO_ROUTES = [
 // say "Notebook" (instead of /journal redirect chain showing "Journal").
 const SIMPLE_ROUTES = [
   { label: 'Chat', path: '/chat', icon: MessageCircle },
-  { label: 'Groups', path: '/groups', icon: MessagesSquare },
+  // { label: 'Groups', path: '/groups', icon: MessagesSquare }, // hidden — WIP
+
   { label: 'Notebook', path: '/notebook', icon: NotebookPen },
   { label: 'Memory', path: '/memory', icon: Archive },
   { label: 'Agents', path: '/settings/agents', icon: Bot },
