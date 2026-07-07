@@ -110,12 +110,13 @@
 
 .research-masthead h1 {
   margin: 24px 0 0;
-  color: var(--research-t-hi);
+  color: var(--ink);
   font-family: var(--font-serif);
-  font-size: 42px;
+  font-size: 34px;
   font-weight: 400;
+  font-style: italic;
   letter-spacing: 0;
-  line-height: 1.04;
+  line-height: 1.08;
 }
 
 .research-masthead p {
