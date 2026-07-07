@@ -715,9 +715,10 @@ html {
   color: var(--text-secondary);
 }
 .effort-select option {
-  background: var(--bg-elevated);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
+
 
 @keyframes g-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 
