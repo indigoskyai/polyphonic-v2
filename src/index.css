@@ -110,10 +110,11 @@
      under a semantic name so call sites read as "armed" rather than "luca". */
   --accent-soft: #60a5fa;
 
-  /* Legacy card surfaces */
-  --card:           rgba(220, 219, 216, 0.03);
-  --card-hover:     rgba(220, 219, 216, 0.045);
-  --card-bg:        rgba(220, 219, 216, 0.018);
+  /* Legacy card surfaces — flattened; cards are canvas + hairline border */
+  --card:           transparent;
+  --card-hover:     var(--overlay-hover);
+  --card-bg:        transparent;
+
 
   /* Agent identity — monochrome cream defaults */
   --agent-luca:     rgba(244, 243, 240, 0.72);
