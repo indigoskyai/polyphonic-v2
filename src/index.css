@@ -3613,7 +3613,7 @@ html {
   letter-spacing: var(--track-body);
   /* The agent's prose is the primary reading content — crisp, high-contrast
      (guide: primary content → --text-primary). */
-  color: var(--text-primary);
+  color: var(--text-body);
   min-width: 0;
   overflow-wrap: anywhere;
 }
