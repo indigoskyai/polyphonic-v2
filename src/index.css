@@ -4011,7 +4011,7 @@ html {
   transition: border-color 180ms var(--ease-out);
 }
 .select-native:focus { border-color: var(--border-focus); }
-.select-native option { background: var(--surface-2); color: var(--text-primary); }
+.select-native option { background: var(--input-bg); color: var(--text-primary); }
 
 /* ── Textarea ── */
 .textarea-base {
