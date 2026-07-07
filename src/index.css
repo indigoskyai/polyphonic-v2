@@ -12,25 +12,32 @@
    ====================================================================== */
 
 :root {
-  /* Surfaces v4 — temperature-locked, B = R × 1.20 ratio */
-  --floor:     #08080a;   /* outer chrome, rail, scene nav — the black floor UNDER the panels (unchanged) */
-  --canvas:    #0e0e11;   /* left panel + main card surface — Mnemos surface (parity with mnemos.html --bg) */
-  --surface-1: #121216;   /* cards, inputs, data rows */
-  --surface-2: #16161a;   /* hover state on cards */
-  --surface-3: #1a1a1f;   /* modals, popovers, segment selected */
-  --surface-4: #1e1e24;   /* tooltips on overlays */
-  --surface-5: #222229;   /* top elevation */
+  /* Surfaces v5 — flat canvas. Cards & panels share the canvas fill and are
+     separated only by hairline borders (Vercel-style). Only true overlays
+     (modals, popovers, tooltips) sit on a raised surface. Form fields keep
+     a distinct fill via --input-bg. */
+  --floor:     #08080a;   /* outer chrome, rail, scene nav — the black floor UNDER the panels */
+  --canvas:    #0e0e11;   /* app background AND cards/panels/data rows — flat */
+  --surface-1: var(--canvas);          /* was #121216 — flattened to canvas */
+  --surface-2: rgba(255, 255, 255, 0.030); /* hover/selected as translucent overlay */
+  --surface-3: #17171a;   /* modals, popovers, segment selected (overlays only) */
+  --surface-4: #1b1b21;   /* tooltips on overlays */
+  --surface-5: #1f1f26;   /* top elevation */
 
-  /* Legacy surface aliases — kept for backward compat */
+  /* Dedicated form-field fill — inputs/textareas/selects stay lighter than canvas */
+  --input-bg:  #121216;
+
+  /* Legacy surface aliases — kept for backward compat, now flat */
   --bg-void:          var(--canvas);
   --bg-deep:          var(--floor);
   --bg-primary:       var(--canvas);
-  --bg-elevated:      var(--surface-1);
-  --bg-surface:       var(--surface-1);
+  --bg-elevated:      var(--canvas);
+  --bg-surface:       var(--canvas);
   --bg-surface-hover: var(--surface-2);
   --bg-glass:         rgba(14, 14, 17, 0.88);
   --surface-raised:   var(--surface-2);
-  --surface-muted:    rgba(255, 255, 255, 0.025);
+  --surface-muted:    transparent;
+
 
   /* Text hierarchy (warm cream, 10 tiers) */
   --ink:             rgba(244, 243, 240, 0.93);  /* HIGHEST — brightness cap */
