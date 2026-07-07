@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { Activity } from 'lucide-react';
 import { useThreadStore } from '@/stores/threadStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useArtifactStore } from '@/stores/artifactStore';
+import { useDrawerStore } from '@/stores/drawerStore';
 import RichBody from '@/components/rich/RichBody';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
@@ -112,6 +114,7 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
   const currentThread = useThreadStore((s) =>
     s.currentThreadId ? s.threads.find((t) => t.id === s.currentThreadId) : null,
   );
+  const openDrawer = useDrawerStore((s) => s.open);
   const threadArtifacts = useArtifactStore(
     (s) => (currentThreadId ? s.byThread[currentThreadId] ?? EMPTY_ARTIFACTS : EMPTY_ARTIFACTS),
   );
@@ -223,6 +226,21 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
         {attachedArtifacts.map((artifact) => (
           <ArtifactChip key={artifact.id} artifact={artifact} />
         ))}
+
+        {msg.role === 'assistant' && (
+          <div className="msg-actions">
+            <button
+              type="button"
+              className="msg-trace-button"
+              onClick={() => openDrawer('continuity-trace', { messageId: msg.id, threadId: msg.thread_id })}
+              title="Open Continuity Trace"
+              aria-label="Open Continuity Trace for this response"
+            >
+              <Activity size={12} strokeWidth={1.7} aria-hidden="true" />
+              <span>Trace</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

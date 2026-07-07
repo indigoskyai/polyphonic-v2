@@ -32,6 +32,7 @@ import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
 import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import MemoryDetailDrawer from "./components/drawers/MemoryDetailDrawer";
+import ContinuityTraceDrawer from "./components/drawers/ContinuityTraceDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
 import AgentDialogueDrawer from "./components/drawers/AgentDialogueDrawer";
 import SubAgentOverlay from "./components/subagents/SubAgentOverlay";
@@ -349,6 +350,7 @@ function DrawerRouter() {
     : active === 'activity-timeline' ? 'Activity timeline'
     : active === 'thread-detail' ? 'Thread detail'
     : active === 'memory-detail' ? 'Memory detail'
+    : active === 'continuity-trace' ? 'Continuity Trace'
     : active === 'agent-inspector' ? 'Agent inspector'
     : active === 'agent-dialogue' ? 'Agent dialogue'
     : active === 'observer' ? 'Observer'
@@ -357,7 +359,7 @@ function DrawerRouter() {
   // Memory detail floats over the page (no backdrop blur) so the graph
   // behind it remains visible. All other drawers keep the backdrop.
   const showBackdrop = active !== 'memory-detail' || isMobile;
-  const drawerWidth = active === 'memory-detail' && !isMobile ? 320 : undefined;
+  const drawerWidth = active === 'memory-detail' && !isMobile ? 320 : active === 'continuity-trace' && !isMobile ? 460 : undefined;
 
   return (
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop} width={drawerWidth}>
@@ -365,6 +367,7 @@ function DrawerRouter() {
       {active === 'activity-timeline' && <ActivityTimelineDrawer />}
       {active === 'thread-detail' && <ThreadDetailDrawer />}
       {active === 'memory-detail' && <MemoryDetailDrawer />}
+      {active === 'continuity-trace' && <ContinuityTraceDrawer />}
       {active === 'observer' && <ObserverDrawer />}
       {active === 'agent-dialogue' && <AgentDialogueDrawer />}
       {active !== null
@@ -372,6 +375,7 @@ function DrawerRouter() {
         && active !== 'activity-timeline'
         && active !== 'thread-detail'
         && active !== 'memory-detail'
+        && active !== 'continuity-trace'
         && active !== 'observer'
         && active !== 'agent-dialogue' && (
         <>

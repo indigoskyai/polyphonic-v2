@@ -22,6 +22,9 @@ const FETCH_LIMIT = 40; // overfetch then trim — cheaper than RPC ranking
 
 export interface HypomnemaRow {
   id: string;
+  agent_id?: string | null;
+  thread_id?: string | null;
+  source_message_id?: string | null;
   content: string;
   confidence: number;
   domain: string | null;
@@ -30,6 +33,8 @@ export interface HypomnemaRow {
   last_revised: string;
   created_at: string;
   density: string;
+  tags?: string[] | null;
+  source?: string | null;
 }
 
 type SupabaseLike = {
@@ -82,6 +87,22 @@ export interface LoadHypomnemaResult {
   block: string;
   count: number;
   rendered: number;
+  items: HypomnemaPreviewItem[];
+}
+
+export interface HypomnemaPreviewItem {
+  id: string;
+  excerpt: string;
+  score: number;
+  confidence: number;
+  timestamp: string | null;
+  agent_id?: string | null;
+  thread_id?: string | null;
+  source_message_id?: string | null;
+  domain?: string | null;
+  density?: string | null;
+  source?: string | null;
+  tags: string[];
 }
 
 /**
@@ -98,7 +119,7 @@ export async function loadHypomnema(
 ): Promise<LoadHypomnemaResult> {
   const { data, error } = await supabase
     .from("hypomnema_entry")
-    .select("id, content, confidence, domain, foundational, active_attention, last_revised, created_at, density")
+    .select("id, agent_id, thread_id, source_message_id, content, confidence, domain, foundational, active_attention, last_revised, created_at, density, tags, source")
     .eq("user_id", userId)
     .eq("agent_id", agentId)
     .eq("active", true)
@@ -107,13 +128,13 @@ export async function loadHypomnema(
 
   if (error) {
     console.warn("[hypomnema.read] query failed:", error.message);
-    return { block: "", count: 0, rendered: 0 };
+    return { block: "", count: 0, rendered: 0, items: [] };
   }
 
   const rows = (data || []) as HypomnemaRow[];
   if (rows.length === 0) {
     const importedRows = await loadImportedHypomnemaRows(supabase, userId, agentId, FETCH_LIMIT);
-    if (importedRows.length === 0) return { block: "", count: 0, rendered: 0 };
+    if (importedRows.length === 0) return { block: "", count: 0, rendered: 0, items: [] };
     return renderHypomnemaRows(importedRows, {
       header: "## what i'm carrying forward from the imported account",
       linePrefix: "imported prior",
@@ -152,7 +173,7 @@ export async function loadImportedHypomnemaRows(
 
   const { data, error } = await supabase
     .from("hypomnema_entry")
-    .select("id, content, confidence, domain, foundational, active_attention, last_revised, created_at, density")
+    .select("id, agent_id, thread_id, source_message_id, content, confidence, domain, foundational, active_attention, last_revised, created_at, density, tags, source")
     .eq("user_id", userId)
     .eq("agent_id", agentId)
     .in("id", ids)
@@ -177,21 +198,36 @@ function renderHypomnemaRows(
     .sort((a, b) => b.score - a.score);
 
   const lines: string[] = [];
+  const items: HypomnemaPreviewItem[] = [];
   let chars = 0;
   let rendered = 0;
-  for (const { row } of scored) {
+  for (const { row, score } of scored) {
     const when = relativeWhen(row.last_revised || row.created_at, nowMs);
     const sanitized = sanitizeContinuityBoundaryText(row.content.trim());
     const prefix = options.linePrefix ? `${options.linePrefix}, ${when}` : when;
     const line = `- (${prefix}) ${sanitized.text}`;
     if (chars + line.length + 1 > CHAR_CAP) break;
     lines.push(line);
+    items.push({
+      id: row.id,
+      excerpt: sanitized.text,
+      score: Number(score.toFixed(3)),
+      confidence: row.confidence,
+      timestamp: row.last_revised || row.created_at || null,
+      agent_id: row.agent_id ?? null,
+      thread_id: row.thread_id ?? null,
+      source_message_id: row.source_message_id ?? null,
+      domain: row.domain ?? null,
+      density: row.density ?? null,
+      source: row.source ?? null,
+      tags: Array.isArray(row.tags) ? row.tags.slice(0, 8) : [],
+    });
     chars += line.length + 1;
     rendered += 1;
   }
 
-  if (lines.length === 0) return { block: "", count: rows.length, rendered: 0 };
+  if (lines.length === 0) return { block: "", count: rows.length, rendered: 0, items: [] };
 
   const block = `\n${options.header}\n\n${lines.join("\n")}`;
-  return { block, count: rows.length, rendered };
+  return { block, count: rows.length, rendered, items };
 }

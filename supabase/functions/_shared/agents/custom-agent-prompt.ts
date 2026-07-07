@@ -52,6 +52,7 @@ export function buildCustomAgentSystemPrompt(parts: CustomAgentPromptParts): str
     `## Agent instructions\n${agentPrompt}`,
     formatCustomIdentityDocs(parts.identityDocs),
     parts.projectContextBlock || "",
+    `## Continuity source boundary\nOnly call something "this thread" or "this session" when it appears in current thread history. If it comes from Mnemos, Hypomnema, functional memory, beliefs, or autonomous context, answer from it naturally without pretending it was in the current thread.`,
     parts.continuityBridge || "",
     parts.hypomnemaBlock || "",
     parts.functionalMemoryBlock || "",

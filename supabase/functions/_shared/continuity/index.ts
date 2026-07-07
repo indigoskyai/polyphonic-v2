@@ -28,6 +28,20 @@ export {
 } from "./kernel.ts";
 
 export {
+  appendContinuityTraceOperation,
+  buildContinuityTraceContext,
+  recordContinuityTurnTrace,
+  sanitizeTraceWriteOperation,
+  type ContinuityTraceContextSummary,
+  type ContinuityTraceItem,
+  type ContinuityTraceLayer,
+  type ContinuityTraceLayerKey,
+  type ContinuityTraceStatus,
+  type ContinuityTraceWriteOperation,
+  type RecordContinuityTurnTraceInput,
+} from "./trace.ts";
+
+export {
   buildHypomnemaGatePayload,
   encodeMnemosExchange,
   queueContinuityTurnWrites,

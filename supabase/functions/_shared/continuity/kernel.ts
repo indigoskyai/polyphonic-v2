@@ -216,7 +216,7 @@ const EMPTY_IDENTITY: LucaIdentityDocs = {
 };
 
 export function emptyHypomnema(): LoadHypomnemaResult {
-  return { block: "", count: 0, rendered: 0 };
+  return { block: "", count: 0, rendered: 0, items: [] };
 }
 
 export async function loadContinuityPacket(
@@ -442,6 +442,11 @@ function stripListPrefix(value: string): string {
 }
 
 function hypomnemaPreviewLines(hypomnema: LoadHypomnemaResult, limit = 2): string[] {
+  if (Array.isArray(hypomnema.items) && hypomnema.items.length > 0) {
+    return hypomnema.items
+      .slice(0, limit)
+      .map((item) => truncateText(item.excerpt, 220));
+  }
   return (hypomnema.block || "")
     .split("\n")
     .map((line) => stripListPrefix(line.trim()))
@@ -529,7 +534,16 @@ export function summarizeContinuityPacket(packet: ContinuityPacket, focus?: stri
     hypomnema: {
       count: packet.hypomnema.count,
       rendered: packet.hypomnema.rendered,
-      items: hypomnemaPreviewLines(packet.hypomnema, 6),
+      items: (packet.hypomnema.items || []).slice(0, 6).map((item) => ({
+        id: item.id,
+        content: truncateText(item.excerpt, 500),
+        score: item.score,
+        confidence: item.confidence,
+        source: item.source ?? null,
+        thread_id: item.thread_id ?? null,
+        source_message_id: item.source_message_id ?? null,
+        tags: item.tags || [],
+      })),
     },
     functional_memory: packet.functionalMemories.slice(0, 8).map((memory) => ({
       id: memory.id,

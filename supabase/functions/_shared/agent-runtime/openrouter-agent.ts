@@ -6,8 +6,10 @@ import type { ContinuityPacket } from "../continuity/index.ts";
 import {
   loadAutonomousMemoryArtifacts,
   queueContinuityTurnWrites,
+  recordContinuityTurnTrace,
   summarizeAutonomousMemoryArtifacts,
   summarizeContinuityPacket,
+  type AutonomousMemoryArtifactsResult,
 } from "../continuity/index.ts";
 import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
@@ -39,6 +41,8 @@ export interface OpenRouterAgentRuntimeOptions {
   agentId: string;
   authHeader: string;
   continuity: ContinuityPacket;
+  autonomousMemory?: AutonomousMemoryArtifactsResult | null;
+  userMessageId?: string | null;
   pendingRevisions: PendingRevision[];
   mcpTools?: McpToolRegistration[];
   corsHeaders: Record<string, string>;
@@ -398,6 +402,20 @@ async function runOpenRouterAgentSdkTurn(
 
   autoTitleThread(options.supabase, options.threadId, options.userMessage, finalContent, options.apiKey).catch(() => {});
 
+  const continuityTraceId = !assistantWasDuplicate
+    ? await recordContinuityTurnTrace(options.supabase, {
+        userId: options.userId,
+        threadId: options.threadId,
+        userMessageId: options.userMessageId ?? null,
+        assistantMessageId: insertedMessage?.id ?? null,
+        agentId: options.agentId,
+        model: usedModel,
+        runtimeMode: "openrouter_agent_sdk",
+        continuity: options.continuity,
+        autonomousMemory: options.autonomousMemory ?? null,
+      })
+    : null;
+
   if (!assistantWasDuplicate) {
     queueContinuityTurnWrites({
       supabase: options.supabase as any,
@@ -411,6 +429,7 @@ async function runOpenRouterAgentSdkTurn(
       authHeader: options.authHeader,
       pendingRevisions: options.pendingRevisions || [],
       recentTurns: normalizeRecentTurns([...options.messages, ...toolMessages]),
+      traceId: continuityTraceId,
     });
   }
 

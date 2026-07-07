@@ -5,6 +5,7 @@ export type DrawerKey =
   | 'activity-timeline'
   | 'thread-detail'
   | 'memory-detail'
+  | 'continuity-trace'
   | 'agent-inspector'
   | 'agent-dialogue'
   | 'observer'

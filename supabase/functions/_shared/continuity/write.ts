@@ -5,9 +5,14 @@ import {
 import { isDialecticEnabled } from "../config.ts";
 import { detectContinuityCarrySignal } from "../hypomnema/salience.ts";
 import { MnemosEngine } from "../mnemos/engine.ts";
+import {
+  appendContinuityTraceOperation,
+  type ContinuityTraceStatus,
+} from "./trace.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
+  rpc?: (fn: string, params?: Record<string, unknown>) => any;
 };
 
 export type ContinuityWriteStatus = "queued" | "skipped" | "error";
@@ -59,6 +64,7 @@ export interface ContinuityWriteOptions {
     pendingRevisions?: PendingRevision[];
   recentTurns?: Array<{ role: string; content: string }>;
   observers?: ContinuityObserverContribution[];
+  traceId?: string | null;
 }
 
 export interface ContinuityWriteReport {
@@ -109,6 +115,26 @@ export function queueContinuityTurnWrites(
     operations.push(operation);
   };
 
+  const appendTrace = (
+    name: ContinuityWriteOperation["name"],
+    status: ContinuityTraceStatus,
+    reason?: string,
+    detail?: Record<string, unknown>,
+  ) => {
+    if (!opts.traceId) return;
+    appendContinuityTraceOperation(opts.supabase, opts.traceId, {
+      name,
+      status,
+      reason: reason ?? null,
+      detail: {
+        ...(detail || {}),
+        thread_id: opts.threadId,
+        agent_id: agentId ?? null,
+        source_message_id: opts.sourceMessageId ?? null,
+      },
+    }).catch((err) => warn(`[continuity.write] trace append failed for ${name}`, err));
+  };
+
   const queue = (
     name: ContinuityWriteOperation["name"],
     enabled: boolean,
@@ -118,15 +144,23 @@ export function queueContinuityTurnWrites(
   ) => {
     if (!enabled) {
       record({ name, status: "skipped", reason });
+      appendTrace(name, "skipped", reason, detail);
       return;
     }
     try {
-      Promise.resolve(work()).catch((err) => {
+      record({ name, status: "queued", detail });
+      appendTrace(name, "queued", undefined, detail);
+      Promise.resolve(work()).then((result) => {
+        const resolved = summarizeResolvedTraceOperation(name, result);
+        appendTrace(name, resolved.status, resolved.reason, resolved.detail);
+      }).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        appendTrace(name, "failed", message, detail);
         warn(`[continuity.write] ${name} failed`, err);
       });
-      record({ name, status: "queued", detail });
     } catch (err) {
       record({ name, status: "error", reason: err instanceof Error ? err.message : String(err) });
+      appendTrace(name, "failed", err instanceof Error ? err.message : String(err), detail);
       warn(`[continuity.write] ${name} failed`, err);
     }
   };
@@ -238,6 +272,65 @@ export function queueContinuityTurnWrites(
   return report;
 }
 
+function summarizeResolvedTraceOperation(
+  name: ContinuityWriteOperation["name"],
+  result: unknown,
+): { status: ContinuityTraceStatus; reason?: string; detail?: Record<string, unknown> } {
+  if (name !== "mnemos_encode") {
+    return { status: "written_after_turn", detail: summarizeUnknownTraceResult(result) };
+  }
+
+  const details = Array.isArray(result) ? result : [result];
+  const mnemosDetails = details
+    .filter((detail): detail is MnemosEncodeOperationDetail => Boolean(detail && typeof detail === "object"))
+    .map((detail) => detail as MnemosEncodeOperationDetail);
+  const decisions = mnemosDetails.map((detail) => detail.decision);
+  const hasEncoded = decisions.includes("encoded");
+  const hasFailed = decisions.includes("failed");
+  const allSkipped = decisions.length > 0 && decisions.every((decision) => decision === "skipped");
+  const status: ContinuityTraceStatus = hasEncoded
+    ? "written_after_turn"
+    : hasFailed
+      ? "failed"
+      : allSkipped
+        ? "skipped"
+        : "written_after_turn";
+  return {
+    status,
+    reason: allSkipped ? firstString(mnemosDetails.map((detail) => detail.skip_reason)) ?? "low salience" : undefined,
+    detail: {
+      decisions,
+      engram_ids: mnemosDetails.map((detail) => detail.engram_id).filter(Boolean),
+      agent_ids: mnemosDetails.map((detail) => detail.agent_id).filter(Boolean),
+      salience: firstNumber(mnemosDetails.map((detail) => detail.salience)),
+      skip_reason: firstString(mnemosDetails.map((detail) => detail.skip_reason)),
+      force_reason: firstString(mnemosDetails.map((detail) => detail.force_reason)),
+      error: firstString(mnemosDetails.map((detail) => detail.error)),
+    },
+  };
+}
+
+function summarizeUnknownTraceResult(result: unknown): Record<string, unknown> {
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const output: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(result as Record<string, unknown>)) {
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+        output[key] = value;
+      }
+    }
+    return output;
+  }
+  return {};
+}
+
+function firstString(values: Array<string | null | undefined>): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+}
+
+function firstNumber(values: Array<number | null | undefined>): number | undefined {
+  return values.find((value): value is number => typeof value === "number" && Number.isFinite(value));
+}
+
 export async function encodeMnemosExchange(
   supabase: SupabaseLike,
   userId: string,
@@ -267,7 +360,12 @@ export async function encodeMnemosExchange(
       {
         engram_type: "episodic",
         tags: encoding.tags,
-        source_context: { ...encoding.source_context, agent_id: resolvedAgentId, source_message_id: sourceMessageId ?? null },
+        source_context: {
+          ...encoding.source_context,
+          agent_id: resolvedAgentId,
+          source_message_id: sourceMessageId ?? null,
+          thread_id: threadId ?? null,
+        },
         api_key: apiKey,
       },
     );

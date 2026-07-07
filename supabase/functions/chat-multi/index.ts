@@ -19,7 +19,9 @@ import {
   loadContinuityPacket,
   logContinuityDiagnostics,
   queueContinuityTurnWrites,
+  recordContinuityTurnTrace,
   shouldLoadAutonomousMemoryArtifacts,
+  type AutonomousMemoryArtifactsResult,
   type ContinuityPacket,
 } from "../_shared/continuity/index.ts";
 import {
@@ -674,16 +676,17 @@ serve(async (req) => {
             clientContext,
           })
       : "";
-    const autonomousMemoryContext = !classicRuntime &&
+    const autonomousMemoryResult: AutonomousMemoryArtifactsResult | null = !classicRuntime &&
         backend.billingTier !== "guest" &&
         shouldLoadAutonomousMemoryArtifacts(messageWithAttachments)
-      ? (await loadAutonomousMemoryArtifacts(supabase, {
+      ? await loadAutonomousMemoryArtifacts(supabase, {
           userId,
           agentId,
           focus: messageWithAttachments,
           limit: 12,
-        })).block
-      : "";
+        })
+      : null;
+    const autonomousMemoryContext = autonomousMemoryResult?.block || "";
     const simpleOpeningTurn =
       backendKeySource === "platform" &&
       agentIsSystemLuca &&
@@ -820,6 +823,8 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         corsHeaders,
         requestId,
         idempotencyKey,
+        autonomousMemory: autonomousMemoryResult,
+        userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
       });
     }
 
@@ -869,6 +874,17 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         agent: agentId,
         metadata: { agent: agentId, tool_planner_fallback: true },
       }).select("id").single();
+      await recordContinuityTurnTrace(supabase, {
+        userId,
+        threadId: thread_id,
+        userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+        assistantMessageId: inserted?.id ?? null,
+        agentId,
+        model: backend.model,
+        runtimeMode: "agent",
+        continuity,
+        autonomousMemory: autonomousMemoryResult,
+      });
       const donePayload = {
         ok: true,
         model: backend.model,
@@ -899,6 +915,17 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         kind: "agent_error",
         metadata: { agent: agentId, code: "forge_proposal_failed", message, detail },
       }).select("id").single();
+      await recordContinuityTurnTrace(supabase, {
+        userId,
+        threadId: thread_id,
+        userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+        assistantMessageId: inserted?.id ?? null,
+        agentId,
+        model: "forge_agent",
+        runtimeMode: "agent",
+        continuity,
+        autonomousMemory: autonomousMemoryResult,
+      });
       const donePayload = {
         ok: false,
         model: "forge_agent",
@@ -950,7 +977,10 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
             memoryAgentIds: classicMemoryAgentIds,
             persistedAgentId: classicRuntime ? null : agentId,
             reasoningEffort: effectiveReasoningEffort,
-          reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
+            continuity,
+            autonomousMemory: autonomousMemoryResult,
+            userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+            reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
           maxTokens: simpleOpeningTurn ? 1024 : undefined,
           guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make|entity|companion|openclaw|open\s+clause)\b/i.test(messageWithAttachments),
         },
@@ -1258,6 +1288,19 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
             );
             const fallbackMessageId = fallbackSavedMessage.id;
             await autoTitleThread(supabase, thread_id, messageWithAttachments, fallbackContent, apiKey!);
+            const fallbackTraceId = !fallbackSavedMessage.duplicate
+              ? await recordContinuityTurnTrace(supabase, {
+                  userId,
+                  threadId: thread_id,
+                  userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+                  assistantMessageId: fallbackMessageId,
+                  agentId,
+                  model: "chairman-fallback",
+                  runtimeMode: "agent",
+                  continuity,
+                  autonomousMemory: autonomousMemoryResult,
+                })
+              : null;
             const fallbackObservers = collectObservers({
               primaryAgentId: agentId,
               councilDrafts: revisedDrafts.map((d) => ({ character: d.character, content: d.content })),
@@ -1277,6 +1320,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
                 pendingRevisions: pendingRevisions || [],
                 recentTurns: history || [],
                 observers: fallbackObservers,
+                traceId: fallbackTraceId,
               });
             }
             const donePayload = {
@@ -1514,6 +1558,19 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
           autoTitleThread(supabase, thread_id, messageWithAttachments, synthesizedContent, apiKey!).catch(
             (e) => console.error("Auto-title failed:", e)
           );
+          const synthesizedTraceId = !synthesizedSavedMessage.duplicate
+            ? await recordContinuityTurnTrace(supabase, {
+                userId,
+                threadId: thread_id,
+                userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+                assistantMessageId: synthesizedMessageId,
+                agentId,
+                model: "synthesis",
+                runtimeMode: "agent",
+                continuity,
+                autonomousMemory: autonomousMemoryResult,
+              })
+            : null;
 
           // Hypomnema gate → primary reflection + observer notes for the
           // other council characters (M5: asymmetric witnessing).
@@ -1536,6 +1593,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
               pendingRevisions: pendingRevisions || [],
               recentTurns: history || [],
               observers: synthObservers,
+              traceId: synthesizedTraceId,
             });
           }
 
@@ -2338,6 +2396,9 @@ async function singleModelStream(
       runtimeProfile?: "classic" | "agent";
       memoryAgentIds?: string[];
       persistedAgentId?: string | null;
+      continuity?: ContinuityPacket;
+      autonomousMemory?: AutonomousMemoryArtifactsResult | null;
+      userMessageId?: string | null;
     } = {},
   ): Promise<Response> {
   const encoder = new TextEncoder();
@@ -2574,6 +2635,19 @@ async function singleModelStream(
         }
         await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
         autoTitleThread(supabase, threadId, userMessage, fullContent, apiKey).catch(() => {});
+          const continuityTraceId = !assistantWasDuplicate && options.continuity
+            ? await recordContinuityTurnTrace(supabase, {
+                userId,
+                threadId,
+                userMessageId: options.userMessageId ?? null,
+                assistantMessageId: insertedMessage?.id ?? null,
+                agentId,
+                model: usedModel,
+                runtimeMode: options.runtimeProfile ?? "agent",
+                continuity: options.continuity,
+                autonomousMemory: options.autonomousMemory ?? null,
+              })
+            : null;
           const singleObservers = collectObservers({
             primaryAgentId: agentId,
             toolMessages: options.runtimeProfile === "classic" ? [] : toolMessages,
@@ -2594,6 +2668,7 @@ async function singleModelStream(
               pendingRevisions: pendingRevisions || [],
               recentTurns: messages || [],
               observers: options.runtimeProfile === "classic" ? [] : singleObservers,
+              traceId: continuityTraceId,
             });
           }
 

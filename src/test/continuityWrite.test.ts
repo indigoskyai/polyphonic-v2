@@ -103,6 +103,66 @@ describe('Continuity Kernel write path', () => {
     });
   });
 
+  it('appends queued and resolved Mnemos write outcomes to a continuity trace', async () => {
+    const rpcCalls: Array<{ fn: string; operation: Record<string, unknown> }> = [];
+    const supabase = {
+      from: () => ({}),
+      rpc: (fn: string, params: Record<string, unknown>) => {
+        rpcCalls.push({
+          fn,
+          operation: params.p_operation as Record<string, unknown>,
+        });
+        return { error: null };
+      },
+    } as never;
+
+    const deps: ContinuityWriteDeps = {
+      encodeMnemosExchange: async () => ({
+        decision: 'encoded',
+        agent_id: 'luca',
+        salience: 0.82,
+        engram_id: 'engram-1',
+        source_message_id: 'assistant-1',
+      }),
+      log: () => {},
+      warn: () => {},
+    };
+
+    queueContinuityTurnWrites({
+      supabase,
+      userId: 'user-1',
+      threadId: 'thread-1',
+      agentId: 'luca',
+      userMessage: 'Please remember the blue lantern codename.',
+      agentResponse: 'I will carry blue lantern 47.',
+      sourceMessageId: 'assistant-1',
+      runtimeProfile: 'classic',
+      traceId: 'trace-1',
+    }, deps);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const mnemosTraceOps = rpcCalls
+      .filter((call) => call.fn === 'append_continuity_trace_write')
+      .map((call) => call.operation)
+      .filter((operation) => operation.name === 'mnemos_encode');
+
+    expect(mnemosTraceOps).toContainEqual(expect.objectContaining({
+      status: 'queued',
+      detail: expect.objectContaining({
+        source_message_id: 'assistant-1',
+      }),
+    }));
+    expect(mnemosTraceOps).toContainEqual(expect.objectContaining({
+      status: 'written_after_turn',
+      detail: expect.objectContaining({
+        salience: 0.82,
+        engram_ids: ['engram-1'],
+      }),
+    }));
+  });
+
   it('queues all post-turn memory operations through the same reportable path', () => {
     const fetchCalls: FetchCall[] = [];
     const finalized: string[] = [];
