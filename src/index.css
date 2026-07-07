@@ -12494,14 +12494,15 @@ html {
   flex: 1;
   display: flex; align-items: center; gap: 10px;
   height: 38px; padding: 0 14px;
-  background: var(--surface-1);
+  background: var(--input-bg);
   border: 1px solid var(--border-faint);
   border-radius: 999px;
   font-family: var(--font-sans); font-size: 12.5px;
   color: var(--text-soft);
   transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
-.s-search:focus-within { border-color: var(--border-soft); background: var(--surface-2); }
+.s-search:focus-within { border-color: var(--border-soft); background: var(--input-bg); }
+
 .s-search-glyph { color: var(--text-whisper); font-size: 13px; }
 .s-search input {
   flex: 1; background: transparent; border: none; outline: none;
