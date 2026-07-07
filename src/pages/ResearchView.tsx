@@ -1,19 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import {
-  Archive,
-  ArrowRight,
-  BadgeCheck,
-  Clipboard,
-  Database,
-  ExternalLink,
-  FlaskConical,
-  Gauge,
-  HardDrive,
-  MessageSquare,
-  Save,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Archive, ArrowRight, Clipboard, ExternalLink, MessageSquare, Save, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   THE_WELL_API_URL,
   THE_WELL_BENCHMARKS_URL,
@@ -22,23 +9,28 @@ import {
   THE_WELL_DATA_FORMAT_URL,
   buildDownloadCommand,
   buildStreamingSnippet,
-  buildWellResearchPrompt,
   buildWellDatasetUrl,
+  buildWellResearchPrompt,
   createWellTruthCard,
   formatSizeGb,
   getDatasetById,
-  getPrimaryAccessName,
   getWellCatalogStats,
   rankWellDatasets,
   type WellDatasetFamily,
 } from '@/lib/theWellCatalog';
-import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  GroundingGlyph,
+  canSaveGroundedTruthCard,
+  groundingDescription,
+  groundingLabel,
+  type GroundingEvidenceLevel,
+} from '@/components/research/GroundingGlyph';
 import { useAuthStore } from '@/stores/authStore';
 import { useResearchStore, type ResearchEvidenceCard } from '@/stores/researchStore';
 import { useThreadStore } from '@/stores/threadStore';
 import { useToast } from '@/hooks/use-toast';
 import { stashChatHandoff } from '@/lib/guestChat';
-import { useNavigate } from 'react-router-dom';
+import './ResearchView.css';
 
 const EXAMPLE_QUESTIONS = [
   'How does turbulence change when radiation and cooling are included?',
@@ -47,16 +39,68 @@ const EXAMPLE_QUESTIONS = [
   'What is the smallest dataset Luca can use for a first physics probe?',
 ];
 
-const PIPELINE = [
-  'Claim',
-  'Dataset',
-  'Sample',
-  'Measure',
-  'Truth card',
+const QUESTION_ROUTES: Record<string, string> = {
+  'Can we test whether a model preserves shock fronts in Euler flow?': 'euler_multi_quadrants',
+  'Show evidence for active matter self-organization from tensor fields.': 'viscoelastic_instability',
+  'What is the smallest dataset Luca can use for a first physics probe?': 'viscoelastic_instability',
+};
+
+const PROCESS_STEPS = [
+  {
+    number: '01',
+    title: 'Claim',
+    description: 'A research question stated in plain terms.',
+  },
+  {
+    number: '02',
+    title: 'Source',
+    description: 'The catalog, paper, query, or computation that can ground it.',
+  },
+  {
+    number: '03',
+    title: 'Sample',
+    description: 'Only the needed split, source, variant, or timestep window.',
+  },
+  {
+    number: '04',
+    title: 'Measure',
+    description: 'Metrics, findings, and caveats recorded with the method.',
+  },
+  {
+    number: '05',
+    title: 'Truth card',
+    description: 'Evidence saved with its boundary and exact recipe.',
+  },
+];
+
+const GROUNDING_LEVELS: Array<{
+  level: GroundingEvidenceLevel;
+  label: string;
+  description: string;
+}> = [
+  {
+    level: 'measured',
+    label: 'measured',
+    description: 'Primary artifact Luca ran or pulled; reproducible.',
+  },
+  {
+    level: 'derived',
+    label: 'derived',
+    description: 'One step removed from a cited finding, related run, or statistic.',
+  },
+  {
+    level: 'referenced',
+    label: 'referenced',
+    description: 'The source is known and located, but the primary was not pulled.',
+  },
+  {
+    level: 'asserted',
+    label: 'asserted',
+    description: 'Model reasoning without external grounding; not saveable.',
+  },
 ];
 
 export default function ResearchView() {
-  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
@@ -79,10 +123,30 @@ export default function ResearchView() {
   const truthCard = useMemo(() => createWellTruthCard(query, selectedDataset), [query, selectedDataset]);
   const streamingSnippet = useMemo(() => buildStreamingSnippet(selectedDataset), [selectedDataset]);
   const downloadCommand = useMemo(() => buildDownloadCommand(selectedDataset), [selectedDataset]);
+  const canSaveTruthCard = canSaveGroundedTruthCard(truthCard.evidenceLevel);
 
   useEffect(() => {
     if (user?.id) void loadCards(user.id);
   }, [user?.id, loadCards]);
+
+  function rankCurrentQuestion() {
+    const routed = QUESTION_ROUTES[query.trim()];
+    const nextDataset = routed ? getDatasetById(routed) : rankedDatasets[0];
+    if (nextDataset) setSelectedId(nextDataset.id);
+  }
+
+  function handleQuestionKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      rankCurrentQuestion();
+    }
+  }
+
+  function handleExampleSelect(example: string) {
+    setQuery(example);
+    const routed = QUESTION_ROUTES[example];
+    if (routed) setSelectedId(routed);
+  }
 
   async function copyText(value: string, type: 'stream' | 'download') {
     try {
@@ -95,7 +159,7 @@ export default function ResearchView() {
   }
 
   async function handleSaveTruthCard() {
-    if (!user?.id) return;
+    if (!user?.id || !canSaveTruthCard) return;
     try {
       await saveWellTruthCard({ userId: user.id, truthCard, dataset: selectedDataset });
       toast({ title: 'Truth card saved', description: `${selectedDataset.label} is now in the Research Lab.` });
@@ -140,78 +204,76 @@ export default function ResearchView() {
   }
 
   return (
-    <div
-      className="flex flex-col flex-1 min-h-0 overflow-y-auto"
-      style={{ animation: 'viewFadeIn var(--dur-normal) var(--ease-out) both' }}
-    >
-      <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto', padding: isMobile ? '24px 16px 96px' : '34px 28px 88px' }}>
-        <header style={headerStyle}>
-          <div style={{ minWidth: 0 }}>
-            <div style={eyebrowStyle}>
-              <FlaskConical size={14} strokeWidth={1.7} />
-              Research Lab
+    <div className="research-view">
+      <div className="research-shell">
+        <header className="research-masthead">
+          <div className="research-masthead__copy">
+            <div className="research-eyebrow research-masthead__eyebrow">
+              <span className="research-eyebrow__dot" aria-hidden="true" />
+              <span>Research lab</span>
             </div>
-            <h1 style={{ margin: '9px 0 0', color: 'var(--text-primary)', fontSize: isMobile ? 32 : 42, lineHeight: 1.02, letterSpacing: 'var(--track-tight)', fontWeight: 370 }}>
-              The Well Registry
-            </h1>
-            <p style={{ margin: '14px 0 0', maxWidth: 760, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.65 }}>
-              Luca maps the physics catalog, ranks evidence sources, and keeps raw simulation data out of memory unless a future compute run is explicitly configured.
+            <h1>The Well Registry</h1>
+            <p>
+              Luca maps the physics catalog, ranks evidence sources, and fetches raw simulation tensors only when a
+              question needs them.
             </p>
           </div>
-          <div style={boundaryStyle}>
-            <HardDrive size={16} strokeWidth={1.6} />
-            <div>
-              <div style={{ color: 'var(--text-primary)', fontSize: 12, fontWeight: 520 }}>Default ingest: 0 GB raw tensors</div>
-              <div style={{ color: 'var(--text-ghost)', fontSize: 11, marginTop: 3 }}>Catalog, metadata, provenance, and access paths are loaded first.</div>
+
+          <div className="research-readout" aria-label="The Well catalog readout">
+            <div className="research-readout__facts">
+              <Readout value={stats.totalSizeLabel} label="mapped" />
+              <Readout value={String(stats.familyCount)} label="families" />
+              <Readout value={String(stats.variantCount)} label="access names" />
+              <Readout value={String(stats.threeDimensional)} label="3D-capable" />
+              <Readout value="pointer" label="evidence mode" />
             </div>
+            <div className="research-readout__principle">
+              <span className="research-readout__principle-value">0 GB</span>
+              <span>default raw ingest</span>
+            </div>
+            <p>Catalog, metadata, provenance, and access paths load first. Raw tensors stream or cache only per task.</p>
           </div>
         </header>
 
-        <section style={metricsGridStyle(isMobile)}>
-          <MetricCard icon={<Database size={16} />} label="Mapped data" value={stats.totalSizeLabel} detail="Official collection scale" />
-          <MetricCard icon={<FlaskConical size={16} />} label="Families" value={String(stats.familyCount)} detail={`${stats.variantCount} exact access names`} />
-          <MetricCard icon={<Gauge size={16} />} label="3D-capable sets" value={String(stats.threeDimensional)} detail="Including spherical and log-spherical grids" />
-          <MetricCard icon={<BadgeCheck size={16} />} label="Evidence mode" value="Pointer-first" detail="Stream or cache per task" />
-        </section>
+        <main className="research-workspace">
+          <section className="research-region research-region--inquiry" aria-label="Research inquiry">
+            <RegionHeading title="Find the right simulated world" copy="Ask in physics. Luca ranks datasets by fit." />
 
-        <main style={workspaceGridStyle(isMobile)}>
-          <section style={surfaceStyle}>
-            <div style={panelHeaderStyle}>
-              <div>
-                <div style={sectionLabelStyle}>Evidence query</div>
-                <h2 style={sectionTitleStyle}>Find the right simulated world</h2>
-              </div>
-              <Search size={16} strokeWidth={1.7} style={{ color: 'var(--text-tertiary)' }} />
-            </div>
-
-            <label style={searchWrapStyle}>
-              <Search size={15} strokeWidth={1.7} style={{ color: 'var(--text-ghost)', flexShrink: 0 }} />
+            <label className="research-query">
               <textarea
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={handleQuestionKeyDown}
                 rows={3}
                 spellCheck={false}
-                style={queryInputStyle}
                 aria-label="Research question"
               />
+              <span className="research-query__bar">
+                <span>Enter to rank</span>
+                <button type="button" onClick={rankCurrentQuestion}>
+                  <span>Rank evidence</span>
+                  <ArrowRight size={13} aria-hidden="true" />
+                </button>
+              </span>
             </label>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              {EXAMPLE_QUESTIONS.map((example) => (
-                <button
-                  type="button"
-                  key={example}
-                  onClick={() => setQuery(example)}
-                  style={chipButtonStyle(query === example)}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
+            <section className="research-group" aria-label="Example research questions">
+              <div className="research-eyebrow">Try a question</div>
+              <div className="research-examples">
+                {EXAMPLE_QUESTIONS.slice(1).map((example) => (
+                  <button key={example} type="button" onClick={() => handleExampleSelect(example)}>
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </section>
 
-            <div style={{ marginTop: 22 }}>
-              <div style={sectionLabelStyle}>Ranked matches</div>
-              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+            <section className="research-group" aria-label="Ranked matches">
+              <div className="research-group__header">
+                <div className="research-eyebrow">Ranked matches</div>
+                <span>{rankedDatasets.length} of {stats.familyCount} families</span>
+              </div>
+              <div className="research-match-list">
                 {rankedDatasets.map((dataset, index) => (
                   <DatasetRow
                     key={dataset.id}
@@ -222,265 +284,340 @@ export default function ResearchView() {
                   />
                 ))}
               </div>
-            </div>
+            </section>
           </section>
 
-          <section style={surfaceStyle}>
-            <div style={panelHeaderStyle}>
-              <div>
-                <div style={sectionLabelStyle}>Selected source</div>
-                <h2 style={sectionTitleStyle}>{selectedDataset.label}</h2>
+          <section className="research-region research-region--source" aria-label="Selected source">
+            <div className="research-source-head">
+              <div className="research-source-head__copy">
+                <h2>{selectedDataset.label}</h2>
+                <GroundingGlyph level={truthCard.evidenceLevel} label />
               </div>
               <a
                 href={buildWellDatasetUrl(selectedDataset)}
                 target="_blank"
                 rel="noreferrer"
-                style={iconLinkStyle}
+                className="research-icon-button"
                 aria-label="Open dataset documentation"
                 title="Open dataset documentation"
               >
-                <ExternalLink size={15} />
+                <ExternalLink size={14} />
               </a>
             </div>
 
-            <div style={datasetMetaGridStyle}>
+            <div className="research-specs">
               <Meta label="Domain" value={selectedDataset.domain} />
-              <Meta label="Grid" value={`${selectedDataset.coordinateSystem} ${selectedDataset.dimension}`} />
-              <Meta label="Resolution" value={selectedDataset.resolution} />
-              <Meta label="Steps" value={selectedDataset.nSteps} />
-              <Meta label="Trajectories" value={selectedDataset.trajectories} />
-              <Meta label="Size" value={formatSizeGb(selectedDataset.sizeGb)} />
+              <Meta label="Grid" value={selectedDataset.coordinateSystem} />
+              <Meta label="Resolution" value={selectedDataset.resolution} exact />
+              <Meta label="Steps" value={selectedDataset.nSteps} exact />
+              <Meta label="Trajectories" value={selectedDataset.trajectories} exact />
+              <Meta label="Size" value={formatSizeGb(selectedDataset.sizeGb)} exact />
             </div>
 
-            <Band title="Fields">
-              <PillList items={selectedDataset.fields} />
-            </Band>
+            <SourceBlock title="Fields">
+              <PillList items={selectedDataset.fields} exact />
+            </SourceBlock>
 
-            <Band title="Phenomena">
+            <SourceBlock title="Phenomena">
               <PillList items={selectedDataset.phenomena} />
-            </Band>
+            </SourceBlock>
 
-            <Band title="Access names">
-              <div style={{ display: 'grid', gap: 8 }}>
+            <SourceBlock title="Access names">
+              <div className="research-access">
                 {selectedDataset.variants.map((variant) => (
-                  <div key={variant.id} style={variantStyle}>
-                    <code style={codeInlineStyle}>{variant.id}</code>
-                    <span style={{ color: 'var(--text-ghost)', fontSize: 12 }}>{variant.sizeGb ? formatSizeGb(variant.sizeGb) : variant.note ?? variant.label}</span>
+                  <div key={variant.id} className="research-access__row">
+                    <code>{variant.id}</code>
+                    <span>{variant.sizeGb ? formatSizeGb(variant.sizeGb) : variant.note ?? variant.label}</span>
                   </div>
                 ))}
               </div>
-            </Band>
+            </SourceBlock>
 
-            <div style={recipeGridStyle}>
-              <RecipeBlock
-                title="Stream probe"
-                value={streamingSnippet}
-                copied={copied === 'stream'}
-                onCopy={() => copyText(streamingSnippet, 'stream')}
-              />
-              <RecipeBlock
-                title="Local cache"
-                value={downloadCommand}
-                copied={copied === 'download'}
-                onCopy={() => copyText(downloadCommand, 'download')}
-              />
-            </div>
+            <CodeBlock
+              title="Stream probe"
+              value={streamingSnippet}
+              copied={copied === 'stream'}
+              onCopy={() => copyText(streamingSnippet, 'stream')}
+            />
+            <CodeBlock
+              title="Local cache"
+              value={downloadCommand}
+              copied={copied === 'download'}
+              onCopy={() => copyText(downloadCommand, 'download')}
+            />
           </section>
 
-          <aside style={surfaceStyle}>
-            <div style={panelHeaderStyle}>
-              <div>
-                <div style={sectionLabelStyle}>Truth card</div>
-                <h2 style={sectionTitleStyle}>What Luca would save</h2>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={handleSaveTruthCard}
-                  disabled={!user?.id || cardSaving}
-                  style={smallActionButtonStyle}
-                  title="Save truth card"
-                >
-                  <Save size={13} />
-                  <span>{cardSaving ? 'Saving' : 'Save'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenWithLuca}
-                  disabled={!user?.id || openingChat}
-                  style={smallActionButtonStyle}
-                  title="Open research chat with Luca"
-                >
-                  <MessageSquare size={13} />
-                  <span>{openingChat ? 'Opening' : 'Ask'}</span>
-                </button>
-                <Sparkles size={16} strokeWidth={1.7} style={{ color: 'var(--accent-soft)', marginTop: 7 }} />
-              </div>
-            </div>
+          <aside className="research-region research-region--evidence" aria-label="Truth card preview">
+            <RegionHeading
+              title="What Luca would save"
+              copy="A durable truth card: pointers and reproducibility, never raw tensors."
+            />
 
-            <div style={truthStatementStyle}>
-              <div style={sectionLabelStyle}>Question</div>
-              <p style={{ margin: '8px 0 0', color: 'var(--text-primary)', fontSize: 15, lineHeight: 1.55 }}>
-                {truthCard.question}
-              </p>
-            </div>
+            <article className="research-truth-card">
+              <header className="research-truth-card__top">
+                <div className="research-eyebrow">Truth card</div>
+                <div className="research-truth-card__actions">
+                  <button
+                    type="button"
+                    onClick={handleOpenWithLuca}
+                    disabled={!user?.id || openingChat}
+                    className="research-button research-button--secondary"
+                  >
+                    <MessageSquare size={13} aria-hidden="true" />
+                    <span>{openingChat ? 'Opening' : 'Ask'}</span>
+                  </button>
+                  {canSaveTruthCard ? (
+                    <button
+                      type="button"
+                      onClick={handleSaveTruthCard}
+                      disabled={!user?.id || cardSaving}
+                      className="research-button research-button--primary"
+                    >
+                      <Save size={13} aria-hidden="true" />
+                      <span>{cardSaving ? 'Saving' : 'Save'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenWithLuca}
+                      disabled={!user?.id || openingChat}
+                      className="research-button research-button--primary"
+                    >
+                      <Search size={13} aria-hidden="true" />
+                      <span>Find sources</span>
+                    </button>
+                  )}
+                </div>
+              </header>
 
-            <Band title="Boundary">
-              <p style={bodyTextStyle}>{truthCard.claimBoundary}</p>
-            </Band>
+              <section className="research-truth-card__grounding">
+                <GroundingGlyph level={truthCard.evidenceLevel} label />
+                <p>{selectedDataset.variants[0]?.id ?? selectedDataset.id}</p>
+              </section>
 
-            <Band title="Evidence loop">
-              <ol style={orderedListStyle}>
-                {truthCard.accessPlan.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </Band>
+              <TruthSection title="Question">
+                <p className="research-truth-card__question">{truthCard.question}</p>
+              </TruthSection>
 
-            <Band title="Measurements">
-              <PillList items={truthCard.measurements} tone="blue" />
-            </Band>
+              <TruthSection title="Boundary">
+                <p>{truthCard.claimBoundary}</p>
+              </TruthSection>
 
-            <Band title="Caveats">
-              <ul style={unorderedListStyle}>
-                {truthCard.caveats.map((caveat) => (
-                  <li key={caveat}>{caveat}</li>
-                ))}
-              </ul>
-            </Band>
+              <TruthSection title="Evidence loop">
+                <ul>
+                  {truthCard.accessPlan.map((step) => <li key={step}>{step}</li>)}
+                </ul>
+              </TruthSection>
+
+              <TruthSection title="Measurements">
+                <PillList items={truthCard.measurements} />
+              </TruthSection>
+
+              <TruthSection title="Caveats">
+                <ul className="research-truth-card__caveats">
+                  {truthCard.caveats.map((caveat) => <li key={caveat}>{caveat}</li>)}
+                </ul>
+              </TruthSection>
+
+              {!canSaveTruthCard && (
+                <p className="research-truth-card__nosave">Asserted reasoning cannot be saved as a truth card.</p>
+              )}
+            </article>
           </aside>
         </main>
 
-        <section style={lowerGridStyle(isMobile)}>
-          <div style={wideSurfaceStyle}>
-            <div style={panelHeaderStyle}>
-              <div>
-                <div style={sectionLabelStyle}>Luca research loop</div>
-                <h2 style={sectionTitleStyle}>From claim to reproducible evidence</h2>
-              </div>
-            </div>
-            <div style={pipelineStyle(isMobile)}>
-              {PIPELINE.map((step, index) => (
-                <div key={step} style={pipelineNodeStyle}>
-                  <span style={pipelineIndexStyle}>{String(index + 1).padStart(2, '0')}</span>
-                  <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{step}</span>
-                  {index < PIPELINE.length - 1 && !isMobile && <ArrowRight size={14} strokeWidth={1.6} style={{ color: 'var(--text-ghost)', marginLeft: 'auto' }} />}
-                </div>
-              ))}
-            </div>
+        <section className="research-spine" aria-label="Claim to truth card process">
+          <div className="research-spine__head">
+            <h2>From claim to reproducible evidence</h2>
+            <p>how a question becomes a truth card</p>
           </div>
+          <div className="research-spine__steps">
+            {PROCESS_STEPS.map((step, index) => (
+              <article key={step.number} className="research-spine__step" data-terminal={index === PROCESS_STEPS.length - 1}>
+                <div className="research-spine__number">{step.number}</div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-          <div style={{ display: 'grid', gap: 12 }}>
-            <SavedEvidencePanel
-              cards={cards}
-              loading={cardsLoading}
-              error={cardsError}
-              onOpen={(card) => {
-                setQuery(card.question);
-                setSelectedId(card.dataset_id);
-              }}
-              onArchive={handleArchiveCard}
-            />
+        <footer className="research-footer">
+          <SavedEvidencePanel
+            cards={cards}
+            loading={cardsLoading}
+            error={cardsError}
+            onOpen={(card) => {
+              setQuery(card.question);
+              setSelectedId(card.dataset_id);
+            }}
+            onArchive={handleArchiveCard}
+          />
 
-            <div style={surfaceStyle}>
-              <div style={panelHeaderStyle}>
+          <aside className="research-footer__aside">
+            <GroundingPanel />
+
+            <section className="research-docs-panel" aria-label="The Well source documents">
+              <div className="research-footer__head">
                 <div>
-                  <div style={sectionLabelStyle}>Source docs</div>
-                  <h2 style={sectionTitleStyle}>Grounding</h2>
+                  <div className="research-eyebrow">Source docs</div>
+                  <h2>The Well</h2>
                 </div>
+                <span>pointer-first</span>
               </div>
-              <div style={{ display: 'grid', gap: 9 }}>
+              <div className="research-doc-links">
                 <SourceLink href={THE_WELL_DATASET_OVERVIEW_URL} label="Dataset overview" />
                 <SourceLink href={THE_WELL_DATA_FORMAT_URL} label="HDF5 data format" />
                 <SourceLink href={THE_WELL_API_URL} label="WellDataset API" />
                 <SourceLink href={THE_WELL_BENCHMARKS_URL} label="Benchmarks" />
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          </aside>
+        </footer>
       </div>
     </div>
   );
 }
 
-function MetricCard({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+function Readout({ value, label }: { value: string; label: string }) {
   return (
-    <div style={metricCardStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, color: 'var(--text-tertiary)' }}>
-        <span style={sectionLabelStyle}>{label}</span>
-        <span style={{ color: 'var(--accent-soft)' }}>{icon}</span>
-      </div>
-      <div style={{ color: 'var(--text-primary)', fontSize: 24, fontWeight: 370, marginTop: 13, letterSpacing: 'var(--track-tight)' }}>{value}</div>
-      <div style={{ color: 'var(--text-ghost)', fontSize: 12, marginTop: 6, lineHeight: 1.45 }}>{detail}</div>
+    <div className="research-readout__item">
+      <strong>{value}</strong>
+      <span>{label}</span>
     </div>
   );
 }
 
-function DatasetRow({ dataset, rank, active, onSelect }: { dataset: WellDatasetFamily; rank: number; active: boolean; onSelect: () => void }) {
+function RegionHeading({ title, copy }: { title: string; copy: string }) {
   return (
-    <button type="button" onClick={onSelect} style={datasetRowStyle(active)}>
-      <span style={rankStyle(active)}>{rank}</span>
-      <span style={{ minWidth: 0, display: 'grid', gap: 4, textAlign: 'left' }}>
-        <span style={{ color: active ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {dataset.label}
-        </span>
-        <span style={{ color: 'var(--text-ghost)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {dataset.domain} · {dataset.resolution} · {formatSizeGb(dataset.sizeGb)}
-        </span>
+    <div className="research-region-head">
+      <h2>{title}</h2>
+      <p>{copy}</p>
+    </div>
+  );
+}
+
+function DatasetRow({
+  dataset,
+  rank,
+  active,
+  onSelect,
+}: {
+  dataset: WellDatasetFamily;
+  rank: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="research-match-row"
+      aria-pressed={active}
+      data-selected={active}
+    >
+      <span className="research-match-row__rank">{String(rank).padStart(2, '0')}</span>
+      <span className="research-match-row__body">
+        <span className="research-match-row__name">{dataset.label}</span>
+        <span className="research-match-row__meta">{dataset.domain} - {dataset.resolution} - {formatSizeGb(dataset.sizeGb)}</span>
       </span>
     </button>
   );
 }
 
-function Meta({ label, value }: { label: string; value: string }) {
+function Meta({ label, value, exact = false }: { label: string; value: string; exact?: boolean }) {
   return (
-    <div style={metaStyle}>
-      <div style={sectionLabelStyle}>{label}</div>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 6, lineHeight: 1.35 }}>{value}</div>
+    <div className="research-meta">
+      <div className="research-eyebrow">{label}</div>
+      <div className={exact ? 'research-meta__value research-meta__value--exact' : 'research-meta__value'}>{value}</div>
     </div>
   );
 }
 
-function Band({ title, children }: { title: string; children: React.ReactNode }) {
+function SourceBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ marginTop: 18 }}>
-      <div style={sectionLabelStyle}>{title}</div>
-      <div style={{ marginTop: 9 }}>{children}</div>
+    <section className="research-source-block">
+      <div className="research-eyebrow">{title}</div>
+      <div>{children}</div>
     </section>
   );
 }
 
-function PillList({ items, tone = 'warm' }: { items: string[]; tone?: 'warm' | 'blue' }) {
+function TruthSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+    <section className="research-truth-card__section">
+      <div className="research-eyebrow">{title}</div>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+function PillList({ items, exact = false }: { items: string[]; exact?: boolean }) {
+  return (
+    <div className="research-pill-list">
       {items.map((item) => (
-        <span key={item} style={pillStyle(tone)}>{item}</span>
+        <span key={item} className={exact ? 'research-pill research-pill--exact' : 'research-pill'}>
+          {item}
+        </span>
       ))}
     </div>
   );
 }
 
-function RecipeBlock({ title, value, copied, onCopy }: { title: string; value: string; copied: boolean; onCopy: () => void }) {
+function CodeBlock({
+  title,
+  value,
+  copied,
+  onCopy,
+}: {
+  title: string;
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
   return (
-    <div style={recipeStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-        <div style={sectionLabelStyle}>{title}</div>
-        <button type="button" onClick={onCopy} style={copyButtonStyle} aria-label={`Copy ${title}`}>
-          <Clipboard size={13} />
+    <section className="research-code">
+      <div className="research-code__head">
+        <div className="research-eyebrow">{title}</div>
+        <button type="button" onClick={onCopy} aria-label={`Copy ${title}`}>
+          <Clipboard size={12} aria-hidden="true" />
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre style={preStyle}>{value}</pre>
-    </div>
+      <pre>{value}</pre>
+    </section>
   );
 }
 
 function SourceLink({ href, label }: { href: string; label: string }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" style={sourceLinkStyle}>
+    <a href={href} target="_blank" rel="noreferrer" className="research-doc-link">
       <span>{label}</span>
-      <ExternalLink size={13} />
+      <ExternalLink size={12} aria-hidden="true" />
     </a>
+  );
+}
+
+function GroundingPanel() {
+  return (
+    <section className="research-grounding-panel" aria-label="Grounding ladder">
+      <div className="research-footer__head">
+        <div>
+          <div className="research-eyebrow">Evidence</div>
+          <h2>Grounding ladder</h2>
+        </div>
+        <span>all outputs</span>
+      </div>
+      <div className="research-grounding-list">
+        {GROUNDING_LEVELS.map((item) => (
+          <div key={item.label} className="research-grounding-row">
+            <GroundingGlyph level={item.level} />
+            <span>{item.label}</span>
+            <p>{groundingDescription(item.level) || item.description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -497,427 +634,47 @@ function SavedEvidencePanel({
   onOpen: (card: ResearchEvidenceCard) => void;
   onArchive: (card: ResearchEvidenceCard) => void;
 }) {
-  const visibleCards = cards.slice(0, 5);
+  const visibleCards = cards.slice(0, 4);
 
   return (
-    <div style={surfaceStyle}>
-      <div style={panelHeaderStyle}>
+    <section className="research-saved-panel" aria-label="Saved truth cards">
+      <div className="research-footer__head">
         <div>
-          <div style={sectionLabelStyle}>Saved evidence</div>
-          <h2 style={sectionTitleStyle}>Truth cards</h2>
+          <div className="research-eyebrow">Saved evidence</div>
+          <h2>Truth cards</h2>
         </div>
-        <span style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{cards.length}</span>
+        <span>{cards.length}</span>
       </div>
-
-      <div style={{ display: 'grid', gap: 8, marginTop: 13 }}>
-        {loading && <p style={emptyTextStyle}>Loading cards...</p>}
-        {error && <p style={errorTextStyle}>{error}</p>}
+      <div className="research-saved-list">
+        {loading && <p className="research-empty-text">Loading cards...</p>}
+        {error && <p className="research-error-text">{error}</p>}
         {!loading && !error && visibleCards.length === 0 && (
-          <p style={emptyTextStyle}>Save a truth card to preserve the dataset, access path, measurements, and caveats.</p>
+          <div className="research-empty-card">
+            <p>Save a truth card to preserve the source, access path, measurements, and caveats.</p>
+            <span>Nothing raw is ingested by default.</span>
+          </div>
         )}
         {visibleCards.map((card) => (
-          <div key={card.id} style={savedCardStyle}>
-            <button type="button" onClick={() => onOpen(card)} style={savedCardMainButtonStyle}>
-              <span style={{ color: 'var(--text-primary)', fontSize: 12, lineHeight: 1.35 }}>{card.title}</span>
-              <span style={{ color: 'var(--text-ghost)', fontSize: 11, marginTop: 4 }}>{card.dataset_label} · {card.evidence_level}</span>
+          <article key={card.id} className="research-saved-row">
+            <button type="button" onClick={() => onOpen(card)} className="research-saved-row__main">
+              <span className="research-saved-row__title">{card.title}</span>
+              <span className="research-saved-row__meta">
+                <GroundingGlyph level={card.evidence_level} size={8} />
+                <span>{card.dataset_label} - {groundingLabel(card.evidence_level)}</span>
+              </span>
             </button>
             <button
               type="button"
               onClick={() => onArchive(card)}
-              style={archiveButtonStyle}
+              className="research-saved-row__archive"
               aria-label={`Archive ${card.title}`}
               title="Archive card"
             >
-              <Archive size={13} />
+              <Archive size={12} aria-hidden="true" />
             </button>
-          </div>
+          </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
-
-const headerStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: 22,
-  marginBottom: 22,
-  flexWrap: 'wrap',
-};
-
-const eyebrowStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  color: 'var(--accent-soft)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 11,
-  letterSpacing: 'var(--track-meta)',
-  textTransform: 'uppercase',
-};
-
-const boundaryStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  maxWidth: 360,
-  padding: '13px 14px',
-  border: '1px solid var(--sage-border-focus)',
-  borderRadius: 10,
-  background: 'var(--sage-overlay-hover)',
-  color: 'var(--accent-soft)',
-};
-
-const metricsGridStyle = (isMobile: boolean): CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-  gap: 10,
-  marginBottom: 14,
-});
-
-const workspaceGridStyle = (isMobile: boolean): CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: isMobile ? '1fr' : 'minmax(280px, 0.78fr) minmax(380px, 1.08fr) minmax(320px, 0.9fr)',
-  gap: 12,
-  alignItems: 'start',
-});
-
-const lowerGridStyle = (isMobile: boolean): CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.3fr) minmax(280px, 0.5fr)',
-  gap: 12,
-  marginTop: 12,
-});
-
-const surfaceStyle: CSSProperties = {
-  border: '1px solid var(--border-faint)',
-  borderRadius: 12,
-  background: 'linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.014))',
-  boxShadow: 'var(--shadow-inset-highlight)',
-  padding: 16,
-  minWidth: 0,
-};
-
-const wideSurfaceStyle: CSSProperties = {
-  ...surfaceStyle,
-  padding: 18,
-};
-
-const metricCardStyle: CSSProperties = {
-  ...surfaceStyle,
-  padding: 14,
-  minHeight: 118,
-};
-
-const panelHeaderStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  gap: 14,
-};
-
-const sectionLabelStyle: CSSProperties = {
-  color: 'var(--text-ghost)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  letterSpacing: 'var(--track-meta)',
-  textTransform: 'uppercase',
-};
-
-const sectionTitleStyle: CSSProperties = {
-  margin: '6px 0 0',
-  color: 'var(--text-primary)',
-  fontSize: 17,
-  lineHeight: 1.2,
-  fontWeight: 420,
-  letterSpacing: 'var(--track-body-tight)',
-};
-
-const searchWrapStyle: CSSProperties = {
-  display: 'flex',
-  gap: 10,
-  marginTop: 16,
-  padding: 12,
-  border: '1px solid var(--border-faint)',
-  borderRadius: 10,
-  background: 'rgba(0,0,0,0.16)',
-};
-
-const queryInputStyle: CSSProperties = {
-  width: '100%',
-  resize: 'vertical',
-  minHeight: 74,
-  border: 0,
-  outline: 0,
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-sans)',
-  fontSize: 14,
-  lineHeight: 1.55,
-};
-
-const chipButtonStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? 'var(--sage-border-focus)' : 'var(--border-faint)'}`,
-  borderRadius: 999,
-  background: active ? 'var(--sage-overlay-hover)' : 'rgba(255,255,255,0.018)',
-  color: active ? 'var(--text-primary)' : 'var(--text-soft)',
-  padding: '6px 9px',
-  fontSize: 11,
-  lineHeight: 1.25,
-  cursor: 'pointer',
-  textAlign: 'left',
-});
-
-const datasetRowStyle = (active: boolean): CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: '28px minmax(0, 1fr)',
-  gap: 10,
-  alignItems: 'center',
-  width: '100%',
-  minHeight: 54,
-  padding: '9px 10px',
-  border: `1px solid ${active ? 'var(--sage-border-focus)' : 'var(--border-faint)'}`,
-  borderRadius: 9,
-  background: active ? 'var(--sage-overlay-active)' : 'rgba(255,255,255,0.018)',
-  cursor: 'pointer',
-});
-
-const rankStyle = (active: boolean): CSSProperties => ({
-  width: 24,
-  height: 24,
-  borderRadius: 7,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: active ? 'rgba(96, 165, 250, 0.14)' : 'rgba(255,255,255,0.035)',
-  color: active ? 'var(--accent-soft)' : 'var(--text-ghost)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-});
-
-const datasetMetaGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))',
-  gap: 8,
-  marginTop: 16,
-};
-
-const metaStyle: CSSProperties = {
-  minWidth: 0,
-  padding: 10,
-  border: '1px solid var(--border-faint)',
-  borderRadius: 9,
-  background: 'rgba(0,0,0,0.13)',
-};
-
-const pillStyle = (tone: 'warm' | 'blue'): CSSProperties => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  minHeight: 24,
-  padding: '4px 8px',
-  borderRadius: 999,
-  border: `1px solid ${tone === 'blue' ? 'var(--blue-border)' : 'var(--border-faint)'}`,
-  background: tone === 'blue' ? 'var(--blue-bg)' : 'rgba(255,255,255,0.022)',
-  color: tone === 'blue' ? 'rgba(190,215,245,0.86)' : 'var(--text-secondary)',
-  fontSize: 11,
-  lineHeight: 1.2,
-});
-
-const variantStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 10,
-  alignItems: 'center',
-  minWidth: 0,
-  padding: '8px 9px',
-  borderRadius: 8,
-  background: 'rgba(255,255,255,0.018)',
-};
-
-const codeInlineStyle: CSSProperties = {
-  color: 'var(--text-secondary)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 11,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const recipeGridStyle: CSSProperties = {
-  display: 'grid',
-  gap: 10,
-  marginTop: 18,
-};
-
-const recipeStyle: CSSProperties = {
-  border: '1px solid var(--border-faint)',
-  borderRadius: 10,
-  background: 'rgba(0,0,0,0.16)',
-  padding: 12,
-  minWidth: 0,
-};
-
-const copyButtonStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  height: 26,
-  padding: '0 8px',
-  borderRadius: 7,
-  border: '1px solid var(--border-faint)',
-  background: 'rgba(255,255,255,0.025)',
-  color: 'var(--text-tertiary)',
-  fontSize: 11,
-  cursor: 'pointer',
-};
-
-const smallActionButtonStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  minHeight: 30,
-  padding: '0 9px',
-  borderRadius: 8,
-  border: '1px solid var(--border-faint)',
-  background: 'rgba(255,255,255,0.026)',
-  color: 'var(--text-secondary)',
-  fontSize: 11,
-  cursor: 'pointer',
-};
-
-const preStyle: CSSProperties = {
-  margin: 0,
-  color: 'var(--text-secondary)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 11,
-  lineHeight: 1.55,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-};
-
-const truthStatementStyle: CSSProperties = {
-  marginTop: 16,
-  padding: 13,
-  border: '1px solid var(--border-subtle)',
-  borderRadius: 10,
-  background: 'rgba(255,255,255,0.024)',
-};
-
-const bodyTextStyle: CSSProperties = {
-  margin: 0,
-  color: 'var(--text-secondary)',
-  fontSize: 12,
-  lineHeight: 1.58,
-};
-
-const orderedListStyle: CSSProperties = {
-  margin: 0,
-  paddingLeft: 18,
-  color: 'var(--text-secondary)',
-  fontSize: 12,
-  lineHeight: 1.65,
-};
-
-const unorderedListStyle: CSSProperties = {
-  margin: 0,
-  paddingLeft: 17,
-  color: 'var(--text-secondary)',
-  fontSize: 12,
-  lineHeight: 1.62,
-};
-
-const pipelineStyle = (isMobile: boolean): CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, minmax(0, 1fr))',
-  gap: 8,
-  marginTop: 14,
-});
-
-const pipelineNodeStyle: CSSProperties = {
-  minHeight: 54,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '10px 11px',
-  border: '1px solid var(--border-faint)',
-  borderRadius: 10,
-  background: 'rgba(255,255,255,0.018)',
-};
-
-const pipelineIndexStyle: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  color: 'var(--accent-soft)',
-};
-
-const iconLinkStyle: CSSProperties = {
-  width: 30,
-  height: 30,
-  borderRadius: 8,
-  border: '1px solid var(--border-faint)',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'var(--text-tertiary)',
-};
-
-const sourceLinkStyle: CSSProperties = {
-  minHeight: 34,
-  padding: '0 10px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 10,
-  border: '1px solid var(--border-faint)',
-  borderRadius: 8,
-  background: 'rgba(255,255,255,0.018)',
-  color: 'var(--text-secondary)',
-  fontSize: 12,
-  textDecoration: 'none',
-};
-
-const emptyTextStyle: CSSProperties = {
-  margin: 0,
-  color: 'var(--text-ghost)',
-  fontSize: 12,
-  lineHeight: 1.55,
-};
-
-const errorTextStyle: CSSProperties = {
-  ...emptyTextStyle,
-  color: 'var(--danger)',
-};
-
-const savedCardStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 30px',
-  gap: 8,
-  alignItems: 'stretch',
-  minWidth: 0,
-};
-
-const savedCardMainButtonStyle: CSSProperties = {
-  minWidth: 0,
-  minHeight: 50,
-  display: 'grid',
-  alignContent: 'center',
-  textAlign: 'left',
-  border: '1px solid var(--border-faint)',
-  borderRadius: 9,
-  background: 'rgba(255,255,255,0.018)',
-  padding: '8px 10px',
-  cursor: 'pointer',
-};
-
-const archiveButtonStyle: CSSProperties = {
-  border: '1px solid var(--border-faint)',
-  borderRadius: 9,
-  background: 'rgba(255,255,255,0.018)',
-  color: 'var(--text-tertiary)',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-};
