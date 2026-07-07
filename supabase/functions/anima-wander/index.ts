@@ -280,7 +280,7 @@ ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
       title: w.type === "insight"
         ? "Something settled into a small insight"
         : "Mind wandered for a moment",
-      summary: w.content.slice(0, 140),
+      summary: w.content,
       content: { salience: w.salience, tags: w.tags, crystallized: w.type === "insight" },
       severity: w.type === "insight" ? "notable" : "info",
       source: "autonomous",

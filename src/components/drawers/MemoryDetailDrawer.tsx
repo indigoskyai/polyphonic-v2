@@ -110,8 +110,9 @@ export default function MemoryDetailDrawer() {
   const agentId = engram.agent_id || (ctx.agent as string | undefined) || 'luca';
   const agent = availableAgents.find((a) => a.id === agentId)?.name || agentId;
   const titleText = engram.content.length > 140
-    ? engram.content.slice(0, 140).trimEnd() + '…'
+    ? engram.content.slice(0, 140).replace(/\s+\S*$/, '').trimEnd() + '…'
     : engram.content;
+
 
   const exportJSON = () => {
     const blob = new Blob([JSON.stringify(engram, null, 2)], { type: 'application/json' });

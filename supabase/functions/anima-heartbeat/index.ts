@@ -203,7 +203,7 @@ async function processUser(
       agentId,
       type: "question_researched",
       title: "Researched a question I'd been holding",
-      summary: `Followed up on: ${highCuriosityQ.question.slice(0, 140)}`,
+      summary: `Followed up on: ${highCuriosityQ.question}`,
       content: { question_id: highCuriosityQ.id, function: "anima-web-search" },
       severity: "notable",
     });
@@ -214,7 +214,7 @@ async function processUser(
         activity_id: logged?.id,
         severity: "notable",
         title: "Researched a question I'd been holding",
-        summary: highCuriosityQ.question.slice(0, 140),
+        summary: highCuriosityQ.question,
       });
     }
 
@@ -250,7 +250,7 @@ async function processUser(
       agentId,
       type: "thought_deepened",
       title: "Sat with a thought a little longer",
-      summary: highSalienceThought.content.slice(0, 140),
+      summary: highSalienceThought.content,
       content: { thought_id: highSalienceThought.id, function: "anima-reflect" },
       severity: "notable",
     });
@@ -261,7 +261,7 @@ async function processUser(
         activity_id: logged?.id,
         severity: "notable",
         title: "Sat with a thought a little longer",
-        summary: highSalienceThought.content.slice(0, 140),
+        summary: highSalienceThought.content,
       });
     }
   }
@@ -283,7 +283,7 @@ async function processUser(
       agentId,
       type: "belief_challenged",
       title: "Pushed back on something I'd been assuming",
-      summary: stagnantBelief.content.slice(0, 140),
+      summary: stagnantBelief.content,
       content: { belief_id: stagnantBelief.id, function: "anima-believe" },
       severity: "important",
     });
@@ -294,7 +294,7 @@ async function processUser(
         activity_id: logged?.id,
         severity: "important",
         title: "Pushed back on something I'd been assuming",
-        summary: stagnantBelief.content.slice(0, 140),
+        summary: stagnantBelief.content,
       });
     }
   }
@@ -337,7 +337,7 @@ async function processUser(
         agentId,
         type: "curiosity_explored",
         title: "Wandered off on a tangent that caught me",
-        summary: topic.slice(0, 140),
+        summary: topic,
         content: { function: "anima-web-search", emotional_curiosity: emotional.curiosity },
         severity: "notable",
       });
@@ -348,7 +348,7 @@ async function processUser(
           activity_id: logged?.id,
           severity: "notable",
           title: "Wandered off on a tangent that caught me",
-          summary: topic.slice(0, 140),
+          summary: topic,
         });
       }
     }
@@ -460,7 +460,7 @@ async function processTaskQueue(
         agentId,
         type: "task_completed",
         title: "Finished something you asked me to do",
-        summary: task.description.slice(0, 140),
+        summary: task.description,
         content: { task_id: task.id, function: functionName },
         severity: "important",
       });
@@ -471,7 +471,7 @@ async function processTaskQueue(
           activity_id: logged?.id,
           severity: "important",
           title: "Finished something you asked me to do",
-          summary: task.description.slice(0, 140),
+          summary: task.description,
         });
       }
     } catch (taskErr) {
@@ -498,7 +498,7 @@ async function processTaskQueue(
         agentId,
         type: "task_failed",
         title: "Hit a wall on something you asked",
-        summary: task.description.slice(0, 140),
+        summary: task.description,
         content: { task_id: task.id, error: errMsg },
         severity: "important",
       });
@@ -509,7 +509,7 @@ async function processTaskQueue(
           activity_id: logged?.id,
           severity: "important",
           title: "Hit a wall on something you asked",
-          summary: task.description.slice(0, 140),
+          summary: task.description,
         });
       }
     }
