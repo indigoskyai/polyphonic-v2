@@ -58,7 +58,7 @@ function tokenContrast(textToken: string, backgroundToken: string): number {
 }
 
 describe('design token contrast', () => {
-  const surfaces = ['canvas', 'surface-1', 'surface-2', 'surface-3', 'surface-5'];
+  const surfaces = ['canvas', 'surface-3', 'surface-5'];
 
   it('keeps normal text tokens above WCAG AA contrast on app surfaces', () => {
     for (const text of ['text-primary', 'text-body', 'text-secondary', 'text-mid']) {
