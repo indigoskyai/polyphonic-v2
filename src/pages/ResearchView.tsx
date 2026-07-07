@@ -212,7 +212,7 @@ export default function ResearchView() {
               <span className="research-eyebrow__dot" aria-hidden="true" />
               <span>Research lab</span>
             </div>
-            <h1>The Well Registry</h1>
+            <h1>The Deep Well</h1>
             <p>
               Luca maps the physics catalog, ranks evidence sources, and fetches raw simulation tensors only when a
               question needs them.

@@ -111,8 +111,9 @@
 .research-masthead h1 {
   margin: 24px 0 0;
   color: var(--research-t-hi);
+  font-family: var(--font-serif);
   font-size: 42px;
-  font-weight: 560;
+  font-weight: 400;
   letter-spacing: 0;
   line-height: 1.04;
 }
