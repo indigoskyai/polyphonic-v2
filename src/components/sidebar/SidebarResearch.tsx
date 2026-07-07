@@ -34,7 +34,7 @@ export default function SidebarResearch() {
             padding: '0 12px',
           }}
         >
-          The Well Registry
+          The Deep Well
         </button>
       </div>
 
