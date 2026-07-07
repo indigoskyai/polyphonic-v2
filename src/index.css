@@ -510,7 +510,7 @@ html {
 
 .thinking-block {
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, rgba(220, 219, 216, 0.015) 0%, rgba(220, 219, 216, 0.005) 100%);
+  background: transparent;
   border: 1px solid var(--border-subtle);
   overflow: hidden;
   transition: border-color var(--dur-micro) ease;
