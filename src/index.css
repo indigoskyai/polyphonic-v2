@@ -3998,7 +3998,8 @@ html {
   -webkit-appearance: none;
   height: 32px;
   width: 100%;
-  background: var(--surface-1);
+  background: var(--input-bg);
+
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0 32px 0 12px;
