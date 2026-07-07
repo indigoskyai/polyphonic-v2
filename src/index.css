@@ -1113,12 +1113,14 @@ html {
   :root {
     --floor: #000000;
     --canvas: #000000;
-    --surface-1: #0b0b0d;
-    --surface-2: #111114;
-    --surface-3: #17171a;
+    --surface-1: var(--canvas);
+    --surface-2: rgba(255, 255, 255, 0.035);
+    --surface-3: #0f0f12;
     --bg-deep: #000000;
     --bg-primary: #000000;
-    --bg-elevated: var(--surface-1);
+    --bg-elevated: var(--canvas);
+    --input-bg: #0b0b0d;
+
     --message-max-width: 100dvw;
     /* Mobile contrast lift — raise the faint text tiers toward WCAG AA on
        small screens (varied lighting / glare hurt legibility most here),
