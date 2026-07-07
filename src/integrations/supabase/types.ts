@@ -1417,6 +1417,83 @@ export type Database = {
           },
         ]
       }
+      continuity_turn_traces: {
+        Row: {
+          agent_id: string
+          assistant_message_id: string | null
+          context_summary: Json
+          created_at: string
+          id: string
+          model: string | null
+          runtime_mode: string | null
+          status: string
+          thread_id: string | null
+          updated_at: string
+          user_id: string
+          user_message_id: string | null
+          write_summary: Json
+        }
+        Insert: {
+          agent_id?: string
+          assistant_message_id?: string | null
+          context_summary?: Json
+          created_at?: string
+          id?: string
+          model?: string | null
+          runtime_mode?: string | null
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+          user_id: string
+          user_message_id?: string | null
+          write_summary?: Json
+        }
+        Update: {
+          agent_id?: string
+          assistant_message_id?: string | null
+          context_summary?: Json
+          created_at?: string
+          id?: string
+          model?: string | null
+          runtime_mode?: string | null
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+          user_message_id?: string | null
+          write_summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "continuity_turn_traces_assistant_message_id_fkey"
+            columns: ["assistant_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "continuity_turn_traces_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "continuity_turn_traces_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "continuity_turn_traces_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crisis_events: {
         Row: {
           created_at: string
@@ -4646,6 +4723,10 @@ export type Database = {
       }
       anonymize_group_room_user: {
         Args: { p_user_id: string }
+        Returns: undefined
+      }
+      append_continuity_trace_write: {
+        Args: { p_operation: Json; p_trace_id: string }
         Returns: undefined
       }
       auto_commit_stale_memory_candidates: { Args: never; Returns: number }
