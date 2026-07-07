@@ -12621,14 +12621,14 @@ html {
     transform var(--dur-fast) var(--ease-out);
 }
 .journal-entry-card:hover {
-  background: var(--surface-2);
-  border-color: var(--border-soft);
+  border-color: var(--border);
   transform: translateY(-1px);
 }
 .journal-entry-card:focus-visible {
-  outline: 1px solid var(--border-strong, var(--border-soft));
+  outline: 1px solid var(--border-strong);
   outline-offset: 3px;
 }
+
 .journal-card-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
