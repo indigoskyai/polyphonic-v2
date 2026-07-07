@@ -1784,14 +1784,14 @@ html {
      whole frame. The 8 prime-interval rhythms (3/5/7/11/13/17/19/23s)
      never sync, so any seam is in motion and never visibly resolves. */
   background:
-    radial-gradient(ellipse 45% 180% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 180% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 180% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
+    radial-gradient(ellipse 45% 90% at 5% 0%,    rgba(232,230,224, var(--pc1)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 90% at 28% 0%,   rgba(232,230,224, var(--pc2)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 90% at 55% 0%,   rgba(232,230,224, var(--pc3)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 90% at 82% 0%,   rgba(232,230,224, var(--pc4)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 90% at 95% 100%, rgba(232,230,224, var(--pc5)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 90% at 68% 100%, rgba(232,230,224, var(--pc6)) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 90% at 40% 100%, rgba(232,230,224, var(--pc7)) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 90% at 15% 100%, rgba(232,230,224, var(--pc8)) 0%, transparent 60%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
