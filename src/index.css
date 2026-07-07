@@ -12034,9 +12034,11 @@ html {
   margin-bottom: 6px;
 }
 .r2-sidebar .sidebar-head-title {
-  font-family: var(--font-sans); font-size: 18px; color: var(--ink);
-  letter-spacing: var(--track-tight); font-weight: 500;
+  font-family: var(--font-serif); font-size: 26px; color: var(--ink);
+  letter-spacing: var(--track-display); font-weight: 400; font-style: italic;
+  line-height: 1;
 }
+
 .r2-sidebar .sidebar-search {
   margin: 14px 16px 0;
   display: flex; align-items: center; gap: 10px;
