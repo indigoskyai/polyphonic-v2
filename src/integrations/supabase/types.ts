@@ -4758,6 +4758,7 @@ export type Database = {
         Returns: boolean
       }
       delete_user_api_key: { Args: never; Returns: undefined }
+      email_queue_dispatch: { Args: never; Returns: undefined }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
