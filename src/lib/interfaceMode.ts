@@ -99,7 +99,8 @@ export interface RailSurface {
 
 const COMPANION_GUIDED_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
-  { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
+  // Groups temporarily hidden — feature still in progress.
+  // { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
   { id: 'notebook', label: 'Notebook', path: '/notebook',        icon: 'notebook', guideId: 'rail-notebook', matchPaths: ['/notebook', '/journal'] },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
   { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
@@ -108,7 +109,8 @@ const COMPANION_GUIDED_SURFACES: RailSurface[] = [
 
 const STUDIO_SURFACES: RailSurface[] = [
   { id: 'chat',     label: 'Chat',     path: '/chat',            icon: 'chat',     guideId: 'rail-chat' },
-  { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
+  // Groups temporarily hidden — feature still in progress.
+  // { id: 'groups',   label: 'Groups',   path: '/groups',          icon: 'groups',   guideId: 'rail-groups' },
   { id: 'memory',   label: 'Memory',   path: '/memory',          icon: 'memory',   guideId: 'rail-memory' },
   { id: 'research', label: 'Research', path: '/research',        icon: 'research', guideId: 'rail-research' },
   { id: 'mind',     label: 'Mind',     path: '/mind',            icon: 'mind',     guideId: 'rail-mind', matchPaths: ['/mind', '/dashboard', '/profile/identity', '/profile/revisions'] },
@@ -116,6 +118,7 @@ const STUDIO_SURFACES: RailSurface[] = [
   { id: 'projects', label: 'Projects', path: '/projects',        icon: 'projects', guideId: 'rail-projects' },
   { id: 'profile',  label: 'Profile',  path: '/profile',         icon: 'profile',  guideId: 'rail-profile' },
 ];
+
 
 export function getRailSurfaces(mode: InterfaceMode): RailSurface[] {
   return shouldShowStudioNavigation(mode) ? STUDIO_SURFACES : COMPANION_GUIDED_SURFACES;
