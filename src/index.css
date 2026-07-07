@@ -12505,7 +12505,7 @@ html {
   color: var(--text-soft);
   transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
-.s-search:focus-within { border-color: var(--border-soft); background: var(--input-bg); }
+.s-search:focus-within { border-color: var(--border); background: var(--input-bg); }
 
 .s-search-glyph { color: var(--text-whisper); font-size: 13px; }
 .s-search input {
