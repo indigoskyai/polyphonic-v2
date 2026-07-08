@@ -565,17 +565,17 @@ export default function ThreadDetailDrawer() {
 
               <ContinuityList
                 title={`Hypomnema · ${continuity?.hypomnema?.rendered ?? 0}`}
-                items={continuity?.hypomnema?.items ?? []}
+                items={Array.isArray(continuity?.hypomnema?.items) ? continuity!.hypomnema!.items : []}
                 empty="No interior thread loaded."
               />
               <ContinuityList
-                title={`Reliable memory · ${continuity?.functional_memory?.length ?? 0}`}
-                items={(continuity?.functional_memory ?? []).map((memory) => memory.content)}
+                title={`Reliable memory · ${Array.isArray(continuity?.functional_memory) ? continuity!.functional_memory!.length : 0}`}
+                items={Array.isArray(continuity?.functional_memory) ? continuity!.functional_memory! : []}
                 empty="No reliable memories matched this thread."
               />
               <ContinuityList
-                title={`Mnemos · ${continuity?.mnemos?.length ?? 0}`}
-                items={(continuity?.mnemos ?? []).map((item) => item.content)}
+                title={`Mnemos · ${Array.isArray(continuity?.mnemos) ? continuity!.mnemos!.length : 0}`}
+                items={Array.isArray(continuity?.mnemos) ? continuity!.mnemos! : []}
                 empty="No associative traces matched this focus."
               />
 
