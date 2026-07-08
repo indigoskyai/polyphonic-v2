@@ -60,6 +60,22 @@ interface ContinuityDiagnosticRow {
   message: string | null;
 }
 
+export type ContinuityPreviewItem =
+  | string
+  | {
+      id?: string | null;
+      content?: string | null;
+      excerpt?: string | null;
+      summary?: string | null;
+      text?: string | null;
+      score?: number | null;
+      confidence?: number | null;
+      source?: string | null;
+      thread_id?: string | null;
+      source_message_id?: string | null;
+      tags?: string[];
+    };
+
 interface ContinuityInspectPayload {
   ok: boolean;
   generated_at?: string;
@@ -67,7 +83,7 @@ interface ContinuityInspectPayload {
   selected_model?: string | null;
   memory_enabled?: boolean;
   bridge?: string;
-  hypomnema?: { count: number; rendered: number; items: string[] };
+  hypomnema?: { count: number; rendered: number; items: ContinuityPreviewItem[] };
   functional_memory?: Array<{
     id: string;
     type: string;
@@ -85,6 +101,15 @@ interface ContinuityInspectPayload {
     tags: string[];
   }>;
   diagnostics?: ContinuityDiagnosticRow[];
+}
+
+export function continuityItemToText(item: ContinuityPreviewItem | null | undefined): string {
+  if (item == null) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item !== 'object') return String(item);
+  const candidate = item.content ?? item.excerpt ?? item.summary ?? item.text;
+  if (typeof candidate === 'string') return candidate;
+  return '';
 }
 
 function relativeTime(iso: string | null | undefined): string {
