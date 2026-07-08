@@ -60,6 +60,22 @@ interface ContinuityDiagnosticRow {
   message: string | null;
 }
 
+export type ContinuityPreviewItem =
+  | string
+  | {
+      id?: string | null;
+      content?: string | null;
+      excerpt?: string | null;
+      summary?: string | null;
+      text?: string | null;
+      score?: number | null;
+      confidence?: number | null;
+      source?: string | null;
+      thread_id?: string | null;
+      source_message_id?: string | null;
+      tags?: string[];
+    };
+
 interface ContinuityInspectPayload {
   ok: boolean;
   generated_at?: string;
@@ -67,7 +83,7 @@ interface ContinuityInspectPayload {
   selected_model?: string | null;
   memory_enabled?: boolean;
   bridge?: string;
-  hypomnema?: { count: number; rendered: number; items: string[] };
+  hypomnema?: { count: number; rendered: number; items: ContinuityPreviewItem[] };
   functional_memory?: Array<{
     id: string;
     type: string;
@@ -85,6 +101,15 @@ interface ContinuityInspectPayload {
     tags: string[];
   }>;
   diagnostics?: ContinuityDiagnosticRow[];
+}
+
+export function continuityItemToText(item: ContinuityPreviewItem | null | undefined): string {
+  if (item == null) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item !== 'object') return String(item);
+  const candidate = item.content ?? item.excerpt ?? item.summary ?? item.text;
+  if (typeof candidate === 'string') return candidate;
+  return '';
 }
 
 function relativeTime(iso: string | null | undefined): string {
@@ -224,17 +249,20 @@ function ContinuityList({
   empty,
 }: {
   title: string;
-  items: string[];
+  items: ContinuityPreviewItem[];
   empty: string;
 }) {
+  const normalized = (Array.isArray(items) ? items : [])
+    .map((item) => continuityItemToText(item))
+    .filter((text) => text && text.length > 0);
   return (
     <div style={{ display: 'grid', gap: 7 }}>
       <div style={{ color: 'var(--text-ghost)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{title}</div>
-      {items.length > 0 ? (
+      {normalized.length > 0 ? (
         <div style={{ display: 'grid', gap: 7 }}>
-          {items.slice(0, 4).map((item, index) => (
+          {normalized.slice(0, 4).map((text, index) => (
             <div key={`${title}-${index}`} style={{ color: 'var(--text-soft)', fontSize: 12, lineHeight: 1.45 }}>
-              {item}
+              {text}
             </div>
           ))}
         </div>
@@ -537,17 +565,17 @@ export default function ThreadDetailDrawer() {
 
               <ContinuityList
                 title={`Hypomnema · ${continuity?.hypomnema?.rendered ?? 0}`}
-                items={continuity?.hypomnema?.items ?? []}
+                items={Array.isArray(continuity?.hypomnema?.items) ? continuity!.hypomnema!.items : []}
                 empty="No interior thread loaded."
               />
               <ContinuityList
-                title={`Reliable memory · ${continuity?.functional_memory?.length ?? 0}`}
-                items={(continuity?.functional_memory ?? []).map((memory) => memory.content)}
+                title={`Reliable memory · ${Array.isArray(continuity?.functional_memory) ? continuity!.functional_memory!.length : 0}`}
+                items={Array.isArray(continuity?.functional_memory) ? continuity!.functional_memory! : []}
                 empty="No reliable memories matched this thread."
               />
               <ContinuityList
-                title={`Mnemos · ${continuity?.mnemos?.length ?? 0}`}
-                items={(continuity?.mnemos ?? []).map((item) => item.content)}
+                title={`Mnemos · ${Array.isArray(continuity?.mnemos) ? continuity!.mnemos!.length : 0}`}
+                items={Array.isArray(continuity?.mnemos) ? continuity!.mnemos! : []}
                 empty="No associative traces matched this focus."
               />
 
