@@ -249,17 +249,20 @@ function ContinuityList({
   empty,
 }: {
   title: string;
-  items: string[];
+  items: ContinuityPreviewItem[];
   empty: string;
 }) {
+  const normalized = (Array.isArray(items) ? items : [])
+    .map((item) => continuityItemToText(item))
+    .filter((text) => text && text.length > 0);
   return (
     <div style={{ display: 'grid', gap: 7 }}>
       <div style={{ color: 'var(--text-ghost)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{title}</div>
-      {items.length > 0 ? (
+      {normalized.length > 0 ? (
         <div style={{ display: 'grid', gap: 7 }}>
-          {items.slice(0, 4).map((item, index) => (
+          {normalized.slice(0, 4).map((text, index) => (
             <div key={`${title}-${index}`} style={{ color: 'var(--text-soft)', fontSize: 12, lineHeight: 1.45 }}>
-              {item}
+              {text}
             </div>
           ))}
         </div>
