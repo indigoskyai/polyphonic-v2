@@ -40,3 +40,25 @@ describe('Continuity inspection drawer', () => {
     expect(migration).not.toMatch(/[^.]similarity\(m\.content,\s*query_text\)/);
   });
 });
+
+describe('continuityItemToText', () => {
+  it('renders content from hypomnema object items without throwing', async () => {
+    const mod = await import('@/components/drawers/ThreadDetailDrawer');
+    const objectItem = {
+      id: 'h1',
+      content: 'still sitting with the harbor question',
+      score: 0.8,
+      confidence: 0.7,
+      source: 'hypomnema_entry',
+      thread_id: 't1',
+      source_message_id: 'm1',
+      tags: ['reflection'],
+    };
+    expect(mod.continuityItemToText(objectItem)).toBe('still sitting with the harbor question');
+    expect(mod.continuityItemToText('legacy string')).toBe('legacy string');
+    expect(mod.continuityItemToText(null)).toBe('');
+    expect(mod.continuityItemToText(undefined)).toBe('');
+    expect(mod.continuityItemToText({ excerpt: 'from excerpt' } as any)).toBe('from excerpt');
+    expect(mod.continuityItemToText({ id: 'x' } as any)).toBe('');
+  });
+});
