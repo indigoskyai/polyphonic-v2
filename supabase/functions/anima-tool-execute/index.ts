@@ -196,7 +196,7 @@ const TOOL_SCHEMAS = [
     function: {
       name: "generate_image",
       description:
-        "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using OpenAI gpt-image-2. Use only for imagery that should look like a real photo or illustration. Do NOT use it for SVG, diagrams, charts, icons, logos, or anything line-based/renderable — the assistant authors those itself as live artifacts.",
+        "Generate a high-quality raster image (photographic, painterly, illustrative) from a text prompt using the user's configured image provider. Default is OpenRouter image generation. Use only for imagery that should look like a real photo or illustration. Do NOT use it for SVG, diagrams, charts, icons, logos, or anything line-based/renderable — the assistant authors those itself as live artifacts.",
       parameters: {
         type: "object",
         properties: {
@@ -281,7 +281,7 @@ Available tools:
 - read_url: Directly fetch a specific public URL and return source content/metadata without model synthesis. It can read HTML text, raw HTML, JSON, and plain text. Use format="raw" when the user needs exact markup/source.
 - browse: Open a public URL in a Browserbase browser, wait for JavaScript rendering, and return DOM text plus page structure (headings, links, buttons, forms). Use this when read_url cannot see browser-rendered state.
 - the_well_research: Query The Well physics-simulation registry for datasets, access names, fields, measurements, and truth-card plans. Does not download raw tensors.
-- generate_image: Generate a high-quality raster image (gpt-image-2). Use for photographic, painterly, or illustrative imagery.
+- generate_image: Generate a high-quality raster image using the user's configured image model. Use for photographic, painterly, or illustrative imagery.
 - edit_image: Iterate on the most recently generated image (e.g. "make it darker", "swap the background"). Pass the storage_path from the prior image.
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
@@ -358,6 +358,110 @@ function latestUserContent(messages: any[]): string {
     }
   }
   return "";
+}
+
+function looksLikeDirectImageGenerationRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const asksForRaster =
+    /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|portrait|landscape|painting|artwork|digital\s+art)\b/.test(normalized) ||
+    /\b(image\s*gen(eration)?|generate\s+(me\s+)?an?\s+image|make\s+(me\s+)?an?\s+image|draw\s+(me\s+)?an?\s+image|show\s+(me\s+)?an?\s+image)\b/.test(normalized);
+  const asksToCreate = /\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|illustrat\w*|show|give)\b/.test(normalized);
+  const renderableInstead = /\b(svg|html|react|component|mermaid|chart|diagram|wireframe|code|page|app)\b/.test(normalized);
+  const editInstead = /\b(edit|modify|change|revise|tweak|iterate|make\s+it|make\s+that|change\s+it)\b/.test(normalized);
+  return asksForRaster && asksToCreate && !renderableInstead && !editInstead;
+}
+
+function inferImageAspectRatio(text: string): "square" | "landscape" | "portrait" | "auto" {
+  const normalized = text.toLowerCase();
+  if (/\b(square|1:1|avatar|profile)\b/.test(normalized)) return "square";
+  if (/\b(landscape|wide|16:9|3:2|banner|wallpaper)\b/.test(normalized)) return "landscape";
+  if (/\b(portrait|vertical|tall|9:16|2:3)\b/.test(normalized)) return "portrait";
+  return "auto";
+}
+
+async function callInternalEdgeFunction(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  edgeFn: string,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/${edgeFn}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let data: any = {};
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+    if (!response.ok) {
+      return {
+        error: data?.error || `${edgeFn} failed`,
+        detail: data?.detail || data?.message || data?.raw,
+        status: response.status,
+      };
+    }
+    return data;
+  } catch (err) {
+    return {
+      error: err instanceof Error && err.name === "AbortError" ? "Tool execution timed out" : "Tool execution failed",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function executeDeterministicImageGeneration(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string | null,
+  prompt: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const args = {
+    prompt: prompt.trim(),
+    aspect_ratio: inferImageAspectRatio(prompt),
+    transparent: /\btransparent\b/.test(prompt.toLowerCase()),
+  };
+  const toolCallId = `call_${crypto.randomUUID().replaceAll("-", "")}`;
+  console.log("[anima-tool-execute] deterministic image tool call", { tool: "generate_image" });
+  const output = await callInternalEdgeFunction(
+    supabaseUrl,
+    serviceRoleKey,
+    "anima-image-create",
+    { user_id: userId, ...args },
+    110_000,
+  );
+  const toolMessages = [
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: toolCallId,
+          type: "function",
+          function: { name: "generate_image", arguments: JSON.stringify(args) },
+        },
+      ],
+    },
+    { role: "tool", tool_call_id: toolCallId, content: JSON.stringify(output) },
+  ];
+  return new Response(
+    JSON.stringify({
+      used_tools: true,
+      tool_calls: [{ tool_call_id: toolCallId, tool: "generate_image", input: args, output }],
+      tool_messages: toolMessages,
+    }),
+    { status: 200, headers },
+  );
 }
 
 type AnchoredForgeProposal = {
@@ -512,7 +616,12 @@ serve(async (req) => {
       );
     }
 
-    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
+    const latestContent = latestUserContent(messages);
+    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestContent);
+
+    if (!forceForgeOnly && looksLikeDirectImageGenerationRequest(latestContent)) {
+      return await executeDeterministicImageGeneration(supabaseUrl, serviceRoleKey, userId, latestContent, jsonHeaders);
+    }
 
     // Get the user's API key. Tool planning and Forge both require BYOK now;
     // the free platform model is reserved for the non-agent Polyphonic Guide.

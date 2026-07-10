@@ -249,10 +249,7 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
     /\b(today|latest|current|recent|now|this week|this month|breaking|news|weather|price|stock|exchange rate)\b/.test(normalized) ||
     /https?:\/\//.test(normalized);
 
-  const asksForGeneratedMedia =
-    (/\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|design\w*|illustrat\w*|edit\w*|modif\w*|chang\w*|show|give)\b/.test(normalized) &&
-      /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|logo|logos|icon|icons|diagram|chart|svg|artifact|html|page|app|component|visual|visuals|drawing|drawings|painting|art)\b/.test(normalized)) ||
-    /\b(image\s*gen(eration)?|image\s*tool|generate\s*image|nano\s*banana|dall[- ]?e|midjourney|stable\s*diffusion)\b/.test(normalized);
+  const asksForGeneratedMedia = looksLikeGeneratedMediaRequest(text);
 
   const asksForExistingTool =
     /\b(use|run|invoke|call)\b.{0,40}\b(tool|mcp|browser|web search|image generator|artifact|subagent)\b/.test(normalized) ||
@@ -267,6 +264,15 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
   const asksForSimulationPreview = looksLikeSimulationPreviewRequest(text);
 
   return asksForCurrentInfo || asksForGeneratedMedia || asksForExistingTool || asksForWorkspaceFile || asksForWellResearch || asksForSimulationPreview;
+}
+
+function looksLikeGeneratedMediaRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    (/\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|design\w*|illustrat\w*|edit\w*|modif\w*|chang\w*|show|give)\b/.test(normalized) &&
+      /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|logo|logos|icon|icons|diagram|chart|svg|artifact|html|page|app|component|visual|visuals|drawing|drawings|painting|art)\b/.test(normalized)) ||
+    /\b(image\s*gen(eration)?|image\s*tool|generate\s*image|nano\s*banana|dall[- ]?e|midjourney|stable\s*diffusion)\b/.test(normalized)
+  );
 }
 
 function looksLikeForgeApprovalFollowup(text: string): boolean {
@@ -556,6 +562,7 @@ serve(async (req) => {
       !onboardingHandoff &&
       !simulationRequestWithoutForgeSubject &&
       looksLikeAgentForgeRequest(visibleMessageForRouting);
+    const likelyGeneratedMediaRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeGeneratedMediaRequest(messageWithAttachments);
     const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
       agentRuntimeActive &&
@@ -800,7 +807,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
     }
     baseMessages.push({ role: "user", content: messageWithAttachments });
 
-      if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
+      if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && !likelyGeneratedMediaRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
       const singleModel = normalizeModelId(
         settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0],
