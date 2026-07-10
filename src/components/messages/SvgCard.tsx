@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Maximize2, Code2, Eye, ExternalLink } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import CodeBlock from '@/components/rich/CodeBlock';
