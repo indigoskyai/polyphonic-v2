@@ -21,6 +21,9 @@ export interface Settings {
   ensemble_models: string[];
   synthesis_model: string;
   reasoning_effort: 'low' | 'medium' | 'high';
+  // Image generation
+  image_provider: 'openrouter' | 'openai';
+  image_model: string;
   // Voice
   default_voice_id: string;
   elevenlabs_agent_id: string | null;
