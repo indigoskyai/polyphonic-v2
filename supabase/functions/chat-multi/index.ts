@@ -250,8 +250,9 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
     /https?:\/\//.test(normalized);
 
   const asksForGeneratedMedia =
-    /\b(generate|create|make|draw|paint|render|design|illustrate|edit|modify|change)\b/.test(normalized) &&
-    /\b(image|picture|photo|illustration|logo|icon|diagram|chart|svg|artifact|html|page|app|component|visual)\b/.test(normalized);
+    (/\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|design\w*|illustrat\w*|edit\w*|modif\w*|chang\w*|show|give)\b/.test(normalized) &&
+      /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|logo|logos|icon|icons|diagram|chart|svg|artifact|html|page|app|component|visual|visuals|drawing|drawings|painting|art)\b/.test(normalized)) ||
+    /\b(image\s*gen(eration)?|image\s*tool|generate\s*image|nano\s*banana|dall[- ]?e|midjourney|stable\s*diffusion)\b/.test(normalized);
 
   const asksForExistingTool =
     /\b(use|run|invoke|call)\b.{0,40}\b(tool|mcp|browser|web search|image generator|artifact|subagent)\b/.test(normalized) ||
