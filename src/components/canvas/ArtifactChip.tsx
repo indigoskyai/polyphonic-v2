@@ -26,6 +26,11 @@ export default function ArtifactChip({ artifact }: { artifact: Artifact }) {
     return <SimulationCard artifact={artifact} compact />;
   }
 
+  if (artifact.kind === 'svg') {
+    return <SvgCard source={artifact.content} title={artifact.title} onOpenCanvas={() => open(artifact.id)} />;
+  }
+
+
   const meta = KIND_META[artifact.kind] || { icon: FileCode2, label: artifact.kind };
   const Icon = meta.icon;
 
