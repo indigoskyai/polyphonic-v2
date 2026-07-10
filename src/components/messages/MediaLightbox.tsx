@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, Link as LinkIcon, Wand2, Check } from 'lucide-react';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
+
 
 interface Props {
   open: boolean;
@@ -110,11 +112,12 @@ export default function MediaLightbox({
 
       <div className="media-lightbox-stage" onClick={(e) => e.stopPropagation()}>
         {isSvg && svgSource ? (
-          <iframe
-            title={alt || 'SVG preview'}
-            sandbox=""
-            srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:transparent;display:flex;align-items:center;justify-content:center;height:100%}svg{max-width:100%;max-height:100%;height:auto;width:auto}</style></head><body>${svgSource}</body></html>`}
-            style={{ width: '90vw', height: '85vh', border: 'none', background: 'transparent' }}
+          <div
+            className="media-lightbox-svg"
+            role="img"
+            aria-label={alt || 'SVG preview'}
+            style={{ width: '90vw', height: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgSource) }}
           />
         ) : (
           <img src={src} alt={alt || ''} className="media-lightbox-img" />
