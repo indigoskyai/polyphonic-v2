@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Maximize2, Code2, Eye, ExternalLink } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import CodeBlock from '@/components/rich/CodeBlock';
@@ -22,22 +22,24 @@ export default function SvgCard({ source, title, onOpenCanvas }: Props) {
 
   const clean = useMemo(() => sanitizeSvg(source), [source]);
 
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+
   return (
     <div className="svg-card">
-      <div className="svg-card-toolbar">
+      <div className="svg-card-toolbar" onClick={stop}>
         <span className="svg-card-label">{title || 'SVG'}</span>
         <div className="svg-card-actions">
-          <button type="button" className="code-icon-btn" onClick={() => setView('preview')} aria-pressed={view === 'preview'} title="Preview">
+          <button type="button" className="code-icon-btn" onClick={(e) => { stop(e); setView('preview'); }} aria-pressed={view === 'preview'} title="Preview">
             <Eye size={11} />
           </button>
-          <button type="button" className="code-icon-btn" onClick={() => setView('code')} aria-pressed={view === 'code'} title="View source">
+          <button type="button" className="code-icon-btn" onClick={(e) => { stop(e); setView('code'); }} aria-pressed={view === 'code'} title="View source">
             <Code2 size={11} />
           </button>
-          <button type="button" className="code-icon-btn" onClick={() => setOpen(true)} title="Expand">
+          <button type="button" className="code-icon-btn" onClick={(e) => { stop(e); setOpen(true); }} title="Expand">
             <Maximize2 size={11} />
           </button>
           {onOpenCanvas && (
-            <button type="button" className="code-icon-btn" onClick={onOpenCanvas} title="Open in canvas">
+            <button type="button" className="code-icon-btn" onClick={(e) => { stop(e); onOpenCanvas(); }} title="Open in canvas">
               <ExternalLink size={11} />
             </button>
           )}
@@ -46,12 +48,20 @@ export default function SvgCard({ source, title, onOpenCanvas }: Props) {
       {view === 'preview' ? (
         <div
           className="svg-card-frame"
-          role="img"
-          aria-label={title || 'SVG preview'}
+          role="button"
+          tabIndex={0}
+          aria-label={title ? `Expand ${title}` : 'Expand SVG'}
+          onClick={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
           dangerouslySetInnerHTML={{ __html: clean }}
         />
       ) : (
-        <div className="svg-card-code"><CodeBlock lang="xml" source={source} /></div>
+        <div className="svg-card-code" onClick={stop}><CodeBlock lang="xml" source={source} /></div>
       )}
       <MediaLightbox
         open={open}
@@ -65,3 +75,4 @@ export default function SvgCard({ source, title, onOpenCanvas }: Props) {
     </div>
   );
 }
+
