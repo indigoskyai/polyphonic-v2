@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Maximize2, Code2, Eye, ExternalLink } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import CodeBlock from '@/components/rich/CodeBlock';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 
 interface Props {
   source: string;
@@ -10,14 +11,16 @@ interface Props {
 }
 
 /**
- * Inline SVG renderer used for `create_artifact kind=svg` style content
- * embedded directly in a chat message. Sandboxed iframe + tap-to-expand.
+ * Inline SVG renderer used for `create_artifact kind=svg` content embedded
+ * directly in a chat message. Renders the SVG inline via sanitised
+ * dangerouslySetInnerHTML (single source of truth — no iframe reflow blanks
+ * on remount) with a toolbar for source/expand/canvas.
  */
 export default function SvgCard({ source, title, onOpenCanvas }: Props) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'preview' | 'code'>('preview');
 
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:12px;background:transparent;display:flex;align-items:center;justify-content:center}svg{max-width:100%;height:auto;display:block}</style></head><body>${source}</body></html>`;
+  const clean = useMemo(() => sanitizeSvg(source), [source]);
 
   return (
     <div className="svg-card">
@@ -41,11 +44,11 @@ export default function SvgCard({ source, title, onOpenCanvas }: Props) {
         </div>
       </div>
       {view === 'preview' ? (
-        <iframe
-          title={title || 'SVG preview'}
-          sandbox=""
-          srcDoc={doc}
+        <div
           className="svg-card-frame"
+          role="img"
+          aria-label={title || 'SVG preview'}
+          dangerouslySetInnerHTML={{ __html: clean }}
         />
       ) : (
         <div className="svg-card-code"><CodeBlock lang="xml" source={source} /></div>

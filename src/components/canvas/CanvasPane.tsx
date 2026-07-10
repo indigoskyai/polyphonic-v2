@@ -67,6 +67,11 @@ export default function CanvasPane() {
     window.addEventListener('mouseup', onUp);
   };
 
+  // When closed, don't render the pane at all. This eliminates the white edge
+  // sliver caused by the pane's background + border-left + a still-mounted
+  // iframe painting under the translated-off container.
+  if (!isOpen) return null;
+
   return (
     <aside className="canvas-pane" data-fullscreen={fullscreen ? 'true' : undefined} aria-hidden={!isOpen}>
       <div className="canvas-resize-handle" onMouseDown={startResize} role="separator" aria-label="Resize canvas" />

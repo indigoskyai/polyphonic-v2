@@ -1243,6 +1243,9 @@ export default function ChatView() {
   // Auto-open the canvas when a NEW artifact is created in this thread after a
   // finished turn — like Claude/ChatGPT. Existing artifacts are seeded as "seen"
   // on thread open without popping, so revisiting a thread never re-opens.
+  // Kinds that render inline in the message (svg, simulation) never trigger
+  // canvas auto-open — the user gets them right in the transcript and can
+  // still click "Open in canvas" to escalate.
   useEffect(() => {
     const tid = currentThreadId;
     if (!tid) return;
@@ -1253,6 +1256,7 @@ export default function ChatView() {
     justStreamedRef.current = false;
     if (hadNew && wasStreamed) {
       const newest = list.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
+      if (newest.kind === 'svg' || newest.kind === 'simulation') return;
       openCanvas(newest.id);
     }
   }, [artifactsByThread, currentThreadId, markCanvasSeen, openCanvas]);
