@@ -13488,13 +13488,23 @@ html {
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: zoom-in;
-  background: linear-gradient(135deg, var(--surface-1), var(--surface-2));
-  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 14px 32px -22px rgba(0,0,0,0.55);
+  background: var(--surface-1);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.28),
+    0 12px 28px -18px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.035);
 }
-.img-card:hover { border-color: var(--border); box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 38px -22px rgba(0,0,0,0.65); }
+.img-card:hover {
+  border-color: var(--border);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.32),
+    0 20px 44px -20px rgba(0,0,0,0.65),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
 .img-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.img-card img { display: block; width: 100%; height: auto; transition: opacity var(--dur-med) var(--ease-out); }
+.img-card img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; transition: opacity var(--dur-med) var(--ease-out); }
+
 .img-card-empty { aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; cursor: default; }
 
 .img-card-shimmer {
