@@ -1,34 +1,19 @@
 // anima-image-create
-// Direct OpenAI gpt-image-2 (with gpt-image-1 fallback). Generates a high-quality
-// image, uploads it to the `generated-images` bucket, and returns a signed URL.
+// Routes image generation through the user's configured provider.
+// Default: OpenRouter (Nano Banana) using the user's OpenRouter key,
+// falling back to the system OPENROUTER_API_KEY. Users can opt into
+// their personal OpenAI key via Settings → Models.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
-
-type Size = "1024x1024" | "1536x1024" | "1024x1536" | "auto";
-
-function pickSize(aspect?: string): Size {
-  switch ((aspect || "").toLowerCase()) {
-    case "wide":
-    case "landscape":
-    case "16:9":
-    case "3:2":
-      return "1536x1024";
-    case "tall":
-    case "portrait":
-    case "9:16":
-    case "2:3":
-      return "1024x1536";
-    case "square":
-    case "1:1":
-      return "1024x1024";
-    default:
-      return "auto";
-  }
-}
+import {
+  generateViaOpenAI,
+  generateViaOpenRouter,
+  ImageProviderError,
+  resolveImageModel,
+} from "../_shared/imageModel.ts";
 
 serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -68,9 +53,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Prompt is required" }), { status: 400, headers: jsonHeaders });
     }
 
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKey) {
-      return new Response(JSON.stringify({ error: "Image generation not configured (OPENAI_API_KEY missing)" }), {
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { config, error: cfgErr } = await resolveImageModel(supabase, userId);
+    if (!config) {
+      return new Response(JSON.stringify({ error: cfgErr || "Image generation not configured" }), {
         status: 500,
         headers: jsonHeaders,
       });
@@ -79,7 +66,7 @@ serve(async (req) => {
     if (userId !== "system") {
       try {
         await checkAndIncrement(userId, "image-generation");
-      } catch (e) {
+      } catch {
         return new Response(JSON.stringify({ error: "Daily image generation limit reached" }), {
           status: 429,
           headers: jsonHeaders,
@@ -87,58 +74,34 @@ serve(async (req) => {
       }
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    // Use gpt-image-1 at medium quality: ~10–15s, well within edge timeout.
-    // gpt-image-2 high-quality routinely exceeds 60s and trips client-side
-    // timeouts in the chat-multi -> tool-execute -> image-create chain.
-    const requestBody: Record<string, unknown> = {
-      model: "gpt-image-1",
-      prompt: prompt.trim(),
-      n: 1,
-      size: pickSize(aspect),
-      quality: "medium",
-      output_format: "png",
-    };
-    if (transparent) requestBody.background = "transparent";
-
-    console.log("[anima-image-create] requesting", { model: requestBody.model, size: requestBody.size, transparent });
+    console.log("[anima-image-create] requesting", {
+      provider: config.provider,
+      model: config.model,
+      keySource: config.keySource,
+    });
     const t0 = Date.now();
-    const response = await withModelRetry(() => fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(60000),
-    }));
-    console.log("[anima-image-create] openai responded", { ms: Date.now() - t0, status: response.status });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("OpenAI image generation failed:", response.status, text);
-      const status = response.status === 429 ? 429 : response.status === 402 ? 402 : 500;
-      return new Response(JSON.stringify({ error: "Image generation failed", detail: text.slice(0, 300) }), {
-        status,
+    let image;
+    try {
+      image = config.provider === "openai"
+        ? await generateViaOpenAI(config, prompt.trim(), aspect, transparent)
+        : await generateViaOpenRouter(config, prompt.trim());
+    } catch (e) {
+      const status = e instanceof ImageProviderError ? e.status : 500;
+      const message = e instanceof Error ? e.message : "Image generation failed";
+      console.error("[anima-image-create] provider error", status, message);
+      return new Response(JSON.stringify({ error: "Image generation failed", detail: message }), {
+        status: status === 429 || status === 402 || status === 422 ? status : 500,
         headers: jsonHeaders,
       });
     }
+    console.log("[anima-image-create] provider responded", { ms: Date.now() - t0 });
 
-    const data = await response.json();
-    const item = data?.data?.[0];
-    const b64 = item?.b64_json as string | undefined;
-    const revisedPrompt = (item?.revised_prompt as string | undefined) || prompt.trim();
-    if (!b64) {
-      return new Response(JSON.stringify({ error: "No image returned" }), { status: 422, headers: jsonHeaders });
-    }
-
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const fileName = `${userId}/${crypto.randomUUID()}.png`;
+    const ext = (image.mimeType.split("/")[1] || "png").toLowerCase();
+    const fileName = `${userId}/${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("generated-images")
-      .upload(fileName, bytes, { contentType: "image/png", upsert: false });
+      .upload(fileName, image.bytes, { contentType: image.mimeType, upsert: false });
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
       return new Response(JSON.stringify({ error: "Failed to save generated image" }), {
@@ -149,7 +112,7 @@ serve(async (req) => {
 
     const { data: signed, error: signedErr } = await supabase.storage
       .from("generated-images")
-      .createSignedUrl(fileName, 60 * 60 * 24 * 7); // 7 days
+      .createSignedUrl(fileName, 60 * 60 * 24 * 7);
     if (signedErr || !signed?.signedUrl) {
       console.error("Signed URL error:", signedErr);
       return new Response(JSON.stringify({ error: "Failed to generate image URL" }), {
@@ -169,8 +132,9 @@ serve(async (req) => {
       JSON.stringify({
         image_url: signed.signedUrl,
         storage_path: fileName,
-        revised_prompt: revisedPrompt,
-        model: requestBody.model,
+        revised_prompt: image.revisedPrompt || prompt.trim(),
+        model: config.model,
+        provider: config.provider,
       }),
       { status: 200, headers: jsonHeaders },
     );

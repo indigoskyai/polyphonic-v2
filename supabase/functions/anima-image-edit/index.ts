@@ -1,12 +1,18 @@
 // anima-image-edit
-// Edit an existing image (from the generated-images or chat-attachments bucket)
-// using OpenAI's gpt-image-2 image edits endpoint.
+// Edits an existing image using the user's configured image provider.
+// Default: OpenRouter (Nano Banana). Users can opt into their personal
+// OpenAI key via Settings → Models.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import {
+  generateViaOpenAI,
+  generateViaOpenRouter,
+  ImageProviderError,
+  resolveImageModel,
+} from "../_shared/imageModel.ts";
 
 const ALLOWED_BUCKETS = ["generated-images", "chat-attachments"];
 
@@ -51,9 +57,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid source image" }), { status: 400, headers: jsonHeaders });
     }
 
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKey) {
-      return new Response(JSON.stringify({ error: "Image editing not configured" }), { status: 500, headers: jsonHeaders });
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { config, error: cfgErr } = await resolveImageModel(supabase, userId);
+    if (!config) {
+      return new Response(JSON.stringify({ error: cfgErr || "Image editing not configured" }), {
+        status: 500,
+        headers: jsonHeaders,
+      });
     }
 
     if (userId !== "system") {
@@ -67,62 +78,41 @@ serve(async (req) => {
       }
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    // Download the source image from storage
     const { data: blob, error: dlErr } = await supabase.storage.from(sourceBucket).download(sourcePath);
     if (dlErr || !blob) {
       console.error("Source download failed:", dlErr);
       return new Response(JSON.stringify({ error: "Source image not found" }), { status: 404, headers: jsonHeaders });
     }
-
     const sourceBytes = new Uint8Array(await blob.arrayBuffer());
+    const sourceImage = { bytes: sourceBytes, mimeType: blob.type || "image/png" };
 
-    // Build multipart form. gpt-image-1 medium keeps us well under the
-    // chained edge-function timeout budget.
-    const form = new FormData();
-    form.append("model", "gpt-image-1");
-    form.append("prompt", prompt.trim());
-    form.append("n", "1");
-    form.append("size", "auto");
-    form.append("quality", "medium");
-    form.append(
-      "image",
-      new Blob([sourceBytes], { type: blob.type || "image/png" }),
-      "source.png",
-    );
-
-    console.log("[anima-image-edit] requesting gpt-image-1");
+    console.log("[anima-image-edit] requesting", {
+      provider: config.provider,
+      model: config.model,
+      keySource: config.keySource,
+    });
     const t0 = Date.now();
-    const response = await withModelRetry(() => fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(60000),
-    }));
-    console.log("[anima-image-edit] openai responded", { ms: Date.now() - t0, status: response.status });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("OpenAI image edit failed:", response.status, text);
-      return new Response(JSON.stringify({ error: "Image edit failed", detail: text.slice(0, 300) }), {
-        status: response.status === 429 ? 429 : 500,
+    let image;
+    try {
+      image = config.provider === "openai"
+        ? await generateViaOpenAI(config, prompt.trim(), undefined, false, sourceImage)
+        : await generateViaOpenRouter(config, prompt.trim(), sourceImage);
+    } catch (e) {
+      const status = e instanceof ImageProviderError ? e.status : 500;
+      const message = e instanceof Error ? e.message : "Image edit failed";
+      console.error("[anima-image-edit] provider error", status, message);
+      return new Response(JSON.stringify({ error: "Image edit failed", detail: message }), {
+        status: status === 429 || status === 402 || status === 422 ? status : 500,
         headers: jsonHeaders,
       });
     }
+    console.log("[anima-image-edit] provider responded", { ms: Date.now() - t0 });
 
-    const data = await response.json();
-    const item = data?.data?.[0];
-    const b64 = item?.b64_json as string | undefined;
-    if (!b64) {
-      return new Response(JSON.stringify({ error: "No image returned" }), { status: 422, headers: jsonHeaders });
-    }
-
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const fileName = `${userId}/${crypto.randomUUID()}.png`;
+    const ext = (image.mimeType.split("/")[1] || "png").toLowerCase();
+    const fileName = `${userId}/${crypto.randomUUID()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("generated-images")
-      .upload(fileName, bytes, { contentType: "image/png", upsert: false });
+      .upload(fileName, image.bytes, { contentType: image.mimeType, upsert: false });
     if (uploadError) {
       return new Response(JSON.stringify({ error: "Failed to save edited image" }), { status: 500, headers: jsonHeaders });
     }
@@ -147,6 +137,8 @@ serve(async (req) => {
         storage_path: fileName,
         source_path: sourcePath,
         source_bucket: sourceBucket,
+        model: config.model,
+        provider: config.provider,
       }),
       { status: 200, headers: jsonHeaders },
     );

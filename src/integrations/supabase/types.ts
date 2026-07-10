@@ -4550,6 +4550,8 @@ export type Database = {
           ensemble_models: Json | null
           font_size: number
           id: string
+          image_model: string
+          image_provider: string
           interface_density: string
           interface_mode: string
           landing_agent_id: string | null
@@ -4582,6 +4584,8 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
+          image_model?: string
+          image_provider?: string
           interface_density?: string
           interface_mode?: string
           landing_agent_id?: string | null
@@ -4614,6 +4618,8 @@ export type Database = {
           ensemble_models?: Json | null
           font_size?: number
           id?: string
+          image_model?: string
+          image_provider?: string
           interface_density?: string
           interface_mode?: string
           landing_agent_id?: string | null

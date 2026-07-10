@@ -227,9 +227,97 @@ export default function ModelsSettings() {
           )}
         </Section>
 
+        <ImageModelSection />
         <EnsembleSection />
       </div>
     </SettingsPage>
+  );
+}
+
+const OPENROUTER_IMAGE_MODELS = [
+  { value: 'google/gemini-2.5-flash-image', label: 'Nano Banana (Gemini 2.5 Flash Image) · Fast, high quality' },
+  { value: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash Image (Preview)' },
+  { value: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image (Preview) · Highest quality' },
+];
+
+const OPENAI_IMAGE_MODELS = [
+  { value: 'gpt-image-1', label: 'OpenAI gpt-image-1 · Medium quality' },
+  { value: 'gpt-image-2', label: 'OpenAI gpt-image-2 · High quality (slow, expensive)' },
+];
+
+function ImageModelSection() {
+  const { image_provider, image_model, updateSetting } = useSettingsStore();
+  const options = image_provider === 'openai' ? OPENAI_IMAGE_MODELS : OPENROUTER_IMAGE_MODELS;
+  const setProvider = (next: 'openrouter' | 'openai') => {
+    if (next === image_provider) return;
+    updateSetting('image_provider', next);
+    const defaultModel = next === 'openai' ? 'gpt-image-1' : 'google/gemini-2.5-flash-image';
+    updateSetting('image_model', defaultModel);
+  };
+
+  return (
+    <Section
+      number="02"
+      name="Image generation"
+      title="Image model"
+      desc="Default routes through OpenRouter (uses your OpenRouter key when set, otherwise the platform key). Switch to OpenAI to use your personal OpenAI key — requires OPENAI_API_KEY on the server."
+    >
+      <div className="set-row">
+        <div className="set-row-copy">
+          <div className="set-row-label">Provider</div>
+          <div className="set-row-desc">
+            OpenRouter is the default. OpenAI is an opt-in path for your personal key.
+          </div>
+        </div>
+        <div className="set-row-control" style={{ display: 'flex', gap: 6 }}>
+          {(['openrouter', 'openai'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setProvider(p)}
+              className={`set-btn compact${image_provider === p ? ' primary' : ''}`}
+            >
+              {p === 'openrouter' ? 'OpenRouter' : 'OpenAI'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div
+          style={{
+            fontSize: 'var(--settings-mono-size)',
+            fontWeight: 'var(--weight-medium)',
+            color: 'var(--text-soft)',
+            letterSpacing: 'var(--track-folio)',
+            textTransform: 'uppercase',
+            marginBottom: 10,
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          Model
+        </div>
+        <SelectInput
+          value={image_model}
+          onChange={(v) => updateSetting('image_model', v)}
+          options={options}
+          width="100%"
+        />
+        <div
+          style={{
+            fontSize: 'var(--settings-caption-size)',
+            fontWeight: 'var(--weight-book)',
+            color: 'var(--text-tertiary)',
+            marginTop: 8,
+            lineHeight: 1.55,
+            letterSpacing: 'var(--track-body-tight)',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          Used whenever the assistant calls the generate_image or edit_image tool.
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -269,7 +357,7 @@ function EnsembleSection() {
   return (
     <>
       <Section
-        number="02"
+        number="03"
         name="Default behavior"
         title="When ensemble is armed"
         desc={
@@ -299,7 +387,7 @@ function EnsembleSection() {
       </Section>
 
       <Section
-        number="03"
+        number="04"
         name="Ensemble"
         title="Models in rotation"
         desc="The signature ensemble (Luca · Anima · Vektor) runs in the meantime. A richer model-rotation system with custom slots and persona presets is on the way."
