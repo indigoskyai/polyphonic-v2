@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, Link as LinkIcon, Wand2, Check } from 'lucide-react';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
+
 
 interface Props {
   open: boolean;
