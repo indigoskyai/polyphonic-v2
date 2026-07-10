@@ -70,6 +70,8 @@ export const defaultSettings: Settings = {
   ],
   synthesis_model: 'anthropic/claude-opus-4-7',
   reasoning_effort: 'medium',
+  image_provider: 'openrouter',
+  image_model: 'google/gemini-2.5-flash-image',
   default_voice_id: 'EXAVITQu4vr4xnSDxMaL',
   elevenlabs_agent_id: null,
   voice_autospeak: false,
