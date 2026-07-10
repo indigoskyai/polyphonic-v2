@@ -13540,23 +13540,30 @@ html {
 
 /* SvgCard */
 .svg-card {
+  position: relative;
   width: 100%; max-width: 560px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--floor);
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
+  transition:
+    transform 180ms var(--ease-premium),
+    border-color 180ms var(--ease-out),
+    box-shadow 240ms var(--ease-premium);
   box-shadow:
-    0 1px 2px rgba(0,0,0,0.28),
-    0 12px 28px -18px rgba(0,0,0,0.55),
-    inset 0 1px 0 rgba(255,255,255,0.035);
+    0 1px 0 rgba(255, 255, 255, 0.018) inset,
+    0 5px 12px -9px rgba(0, 0, 0, 0.34),
+    0 16px 34px -28px rgba(0, 0, 0, 0.38);
+  transform: translateZ(0);
 }
-.svg-card:hover {
-  border-color: var(--border);
+.svg-card:hover,
+.svg-card:focus-within {
+  transform: translateY(-1px) translateZ(0);
+  border-color: color-mix(in srgb, var(--text-soft) 22%, var(--border-subtle));
   box-shadow:
-    0 1px 2px rgba(0,0,0,0.32),
-    0 20px 44px -20px rgba(0,0,0,0.65),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+    0 1px 0 rgba(255, 255, 255, 0.026) inset,
+    0 8px 18px -13px rgba(0, 0, 0, 0.30),
+    0 22px 48px -36px rgba(0, 0, 0, 0.40);
 }
 .svg-card-toolbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -13579,18 +13586,22 @@ html {
 .media-lightbox {
   position: fixed; inset: 0; z-index: 1000;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(6,6,8,0.55);
-  backdrop-filter: blur(18px) saturate(120%);
-  -webkit-backdrop-filter: blur(18px) saturate(120%);
-  animation: lightbox-fade var(--dur-med) var(--ease-out);
+  padding: clamp(16px, 3vw, 48px);
+  background: rgba(3, 3, 4, 0.48);
+  backdrop-filter: blur(26px) saturate(112%);
+  -webkit-backdrop-filter: blur(26px) saturate(112%);
+  animation: lightbox-fade 320ms var(--ease-premium);
 }
 @keyframes lightbox-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes lightbox-pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes lightbox-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .media-lightbox-shell {
   position: relative;
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-  animation: lightbox-pop var(--dur-med) var(--ease-out);
+  animation: lightbox-pop 420ms var(--ease-premium);
 }
 .media-lightbox-toolbar {
   position: absolute; top: -44px; right: 0;
@@ -13599,13 +13610,18 @@ html {
 .media-lightbox-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 10px; border-radius: 999px;
-  background: rgba(20,20,20,0.7); backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(18, 18, 19, 0.58);
+  backdrop-filter: blur(18px) saturate(115%);
+  -webkit-backdrop-filter: blur(18px) saturate(115%);
+  border: 1px solid rgba(255,255,255,0.11);
   color: var(--text-secondary);
   font-family: var(--font-mono); font-size: 11px; letter-spacing: var(--track-meta); text-transform: uppercase;
-  cursor: pointer; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+  box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.48);
+  transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out), transform 160ms var(--ease-out);
 }
-.media-lightbox-btn:hover { color: var(--text-body); border-color: rgba(255,255,255,0.22); background: rgba(30,30,30,0.85); }
+.media-lightbox-btn:hover { color: var(--text-body); border-color: rgba(255,255,255,0.19); background: rgba(30,30,31,0.72); transform: translateY(-1px); }
+.media-lightbox-btn:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
 .media-lightbox-btn.primary { background: var(--text-body); color: var(--floor); border-color: transparent; }
 .media-lightbox-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 .media-lightbox-stage {
@@ -13614,14 +13630,20 @@ html {
 .media-lightbox-img {
   max-width: min(1200px, 90vw); max-height: 85vh; width: auto; height: auto;
   border-radius: var(--radius-md);
-  box-shadow: 0 40px 100px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 8px 18px -14px rgba(0, 0, 0, 0.38),
+    0 24px 54px -42px rgba(0, 0, 0, 0.46);
   display: block;
 }
 .media-lightbox-svg {
   width: min(1000px, 90vw);
   max-height: 85vh;
   border-radius: var(--radius-md);
-  box-shadow: 0 40px 100px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 10px 22px -17px rgba(0, 0, 0, 0.42),
+    0 30px 70px -50px rgba(0, 0, 0, 0.54);
   background: var(--floor);
   padding: 24px;
   display: flex; align-items: center; justify-content: center;
