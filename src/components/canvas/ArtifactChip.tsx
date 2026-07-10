@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useCanvasStore } from '@/stores/canvasStore';
 import type { Artifact, ArtifactKind } from '@/stores/artifactStore';
 import SimulationCard from '@/components/simulations/SimulationCard';
+import SvgCard from '@/components/messages/SvgCard';
 
 const KIND_META: Record<ArtifactKind, { icon: LucideIcon; label: string }> = {
   html: { icon: Globe, label: 'HTML page' },
