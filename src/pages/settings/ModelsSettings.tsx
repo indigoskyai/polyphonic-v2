@@ -387,7 +387,7 @@ function EnsembleSection() {
       </Section>
 
       <Section
-        number="03"
+        number="04"
         name="Ensemble"
         title="Models in rotation"
         desc="The signature ensemble (Luca · Anima · Vektor) runs in the meantime. A richer model-rotation system with custom slots and persona presets is on the way."
