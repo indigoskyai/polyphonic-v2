@@ -93,36 +93,38 @@ export default function MediaLightbox({
       aria-label={alt || 'Media preview'}
       onClick={onClose}
     >
-      <div className="media-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
-        {onEditWithPrompt && (
-          <button type="button" className="media-lightbox-btn" onClick={() => setEditing((v) => !v)} title="Edit with prompt">
-            <Wand2 size={14} /><span>Edit</span>
+      <div className="media-lightbox-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="media-lightbox-toolbar">
+          {onEditWithPrompt && (
+            <button type="button" className="media-lightbox-btn" onClick={() => setEditing((v) => !v)} title="Edit with prompt">
+              <Wand2 size={14} /><span>Edit</span>
+            </button>
+          )}
+          <button type="button" className="media-lightbox-btn" onClick={handleCopyLink} title="Copy link">
+            {copied ? <Check size={14} /> : <LinkIcon size={14} />}<span>{copied ? 'Copied' : 'Link'}</span>
           </button>
-        )}
-        <button type="button" className="media-lightbox-btn" onClick={handleCopyLink} title="Copy link">
-          {copied ? <Check size={14} /> : <LinkIcon size={14} />}<span>{copied ? 'Copied' : 'Link'}</span>
-        </button>
-        <button type="button" className="media-lightbox-btn" onClick={handleDownload} title="Download">
-          <Download size={14} /><span>Download</span>
-        </button>
-        <button type="button" className="media-lightbox-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">
-          <X size={14} />
-        </button>
+          <button type="button" className="media-lightbox-btn" onClick={handleDownload} title="Download">
+            <Download size={14} /><span>Download</span>
+          </button>
+          <button type="button" className="media-lightbox-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="media-lightbox-stage">
+          {isSvg && svgSource ? (
+            <div
+              className="media-lightbox-svg"
+              role="img"
+              aria-label={alt || 'SVG preview'}
+              dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgSource) }}
+            />
+          ) : (
+            <img src={src} alt={alt || ''} className="media-lightbox-img" />
+          )}
+        </div>
       </div>
 
-      <div className="media-lightbox-stage" onClick={(e) => e.stopPropagation()}>
-        {isSvg && svgSource ? (
-          <div
-            className="media-lightbox-svg"
-            role="img"
-            aria-label={alt || 'SVG preview'}
-            style={{ width: '90vw', height: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgSource) }}
-          />
-        ) : (
-          <img src={src} alt={alt || ''} className="media-lightbox-img" />
-        )}
-      </div>
 
       {editing && onEditWithPrompt && (
         <div className="media-lightbox-edit" onClick={(e) => e.stopPropagation()}>

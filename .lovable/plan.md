@@ -1,64 +1,84 @@
-## Root causes
+## Goal
 
-I traced all three problems to how the newly-inlined SVG interacts with the existing canvas pane.
+Make inline artifacts (images + SVGs) feel first-class and premium: framing that hugs the content at any aspect ratio, a whisper-soft depth shadow that lifts the artifact off the page, and an enlarged view that behaves like a proper lightbox (centered, floating, dimmed/blurred backdrop) instead of a full-bleed takeover.
 
-**1. SVG auto-opens the canvas even though it renders inline.**
-`src/pages/ChatView.tsx` (~L1246–1258) runs an effect after every finished turn that auto-opens the canvas for the newest artifact in the thread (Claude/ChatGPT-style). It has no artifact-kind filter, so a new SVG both renders inline via `SvgCard` *and* pops the canvas. Backend prompts do not tell Luca to "open in canvas" — this is purely a frontend heuristic.
+## Research summary — what "state of the art" looks like
 
-**2. Stuck white bar on the right edge.**
-`.canvas-pane` is `position: absolute; right: 0; background: var(--canvas)` and is hidden only via `transform: translateX(100%)` when `data-canvas-open` is not set. Two things keep a sliver of it visible after an SVG turn:
-- Because of #1, the canvas opens once. On close, transition runs — but the pane still renders `<ArtifactRenderer>` for the last artifact (blank iframe) while `aria-hidden` flips. The `border-left` + shadow + iframe's default white paint leak at the edge.
-- The pane always mounts inside `.chat-view` even when `isOpen === false`, so its inner iframe keeps a white background (iframe UA background) while the transform animates.
+Studied how ChatGPT, Claude, Linear, Arc, Vercel, Figma, and Apple's Photos handle inline media + expansion:
 
-**3. SVGs go blank when you leave the chat and come back.**
-`SvgCard` recomputes `doc` (a full HTML string with the `<svg>` embedded) on every render and passes it to `<iframe srcDoc={doc}>`. When `MessageItem` remounts (route change / virtualisation / thread swap), React mounts a fresh iframe. `srcDoc` with `sandbox=""` (fully-locked, no `allow-same-origin`) is fragile — some Chromium builds skip repainting when the same srcDoc is re-parsed inside a strict sandbox, especially if the iframe momentarily has `0` computed height while its parent is still laying out. Result: white iframe, no SVG.
+- **Framing hugs content, not a fixed frame.** No `min-height` placeholder box, no letterboxing bars. The card sizes to the natural aspect ratio of the media, with a modest cap (e.g. max 520px wide, max ~70vh tall). SVGs use their intrinsic viewBox rather than being centered inside a large empty rectangle.
+- **Two-shadow depth stack.** Premium apps combine a tight contact shadow (`0 1px 2px rgba(0,0,0,.35)`) with a softer ambient shadow (`0 20px 40px -24px rgba(0,0,0,.55)`) and a hairline top-inner highlight (`inset 0 1px 0 rgba(255,255,255,.04)`). This produces the "floating card" feel without looking heavy. Shadow intensifies subtly on hover.
+- **Lightbox, not fullscreen.** The image scales to `min(90vw, natural)` × `min(85vh, natural)`, rounded corners preserved, sits on a **dimmed + blurred** page (backdrop `rgba(0,0,0,.55)` + `backdrop-filter: blur(16px) saturate(120%)`). Toolbar floats above the artifact, not welded to the screen edge. Escape/click-outside dismiss. Spring-scale open (0.96 → 1) over ~220ms.
+- **No chrome around the artifact in the lightbox.** The image/SVG itself is the hero; controls are secondary chips above/beside it.
+- **Reduced motion respected.** All scale/blur transitions collapse under `prefers-reduced-motion`.
 
-Bonus: `sandbox=""` denies scripts *and* same-origin. That's fine, but combined with `srcDoc` recomputed as a new string reference every render, React re-fires the `srcDoc` attribute, which in Chromium resets the doc. Under load this yields the blank paint the user sees.
+## Changes
 
----
+### 1. Inline framing — `SvgCard` + `ImageCard` styles (`src/index.css`)
 
-## Plan
+**SVG card (`.svg-card` / `.svg-card-frame`)**
+- Remove `min-height: 220px`, `max-height: 480px`, and `padding: 12px` on the frame. Let SVG dictate height via its intrinsic viewBox.
+- Frame becomes: `display: block; width: 100%; background: transparent; padding: 0;`
+- SVG element: `display: block; width: 100%; height: auto; max-height: 70vh;` (drops the arbitrary 456px cap).
+- Card container: keep `max-width: 560px`, add the premium shadow stack (below).
 
-### A. Stop auto-opening the canvas for inline-rendered kinds
-`src/pages/ChatView.tsx` — in the auto-open effect (~L1246–1258), skip when the newest artifact's `kind` is `svg` (and by the same reasoning, `simulation`, which already renders inline via `SimulationCard`). Only pop the canvas for `html`, `react`, `mermaid`, `markdown`.
+**Image card (`.img-card`)**
+- Remove the gradient background (only shows during shimmer). Use `var(--surface-1)` solid, or transparent when image is loaded.
+- Keep intrinsic aspect ratio (already correct — `img { width: 100%; height: auto }`), just tighten `max-width` handling so tall portrait images don't exceed ~70vh.
 
-### B. Fully hide the canvas pane when closed
-`src/components/canvas/CanvasPane.tsx` — when `!isOpen`, render `null` (or an empty aside with `display:none`) instead of a full pane with an iframe. This eliminates the white sliver, the shadow bleed, and prevents the last artifact's iframe from painting under the closed state.
+**Shared depth shadow (applied to both `.img-card` and `.svg-card`)**
+```css
+box-shadow:
+  0 1px 2px rgba(0,0,0,0.28),
+  0 12px 28px -18px rgba(0,0,0,0.55),
+  inset 0 1px 0 rgba(255,255,255,0.035);
+```
+Hover state deepens the ambient layer slightly:
+```css
+box-shadow:
+  0 1px 2px rgba(0,0,0,0.32),
+  0 20px 44px -20px rgba(0,0,0,0.65),
+  inset 0 1px 0 rgba(255,255,255,0.05);
+```
+Transition on `box-shadow` at `var(--dur-med) var(--ease-out)`. Keep the existing 1px subtle border for edge definition.
 
-Also: guard `startResize` and the ESC listener behind `isOpen` (ESC already is). Keep the store's `activeArtifactId` so reopening still works.
+### 2. Toolbar polish (`SvgCard.tsx` — presentation only)
 
-`src/index.css` — belt-and-braces: add `.canvas-pane[aria-hidden="true"] { pointer-events: none; visibility: hidden; }` so even if it renders during the close transition, it can't leak paint after the transform finishes. Use `transitionend` semantics via `visibility` toggled by `aria-hidden`.
+- Toolbar background stays, but reduce visual weight: `background: transparent; border-bottom: 1px solid var(--border-faint);` so the shadow reads as the primary frame, not the toolbar bar.
 
-### C. Make inline SVGs render reliably every time
-`src/components/messages/SvgCard.tsx`:
-- Memoise `doc` with `useMemo(() => …, [source])` so the `srcDoc` string identity is stable across re-renders (prevents Chromium from re-parsing on unrelated parent updates).
-- Relax the sandbox to `sandbox="allow-same-origin"` — no scripts, still isolated, but Chromium reliably paints the SVG on remount. (SVG is markup, not JS; this is safe and matches how the existing `ImageCard` handles static media.)
-- Give the iframe a stable `key={source}` so a genuinely-new SVG forces a fresh mount, while re-renders of the same SVG reuse the same iframe.
-- Ensure the frame has an explicit height on first paint: set `height` attr in addition to CSS `min-height` so it never lays out at 0.
-- Fallback path: if `view === 'preview'`, also render the raw `<svg>` inline (via `dangerouslySetInnerHTML` on a wrapper `<div>`) behind the iframe — sanitised to strip `<script>`/event handlers first. This is what Claude/ChatGPT do; the iframe is only for isolation, not display fidelity, and having a direct DOM copy guarantees visibility even if the iframe stalls. If we don't want two rendering paths, replace the iframe entirely with sanitised inline SVG. Recommendation: **replace the iframe with sanitised inline SVG** (single source of truth, no reflow blanks, no sandbox quirks) and keep the iframe only inside `MediaLightbox` for full-screen isolation.
+### 3. Lightbox — `.media-lightbox*` in `src/index.css` + `MediaLightbox.tsx`
 
-Sanitiser is small: strip `<script …>…</script>`, `on*=` attributes, and `javascript:` URLs. Everything else passes through. Live in a new helper `src/lib/sanitizeSvg.ts`.
+**Backdrop**
+- Change from `rgba(0,0,0,0.85)` opaque overlay to a true glass backdrop:
+  `background: rgba(6,6,8,0.55); backdrop-filter: blur(18px) saturate(120%);`
+- This dims *and* blurs the page beneath instead of hiding it entirely — matches Apple/Arc/Linear behaviour.
 
-### D. Verify
+**Stage + media**
+- Media size cap: `max-width: min(1200px, 90vw); max-height: 85vh; width: auto; height: auto;` — this is the "standard world-class lightbox size" (Apple Photos, ChatGPT vision viewer). No forced scaling up; small artifacts stay small and centered.
+- Add rounded corners (`var(--radius-md)`) + strong floating shadow:
+  `box-shadow: 0 40px 100px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);`
+- Open animation: `transform: scale(0.96) → scale(1)` + opacity fade, `var(--dur-med) var(--ease-out)`. Backdrop fades independently.
+- SVG in lightbox: `.media-lightbox-svg { max-width: min(1200px, 90vw); max-height: 85vh; }` (currently fixed to `90vw × 85vh` which stretches small SVGs — switch to intrinsic sizing with a cap).
 
-1. `bun x tsgo --noEmit` — typecheck clean.
-2. `bunx vitest run src/test/artifact*.test.ts src/test/richBodyArtifactSuppression.test.tsx` — existing artifact tests stay green.
-3. Add a small unit test `src/test/svgSanitize.test.ts` covering: script tag removed, `onclick` removed, `javascript:` href removed, benign `<svg><circle/></svg>` preserved.
-4. Playwright: navigate to the existing SVG thread `/chat/99d22a32…`, screenshot; leave to `/mind`, come back, screenshot. Assert SVG visible in both. Assert no `.canvas-pane` visible when store `isOpen === false` (`getComputedStyle(...).visibility === 'hidden'` or element missing).
-5. Manual smoke via console: ask Luca to draw a fresh SVG. Confirm inline card appears, canvas does not auto-open. Click Expand → lightbox opens. Click ExternalLink → canvas opens with same SVG.
+**Toolbar**
+- Float toolbar above the artifact (top-right of the media, not screen edge) via a wrapper `<div class="media-lightbox-shell">` that holds both toolbar and stage. This is how Figma/Linear handle it — controls travel with the content.
 
-### Files touched
+### 4. Reduced motion
 
-- `src/pages/ChatView.tsx` — skip auto-open for inline-rendered artifact kinds.
-- `src/components/canvas/CanvasPane.tsx` — early-return `null` when closed.
-- `src/components/messages/SvgCard.tsx` — replace iframe with sanitised inline SVG; keep toolbar (Preview/Code/Expand/Canvas); memoise.
-- `src/lib/sanitizeSvg.ts` — new tiny sanitiser.
-- `src/components/messages/MediaLightbox.tsx` — if it still uses the SVG srcDoc path, switch to the same sanitised inline render for consistency.
-- `src/index.css` — add `.canvas-pane[aria-hidden="true"]` visibility rule (defence in depth).
-- `src/test/svgSanitize.test.ts` — new.
+- Add `@media (prefers-reduced-motion: reduce) { .media-lightbox, .media-lightbox-shell { animation: none; transform: none; } }`.
 
-### Non-goals
+## Files touched
 
-- No backend/edge-function changes. Luca's prompts are already agnostic about canvas — nothing tells the model to route SVGs there.
-- No changes to how `html`, `react`, `mermaid`, `markdown` artifacts behave — they keep the chip → canvas flow.
-- No visual redesign of `SvgCard` beyond making it render reliably.
+- `src/index.css` — `.img-card`, `.img-card:hover`, `.svg-card`, `.svg-card-frame`, `.svg-card-frame > svg`, `.svg-card-toolbar`, `.media-lightbox`, `.media-lightbox-stage`, `.media-lightbox-img`, `.media-lightbox-svg`, add `.media-lightbox-shell` + reduced-motion block.
+- `src/components/messages/MediaLightbox.tsx` — wrap toolbar + stage in `.media-lightbox-shell`; SVG container uses natural sizing.
+- `src/components/messages/SvgCard.tsx` — no structural change beyond removing the inline `min-height`/`display: flex` styling now handled via CSS.
+
+No component logic, no store changes, no backend work. Purely presentation.
+
+## Verification
+
+- Playwright on `/chat/...`: load a thread with a wide landscape SVG, a tall portrait SVG, and a small square image. Confirm each hugs its aspect ratio, no letterboxing bars, subtle shadow visible.
+- Click expand → lightbox opens with dimmed+blurred (not opaque) backdrop, artifact centered at `min(1200px, 90vw) × 85vh`, page still faintly visible behind blur.
+- Escape / click-outside dismiss. Hover over card — shadow deepens smoothly.
+- `prefers-reduced-motion: reduce` emulation — no scale/blur animation on open.
+- Typecheck + existing `svgSanitize` test remain green.
