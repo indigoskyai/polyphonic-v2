@@ -424,6 +424,7 @@ async function executeDeterministicImageGeneration(
   serviceRoleKey: string,
   userId: string | null,
   prompt: string,
+  headers: Record<string, string>,
 ): Promise<Response> {
   const args = {
     prompt: prompt.trim(),
@@ -459,7 +460,7 @@ async function executeDeterministicImageGeneration(
       tool_calls: [{ tool_call_id: toolCallId, tool: "generate_image", input: args, output }],
       tool_messages: toolMessages,
     }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+    { status: 200, headers },
   );
 }
 
@@ -616,10 +617,10 @@ serve(async (req) => {
     }
 
     const latestContent = latestUserContent(messages);
-    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestUserContent(messages));
+    const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestContent);
 
     if (!forceForgeOnly && looksLikeDirectImageGenerationRequest(latestContent)) {
-      return await executeDeterministicImageGeneration(supabaseUrl, serviceRoleKey, userId, latestContent);
+      return await executeDeterministicImageGeneration(supabaseUrl, serviceRoleKey, userId, latestContent, jsonHeaders);
     }
 
     // Get the user's API key. Tool planning and Forge both require BYOK now;

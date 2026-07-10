@@ -31,8 +31,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
     let userId: string;
+    const body = await req.json();
     if (token === serviceRoleKey) {
-      userId = "system";
+      userId = typeof body?.user_id === "string" && body.user_id ? body.user_id : "system";
     } else {
       const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
@@ -44,7 +45,6 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const body = await req.json();
     const prompt: string = (body?.prompt ?? "").toString();
     const aspect: string | undefined = body?.aspect_ratio;
     const transparent: boolean = body?.transparent === true;
