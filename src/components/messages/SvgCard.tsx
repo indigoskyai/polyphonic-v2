@@ -33,6 +33,11 @@ export default function SvgCard({ source, title, onOpenCanvas }: Props) {
           <button type="button" className="code-icon-btn" onClick={() => setOpen(true)} title="Expand">
             <Maximize2 size={11} />
           </button>
+          {onOpenCanvas && (
+            <button type="button" className="code-icon-btn" onClick={onOpenCanvas} title="Open in canvas">
+              <ExternalLink size={11} />
+            </button>
+          )}
         </div>
       </div>
       {view === 'preview' ? (
