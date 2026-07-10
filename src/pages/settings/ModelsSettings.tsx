@@ -357,7 +357,7 @@ function EnsembleSection() {
   return (
     <>
       <Section
-        number="02"
+        number="03"
         name="Default behavior"
         title="When ensemble is armed"
         desc={
