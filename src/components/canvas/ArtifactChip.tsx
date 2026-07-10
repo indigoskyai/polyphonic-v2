@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useCanvasStore } from '@/stores/canvasStore';
 import type { Artifact, ArtifactKind } from '@/stores/artifactStore';
 import SimulationCard from '@/components/simulations/SimulationCard';
+import SvgCard from '@/components/messages/SvgCard';
 
 const KIND_META: Record<ArtifactKind, { icon: LucideIcon; label: string }> = {
   html: { icon: Globe, label: 'HTML page' },
@@ -24,6 +25,11 @@ export default function ArtifactChip({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'simulation') {
     return <SimulationCard artifact={artifact} compact />;
   }
+
+  if (artifact.kind === 'svg') {
+    return <SvgCard source={artifact.content} title={artifact.title} onOpenCanvas={() => open(artifact.id)} />;
+  }
+
 
   const meta = KIND_META[artifact.kind] || { icon: FileCode2, label: artifact.kind };
   const Icon = meta.icon;

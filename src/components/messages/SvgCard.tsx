@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { Maximize2, Code2, Eye } from 'lucide-react';
+import { Maximize2, Code2, Eye, ExternalLink } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import CodeBlock from '@/components/rich/CodeBlock';
 
 interface Props {
   source: string;
   title?: string;
+  onOpenCanvas?: () => void;
 }
 
 /**
  * Inline SVG renderer used for `create_artifact kind=svg` style content
  * embedded directly in a chat message. Sandboxed iframe + tap-to-expand.
  */
-export default function SvgCard({ source, title }: Props) {
+export default function SvgCard({ source, title, onOpenCanvas }: Props) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'preview' | 'code'>('preview');
 
@@ -32,6 +33,11 @@ export default function SvgCard({ source, title }: Props) {
           <button type="button" className="code-icon-btn" onClick={() => setOpen(true)} title="Expand">
             <Maximize2 size={11} />
           </button>
+          {onOpenCanvas && (
+            <button type="button" className="code-icon-btn" onClick={onOpenCanvas} title="Open in canvas">
+              <ExternalLink size={11} />
+            </button>
+          )}
         </div>
       </div>
       {view === 'preview' ? (

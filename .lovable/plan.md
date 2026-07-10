@@ -1,19 +1,39 @@
-## Change
+## Goal
+Render SVG artifacts inline in the chat message (like an image), instead of only showing a chip that opens the canvas.
 
-Make the sidebar section title (e.g. "Journal" shown above the sidebar's own list) use the same Instrument Serif treatment as the main page hero title, across every section (Chat, Groups, Memory, Research, Mind, Journal, Projects, Profile, Settings).
+## Change scope
+Frontend/presentation only. No edge functions, no schema changes. SVG generation, persistence, and canvas behavior remain intact — we're changing how the message row displays an `artifact.kind === 'svg'`.
 
-## Files
+## Approach
 
-- `src/components/sidebar/SidebarHeader.tsx` — swap the title's `font-family` from `var(--font-grotesque)` to `var(--font-serif)` (Instrument Serif). Adjust weight/tracking to match the page hero (regular weight, `--track-display` or `normal`, size bumped modestly so it reads as a title, not a label). Keep the optional mono "LIVE" eyebrow unchanged.
+In `src/components/canvas/ArtifactChip.tsx`, add an early return for `artifact.kind === 'svg'` that renders an inline SVG card, mirroring how `SimulationCard` is already special-cased on line 24-26.
 
-## Out of scope
+The inline SVG card will:
+- Render the SVG directly in a sandboxed iframe (isolated styles/scripts, same as `SvgCard.tsx` already does), sized responsively with a sensible max-height (~420px) so it feels like an image, not a full canvas.
+- Show a light toolbar with: title, "Open in canvas" (reuses `useCanvasStore().open(artifact.id)`), "Expand" (lightbox), and "Copy source" — matching the affordances of image messages and the existing `SvgCard` component.
+- Handle the streaming case: while the artifact is mid-stream (`StreamingArtifactChip` path / `version === 0`), keep the "building…" placeholder so we don't render partial markup.
 
-- Rail nav items ("Chat", "Groups", etc. in the icon list) stay in the sans UI font — those are navigation, not section titles.
-- Sidebar sub-labels ("AGENT", "JOURNAL 383") stay mono uppercase.
-- No color, spacing, layout, or backend changes.
-- No changes to page hero components themselves.
+Reuse the existing `src/components/messages/SvgCard.tsx` (already implements the sandboxed iframe + lightbox + code toggle) as the inline renderer. It's currently unused; we'll wire it into `ArtifactChip` for SVGs and add a small "Open in canvas" button to it so the canvas escape hatch is preserved.
 
-## Verify
+## Files to change
 
-- Load `/journal`, `/chat`, `/memory`, `/research`, `/mind`, `/projects`, `/profile`, `/settings` and confirm the sidebar section title now visually rhymes with the page's serif hero.
-- Build + typecheck clean, no console errors.
+1. `src/components/canvas/ArtifactChip.tsx`
+   - Special-case `kind === 'svg'` → render `<SvgCard source={artifact.content} title={artifact.title} onOpenCanvas={() => open(artifact.id)} />`.
+   - In `StreamingArtifactChip`, keep the current building placeholder for SVGs (don't try to render partial markup).
+
+2. `src/components/messages/SvgCard.tsx`
+   - Add optional `onOpenCanvas?: () => void` prop; when provided, render an "Open in canvas" icon button in the toolbar alongside the existing preview/code/expand buttons.
+   - Minor: constrain iframe height (e.g. `max-height: 420px`) so it reads as inline media.
+
+3. `src/index.css` (only if needed)
+   - Add/tweak `.svg-card` styles for chat context (spacing, border, background) so it visually matches image messages. Existing rules may already suffice — verify before adding.
+
+## Non-goals
+- No change to how HTML / React / mermaid / markdown / simulation artifacts render (they still use the chip → canvas flow).
+- No backend or extraction changes; the promotion heuristic in `streamingArtifacts.ts` stays the same.
+- No change to `ArtifactRenderer` (canvas view) — SVG still opens fully in canvas when the user clicks the escape hatch.
+
+## Verification
+- Typecheck.
+- Manually confirm in preview: send a prompt that generates an SVG, verify it renders inline (not as a chip), that "Open in canvas" still works, expand opens the lightbox, and code toggle shows source.
+- Streaming: while SVG is being generated, the building placeholder appears; on completion it swaps to the inline render without flashing partial markup.
