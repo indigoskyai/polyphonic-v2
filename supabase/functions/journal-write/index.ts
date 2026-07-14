@@ -317,7 +317,16 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
           },
         ],
         temperature: 0.85,
-        max_tokens: 1024,
+        // Reasoning models (Gemini 2.5+ Pro, Claude Opus with extended thinking,
+        // o1/R1 families) spend a large share of the completion budget on
+        // invisible reasoning tokens. With max_tokens=1024 those runs were
+        // landing in journal_entries.content as ~100-200 char partial strings
+        // ending mid-sentence. Raise the headroom and cap reasoning explicitly
+        // so the visible entry can complete. `reasoning.exclude` drops the
+        // reasoning trace since journal-write doesn't consume it; non-reasoning
+        // models ignore the field.
+        max_tokens: 4096,
+        reasoning: { max_tokens: 1024, exclude: true },
       }),
       signal: AbortSignal.timeout(60000),
     }));
