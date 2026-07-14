@@ -18,5 +18,5 @@ Deno.serve(async (req) => {
     const { error: deleteError } = await ctx.admin.from("chat_attachments").delete().eq("id", id).eq("user_id", ctx.userId);
     if (deleteError) throw deleteError;
     return jsonResponse({ cancelled: true }, corsHeaders);
-  });
+  })(req);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, FileUp, ImagePlus, Plus } from 'lucide-react';
+import './attachment-source.css';
 
 interface AttachmentSourceControlProps {
   open: boolean;

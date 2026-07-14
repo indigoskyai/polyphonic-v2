@@ -17,5 +17,5 @@ Deno.serve(async (req) => {
     if (error) throw error;
     if (!row) throw new ForbiddenError("Attachment not found");
     return jsonResponse({ attachment: await signedDescriptor(ctx.admin, row) }, corsHeaders);
-  });
+  })(req);
 });

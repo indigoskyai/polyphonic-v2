@@ -71,6 +71,13 @@ describe('production attachment pipeline', () => {
     expect(api).toContain('const stableDescriptor');
     expect(api).toContain("url: ''");
   });
+
+  it('invokes every attachment endpoint through the shared error wrapper', () => {
+    for (const endpoint of ['init', 'finalize', 'bind', 'url', 'cancel', 'retry']) {
+      const source = read(`supabase/functions/attachment-${endpoint}/index.ts`);
+      expect(source).toContain('})(req);');
+    }
+  });
 });
 
 describe('autonomous content integrity', () => {

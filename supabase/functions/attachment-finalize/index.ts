@@ -58,5 +58,5 @@ Deno.serve(async (req) => {
     if (jobError) throw jobError;
 
     return jsonResponse({ attachment: descriptorFromRow(queued), queued: true }, corsHeaders, 202);
-  });
+  })(req);
 });

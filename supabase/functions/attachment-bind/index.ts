@@ -52,5 +52,5 @@ Deno.serve(async (req) => {
     const attachments = [];
     for (const row of updated || []) attachments.push(await signedDescriptor(ctx.admin, row));
     return jsonResponse({ attachments }, corsHeaders);
-  });
+  })(req);
 });

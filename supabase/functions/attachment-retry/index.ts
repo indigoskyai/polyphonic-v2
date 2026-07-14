@@ -32,5 +32,5 @@ Deno.serve(async (req) => {
     }, { onConflict: "attachment_id" });
     if (jobError) throw jobError;
     return jsonResponse({ attachment: descriptorFromRow(updated), queued: true }, corsHeaders, 202);
-  });
+  })(req);
 });

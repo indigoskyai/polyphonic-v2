@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import './durable-attachment.css';
 import {
   ChevronDown,
   Download,

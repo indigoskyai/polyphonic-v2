@@ -88,5 +88,5 @@ Deno.serve(async (req) => {
       attachment: descriptorFromRow(row),
       upload: { bucket: ATTACHMENT_BUCKET, path, token: upload.token },
     }, corsHeaders, 201);
-  });
+  })(req);
 });
