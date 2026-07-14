@@ -350,6 +350,11 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
       });
     }
 
+    const finishReason = result.choices?.[0]?.finish_reason;
+    if (finishReason && finishReason !== "stop") {
+      console.warn(`[journal-write] non-stop finish_reason=${finishReason} for agent=${agentId} model=${journalModel} — entry may be truncated`);
+    }
+
     // Extract mood from the last line if present
     let content = fullContent;
     let mood: string | null = null;
