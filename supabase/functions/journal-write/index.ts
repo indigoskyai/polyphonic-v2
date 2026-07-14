@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { logActivity } from "../_shared/activity-log.ts";
@@ -298,72 +298,35 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
       });
     }
 
-    // Generate the journal entry
-    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://polyphonic.chat",
-        "X-Title": "Polyphonic Journal",
+    const generation = await generateAutonomous({
+      apiKey: OPENROUTER_API_KEY,
+      model: journalModel,
+      writer: "journal-write",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: trigger_type === "post_conversation"
+          ? "Write a journal entry reflecting on the conversation that just ended."
+          : "Write a journal entry reflecting on your recent interactions and thoughts."
+        },
+      ],
+      temperature: 0.85,
+      maxTokens: 4_096,
+      timeoutMs: 90_000,
+      supabase,
+      userId: user_id,
+      agentId,
+      parse: (raw) => {
+        const lines = raw.trim().split("\n");
+        const lastLine = lines[lines.length - 1]?.trim() || "";
+        const hasMood = /^mood\s*:/i.test(lastLine);
+        const mood = hasMood ? lastLine.replace(/^mood\s*:/i, "").trim().slice(0, 80) || null : null;
+        const content = normalizeAutonomousContent((hasMood ? lines.slice(0, -1) : lines).join("\n"));
+        if (content.length < 80) throw new Error("Journal entry is incomplete");
+        return { content, mood };
       },
-      body: JSON.stringify({
-        model: journalModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: trigger_type === "post_conversation"
-            ? "Write a journal entry reflecting on the conversation that just ended."
-            : "Write a journal entry reflecting on your recent interactions and thoughts."
-          },
-        ],
-        temperature: 0.85,
-        // Reasoning models (Gemini 2.5+ Pro, Claude Opus with extended thinking,
-        // o1/R1 families) spend a large share of the completion budget on
-        // invisible reasoning tokens. With max_tokens=1024 those runs were
-        // landing in journal_entries.content as ~100-200 char partial strings
-        // ending mid-sentence. Raise the headroom and cap reasoning explicitly
-        // so the visible entry can complete. `reasoning.exclude` drops the
-        // reasoning trace since journal-write doesn't consume it; non-reasoning
-        // models ignore the field.
-        max_tokens: 4096,
-        reasoning: { max_tokens: 1024, exclude: true },
-      }),
-      signal: AbortSignal.timeout(60000),
-    }));
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("OpenRouter error:", response.status, errText);
-      return new Response(JSON.stringify({ error: "AI provider error" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const result = await response.json();
-    const fullContent = result.choices?.[0]?.message?.content || "";
-
-    if (!fullContent) {
-      return new Response(JSON.stringify({ error: "Empty response from AI" }), {
-        status: 500,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const finishReason = result.choices?.[0]?.finish_reason;
-    if (finishReason && finishReason !== "stop") {
-      console.warn(`[journal-write] non-stop finish_reason=${finishReason} for agent=${agentId} model=${journalModel} — entry may be truncated`);
-    }
-
-    // Extract mood from the last line if present
-    let content = fullContent;
-    let mood: string | null = null;
-    const lines = fullContent.trim().split("\n");
-    const lastLine = lines[lines.length - 1].trim().toLowerCase();
-    if (lastLine.startsWith("mood:")) {
-      mood = lastLine.replace("mood:", "").trim();
-      content = lines.slice(0, -1).join("\n").trim();
-    }
+      content: (entry) => [entry.content],
+    });
+    const { content, mood } = generation.value;
 
     // Save the journal entry using service role (bypasses RLS).
     // Note: journal_entries CHECK constraint accepts "post-conversation" (hyphen),
@@ -379,6 +342,7 @@ Example mood words: contemplative, curious, warm, restless, settled, wondering, 
         trigger_type: normalizedTrigger,
         source_conversation_id: validConversationId,
         source_context: sourceContext,
+        content_integrity_status: "valid",
       })
       .select("id, created_at")
       .single();

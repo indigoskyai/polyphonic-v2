@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -214,44 +214,36 @@ serve(async (req) => {
       const modelName = model.split("/").pop() || model;
 
       try {
-        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
+        const generation = await generateAutonomous({
+          apiKey: OPENROUTER_API_KEY,
+          model,
+          writer: "anima-observe",
+          messages: [{ role: "user", content: fullPrompt }],
+          temperature: 0.6,
+          maxTokens: 1_500,
+          supabase,
+          userId: user_id,
+          agentId: agent_id,
+          parse: (raw) => {
+            const observations: any[] = [];
+            for (const block of raw.split(/(?=OBSERVATION:)/)) {
+              if (!block.trim().startsWith("OBSERVATION:")) continue;
+              const observationMatch = block.match(/OBSERVATION:\s*(.+?)(?=\nTYPE:|$)/s);
+              const typeMatch = block.match(/TYPE:\s*(pattern|blindspot|contradiction|growth_edge|emotional|stagnation)/i);
+              const salienceMatch = block.match(/SALIENCE:\s*([\d.]+)/);
+              if (!observationMatch || !typeMatch || !salienceMatch) continue;
+              observations.push({
+                content: normalizeAutonomousContent(observationMatch[1]),
+                type: typeMatch[1].toLowerCase(),
+                salience: Math.max(0, Math.min(1, parseFloat(salienceMatch[1]))),
+                model: modelName,
+              });
+            }
+            return observations;
           },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content: fullPrompt }],
-            temperature: 0.6,
-            max_tokens: 1500,
-          }),
-          signal: AbortSignal.timeout(60000),
-        }));
-
-        if (!response.ok) {
-          allObservations[modelName] = [];
-          continue;
-        }
-
-        const data = await response.json();
-        const raw = data.choices?.[0]?.message?.content || "";
-
-        // Parse observations
-        const observations: any[] = [];
-        const blocks = raw.split(/(?=OBSERVATION:)/);
-        for (const block of blocks) {
-          if (!block.trim().startsWith("OBSERVATION:")) continue;
-          const obsMatch = block.match(/OBSERVATION:\s*(.+?)(?=\nTYPE:|$)/s);
-          const typeMatch = block.match(/TYPE:\s*(\S+)/);
-          const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
-          if (!obsMatch) continue;
-          const content = obsMatch[1].trim();
-          if (!content) continue;
-          const obsType = typeMatch?.[1]?.toLowerCase() || "pattern";
-          const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.5;
-          observations.push({ content, type: obsType, salience, model: modelName });
-        }
+          content: (observations) => observations.map((observation) => observation.content),
+        });
+        const observations = generation.value;
 
         allObservations[modelName] = observations.slice(0, 3);
         totalObs += observations.length;
@@ -262,6 +254,7 @@ serve(async (req) => {
           agent_id,
           model: modelName,
           observations: observations.slice(0, 3),
+          content_integrity_status: "valid",
         });
         if (olErr) console.error(`[anima-observe] observer_logs insert (${modelName}) failed:`, olErr);
 
@@ -310,24 +303,20 @@ serve(async (req) => {
       synthLines.push(`Synthesize briefly: What did multiple observers notice? Where do they disagree? What emerges only from seeing all together? 3-5 sentences.`);
 
       try {
-        const synthResponse = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [{ role: "user", content: synthLines.join("\n") }],
-            temperature: 0.5,
-            max_tokens: 500,
-          }),
-          signal: AbortSignal.timeout(60000),
-        }));
-
-        if (synthResponse.ok) {
-          const synthData = await synthResponse.json();
-          synthesis = synthData.choices?.[0]?.message?.content?.trim() || null;
+        const generation = await generateAutonomous({
+          apiKey: OPENROUTER_API_KEY,
+          model: "google/gemini-2.5-flash",
+          writer: "anima-observe-synthesis",
+          messages: [{ role: "user", content: synthLines.join("\n") }],
+          temperature: 0.5,
+          maxTokens: 500,
+          supabase,
+          userId: user_id,
+          agentId: agent_id,
+          parse: (raw) => normalizeAutonomousContent(raw),
+          content: (content) => [content],
+        });
+        synthesis = generation.value;
 
           if (synthesis) {
             // Store synthesis in observer_logs
@@ -337,10 +326,10 @@ serve(async (req) => {
               model: "synthesis",
               observations: [],
               synthesis,
+              content_integrity_status: "valid",
             });
             if (synthInsErr) console.error("[anima-observe] observer_logs synthesis insert failed:", synthInsErr);
           }
-        }
       } catch (e) {
         console.error("Synthesis error:", e);
       }

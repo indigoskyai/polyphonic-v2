@@ -21,14 +21,17 @@ describe('chat-native companion import', () => {
     expect(openclaw).toContain('Do not create or save anything in this first turn');
   });
 
-  it('surfaces manual upload and Bridge-assisted import from the chat composer', () => {
+  it('keeps companion migration out of the normal chat attachment composer', () => {
     const chatView = readRepoFile('src/pages/ChatView.tsx');
+    const attachmentControl = readRepoFile('src/components/attachments/AttachmentSourceControl.tsx');
     const panel = readRepoFile('src/components/chat/CompanionImportPanel.tsx');
 
-    expect(chatView).toContain('CompanionImportPanel');
-    expect(chatView).toContain("startCompanionImportConversation('generic')");
-    expect(chatView).toContain("startCompanionImportConversation('openclaw'");
-    expect(chatView).toContain('setCompanionImportOpen((value) => !value)');
+    expect(chatView).not.toContain('CompanionImportPanel');
+    expect(chatView).not.toContain('setCompanionImportOpen');
+    expect(chatView).toContain('<AttachmentSourceControl');
+    expect(attachmentControl).toContain('attachment-source-menu');
+    expect(attachmentControl).toContain('Upload files');
+    expect(attachmentControl).toContain('Take a photo');
 
     expect(panel).toContain('Bring a companion into Polyphonic');
     expect(panel).toContain('Start a guided migration');

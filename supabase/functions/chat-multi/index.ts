@@ -46,6 +46,11 @@ import {
 import { ANIMA_SOUL } from "../_shared/agents/anima-soul.ts";
 import { VEKTOR_SOUL } from "../_shared/agents/vektor-soul.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
+import {
+  buildModelAttachmentContent,
+  MAX_ATTACHMENTS_PER_TURN,
+  persistPdfAnnotations,
+} from "../_shared/attachments.ts";
 import { persistArtifactsFromContent } from "../_shared/artifacts/extract.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { claimIdempotencyKey, recordIdempotentResponse } from "../_shared/idempotency.ts";
@@ -346,6 +351,7 @@ serve(async (req) => {
       thread_id,
         message,
         attachments,
+        attachment_ids: attachmentIdsInput,
         model: modelOverride,
         runtime_mode: runtimeModeOverride,
         memory_enabled: memoryEnabledOverride,
@@ -358,12 +364,19 @@ serve(async (req) => {
       client_context: clientContext,
     } = body;
 
-    if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
+    const attachmentIds = Array.isArray(attachmentIdsInput)
+      ? [...new Set(attachmentIdsInput.filter((value): value is string => typeof value === "string" && value.length > 0))]
+      : [];
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_TURN) {
+      return fail(new ValidationError(`A turn can include at most ${MAX_ATTACHMENTS_PER_TURN} attachments`));
+    }
+    const hasLegacyAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!thread_id || typeof message !== "string" || message.length > 32000 || (!message.trim() && !attachmentIds.length && !hasLegacyAttachments)) {
       return fail(new ValidationError("Invalid request"));
     }
 
-    const messageWithAttachments = appendAttachmentContext(message, attachments);
-    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    let messageWithAttachments = appendAttachmentContext(message.trim() || "Please use the attached files.", attachments);
+    const hasAttachments = hasLegacyAttachments || attachmentIds.length > 0;
     const onboardingHandoff =
       clientContext &&
       typeof clientContext === "object" &&
@@ -553,6 +566,21 @@ serve(async (req) => {
     const agentModel = normalizeModelId((agentConfig?.model as string | undefined) || null);
     const agentIsSystemLuca = agentId === "luca";
     const agentRuntimeActive = !classicRuntime;
+    const attachmentResolutionModel = normalizeModelId(
+      classicRuntime
+        ? selectedClassicModel
+        : agentIsSystemLuca
+          ? settings?.default_model || agentModel || DEFAULT_ENSEMBLE[0]
+          : agentModel || settings?.default_model || DEFAULT_ENSEMBLE[0],
+    ) || DEFAULT_ENSEMBLE[0];
+    const attachmentBundle = await buildModelAttachmentContent(
+      supabase,
+      userId,
+      attachmentIds,
+      attachmentResolutionModel,
+      apiKey,
+    );
+    messageWithAttachments += attachmentBundle.promptContext;
     const visibleMessageForRouting = userVisibleSimulationText(messageWithAttachments);
     const likelySimulationRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeSimulationPreviewRequest(messageWithAttachments);
     const simulationRequestWithoutForgeSubject = likelySimulationRequest && !mentionsAgentForgeSubject(visibleMessageForRouting);
@@ -805,7 +833,19 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         baseMessages.push({ role: msg.role, content: msg.content });
       }
     }
-    baseMessages.push({ role: "user", content: messageWithAttachments });
+    if (attachmentBundle.cachedAnnotations.length > 0) {
+      baseMessages.push({
+        role: "assistant",
+        content: "Previously parsed attachment material is available for reuse.",
+        annotations: attachmentBundle.cachedAnnotations,
+      });
+    }
+    baseMessages.push({
+      role: "user",
+      content: attachmentBundle.parts.length > 0
+        ? [{ type: "text", text: messageWithAttachments }, ...attachmentBundle.parts]
+        : messageWithAttachments,
+    });
 
       if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && !likelyGeneratedMediaRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId)) {
       const mcpTools = await loadMcpToolRegistrations(supabase, userId, agentId);
@@ -833,6 +873,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         idempotencyKey,
         autonomousMemory: autonomousMemoryResult,
         userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
+        attachmentIds,
       });
     }
 
@@ -991,6 +1032,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
             reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
           maxTokens: simpleOpeningTurn ? 1024 : undefined,
           guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make|entity|companion|openclaw|open\s+clause)\b/i.test(messageWithAttachments),
+          attachmentIds,
         },
       );
     }
@@ -2407,6 +2449,7 @@ async function singleModelStream(
       continuity?: ContinuityPacket;
       autonomousMemory?: AutonomousMemoryArtifactsResult | null;
       userMessageId?: string | null;
+      attachmentIds?: string[];
     } = {},
   ): Promise<Response> {
   const encoder = new TextEncoder();
@@ -2493,6 +2536,7 @@ async function singleModelStream(
         let buffer = "";
         let usedModel = model;
         let tokensUsed: number | null = null;
+        const attachmentAnnotations: unknown[] = [];
         let pendingContent = "";
         let contentGuardActive = true;
         let forgeLeakDetected = false;
@@ -2541,6 +2585,8 @@ async function singleModelStream(
             }
             if (chunk.model) usedModel = chunk.model;
             if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
+            const annotations = delta.annotations || chunk.choices?.[0]?.message?.annotations;
+            if (Array.isArray(annotations)) attachmentAnnotations.push(...annotations);
           } catch { /* skip */ }
         };
 
@@ -2634,6 +2680,8 @@ async function singleModelStream(
           insertedMessage = inserted;
         }
         if (!assistantWasDuplicate) {
+          await persistPdfAnnotations(supabase, userId, options.attachmentIds || [], attachmentAnnotations)
+            .catch((error) => console.warn("[chat-multi] could not persist PDF annotations", error));
           await persistArtifactsFromContent(supabase, {
             threadId,
             userId,

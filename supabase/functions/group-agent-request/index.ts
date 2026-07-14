@@ -14,6 +14,7 @@ import {
   type ActiveMember,
   type GroupAgentRow,
 } from "../_shared/group-rooms.ts";
+import { buildModelAttachmentContent, persistPdfAnnotations } from "../_shared/attachments.ts";
 
 interface GroupMessageRow {
   id: string;
@@ -24,6 +25,7 @@ interface GroupMessageRow {
   role: "user" | "assistant" | "system";
   content: string;
   attachments?: unknown[];
+  attachment_ids?: string[];
   metadata?: Record<string, unknown>;
   state: "visible" | "deleted";
   created_at: string;
@@ -281,6 +283,30 @@ Deno.serve(async (req) => {
       const triggerText = triggerMessage
         ? `The trigger was this human message:\n${speakerLabel(triggerMessage, membersByUser, agentsByOwnerAndId)}: ${triggerMessage.content}`
         : `The requester asks:\n${prompt}`;
+      const triggerAttachmentIds = Array.isArray(triggerMessage?.attachment_ids) ? triggerMessage!.attachment_ids! : [];
+      const model = config.model || "anthropic/claude-opus-4-7";
+      const attachmentBundle = await buildModelAttachmentContent(
+        ctx.admin,
+        ctx.userId,
+        triggerAttachmentIds,
+        model,
+        apiKey,
+      );
+      const userText = `Room transcript:\n${transcriptBlock || "(No visible prior messages.)"}\n\n${triggerText}${attachmentBundle.promptContext}\n\nRespond in the room now.`;
+      const messages: Array<Record<string, unknown>> = [{ role: "system", content: systemPrompt }];
+      if (attachmentBundle.cachedAnnotations.length) {
+        messages.push({
+          role: "assistant",
+          content: "Previously parsed attachment material is available for reuse.",
+          annotations: attachmentBundle.cachedAnnotations,
+        });
+      }
+      messages.push({
+        role: "user",
+        content: attachmentBundle.parts.length
+          ? [{ type: "text", text: userText }, ...attachmentBundle.parts]
+          : userText,
+      });
 
       const response = await withModelRetry(() => fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
         method: "POST",
@@ -291,11 +317,8 @@ Deno.serve(async (req) => {
           "X-Title": "Polyphonic Group Rooms",
         },
         body: JSON.stringify({
-          model: config.model || "anthropic/claude-opus-4-7",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Room transcript:\n${transcriptBlock || "(No visible prior messages.)"}\n\n${triggerText}\n\nRespond in the room now.` },
-          ],
+          model,
+          messages,
           temperature: 0.7,
           max_tokens: 1200,
         }),
@@ -312,6 +335,11 @@ Deno.serve(async (req) => {
       }
 
       const payload = await response.json();
+      const responseAnnotations = Array.isArray(payload?.choices?.[0]?.message?.annotations)
+        ? payload.choices[0].message.annotations
+        : [];
+      await persistPdfAnnotations(ctx.admin, ctx.userId, triggerAttachmentIds, responseAnnotations)
+        .catch((error) => console.warn("[group-agent-request] could not persist PDF annotations", error));
       const assistantText = readAssistantText(payload);
       if (!assistantText) {
         const failed = await failJob(ctx.admin, job.id, "The model returned an empty reply.", { reason: "empty_reply" });
@@ -339,7 +367,7 @@ Deno.serve(async (req) => {
               private_memory_not_disclosed_as_room_fact: true,
               high_risk_tools_blocked: true,
             },
-            model: config.model || "anthropic/claude-opus-4-7",
+            model,
           },
         })
         .select("*")

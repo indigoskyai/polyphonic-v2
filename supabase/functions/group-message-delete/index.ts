@@ -43,12 +43,19 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date().toISOString();
+    const { error: attachmentDeleteError } = await ctx.admin
+      .from("chat_attachments")
+      .delete()
+      .eq("group_message_id", messageId);
+    if (attachmentDeleteError) throw attachmentDeleteError;
+
     const { data: deleted, error } = await ctx.admin
       .from("group_messages")
       .update({
         state: "deleted",
         content: "",
         attachments: [],
+        attachment_ids: [],
         deleted_at: now,
         metadata: {
           ...(message.metadata ?? {}),

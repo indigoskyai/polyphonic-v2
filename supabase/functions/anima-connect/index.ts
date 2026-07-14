@@ -4,7 +4,7 @@ import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gat
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 const CONNECTOR_PROMPT = `You are examining two memories from the same mind. Your job: determine if these memories are meaningfully connected.
@@ -161,36 +161,33 @@ serve(async (req) => {
       }
 
       try {
-        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
+        const generation = await generateAutonomous({
+          apiKey: OPENROUTER_API_KEY,
+          model: connectModel,
+          writer: "anima-connect",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.5,
+          maxTokens: 300,
+          supabase,
+          userId: user_id,
+          agentId: agent_id,
+          allowEmpty: (raw) => /^NO_CONNECTION\.?$/i.test(raw.trim()),
+          parse: (raw) => {
+            if (/^NO_CONNECTION\.?$/i.test(raw.trim())) return { description: null, strength: 0, relationType: "thematic" };
+            const connectionMatch = raw.match(/CONNECTION:\s*(.+?)(?=\nSTRENGTH:|$)/s);
+            const strengthMatch = raw.match(/STRENGTH:\s*([\d.]+)/);
+            const typeMatch = raw.match(/TYPE:\s*(supports|contradicts|elaborates|causes|temporal|thematic)/i);
+            if (!connectionMatch || !strengthMatch || !typeMatch) return { description: null, strength: 0, relationType: "thematic" };
+            return {
+              description: normalizeAutonomousContent(connectionMatch[1]),
+              strength: Math.max(0, Math.min(1, parseFloat(strengthMatch[1]))),
+              relationType: typeMatch[1].toLowerCase(),
+            };
           },
-          body: JSON.stringify({
-            model: connectModel,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.5,
-            max_tokens: 300,
-          }),
-          signal: AbortSignal.timeout(60000),
-        }));
-
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const raw = data.choices?.[0]?.message?.content?.trim() || "";
-
-        if (raw.includes("NO_CONNECTION")) continue;
-
-        const connMatch = raw.match(/CONNECTION:\s*(.+?)(?=\nSTRENGTH:|$)/s);
-        const strMatch = raw.match(/STRENGTH:\s*([\d.]+)/);
-        const typeMatch = raw.match(/TYPE:\s*(\S+)/);
-
-        if (!connMatch) continue;
-        const description = connMatch[1].trim();
-        const strength = strMatch ? Math.max(0, Math.min(1, parseFloat(strMatch[1]))) : 0.5;
-        const relationType = typeMatch?.[1]?.toLowerCase() || "thematic";
+          content: (connection) => connection.description ? [connection.description] : [],
+        });
+        const { description, strength, relationType } = generation.value;
+        if (!description) continue;
 
         if (strength < 0.3) continue; // Skip weak connections
 
@@ -212,6 +209,7 @@ serve(async (req) => {
           source: "background",
           salience: Math.min(strength + 0.1, 1.0),
           type: "reflection",
+          content_integrity_status: "valid",
         });
         if (insErr) console.error("[anima-connect] thought_stream insert failed:", insErr);
 

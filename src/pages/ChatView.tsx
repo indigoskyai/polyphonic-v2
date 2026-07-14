@@ -24,12 +24,12 @@ import ConnectOpenRouter from '@/components/ConnectOpenRouter';
 import RichBody from '@/components/rich/RichBody';
 import AttachmentDropOverlay from '@/components/attachments/AttachmentDropOverlay';
 import AttachmentChip from '@/components/attachments/AttachmentChip';
+import AttachmentSourceControl from '@/components/attachments/AttachmentSourceControl';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageItem from '@/components/messages/MessageItem';
 import PermissionInline from '@/components/permissions/PermissionInline';
 import WelcomeBackCard from '@/components/chat/WelcomeBackCard';
 import LandingAmbient from '@/components/chat/LandingAmbient';
-import CompanionImportPanel from '@/components/chat/CompanionImportPanel';
 import AgentErroredCard from '@/components/states/AgentErroredCard';
 import ArtifactChip, { StreamingArtifactChip } from '@/components/canvas/ArtifactChip';
 import { useArtifactStore } from '@/stores/artifactStore';
@@ -54,7 +54,6 @@ import {
   readLandingPrompt,
 } from '@/lib/guestChat';
 import { getForgeProposalMetadata } from '@/lib/agentForge';
-import { buildCompanionImportHandoff, type CompanionImportSource } from '@/lib/companionImport';
 import { resolveAccessTier, type ModelKeyStatus } from '@/lib/accessTier';
 import { appendStreamingDelta } from '@/lib/streamingText';
 import { extractStreamingArtifacts } from '@/lib/streamingArtifacts';
@@ -74,15 +73,17 @@ import {
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
-  CHAT_ATTACHMENT_BUCKET,
-  inferAttachmentLanguage,
-  inferAttachmentType,
+  CHAT_ATTACHMENT_ACCEPT,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENTS,
-  safeAttachmentFileName,
-  shouldInlineCodeAttachment,
 } from '@/lib/chatAttachments';
-import { Plus } from 'lucide-react';
+import {
+  bindChatAttachments,
+  cancelChatAttachment,
+  descriptorToLegacyAttachment,
+  retryChatAttachment,
+  uploadChatAttachment,
+} from '@/lib/attachmentApi';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -301,27 +302,6 @@ function LucaOnlyPill({
   return (
     <button type="button" className="agent-pill targeted luca-only-pill" title={title} aria-label={title}>
       {label}
-    </button>
-  );
-}
-
-function AttachmentPlusButton({
-  onClick,
-  disabled = false,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className="attach-btn"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label="Attach files"
-      title="Attach files"
-    >
-      <Plus size={15} strokeWidth={1.55} aria-hidden="true" />
     </button>
   );
 }
@@ -776,14 +756,19 @@ export default function ChatView() {
   const sendInFlightRef = useRef(false);
   const composerSendTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [companionImportOpen, setCompanionImportOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadBatchIdRef = useRef(crypto.randomUUID());
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const landingHandoffStartedAtRef = useRef(new Date().toISOString());
   const pendingAttachments = useAttachmentStore((s) => s.pending);
   const addAttachments = useAttachmentStore((s) => s.add);
   const removeAttachment = useAttachmentStore((s) => s.remove);
   const clearAttachments = useAttachmentStore((s) => s.clear);
   const setAttachmentStatus = useAttachmentStore((s) => s.setStatus);
+  const retryAttachmentInStore = useAttachmentStore((s) => s.retry);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const attachmentSendBlocked = pendingAttachments.some((attachment) => attachment.status !== 'ready');
   // Real Luca/custom-agent chat requires the user's OpenRouter key. The free
   // platform model is reserved for the Polyphonic Guide, not agent continuity.
   const modelKeyMissing = modelKeyStatus !== 'present';
@@ -1283,7 +1268,7 @@ export default function ChatView() {
       // Highest priority: explicit thought initiation queued for the user
       const { data: initiations } = await supabase
         .from('thought_initiations')
-        .select('message, created_at')
+        .select('message, created_at, content_integrity_status, content_hidden_at')
         .eq('user_id', user.id)
         .eq('agent_id', activeAgentId)
         .eq('status', 'pending')
@@ -1291,8 +1276,11 @@ export default function ChatView() {
         .limit(1);
       if (canceled) return;
 
-      if (initiations && initiations.length > 0) {
-        setWelcomeBack({ type: 'initiation', content: initiations[0].message });
+      const visibleInitiations = initiations?.filter(
+        (item) => !item.content_hidden_at && item.content_integrity_status !== 'rejected',
+      ) ?? [];
+      if (visibleInitiations.length > 0) {
+        setWelcomeBack({ type: 'initiation', content: visibleInitiations[0].message });
         setDynamicPlaceholder("What's on your mind?");
         return;
       }
@@ -1306,7 +1294,7 @@ export default function ChatView() {
       const seenIso = profile?.last_seen_activity_at ?? new Date(0).toISOString();
       const { data: surfaced } = await supabase
         .from('entity_activity_log')
-        .select('title, summary, severity, created_at')
+        .select('title, summary, severity, created_at, content_integrity_status, content_hidden_at')
         .eq('user_id', user.id)
         .eq('agent_id', activeAgentId)
         .eq('surface_to_user', true)
@@ -1315,8 +1303,11 @@ export default function ChatView() {
         .order('created_at', { ascending: false })
         .limit(1);
       if (canceled) return;
-      if (surfaced && surfaced.length > 0) {
-        const a = surfaced[0] as { title: string | null; summary: string | null; severity: string };
+      const visibleSurfaced = surfaced?.filter(
+        (item) => !item.content_hidden_at && item.content_integrity_status !== 'rejected',
+      ) ?? [];
+      if (visibleSurfaced.length > 0) {
+        const a = visibleSurfaced[0] as { title: string | null; summary: string | null; severity: string };
         setWelcomeBack({
           type: 'thought',
           content: a.summary || a.title || 'something happened while you were away',
@@ -1342,7 +1333,7 @@ export default function ChatView() {
         // Check for recent journal entries or dreams
         const { data: recentJournal } = await supabase
           .from('journal_entries')
-          .select('content, mood, created_at')
+          .select('content, mood, created_at, content_integrity_status, content_hidden_at')
           .eq('user_id', user.id)
           .eq('agent_id', activeAgentId)
           .gt('created_at', new Date(lastTime).toISOString())
@@ -1350,8 +1341,9 @@ export default function ChatView() {
           .limit(1);
         if (canceled) return;
 
-        if (recentJournal && recentJournal.length > 0) {
-          const entry = recentJournal[0];
+        const visibleRecentJournal = recentJournal?.filter((entry) => !entry.content_hidden_at && entry.content_integrity_status !== 'rejected') ?? [];
+        if (visibleRecentJournal.length > 0) {
+          const entry = visibleRecentJournal[0];
           const snippet = entry.content.slice(0, 150) + (entry.content.length > 150 ? '...' : '');
           const isDream = entry.mood === 'dreaming';
           setWelcomeBack({
@@ -1365,7 +1357,7 @@ export default function ChatView() {
         // Check for recent autonomous thoughts
         const { data: recentThought } = await supabase
           .from('thought_stream')
-          .select('content, created_at')
+          .select('content, created_at, content_integrity_status, content_hidden_at')
           .eq('user_id', user.id)
           .eq('agent_id', activeAgentId)
           .gt('created_at', new Date(lastTime).toISOString())
@@ -1373,8 +1365,10 @@ export default function ChatView() {
           .limit(1);
         if (canceled) return;
 
-        if (recentThought && recentThought.length > 0) {
-          setWelcomeBack({ type: 'thought', content: recentThought[0].content.slice(0, 150) });
+        const visibleRecentThought = recentThought?.filter((thought) => !thought.content_hidden_at && thought.content_integrity_status !== 'rejected') ?? [];
+        if (visibleRecentThought.length > 0) {
+          const thought = visibleRecentThought[0].content;
+          setWelcomeBack({ type: 'thought', content: thought.slice(0, 150) + (thought.length > 150 ? '…' : '') });
           setDynamicPlaceholder(`${currentAgentLabel} has been thinking...`);
           return;
         }
@@ -1402,13 +1396,44 @@ export default function ChatView() {
     if (ta.style.height !== next) ta.style.height = next;
   };
 
+  const startAttachmentUpload = useCallback((attachment: Attachment) => {
+    if (!attachment.file) return;
+    const controller = new AbortController();
+    setAttachmentStatus(attachment.id, 'uploading', { progress: 1, abortController: controller, error: undefined });
+    void uploadChatAttachment(attachment.file, {}, {
+      batchId: uploadBatchIdRef.current,
+      signal: controller.signal,
+      onState: ({ status, progress, descriptor }) => {
+        setAttachmentStatus(attachment.id, status, {
+          progress,
+          descriptor,
+          kind: descriptor?.kind,
+          url: descriptor?.preview?.url,
+          error: descriptor?.error,
+          abortController: controller,
+        });
+      },
+    }).then((descriptor) => {
+      setAttachmentStatus(attachment.id, 'ready', {
+        progress: 100,
+        descriptor,
+        kind: descriptor.kind,
+        url: descriptor.preview?.url,
+        abortController: undefined,
+      });
+    }).catch((uploadError) => {
+      if (uploadError instanceof DOMException && uploadError.name === 'AbortError') return;
+      setAttachmentStatus(attachment.id, 'failed', {
+        progress: undefined,
+        error: uploadError instanceof Error ? uploadError.message : 'Upload failed',
+        abortController: undefined,
+      });
+    });
+  }, [setAttachmentStatus]);
+
   const queueAttachmentFiles = useCallback((filesLike: FileList | File[] | null | undefined) => {
     const files = Array.from(filesLike || []);
     if (files.length === 0) return;
-    if (!byokEnabled) {
-      setAttachmentError('File attachments are available after connecting your OpenRouter key.');
-      return;
-    }
 
     const remaining = Math.max(0, MAX_CHAT_ATTACHMENTS - pendingAttachments.length);
     const accepted: File[] = [];
@@ -1420,98 +1445,82 @@ export default function ChatView() {
         continue;
       }
       if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
-        rejected.push(`${file.name}: max 10 MB`);
+        rejected.push(`${file.name}: max 100 MB`);
+        continue;
+      }
+      if (file.size < 1) {
+        rejected.push(`${file.name}: empty file`);
         continue;
       }
       accepted.push(file);
     }
 
-    if (accepted.length > 0) addAttachments(accepted);
+    if (accepted.length > 0) {
+      const queued = addAttachments(accepted);
+      queued.forEach(startAttachmentUpload);
+    }
     setAttachmentError(rejected.length > 0 ? rejected.slice(0, 2).join(' · ') : null);
-  }, [addAttachments, byokEnabled, pendingAttachments.length]);
+  }, [addAttachments, pendingAttachments.length, startAttachmentUpload]);
 
-  const openCompanionFilePicker = useCallback(() => {
-    setCompanionImportOpen(false);
+  const openAttachmentFilePicker = useCallback(() => {
+    setAttachmentMenuOpen(false);
     fileInputRef.current?.click();
   }, []);
 
-  const startCompanionImportConversation = useCallback((source: CompanionImportSource, deviceName?: string | null) => {
-    const text = buildCompanionImportHandoff(source, deviceName);
-    setCompanionImportOpen(false);
-    window.setTimeout(() => {
-      void sendMessageRef.current?.({ text, hiddenHandoff: true });
-    }, 30);
+  const openPhotoPicker = useCallback(() => {
+    setAttachmentMenuOpen(false);
+    photoInputRef.current?.click();
   }, []);
 
-  const openBridgeSetup = useCallback(() => {
-    setCompanionImportOpen(false);
-    navigate('/settings/local-runtime');
-  }, [navigate]);
+  const openCameraPicker = useCallback(() => {
+    setAttachmentMenuOpen(false);
+    cameraInputRef.current?.click();
+  }, []);
 
   useEffect(() => {
-    if (alcoveOpen && companionImportOpen) setCompanionImportOpen(false);
-  }, [alcoveOpen, companionImportOpen]);
+    if (alcoveOpen && attachmentMenuOpen) setAttachmentMenuOpen(false);
+  }, [alcoveOpen, attachmentMenuOpen]);
+
+  const handleComposerPaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const images = Array.from(event.clipboardData.files || []).filter((file) => file.type.startsWith('image/'));
+    if (!images.length) return;
+    event.preventDefault();
+    queueAttachmentFiles(images);
+  }, [queueAttachmentFiles]);
 
   const uploadPendingAttachments = useCallback(async (threadForUpload: string): Promise<PersistedAttachment[]> => {
-    if (!user || pendingAttachments.length === 0) return [];
-
-    const { supabase } = await import('@/integrations/supabase/client');
-    const uploaded: PersistedAttachment[] = [];
-
-    for (const attachment of pendingAttachments) {
-      if (!attachment.file) continue;
-      setAttachmentStatus(attachment.id, 'uploading');
-      try {
-        const safeName = safeAttachmentFileName(attachment.name);
-        const path = `${user.id}/${threadForUpload}/${crypto.randomUUID()}-${safeName}`;
-        const { error: uploadError } = await supabase.storage
-          .from(CHAT_ATTACHMENT_BUCKET)
-          .upload(path, attachment.file, {
-            contentType: attachment.mime,
-            upsert: false,
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: signed, error: signedError } = await supabase.storage
-          .from(CHAT_ATTACHMENT_BUCKET)
-          .createSignedUrl(path, 60 * 60 * 24 * 30);
-
-        if (signedError || !signed?.signedUrl) {
-          throw signedError || new Error('Could not create attachment link');
-        }
-
-        const meta: Record<string, unknown> = {
-          name: attachment.name,
-          size: attachment.size,
-          mime: attachment.mime,
-          bucket: CHAT_ATTACHMENT_BUCKET,
-          path,
-          signed_expires_at: new Date(Date.now() + 60 * 60 * 24 * 30 * 1000).toISOString(),
-        };
-
-        const type = inferAttachmentType(attachment.file);
-        if (type === 'code' && shouldInlineCodeAttachment(attachment.file)) {
-          meta.lang = inferAttachmentLanguage(attachment.name, attachment.mime);
-          meta.code = await attachment.file.text();
-        }
-
-        const persisted: PersistedAttachment = {
-          type,
-          url: signed.signedUrl,
-          meta,
-        };
-        uploaded.push(persisted);
-        setAttachmentStatus(attachment.id, 'ready', { url: signed.signedUrl, path });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Upload failed';
-        setAttachmentStatus(attachment.id, 'error', { error: message });
-        throw new Error(`Could not attach ${attachment.name}: ${message}`);
-      }
+    if (pendingAttachments.length === 0) return [];
+    const descriptors = pendingAttachments.map((attachment) => attachment.descriptor);
+    if (descriptors.some((descriptor) => !descriptor || descriptor.status !== 'ready')) {
+      throw new Error('Wait for every attachment to finish processing, or retry the failed file.');
     }
+    const bound = await bindChatAttachments(
+      descriptors.map((descriptor) => descriptor!.id),
+      { threadId: threadForUpload },
+    );
+    return bound.map((descriptor) => descriptorToLegacyAttachment(descriptor) as PersistedAttachment);
+  }, [pendingAttachments]);
 
-    return uploaded;
-  }, [pendingAttachments, setAttachmentStatus, user]);
+  const removePendingAttachment = useCallback((attachment: Attachment) => {
+    attachment.abortController?.abort();
+    const attachmentId = attachment.descriptor?.id;
+    removeAttachment(attachment.id);
+    if (attachmentId) void cancelChatAttachment(attachmentId).catch(() => undefined);
+  }, [removeAttachment]);
+
+  const retryPendingAttachment = useCallback((attachment: Attachment) => {
+    if (attachment.descriptor?.id && attachment.status === 'failed') {
+      setAttachmentStatus(attachment.id, 'quarantined', { progress: 72, error: undefined });
+      void retryChatAttachment(attachment.descriptor.id).then((descriptor) => {
+        setAttachmentStatus(attachment.id, 'ready', { descriptor, progress: 100, error: undefined, url: descriptor.preview?.url });
+      }).catch((retryError) => {
+        setAttachmentStatus(attachment.id, 'failed', { error: retryError instanceof Error ? retryError.message : 'Retry failed' });
+      });
+      return;
+    }
+    retryAttachmentInStore(attachment.id);
+    startAttachmentUpload({ ...attachment, status: 'pending', descriptor: undefined, error: undefined });
+  }, [retryAttachmentInStore, setAttachmentStatus, startAttachmentUpload]);
 
   const renderPendingAttachments = () => {
     if (pendingAttachments.length === 0 && !attachmentError) return null;
@@ -1523,7 +1532,8 @@ export default function ChatView() {
               <AttachmentChip
                 key={attachment.id}
                 attachment={attachment}
-                onRemove={() => removeAttachment(attachment.id)}
+                onRemove={() => removePendingAttachment(attachment)}
+                onRetry={() => retryPendingAttachment(attachment)}
               />
             ))}
           </div>
@@ -1876,6 +1886,10 @@ export default function ChatView() {
     const hiddenHandoff = options?.hiddenHandoff === true;
     if (modelKeyMissing) return;
     if ((!sourceText.trim() && pendingAttachments.length === 0 && !replayAttachments?.length) || !user || isStreaming || firstTurnHandoff) return;
+    if (!replayAttachments && attachmentSendBlocked) {
+      setAttachmentError('Wait for every attachment to finish processing, or retry the failed file.');
+      return;
+    }
     if (sendInFlightRef.current) return;
     sendInFlightRef.current = true;
     const clientTurnId = crypto.randomUUID();
@@ -1883,7 +1897,7 @@ export default function ChatView() {
     // Dismiss welcome back on first message
     if (welcomeBack) setWelcomeBack(null);
 
-    const messageText = sourceText.trim() || 'Uploaded attachments.';
+    const messageText = sourceText.trim() || 'Attached files.';
     inputCaptureRef.current = messageText;
     persistChatTarget(classicChatActive
       ? { kind: 'model', id: selectedChatModel }
@@ -1942,6 +1956,9 @@ export default function ChatView() {
     }
 
     let persistedUserMessage: Message | null = null;
+    const uploadedAttachmentIds = uploadedAttachments
+      .map((attachment) => attachment.descriptor?.id || (attachment.meta?.attachment_id as string | undefined))
+      .filter((id): id is string => Boolean(id));
     if (!hiddenHandoff) {
       try {
         const inserted = await insertMessageWithFreshSession({
@@ -1949,13 +1966,14 @@ export default function ChatView() {
           user_id: user.id,
           role: 'user',
           content: messageText,
+          attachment_ids: uploadedAttachmentIds,
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments as any : null,
           metadata: {
             client_turn_id: clientTurnId,
             idempotency_key: `chat:${tid}:${clientTurnId}`,
             access_tier: accessTier,
           },
-        });
+        } as any);
         persistedUserMessage = inserted as unknown as Message;
       } catch (insertUserError) {
         sendInFlightRef.current = false;
@@ -1982,6 +2000,7 @@ export default function ChatView() {
 
       addMessage({
         ...persistedUserMessage!,
+        attachment_ids: uploadedAttachmentIds,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
       } as Message);
     }
@@ -1990,6 +2009,7 @@ export default function ChatView() {
     if (hiddenHandoff || !options?.text || options.text === input) {
       setInput('');
       clearAttachments();
+      uploadBatchIdRef.current = crypto.randomUUID();
       setAttachmentError(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     }
@@ -2032,6 +2052,7 @@ export default function ChatView() {
             thread_id: tid,
             message: edgeMessageText,
             source_message_id: persistedUserMessage?.id,
+            attachment_ids: uploadedAttachmentIds,
             attachments: uploadedAttachments,
             model: selectedChatModel,
             runtime_mode: effectiveRuntimeMode,
@@ -2344,7 +2365,7 @@ export default function ChatView() {
       sendInFlightRef.current = false;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, classicChatActive, persistChatTarget, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, attachmentSendBlocked, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, classicChatActive, persistChatTarget, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
@@ -2633,11 +2654,12 @@ export default function ChatView() {
               wrapper instead of shrinking to its (now smaller) footer
               content after the modes consolidation. */}
           <div className="chat-empty-composer" style={{ animation: 'viewFadeIn 0.6s var(--ease-out) 0.2s both', width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
+            <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${attachmentMenuOpen ? ' attachment-menu-open' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 && !attachmentMenuOpen ? ' composer-collapsed' : ''}`}>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
+                accept={CHAT_ATTACHMENT_ACCEPT}
                 aria-label="Attachment file picker"
                 className="chat-file-input"
                 onChange={(e) => {
@@ -2646,22 +2668,37 @@ export default function ChatView() {
                   e.currentTarget.value = '';
                 }}
               />
+              <input
+                ref={photoInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                aria-label="Photo library picker"
+                className="chat-file-input"
+                onChange={(event) => {
+                  queueAttachmentFiles(event.currentTarget.files);
+                  event.currentTarget.value = '';
+                }}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                aria-label="Camera picker"
+                className="chat-file-input"
+                onChange={(event) => {
+                  queueAttachmentFiles(event.currentTarget.files);
+                  event.currentTarget.value = '';
+                }}
+              />
               {!classicChatActive && renderObserverAlcove()}
               {!alcoveOpen && renderModelKeyNotice()}
               {!alcoveOpen && renderPendingAttachments()}
-              {!alcoveOpen && !classicChatActive && (
-                <CompanionImportPanel
-                  open={companionImportOpen}
-                  onClose={() => setCompanionImportOpen(false)}
-                  onAttachFiles={openCompanionFilePicker}
-                  onStartCompanionImport={() => startCompanionImportConversation('generic')}
-                  onStartOpenClawImport={(deviceName) => startCompanionImportConversation('openclaw', deviceName)}
-                  onOpenBridgeSetup={openBridgeSetup}
-                />
-              )}
               <div className="input-row">
                 <textarea
                   ref={textareaRef}
+                  onPaste={handleComposerPaste}
                   className="input-textarea"
                   enterKeyHint="send"
                   autoCapitalize="sentences"
@@ -2679,12 +2716,13 @@ export default function ChatView() {
               </div>
               <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
                 <div className="agent-pills">
-                  {!alcoveOpen && byokEnabled && (
-                    <AttachmentPlusButton
-                      onClick={() => {
-                        if (classicChatActive) openCompanionFilePicker();
-                        else setCompanionImportOpen((value) => !value);
-                      }}
+                  {!alcoveOpen && (
+                    <AttachmentSourceControl
+                      open={attachmentMenuOpen}
+                      onOpenChange={setAttachmentMenuOpen}
+                      onFiles={openAttachmentFilePicker}
+                      onPhotos={openPhotoPicker}
+                      onCamera={openCameraPicker}
                     />
                   )}
                   {!isMobile && renderGuestStatusChip()}
@@ -2734,8 +2772,9 @@ export default function ChatView() {
                   )}
                   <button
                     type="button"
-                    aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
-                    className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
+                    aria-label={isStreaming || guardianStreaming ? 'Stop response' : attachmentSendBlocked ? 'Files are still processing' : alcoveOpen ? 'Send observer message' : 'Send message'}
+                    title={attachmentSendBlocked ? 'Wait for files to finish processing' : undefined}
+                    className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && !attachmentSendBlocked && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
                     onClick={() => {
                       if (isStreaming || guardianStreaming) {
                         void stopStreaming();
@@ -2748,7 +2787,7 @@ export default function ChatView() {
                         void sendMessage();
                       }
                     }}
-                    disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+                    disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || attachmentSendBlocked || (!input.trim() && pendingAttachments.length === 0)))}
                   >
                     <span className="send-icon">
                       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -3210,11 +3249,12 @@ export default function ChatView() {
 
       {/* Input zone */}
       <div className="input-zone">
-        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 ? ' composer-collapsed' : ''}`}>
+        <div className={`input-shell${focused ? ' focused' : ''}${alcoveOpen ? ' alcove-active' : ''}${composerSending ? ' sending-turn' : ''}${attachmentMenuOpen ? ' attachment-menu-open' : ''}${isMobile && !focused && !input.trim() && pendingAttachments.length === 0 && !attachmentMenuOpen ? ' composer-collapsed' : ''}`}>
           <input
             ref={fileInputRef}
             type="file"
             multiple
+            accept={CHAT_ATTACHMENT_ACCEPT}
             aria-label="Attachment file picker"
             className="chat-file-input"
             onChange={(e) => {
@@ -3223,25 +3263,40 @@ export default function ChatView() {
               e.currentTarget.value = '';
             }}
           />
+          <input
+            ref={photoInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            aria-label="Photo library picker"
+            className="chat-file-input"
+            onChange={(event) => {
+              queueAttachmentFiles(event.currentTarget.files);
+              event.currentTarget.value = '';
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            aria-label="Camera picker"
+            className="chat-file-input"
+            onChange={(event) => {
+              queueAttachmentFiles(event.currentTarget.files);
+              event.currentTarget.value = '';
+            }}
+          />
           {!classicChatActive && renderObserverAlcove()}
 
           {!alcoveOpen && renderModelKeyNotice()}
           {!alcoveOpen && renderPendingAttachments()}
-          {!alcoveOpen && !classicChatActive && (
-            <CompanionImportPanel
-              open={companionImportOpen}
-              onClose={() => setCompanionImportOpen(false)}
-              onAttachFiles={openCompanionFilePicker}
-              onStartCompanionImport={() => startCompanionImportConversation('generic')}
-              onStartOpenClawImport={(deviceName) => startCompanionImportConversation('openclaw', deviceName)}
-              onOpenBridgeSetup={openBridgeSetup}
-            />
-          )}
 
           {/* Textarea */}
           <div className="input-row">
             <textarea
               ref={textareaRef}
+              onPaste={handleComposerPaste}
               className="input-textarea"
               enterKeyHint="send"
               autoCapitalize="sentences"
@@ -3261,12 +3316,13 @@ export default function ChatView() {
           {/* Footer */}
           <div className="input-footer" onMouseDown={(e) => { if (isMobile) e.preventDefault(); }}>
             <div className="agent-pills">
-              {!alcoveOpen && byokEnabled && (
-                <AttachmentPlusButton
-                  onClick={() => {
-                    if (classicChatActive) openCompanionFilePicker();
-                    else setCompanionImportOpen((value) => !value);
-                  }}
+              {!alcoveOpen && (
+                <AttachmentSourceControl
+                  open={attachmentMenuOpen}
+                  onOpenChange={setAttachmentMenuOpen}
+                  onFiles={openAttachmentFilePicker}
+                  onPhotos={openPhotoPicker}
+                  onCamera={openCameraPicker}
                 />
               )}
               {!isMobile && renderGuestStatusChip()}
@@ -3320,8 +3376,9 @@ export default function ChatView() {
 
               <button
                 type="button"
-                aria-label={isStreaming || guardianStreaming ? 'Stop response' : alcoveOpen ? 'Send observer message' : 'Send message'}
-                className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
+                aria-label={isStreaming || guardianStreaming ? 'Stop response' : attachmentSendBlocked ? 'Files are still processing' : alcoveOpen ? 'Send observer message' : 'Send message'}
+                title={attachmentSendBlocked ? 'Wait for files to finish processing' : undefined}
+                className={`send-btn${isStreaming || guardianStreaming ? ' streaming' : ''}${(!isStreaming && !guardianStreaming && !modelKeyMissing && !attachmentSendBlocked && (input.trim() || pendingAttachments.length > 0)) ? ' armed' : ''}${ensembleActive && !alcoveOpen ? ' ensemble-armed' : ''}`}
                 onClick={() => {
                   if (isStreaming || guardianStreaming) {
                     void stopStreaming();
@@ -3334,7 +3391,7 @@ export default function ChatView() {
                     void sendMessage();
                   }
                 }}
-                disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || (!input.trim() && pendingAttachments.length === 0)))}
+                disabled={!(isStreaming || guardianStreaming) && (alcoveOpen ? (modelKeyMissing || !input.trim()) : (!!displayFirstTurnHandoff || modelKeyMissing || attachmentSendBlocked || (!input.trim() && pendingAttachments.length === 0)))}
               >
                 <span className="send-icon">
                   <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">

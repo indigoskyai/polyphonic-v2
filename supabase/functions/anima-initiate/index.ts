@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
 import { allowsProactiveAutonomy, isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
@@ -213,30 +213,20 @@ Your current emotional state: ${emotionalState?.mood_summary || "present"}
 
 Write ONLY the message. Nothing else.`;
 
-      try {
-        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [{ role: "user", content: compositionPrompt }],
-            temperature: 0.7,
-            max_tokens: 200,
-          }),
-          signal: AbortSignal.timeout(60000),
-        }));
-
-        if (response.ok) {
-          const data = await response.json();
-          const composed = data.choices?.[0]?.message?.content?.trim();
-          if (composed && composed.length > 10) message = composed;
-        }
-      } catch (e) {
-        console.error("Composition error:", e);
-      }
+      const generation = await generateAutonomous({
+        apiKey: OPENROUTER_API_KEY,
+        model: "google/gemini-2.5-flash",
+        writer: "anima-initiate",
+        messages: [{ role: "user", content: compositionPrompt }],
+        temperature: 0.7,
+        maxTokens: 200,
+        supabase,
+        userId: user_id,
+        agentId: agent_id,
+        parse: (raw) => normalizeAutonomousContent(raw),
+        content: (content) => [content],
+      });
+      message = generation.value;
     }
 
     // Store the initiation
@@ -249,6 +239,7 @@ Write ONLY the message. Nothing else.`;
         message,
         status: "pending",
         trigger_reason: triggerReason,
+        content_integrity_status: "valid",
       })
       .select("id")
       .single();

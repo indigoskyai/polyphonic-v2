@@ -58,7 +58,7 @@ describe('Agent Forge runtime', () => {
     expect(sdk).toContain('Never changes agent data directly');
 
     expect(chatMulti).toContain('const agentIsSystemLuca = agentId === "luca"');
-    expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
+    expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && !likelyGeneratedMediaRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
     expect(chatMulti).toContain('function looksLikeLegacyToolPlannerRequest');
     expect(chatMulti).toContain('const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');

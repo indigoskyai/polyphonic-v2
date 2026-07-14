@@ -13,7 +13,7 @@
  */
 
 import type { ConsolidationReport } from "./consolidation.ts";
-import { withModelRetry } from "../modelRetry.ts";
+import { generateAutonomous } from "../autonomous-generation.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -82,42 +82,31 @@ function buildDreamPrompt(report: ConsolidationReport): string {
  * Generate a dream narrative from a consolidation report via OpenRouter.
  */
 async function generateDreamNarrative(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
   report: ConsolidationReport,
   openrouterApiKey: string
 ): Promise<string> {
   const prompt = buildDreamPrompt(report);
-
-  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${openrouterApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "anthropic/claude-haiku-4.5",
-      messages: [
-        { role: "system", content: DREAMING_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 300,
-      temperature: 0.8,
-    }),
-    signal: AbortSignal.timeout(60000),
-  }));
-
-  if (!response.ok) {
-    throw new Error(`Dream generation failed: ${response.status} ${response.statusText}`);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OpenRouter response shape
-  const data: any = await response.json();
-  const narrative = data?.choices?.[0]?.message?.content?.trim();
-
-  if (!narrative) {
-    throw new Error("Dream generation returned empty content");
-  }
-
-  return narrative;
+  const generated = await generateAutonomous<string>({
+    apiKey: openrouterApiKey,
+    model: "anthropic/claude-haiku-4.5",
+    writer: "mnemos-dreaming",
+    messages: [
+      { role: "system", content: DREAMING_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+    parse: (raw) => raw.trim(),
+    content: (narrative) => [narrative],
+    maxTokens: 512,
+    temperature: 0.8,
+    timeoutMs: 60_000,
+    supabase,
+    userId,
+    agentId,
+  });
+  return generated.value;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +211,7 @@ export async function dream(
   }
 
   try {
-    const narrative = await generateDreamNarrative(report, openrouterApiKey);
+    const narrative = await generateDreamNarrative(supabase, userId, agentId, report, openrouterApiKey);
 
     const dreamReport: DreamReport = {
       user_id: userId,

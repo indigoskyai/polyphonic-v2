@@ -17,6 +17,18 @@ project_id = "kknchdnrujzheulqzowv"
     verify_jwt = false
   [functions.agent-social-x-oauth-start]
     verify_jwt = false
+  [functions.attachment-bind]
+    verify_jwt = false
+  [functions.attachment-cancel]
+    verify_jwt = false
+  [functions.attachment-finalize]
+    verify_jwt = false
+  [functions.attachment-init]
+    verify_jwt = false
+  [functions.attachment-retry]
+    verify_jwt = false
+  [functions.attachment-url]
+    verify_jwt = false
   [functions.anima-believe]
     verify_jwt = false
   [functions.anima-browser]

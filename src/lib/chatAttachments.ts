@@ -1,10 +1,19 @@
 import type { MessageAttachment } from '@/stores/threadStore';
 
 export const CHAT_ATTACHMENT_BUCKET = 'chat-attachments';
-export const MAX_CHAT_ATTACHMENTS = 6;
-export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_CHAT_ATTACHMENTS = 10;
+export const MAX_CHAT_ATTACHMENT_BYTES = 100 * 1024 * 1024;
 export const MAX_INLINE_CODE_BYTES = 96 * 1024;
 export const MAX_PROMPT_CODE_CHARS = 12_000;
+
+export const CHAT_ATTACHMENT_ACCEPT = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/svg+xml',
+  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/*', 'application/json', 'application/xml', 'application/rtf', 'application/zip',
+  'audio/*', 'video/mp4', 'video/quicktime', 'video/webm',
+].join(',');
 
 const CODE_EXTENSIONS: Record<string, string> = {
   js: 'javascript',
@@ -52,7 +61,8 @@ const TEXT_MIME_TYPES = new Set([
 ]);
 
 export function safeAttachmentFileName(name: string): string {
-  const cleaned = name
+  const baseName = name.split(/[\\/]/).pop() || name;
+  const cleaned = baseName
     .normalize('NFKD')
     .replace(/[^\w.\- ]+/g, '')
     .trim()

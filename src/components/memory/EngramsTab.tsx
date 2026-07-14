@@ -34,6 +34,11 @@ function EngramRow({ engram, selected, onClick }: { engram: Engram; selected: bo
         {engram.access_count > 0 && (
           <span className="kind">accessed {engram.access_count}×</span>
         )}
+        {engram.content_integrity_status === 'suspect' && (
+          <span className="integrity-suspect" title={engram.content_integrity_reason || 'Possible legacy truncation'}>
+            review
+          </span>
+        )}
         <span className="salience">{engram.strength.toFixed(2)}</span>
         <span className="time">{timeAgo(engram.created_at)}</span>
       </div>

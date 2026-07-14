@@ -17,6 +17,9 @@ export interface MemoryCandidate {
   status: CandidateStatus;
   reviewed_at: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 interface MemoryCandidatesState {
@@ -65,7 +68,12 @@ export const useMemoryCandidatesStore = create<MemoryCandidatesState>((set, get)
       set({ loading: false, error: error.message });
       return;
     }
-    set({ items: (data ?? []) as MemoryCandidate[], loading: false });
+    set({
+      items: ((data ?? []) as MemoryCandidate[]).filter((candidate) =>
+        !candidate.content_hidden_at && candidate.content_integrity_status !== 'rejected'
+      ),
+      loading: false,
+    });
   },
 
   subscribe: (userId, agentId = 'luca') => {
@@ -78,6 +86,7 @@ export const useMemoryCandidatesStore = create<MemoryCandidatesState>((set, get)
           const row = (payload.new ?? payload.old) as MemoryCandidate | undefined;
           if (!row) return;
           if ((row.agent_id || 'luca') !== agentId) return;
+          if (row.content_hidden_at || row.content_integrity_status === 'rejected') return;
           if (payload.eventType === 'INSERT') {
             if (row.status !== 'pending') return;
             set((s) => ({ items: [row, ...s.items] }));

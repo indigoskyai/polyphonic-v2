@@ -16,10 +16,10 @@ import {
   logContinuityDiagnostics,
 } from "../_shared/continuity/index.ts";
 import { dispatchProactiveEngagement } from "../_shared/proactive-engagement.ts";
+import { buildModelAttachmentContent, persistPdfAnnotations } from "../_shared/attachments.ts";
 
 const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
 const SUBAGENT_TURN_TIMEOUT_MS = 45_000;
-const REPORT_TRUNCATE = 1800;
 
 const SUBAGENT_TOOL_SCHEMAS = [
   {
@@ -153,7 +153,7 @@ serve(async (req) => {
         await supabase
           .from("subagent_tasks")
           .update({
-            result: result.text.slice(0, 12000),
+            result: result.text,
             tool_calls_used: result.toolCallsUsed,
             completed_at: new Date().toISOString(),
           })
@@ -172,7 +172,7 @@ serve(async (req) => {
         .update({
           status: "completed",
           progress: 1,
-          result: result.text.slice(0, 12000),
+          result: result.text,
           tool_calls_used: result.toolCallsUsed,
           report_message_id: reportMessageId,
           completed_at: new Date().toISOString(),
@@ -191,8 +191,8 @@ serve(async (req) => {
         source: "subagent_run",
         severity: result.toolCallsUsed > 0 ? "notable" : "info",
         title: "Subagent finished",
-        summary: result.text.slice(0, 200),
-        rationale: `A background subagent you dispatched finished its work on: "${task.task_description.slice(0, 200)}".`,
+        summary: result.text.length > 200 ? `${result.text.slice(0, 199).trimEnd()}…` : result.text,
+        rationale: `A background subagent you dispatched finished its work on: "${task.task_description.length > 200 ? `${task.task_description.slice(0, 199).trimEnd()}…` : task.task_description}".`,
         activityType: "subagent_completed",
         content: {
           subagent_task_id: task.id,
@@ -262,14 +262,35 @@ async function runSubagentLoop(
     }),
   });
 
+  const attachmentIds = Array.isArray(task.attachment_ids)
+    ? task.attachment_ids.filter((id: unknown): id is string => typeof id === "string")
+    : [];
+  const attachmentBundle = await buildModelAttachmentContent(
+    supabase,
+    task.user_id,
+    attachmentIds,
+    SUBAGENT_MODEL,
+    apiKey,
+  );
+
   const messages: any[] = [
     { role: "system", content: systemPrompt },
     ...continuity.history.slice(-12).map((m: any) => ({ role: m.role, content: m.content })),
-    {
-      role: "user",
-      content: `Sub-task delegated to you:\n\n${task.task_description}`,
-    },
   ];
+  if (attachmentBundle.cachedAnnotations.length) {
+    messages.push({
+      role: "assistant",
+      content: "Previously parsed attachment material is available for reuse.",
+      annotations: attachmentBundle.cachedAnnotations,
+    });
+  }
+  const delegatedTask = `Sub-task delegated to you:\n\n${task.task_description}${attachmentBundle.promptContext}`;
+  messages.push({
+    role: "user",
+    content: attachmentBundle.parts.length
+      ? [{ type: "text", text: delegatedTask }, ...attachmentBundle.parts]
+      : delegatedTask,
+  });
 
   const startedAt = Date.now();
   const deadline = startedAt + (Number(task.time_budget_seconds) || 300) * 1000;
@@ -295,10 +316,20 @@ async function runSubagentLoop(
       (tool) => tool.function.name === "finish",
     );
 
-    const choice = await callModel(apiKey, messages, allowedTools);
+    let choice = await callModel(apiKey, messages, allowedTools, 1200);
+    if (choice && !["stop", "tool_calls"].includes(choice.finish_reason)) {
+      choice = await callModel(apiKey, messages, allowedTools, 2400);
+    }
     if (!choice) {
       finalText = "Subagent could not get a response from the model.";
       break;
+    }
+    if (!["stop", "tool_calls"].includes(choice.finish_reason)) {
+      throw new Error(`Subagent response did not complete (finish_reason=${choice.finish_reason || "unknown"})`);
+    }
+    if (Array.isArray(choice.annotations) && attachmentIds.length) {
+      await persistPdfAnnotations(supabase, task.user_id, attachmentIds, choice.annotations)
+        .catch((error) => console.warn("[subagent-run] could not persist PDF annotations", error));
     }
 
     const toolCalls = Array.isArray(choice.tool_calls) ? choice.tool_calls : [];
@@ -397,7 +428,7 @@ async function wasCancelled(supabase: any, taskId: string): Promise<boolean> {
   return data?.status === "cancelled";
 }
 
-async function callModel(apiKey: string, messages: any[], tools: any[]): Promise<any | null> {
+async function callModel(apiKey: string, messages: any[], tools: any[], maxTokens: number): Promise<any | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SUBAGENT_TURN_TIMEOUT_MS);
   try {
@@ -414,7 +445,7 @@ async function callModel(apiKey: string, messages: any[], tools: any[]): Promise
         messages,
         tools,
         temperature: 0.3,
-        max_tokens: 1200,
+        max_tokens: maxTokens,
       }),
       signal: controller.signal,
     });
@@ -426,7 +457,8 @@ async function callModel(apiKey: string, messages: any[], tools: any[]): Promise
     }
 
     const data = await response.json();
-    return data?.choices?.[0]?.message ?? null;
+    const choice = data?.choices?.[0];
+    return choice?.message ? { ...choice.message, finish_reason: choice.finish_reason } : null;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       console.error("subagent model call timed out");
@@ -508,7 +540,7 @@ async function runSubagentTool(
 
 async function postReport(supabase: any, task: any, result: SubagentResult): Promise<string | null> {
   try {
-    const summary = result.text.trim().slice(0, REPORT_TRUNCATE);
+    const summary = result.text.trim();
     const formatted = formatReportMessage(task.task_description, summary, result.toolCallsUsed);
     const { data, error } = await supabase
       .from("messages")

@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { buildAnimaConsultPrompt } from "../_shared/agents/anima-soul.ts";
 import { loadHypomnema } from "../_shared/hypomnema/index.ts";
+import { buildModelAttachmentContent, persistPdfAnnotations } from "../_shared/attachments.ts";
 
 // EXEMPT from the agent-family model rule: Anima is a distinct entity (the wise,
 // contemplative consultant), not the consulting agent. She answers in her OWN
@@ -105,7 +106,30 @@ serve(async (req) => {
         hypomnemaBlock: hypomnemaResult.block,
       });
 
-      const response = await callModel(apiKey, model, systemPrompt, question);
+      let attachmentIds: string[] = [];
+      if (parentMessageId && parentThreadId) {
+        const { data: parentMessage } = await supabase
+          .from("messages")
+          .select("attachment_ids")
+          .eq("id", parentMessageId)
+          .eq("thread_id", parentThreadId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        attachmentIds = Array.isArray(parentMessage?.attachment_ids)
+          ? parentMessage.attachment_ids.filter((id: unknown): id is string => typeof id === "string")
+          : [];
+      }
+      const attachmentBundle = await buildModelAttachmentContent(supabase, userId, attachmentIds, model, apiKey);
+      const response = await callModel(
+        apiKey,
+        model,
+        systemPrompt,
+        `${question}${attachmentBundle.promptContext}`,
+        attachmentBundle.parts,
+        attachmentBundle.cachedAnnotations,
+      );
+      await persistPdfAnnotations(supabase, userId, attachmentIds, response.annotations)
+        .catch((error) => console.warn("[agent-consult] could not persist PDF annotations", error));
       const completedAt = new Date().toISOString();
 
       await supabase
@@ -187,11 +211,25 @@ async function callModel(
   model: string,
   systemPrompt: string,
   userContent: string,
-): Promise<{ text: string; tokens: number | null }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  attachmentParts: Record<string, unknown>[] = [],
+  cachedAnnotations: unknown[] = [],
+): Promise<{ text: string; tokens: number | null; annotations: unknown[] }> {
+  let lastFinishReason = "unknown";
+  for (const maxTokens of [1500, 3000]) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const messages: Array<Record<string, unknown>> = [{ role: "system", content: systemPrompt }];
+      if (cachedAnnotations.length) {
+        messages.push({ role: "assistant", content: "Previously parsed attachment material is available for reuse.", annotations: cachedAnnotations });
+      }
+      messages.push({
+        role: "user",
+        content: attachmentParts.length
+          ? [{ type: "text", text: userContent }, ...attachmentParts]
+          : userContent,
+      });
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -201,32 +239,35 @@ async function callModel(
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
+        messages,
         temperature: 0.6,
-        max_tokens: 1500,
+        max_tokens: maxTokens,
       }),
       signal: controller.signal,
-    });
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OpenRouter ${response.status}: ${text.slice(0, 240)}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`OpenRouter ${response.status}: ${text.slice(0, 240)}`);
+      }
+
+      const data = await response.json();
+      const choice = data?.choices?.[0];
+      lastFinishReason = choice?.finish_reason || "unknown";
+      if (lastFinishReason !== "stop") continue;
+      const text = choice?.message?.content;
+      if (typeof text !== "string" || !text.trim()) {
+        throw new Error("Empty response from model");
+      }
+
+      const tokens = typeof data?.usage?.total_tokens === "number" ? data.usage.total_tokens : null;
+      const annotations = Array.isArray(choice?.message?.annotations) ? choice.message.annotations : [];
+      return { text: text.trim(), tokens, annotations };
+    } finally {
+      clearTimeout(timer);
     }
-
-    const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== "string" || !text.trim()) {
-      throw new Error("Empty response from model");
-    }
-
-    const tokens = typeof data?.usage?.total_tokens === "number" ? data.usage.total_tokens : null;
-    return { text: text.trim(), tokens };
-  } finally {
-    clearTimeout(timer);
   }
+  throw new Error(`Agent consultation did not complete (finish_reason=${lastFinishReason})`);
 }
 
 function json(body: unknown, status: number, corsHeaders: Record<string, string>) {

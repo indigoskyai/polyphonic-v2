@@ -12,6 +12,7 @@ import {
   type GroupRoomBundle,
   type GroupRoomMember,
 } from '@/lib/groupRooms';
+import { isCanonicalAttachment, type AttachmentDescriptor } from '@/types/attachments';
 
 type Db = typeof supabase & Record<string, any>;
 
@@ -35,7 +36,7 @@ interface GroupRoomState {
   acceptInvite: (token: string) => Promise<string | null>;
   addAgent: (roomId: string, agentId: string, mentionPolicy: GroupRoomAgent['mention_policy']) => Promise<void>;
   removeAgent: (roomId: string, agentId: string, ownerUserId: string) => Promise<void>;
-  sendMessage: (roomId: string, content: string, files?: File[]) => Promise<GroupMessage | null>;
+  sendMessage: (roomId: string, content: string, attachments?: AttachmentDescriptor[]) => Promise<GroupMessage | null>;
   requestAgent: (job: GroupAgentJob) => Promise<void>;
   deleteMessage: (roomId: string, messageId: string) => Promise<void>;
   updateMember: (roomId: string, action: string, input?: Record<string, unknown>) => Promise<void>;
@@ -99,41 +100,11 @@ function normalizeMessage(message: GroupMessage): GroupMessage {
   };
 }
 
-function safeFileName(name: string): string {
-  const cleaned = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-  return cleaned || 'attachment';
-}
-
-async function uploadGroupAttachments(roomId: string, files: File[] = []): Promise<GroupAttachment[]> {
-  const uploads: GroupAttachment[] = [];
-  for (const file of files.slice(0, 8)) {
-    const path = `${roomId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-    const { error } = await supabase.storage
-      .from('group-attachments')
-      .upload(path, file, {
-        contentType: file.type || 'application/octet-stream',
-        upsert: false,
-      });
-    if (error) throw error;
-    uploads.push({
-      bucket: 'group-attachments',
-      path,
-      name: file.name,
-      size: file.size,
-      content_type: file.type || null,
-    });
-  }
-  return uploads;
-}
-
 async function signMessageAttachments(messages: GroupMessage[]): Promise<GroupMessage[]> {
   const signed = await Promise.all(messages.map(async (message) => {
     if (!Array.isArray(message.attachments) || message.attachments.length === 0) return normalizeMessage(message);
     const attachments = await Promise.all(message.attachments.map(async (attachment) => {
+      if (isCanonicalAttachment(attachment)) return attachment;
       if (!attachment?.path) return attachment;
       const { data } = await supabase.storage
         .from('group-attachments')
@@ -353,12 +324,15 @@ export const useGroupRoomStore = create<GroupRoomState>((set, get) => ({
     if (error) set({ error: await readInvokeError(error, 'Could not remove agent.') });
   },
 
-  sendMessage: async (roomId, content, files = []) => {
+  sendMessage: async (roomId, content, attachments = []) => {
     try {
-      const attachments = await uploadGroupAttachments(roomId, files);
+      if (attachments.some((attachment) => attachment.status !== 'ready')) {
+        throw new Error('Every attachment must finish processing before sending.');
+      }
+      const attachmentIds = attachments.map((attachment) => attachment.id);
       const clientMessageId = crypto.randomUUID();
       const { data, error } = await supabase.functions.invoke('group-message-send', {
-        body: { room_id: roomId, content, attachments, client_message_id: clientMessageId },
+        body: { room_id: roomId, content, attachment_ids: attachmentIds, client_message_id: clientMessageId },
       });
       if (error) throw new Error(await readInvokeError(error, 'Could not send message.'));
       const message = data?.message as GroupMessage | undefined;

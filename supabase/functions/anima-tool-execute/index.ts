@@ -1241,6 +1241,20 @@ async function executeDispatchSubagent(
     };
   }
 
+  let attachmentIds: string[] = [];
+  if (sourceMessageId) {
+    const { data: sourceMessage } = await supabase
+      .from("messages")
+      .select("attachment_ids")
+      .eq("id", sourceMessageId)
+      .eq("thread_id", threadId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    attachmentIds = Array.isArray(sourceMessage?.attachment_ids)
+      ? sourceMessage.attachment_ids.filter((id: unknown): id is string => typeof id === "string")
+      : [];
+  }
+
   const { data: inserted, error } = await supabase
     .from("subagent_tasks")
     .insert({
@@ -1248,6 +1262,7 @@ async function executeDispatchSubagent(
       agent_id: "luca",
       parent_thread_id: threadId,
       parent_message_id: sourceMessageId,
+      attachment_ids: attachmentIds,
       task_description: taskDescription,
       tool_budget: toolBudget,
       time_budget_seconds: timeBudget,

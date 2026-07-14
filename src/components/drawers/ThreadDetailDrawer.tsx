@@ -32,6 +32,8 @@ interface ActivityRow {
   content: Record<string, unknown> | null;
   source: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_hidden_at?: string | null;
 }
 
 interface MessageRow {
@@ -326,7 +328,7 @@ export default function ThreadDetailDrawer() {
           .order('created_at', { ascending: true }),
         supabase
           .from('entity_activity_log')
-          .select('id, activity_type, title, summary, content, source, created_at')
+          .select('id, activity_type, title, summary, content, source, created_at, content_integrity_status, content_hidden_at')
           .eq('user_id', thread.user_id)
           .order('created_at', { ascending: false })
           .limit(200),
@@ -341,7 +343,11 @@ export default function ThreadDetailDrawer() {
       setMessageRows(msgs);
 
       const all = (actRes.data ?? []) as ActivityRow[];
-      const forThread = all.filter((row) => activityReferencesThread(row.content, threadId));
+      const forThread = all.filter((row) =>
+        !row.content_hidden_at &&
+        row.content_integrity_status !== 'rejected' &&
+        activityReferencesThread(row.content, threadId)
+      );
       setActivityRows(forThread.slice(0, 40));
       setLoading(false);
     }
@@ -379,7 +385,7 @@ export default function ThreadDetailDrawer() {
         { event: 'INSERT', schema: 'public', table: 'entity_activity_log', filter: `user_id=eq.${thread.user_id}` },
         (payload) => {
           const row = payload.new as ActivityRow;
-          if (!row?.id || !activityReferencesThread(row.content, threadId)) return;
+          if (!row?.id || row.content_hidden_at || row.content_integrity_status === 'rejected' || !activityReferencesThread(row.content, threadId)) return;
           setActivityRows((prev) => [row, ...prev.filter((item) => item.id !== row.id)].slice(0, 40));
         },
       )

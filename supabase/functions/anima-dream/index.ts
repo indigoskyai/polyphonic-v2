@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
@@ -158,30 +158,28 @@ serve(async (req) => {
         .replace("{memory_b}", memB.content);
 
       try {
-        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: dreamModel,
-            messages: [
-              { role: "system", content: "You are a dreaming mind. Let go of structure. Free-associate. Stream of consciousness. lowercase. If nothing comes, say [nothing surfaced] and that's fine." },
-              { role: "user", content: prompt },
-            ],
-            temperature: 0.95,
-            max_tokens: 500,
+        const generation = await generateAutonomous({
+          apiKey: OPENROUTER_API_KEY,
+          model: dreamModel,
+          writer: "anima-dream",
+          messages: [
+            { role: "system", content: "You are a dreaming mind. Let go of structure. Free-associate. Stream of consciousness. lowercase. If nothing comes, say [nothing surfaced] and that's fine." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.95,
+          maxTokens: 500,
+          supabase,
+          userId: user_id,
+          agentId: agent_id,
+          allowEmpty: (raw) => /^\[nothing surfaced\][.!]?$/i.test(raw.trim()),
+          parse: (raw) => ({
+            text: /^\[nothing surfaced\][.!]?$/i.test(raw.trim()) ? null : normalizeAutonomousContent(raw),
           }),
-          signal: AbortSignal.timeout(60000),
-        }));
+          content: (dream) => dream.text ? [dream.text] : [],
+        });
+        const dreamText = generation.value.text;
 
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const dreamText = data.choices?.[0]?.message?.content?.trim() || "";
-
-        if (!dreamText || dreamText.length < 30 || dreamText.toLowerCase().includes("[nothing surfaced]")) {
+        if (!dreamText || dreamText.length < 30) {
           dreamsDiscarded++;
           continue;
         }
@@ -196,6 +194,7 @@ serve(async (req) => {
           content: dreamText,
           mood: "dreaming",
           trigger_type: "periodic",
+          content_integrity_status: "valid",
         });
         if (dreamInsErr) console.error("[anima-dream] journal_entries insert failed:", dreamInsErr);
 

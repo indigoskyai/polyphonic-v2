@@ -6,7 +6,7 @@ export type GroupAgentJobStatus = 'queued' | 'running' | 'complete' | 'failed' |
 export type GroupMemoryVisibility = 'private' | 'room';
 export type GroupMemoryStatus = 'pending' | 'approved' | 'rejected';
 
-export interface GroupAttachment {
+export interface LegacyGroupAttachment {
   bucket: 'group-attachments';
   path: string;
   name: string;
@@ -14,6 +14,8 @@ export interface GroupAttachment {
   content_type?: string | null;
   signedUrl?: string | null;
 }
+
+export type GroupAttachment = LegacyGroupAttachment | AttachmentDescriptor;
 
 export interface GroupRoom {
   id: string;
@@ -72,6 +74,7 @@ export interface GroupMessage {
   role: GroupMessageRole;
   content: string;
   attachments: GroupAttachment[];
+  attachment_ids?: string[];
   metadata: Record<string, unknown> | null;
   reply_to_id: string | null;
   state: 'visible' | 'deleted';
@@ -189,3 +192,4 @@ export function isQueuedGroupAgentJob(job: GroupAgentJob): boolean {
 export function shouldShowGroupJobUnderMessage(job: GroupAgentJob, messageId: string): boolean {
   return job.trigger_message_id === messageId && job.status !== 'complete';
 }
+import type { AttachmentDescriptor } from '@/types/attachments';

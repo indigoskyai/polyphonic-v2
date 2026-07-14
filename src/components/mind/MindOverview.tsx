@@ -291,9 +291,14 @@ export default function MindOverview() {
                     <div className="m-activity-line" />
                   </div>
                   <div className="m-activity-body">
-                    <div className="m-activity-type">{cls}</div>
+                    <div className="m-activity-type">
+                      {cls}
+                      {ev.content_integrity_status === 'suspect' && (
+                        <span className="integrity-suspect" title={ev.content_integrity_reason || 'Possible legacy truncation'}>review</span>
+                      )}
+                    </div>
                     <div className="m-activity-summary">
-                      {ev.title || ev.summary || ev.activity_type.replace(/_/g, ' ')}
+                      {ev.summary || ev.title || ev.activity_type.replace(/_/g, ' ')}
                     </div>
                   </div>
                   <div className="m-activity-time">{timeAgo(ev.created_at)}</div>

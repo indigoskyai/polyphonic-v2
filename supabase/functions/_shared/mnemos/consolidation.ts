@@ -46,6 +46,7 @@ import {
 import { applySupersession } from "./supersession.ts";
 import { withModelRetry } from "../modelRetry.ts";
 import { resolveRoleModel } from "../model-backend.ts";
+import { generateAutonomous } from "../autonomous-generation.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -1051,12 +1052,15 @@ export function parseSynthesisResponse(text: string): { content: string; confide
  * the caller SKIPS (it never falls back to the lexical paste).
  */
 async function synthesizeBelief(args: {
+  supabase: SupabaseClient;
+  userId: string;
+  agentId: string;
   tag: string;
   cluster: Engram[];
   model: string;
   apiKey: string;
 }): Promise<SynthesisOutcome> {
-  const { tag, cluster, model, apiKey } = args;
+  const { supabase, userId, agentId, tag, cluster, model, apiKey } = args;
   const evidence = cluster.slice(0, BELIEF_SYNTHESIS_EVIDENCE_CAP).map((e, i) => {
     const v = e.emotional_valence ?? 0;
     const sign = v > 0.15 ? "(+) " : v < -0.15 ? "(-) " : "";
@@ -1078,21 +1082,22 @@ CONFIDENCE: <number between 0.05 and 0.95>`;
   const prompt = `Theme: ${tag}\n\nYour memories on this theme:\n${evidence}`;
 
   try {
-    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-        temperature: 0.4,
-        max_tokens: 400,
-      }),
-      signal: AbortSignal.timeout(60000),
-    }));
-    if (!response.ok) return { ok: false, reason: `http_${response.status}` };
-    const data = await response.json();
-    const text: string = data.choices?.[0]?.message?.content || "";
-    return parseSynthesisResponseDetailed(text);
+    const generated = await generateAutonomous<SynthesisOutcome>({
+      apiKey,
+      model,
+      writer: "mnemos-belief-synthesis",
+      messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+      parse: parseSynthesisResponseDetailed,
+      content: (result) => result.ok ? [result.content] : [],
+      allowEmpty: (raw) => raw.trim().toUpperCase().startsWith("NONE"),
+      maxTokens: 512,
+      temperature: 0.4,
+      timeoutMs: 60_000,
+      supabase,
+      userId,
+      agentId,
+    });
+    return generated.value;
   } catch (_e) {
     // Distinguish infra timeouts from genuine non-convergence for dark-launch monitoring.
     if (_e instanceof Error && (_e.name === "AbortError" || _e.name === "TimeoutError")) {
@@ -1248,7 +1253,15 @@ async function formBeliefs(
       }
       synthCreates++;
       beliefReport.llm_attempts++;
-      const result = await synthesizeBelief({ tag, cluster: csorted, model: synth.model, apiKey: synth.apiKey });
+      const result = await synthesizeBelief({
+        supabase,
+        userId,
+        agentId,
+        tag,
+        cluster: csorted,
+        model: synth.model,
+        apiKey: synth.apiKey,
+      });
       if (!result.ok) {
         const failure = result as { ok: false; reason: string };
         addBeliefFailure(beliefReport, tag, failure.reason);

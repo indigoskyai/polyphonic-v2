@@ -47,6 +47,9 @@ export interface DigestEngram {
   digest_suggestion_model: string | null;
   digest_suggestion_generated_at: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 interface DigestState {
@@ -127,7 +130,13 @@ export const useDigestStore = create<DigestState>((set, get) => ({
       set({ loading: false, error: error.message });
       return;
     }
-    set({ digest: digest as DigestRow, engrams: (engrams ?? []) as DigestEngram[], loading: false });
+    set({
+      digest: digest as DigestRow,
+      engrams: ((engrams ?? []) as DigestEngram[]).filter(
+        (engram) => !engram.content_hidden_at && engram.content_integrity_status !== 'rejected',
+      ),
+      loading: false,
+    });
   },
 
   refresh: async (agentId) => {
@@ -155,6 +164,10 @@ export const useDigestStore = create<DigestState>((set, get) => ({
           const row = (payload.new ?? payload.old) as DigestEngram;
           if (!row || row.digest_id !== digestId) return;
           if ((row.agent_id || 'luca') !== agentId) return;
+          if (row.content_hidden_at || row.content_integrity_status === 'rejected') {
+            set((s) => ({ engrams: s.engrams.filter((engram) => engram.id !== row.id) }));
+            return;
+          }
           if (payload.eventType === 'UPDATE') {
             set((s) => ({
               engrams: s.engrams.map((e) => (e.id === row.id ? (payload.new as DigestEngram) : e)),

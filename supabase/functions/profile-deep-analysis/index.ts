@@ -6,6 +6,7 @@ import {
   handleCorsPreflightIfNeeded,
 } from "../_shared/cors.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
+import { assertCompleteAutonomousContent, AutonomousGenerationError } from "../_shared/autonomous-generation.ts";
 
 // EXEMPT from the agent-family model rule: this runs on the Lovable free gateway
 // (ai.gateway.lovable.dev), not the user's OpenRouter BYOK key, so per-agent family
@@ -696,7 +697,13 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      return data.choices?.[0]?.message?.content || "";
+      const choice = data.choices?.[0];
+      if (choice?.finish_reason !== "stop") {
+        throw new AutonomousGenerationError("non_stop_finish", `Analysis pass ended with finish_reason=${choice?.finish_reason || "unknown"}`);
+      }
+      const content = String(choice?.message?.content || "").trim();
+      if (!content) throw new AutonomousGenerationError("empty_content", "Analysis pass returned no content");
+      return content;
     }
 
     // ── Run 5-pass analysis with iterative deepening ──
@@ -828,14 +835,18 @@ ${pass5}`;
     }
 
     const finalData = await finalResponse.json();
+    const finalChoice = finalData.choices?.[0];
+    if (!['stop', 'tool_calls'].includes(finalChoice?.finish_reason)) {
+      throw new AutonomousGenerationError("non_stop_finish", `Final profile synthesis ended with finish_reason=${finalChoice?.finish_reason || "unknown"}`);
+    }
     let profile: any = {};
 
     try {
-      const toolCall = finalData.choices?.[0]?.message?.tool_calls?.[0];
+      const toolCall = finalChoice?.message?.tool_calls?.[0];
       if (toolCall?.function?.arguments) {
         profile = JSON.parse(toolCall.function.arguments);
       } else {
-        const content = finalData.choices?.[0]?.message?.content || "{}";
+        const content = finalChoice?.message?.content || "";
         const cleaned = content.replace(/```json\n?/g, "").replace(
           /```\n?/g,
           "",
@@ -844,12 +855,7 @@ ${pass5}`;
       }
     } catch (parseErr) {
       console.error("Failed to parse final profile:", parseErr);
-      // Store raw analysis even if structured parsing fails
-      profile = {
-        identity_narrative:
-          "Analysis completed but structured parsing failed. Raw data stored.",
-        raw_passes: { pass1, pass2, pass3, pass4, pass5 },
-      };
+      throw new AutonomousGenerationError("invalid_structure", "Final profile synthesis did not return a complete structured profile");
     }
 
     // ── Upsert psychological profile ──
@@ -891,6 +897,7 @@ ${pass5}`;
         emotional_arousal: 0.4,
         tags: ["profile", "identity", "deep-analysis"],
         source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
+        content_integrity_status: "valid",
       });
     }
 
@@ -903,13 +910,14 @@ ${pass5}`;
       engramInserts.push({
         user_id,
         agent_id,
-        content: `PERSONALITY DIMENSIONS — ${b5Summary}`,
+        content: `PERSONALITY DIMENSIONS — ${b5Summary}.`,
         engram_type: "semantic",
         strength: 0.9,
         stability: 0.85,
         accessibility: 0.9,
         tags: ["profile", "big-five", "deep-analysis"],
         source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
+        content_integrity_status: "valid",
       });
     }
 
@@ -921,17 +929,21 @@ ${pass5}`;
       engramInserts.push({
         user_id,
         agent_id,
-        content: `SHADOW PATTERNS — Blind spots: ${spotTexts.join("; ")}`,
+        content: `SHADOW PATTERNS — Blind spots: ${spotTexts.join("; ")}.`,
         engram_type: "semantic",
         strength: 0.85,
         stability: 0.8,
         accessibility: 0.85,
         tags: ["profile", "shadow", "deep-analysis"],
         source_context: { pipeline: "profile-deep-analysis-v1", import_id, agent_id },
+        content_integrity_status: "valid",
       });
     }
 
     if (engramInserts.length > 0) {
+      engramInserts.forEach((engram) => {
+        engram.content = assertCompleteAutonomousContent(String(engram.content || ""));
+      });
       await supabase.from("engrams").insert(engramInserts);
     }
 
@@ -953,6 +965,20 @@ ${pass5}`;
     // after the response is sent. The client polls psychological_profile.
     const bgTask = runAnalysis().catch(async (e) => {
       console.error("profile-deep-analysis background error:", e);
+      try {
+        await supabase.from("autonomous_generation_events").insert({
+          user_id,
+          agent_id,
+          writer: "profile-deep-analysis",
+          status: "failed",
+          reason: e instanceof AutonomousGenerationError ? e.reason : "generation_failed",
+          attempts: 1,
+          model: ANALYSIS_MODEL,
+          detail: e instanceof Error ? e.message.slice(0, 2000) : String(e).slice(0, 2000),
+        });
+      } catch {
+        // Failure telemetry is best effort; preserve the original error path.
+      }
       if (import_id) {
         await updateImport({
           status: "failed",

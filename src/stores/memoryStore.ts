@@ -25,6 +25,9 @@ export const ENGRAM_UI_SELECT = [
   'access_count',
   'created_at',
   'updated_at',
+  'content_integrity_status',
+  'content_integrity_reason',
+  'content_hidden_at',
 ].join(',');
 
 export interface Engram {
@@ -46,6 +49,9 @@ export interface Engram {
   access_count: number;
   created_at: string;
   updated_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface Connection {
@@ -72,6 +78,9 @@ export interface Belief {
   domain?: string;
   created_at: string;
   updated_at?: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface Memory {
@@ -93,6 +102,9 @@ export interface Memory {
   is_pinned?: boolean | null;
   created_at: string;
   updated_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 interface MemoryFilters {
@@ -170,6 +182,9 @@ export function normalizeEngramRow(row: Record<string, unknown>): Engram {
     access_count: numberOr(row.access_count, 0),
     created_at: stringOr(row.created_at, now),
     updated_at: stringOr(row.updated_at, stringOr(row.created_at, now)),
+    content_integrity_status: row.content_integrity_status === 'suspect' || row.content_integrity_status === 'rejected' ? row.content_integrity_status : 'valid',
+    content_integrity_reason: typeof row.content_integrity_reason === 'string' ? row.content_integrity_reason : null,
+    content_hidden_at: typeof row.content_hidden_at === 'string' ? row.content_hidden_at : null,
   };
 }
 
@@ -223,7 +238,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
       return;
     }
     clearLoadError('memories');
-    set({ memories: (data ?? []) as Memory[] });
+    set({
+      memories: ((data ?? []) as Memory[]).filter((memory) =>
+        !memory.content_hidden_at && memory.content_integrity_status !== 'rejected'
+      ),
+    });
   },
 
   loadEngrams: async (userId, agentId = 'luca') => {
@@ -239,7 +258,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
       return;
     }
     clearLoadError('engrams');
-    set({ engrams: ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => normalizeEngramRow(row)) });
+    set({
+      engrams: ((data ?? []) as unknown as Array<Record<string, unknown>>)
+        .map((row) => normalizeEngramRow(row))
+        .filter((engram) => !engram.content_hidden_at && engram.content_integrity_status !== 'rejected'),
+    });
   },
 
   loadConnections: async (userId, agentId = 'luca') => {
@@ -270,7 +293,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => {
       return;
     }
     clearLoadError('beliefs');
-    set({ beliefs: (data ?? []) as Belief[] });
+    set({
+      beliefs: ((data ?? []) as Belief[]).filter((belief) =>
+        !belief.content_hidden_at && belief.content_integrity_status !== 'rejected'
+      ),
+    });
   },
 
   loadAll: async (userId, agentId = 'luca') => {

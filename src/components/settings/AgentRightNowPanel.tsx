@@ -186,10 +186,8 @@ export default function AgentRightNowPanel({ agentId }: Props) {
                     fontSize: 13,
                     lineHeight: 1.5,
                     color: 'var(--text-secondary)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
+                    overflowWrap: 'anywhere',
+                    whiteSpace: 'pre-wrap',
                   }}
                 >
                   {b.text}

@@ -5,6 +5,7 @@ import {
   normalizeThreadRuntimeMode,
   type ThreadRuntimeMode,
 } from '@/lib/chatRuntime';
+import type { AttachmentDescriptor } from '@/types/attachments';
 
 export interface Thread {
   id: string;
@@ -30,6 +31,7 @@ export interface MessageAttachment {
   type: 'image' | 'file' | 'code';
   url: string;
   meta?: Record<string, unknown>;
+  descriptor?: AttachmentDescriptor;
 }
 
 export interface Message {
@@ -47,6 +49,7 @@ export interface Message {
   kind?: 'permission_request' | 'agent_forge_proposal' | 'agent_error' | 'text' | 'scheduled_task' | 'scheduled_task_result' | 'subagent_report' | null;
   metadata?: Record<string, unknown> | null;
   attachments?: MessageAttachment[] | null;
+  attachment_ids?: string[] | null;
 }
 
 export interface CreateThreadOptions {

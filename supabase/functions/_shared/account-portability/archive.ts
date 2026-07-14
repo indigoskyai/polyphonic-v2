@@ -167,7 +167,16 @@ export const PORTABLE_TABLES: PortableTableConfig[] = [
   { name: "projects", idColumn: "id", userColumn: "user_id" },
   { name: "conversations", idColumn: "id", userColumn: "user_id", readOnly: true },
   { name: "threads", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { project_id: "projects" }, arrayRemapColumns: { participating_agent_ids: "agent" } },
-  { name: "messages", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads" }, jsonColumns: ["metadata", "attachments"], importBatchSize: 100 },
+  { name: "messages", idColumn: "id", userColumn: "user_id", remapColumns: { thread_id: "threads" }, arrayRemapColumns: { attachment_ids: "chat_attachments" }, jsonColumns: ["metadata", "attachments"], importBatchSize: 100 },
+  {
+    name: "chat_attachments",
+    idColumn: "id",
+    userColumn: "user_id",
+    remapColumns: { thread_id: "threads", message_id: "messages" },
+    deferredRemapColumns: { duplicate_of: "chat_attachments" },
+    jsonColumns: ["derivatives", "capabilities"],
+    importBatchSize: 25,
+  },
   { name: "group_rooms", idColumn: "id", userColumn: "owner_user_id", jsonColumns: [], readOnly: true },
   { name: "group_room_members", idColumn: "id", userColumn: "user_id", jsonColumns: ["display_snapshot", "notification_prefs"], readOnly: true },
   { name: "group_room_agents", idColumn: "id", userColumn: "owner_user_id", readOnly: true },
@@ -186,6 +195,7 @@ export const PORTABLE_TABLES: PortableTableConfig[] = [
   { name: "journal_entries", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", remapColumns: { source_conversation_id: "threads" }, jsonColumns: ["source_context"], importBatchSize: 50 },
   { name: "thought_stream", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "thought_initiations", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
+  { name: "autonomous_generation_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "activity_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["metadata"], importBatchSize: 100 },
   { name: "memory_events", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id" },
   { name: "memory_candidates", idColumn: "id", userColumn: "user_id", agentColumn: "agent_id", jsonColumns: ["source"], importBatchSize: 100 },
@@ -475,6 +485,24 @@ export function transformRowForImport(
     out.last_run_at = null;
     out.last_run_status = null;
     out.next_run_at = null;
+  }
+  if (config.name === "chat_attachments") {
+    const sourceBucket = typeof row.bucket === "string" ? row.bucket : "chat-attachments";
+    const sourcePath = typeof row.storage_path === "string" ? row.storage_path : "";
+    const mappedAsset = sourcePath ? maps.assets[`${sourceBucket}/${sourcePath}`] : undefined;
+    out.bucket = mappedAsset?.bucket || "chat-attachments";
+    out.storage_path = mappedAsset?.path || `imported/${targetUserId}/${importJobId}/missing/${mappedId || crypto.randomUUID()}`;
+    out.upload_batch_id = crypto.randomUUID();
+    // Group membership is not portable across accounts. Preserve the private
+    // asset and descriptor as an unattached record instead of restoring an
+    // authorization relationship to a room that may belong to other users.
+    out.room_id = null;
+    out.group_message_id = null;
+    if (!mappedAsset) {
+      out.status = "failed";
+      out.processing_error = "Original asset was not available in the imported archive.";
+      out.ready_at = null;
+    }
   }
   const sourceTimestamp = new Date().toISOString();
   if ("created_by" in out) out.created_by = targetUserId;

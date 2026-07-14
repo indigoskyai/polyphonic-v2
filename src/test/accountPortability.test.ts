@@ -59,6 +59,7 @@ const maps: ImportIdMaps = {
   ids: {
     threads: { 'thread-old': 'thread-new' },
     messages: { 'message-old': 'message-new' },
+    chat_attachments: { 'attachment-old': 'attachment-new' },
     projects: { 'project-old': 'project-new' },
     artifacts: { 'artifact-old': 'artifact-new', 'artifact-parent': 'artifact-parent-new' },
     engrams: { 'engram-a': 'engram-new-a', 'engram-b': 'engram-new-b' },
@@ -175,6 +176,8 @@ describe('account portability archive', () => {
     expect([...tableNames]).toEqual(expect.arrayContaining([
       'threads',
       'messages',
+      'chat_attachments',
+      'autonomous_generation_events',
       'agent_configs',
       'memories',
       'engrams',
@@ -242,6 +245,30 @@ describe('account portability archive', () => {
     expect(artifact.thread_id).toBe('thread-new');
     expect(artifact.source_message_id).toBe('message-new');
     expect(artifact.parent_artifact_id).toBeNull();
+
+    const canonicalAttachment = transformRowForImport(PORTABLE_TABLE_BY_NAME.get('chat_attachments')!, {
+      id: 'attachment-old',
+      user_id: 'source-user',
+      thread_id: 'thread-old',
+      message_id: 'message-old',
+      room_id: 'room-old',
+      group_message_id: 'group-message-old',
+      upload_batch_id: 'batch-old',
+      bucket: 'chat-attachments',
+      storage_path: 'source-user/thread-old/file.txt',
+      original_name: 'file.txt',
+      status: 'ready',
+      derivatives: [],
+      capabilities: { text: true },
+    }, 'target-user', maps, 'job-1', 'export-12345678');
+
+    expect(canonicalAttachment.id).toBe('attachment-new');
+    expect(canonicalAttachment.user_id).toBe('target-user');
+    expect(canonicalAttachment.thread_id).toBe('thread-new');
+    expect(canonicalAttachment.message_id).toBe('message-new');
+    expect(canonicalAttachment.storage_path).toBe('target-user/thread-new/file.txt');
+    expect(canonicalAttachment.room_id).toBeNull();
+    expect(canonicalAttachment.group_message_id).toBeNull();
   });
 
   it('imports proactive tasks disabled and remaps memory graph edges', () => {

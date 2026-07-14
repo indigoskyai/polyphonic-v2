@@ -277,10 +277,12 @@ export default function ProfileView() {
         .maybeSingle(),
       supabase
         .from('memories')
-        .select('memory_type, confidence, sharpness, tags, created_at, narrative_thread, emotional_valence, emotional_intensity')
+        .select('memory_type, confidence, sharpness, tags, created_at, narrative_thread, emotional_valence, emotional_intensity, content_integrity_status, content_hidden_at')
         .eq('user_id', user.id)
         .eq('agent_id', activeAgentId)
         .eq('is_deleted', false)
+        .is('content_hidden_at', null)
+        .neq('content_integrity_status', 'rejected')
         .order('created_at', { ascending: false })
         .limit(1000),
       supabase
@@ -292,10 +294,12 @@ export default function ProfileView() {
         .limit(180),
       supabase
         .from('engrams')
-        .select('engram_type, strength, accessibility, state')
+        .select('engram_type, strength, accessibility, state, content_integrity_status, content_hidden_at')
         .eq('user_id', user.id)
         .eq('agent_id', activeAgentId)
         .eq('state', 'active')
+        .is('content_hidden_at', null)
+        .neq('content_integrity_status', 'rejected')
         .limit(500),
     ]);
 

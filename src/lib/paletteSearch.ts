@@ -84,7 +84,7 @@ export function buildResults(
   // Memory
   if (scope === 'all' || scope === 'memory') {
     memories.forEach((m, idx) => {
-      const title = m.content.slice(0, 80);
+      const title = m.content.length > 80 ? `${m.content.slice(0, 79).trimEnd()}…` : m.content;
       const score = scoreResult(title, query, Math.max(0, 40 - idx));
       if (score < 0 && query) return;
       out.push({

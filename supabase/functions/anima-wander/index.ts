@@ -18,7 +18,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -191,39 +191,23 @@ ${activityText}
 
 ${emotionalPrompt || "=== Emotional State ===\n(none)"}`;
 
-  // Call LLM
-  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${userApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: wanderModel,
-      messages: [
-        { role: "system", content: WANDER_PROMPT },
-        { role: "user", content: contextBlock },
-      ],
-      temperature: 0.95, // higher than think — we want drift
-      max_tokens: 1024,
-    }),
-    signal: AbortSignal.timeout(60000),
-  }));
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.warn("[anima-wander] LLM call failed:", response.status, errText);
-    return { ok: false, reason: "llm_failed" };
-  }
-
-  const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content || "";
-
-  // Parse wanderings
-  const wanderings = parseWanderings(raw);
-  if (wanderings.length === 0) {
-    return { ok: true, reason: "no_wanderings_parsed", wanderings_generated: 0 };
-  }
+  const generation = await generateAutonomous({
+    apiKey: userApiKey,
+    model: wanderModel,
+    writer: "anima-wander",
+    messages: [
+      { role: "system", content: WANDER_PROMPT },
+      { role: "user", content: contextBlock },
+    ],
+    temperature: 0.95,
+    maxTokens: 1_024,
+    supabase,
+    userId: user_id,
+    agentId: agent_id,
+    parse: parseWanderings,
+    content: (wanderings) => wanderings.map((wandering) => wandering.content),
+  });
+  const wanderings = generation.value;
 
   const insightCount = wanderings.filter((w) => w.type === "insight").length;
 
@@ -320,13 +304,13 @@ function parseWanderings(raw: string): ParsedWandering[] {
     const typeMatch = block.match(/TYPE:\s*(wandering|insight)/i);
     const tagsMatch = block.match(/TAGS:\s*(.+)/);
 
-    if (!contentMatch) continue;
-    const content = contentMatch[1].trim();
+    if (!contentMatch || !salMatch || !typeMatch || !tagsMatch) continue;
+    const content = normalizeAutonomousContent(contentMatch[1]);
     if (!content || content.length < 10) continue;
 
-    const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.4;
-    const type = typeMatch && typeMatch[1].toLowerCase() === "insight" ? "insight" : "wandering";
-    const tags = tagsMatch ? tagsMatch[1].split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean) : [];
+    const salience = Math.max(0, Math.min(1, parseFloat(salMatch[1])));
+    const type = typeMatch[1].toLowerCase() === "insight" ? "insight" : "wandering";
+    const tags = tagsMatch[1].split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean);
 
     wanderings.push({ content, salience, type, tags });
   }

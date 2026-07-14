@@ -10,7 +10,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
   it('keeps the SDK path Luca-only, feature-gated, and before the legacy tool planner', () => {
     const source = readRepoFile('supabase/functions/chat-multi/index.ts');
 
-	    const gateIndex = source.indexOf('if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
+    const gateIndex = source.indexOf('if (agentRuntimeActive && !onboardingHandoff && !forceForgeRequest && !likelyGeneratedMediaRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested && isOpenRouterAgentRuntimeEnabled(userId))');
     const legacyPlannerIndex = source.indexOf('const toolPlannerResult = shouldRunLegacyToolPlanner');
 
     expect(source).toContain('../_shared/agent-runtime/openrouter-agent.ts');
@@ -28,7 +28,7 @@ describe('OpenRouter Agent SDK runtime gate', () => {
 
     // Existing chat remains the fallback whenever the flag is off or the agent is not Luca.
     expect(source).toContain('singleModelStream(');
-	    expect(source).toContain('const useEnsemble = agentRuntimeActive && backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;');
+    expect(source).toContain('const useEnsemble = agentRuntimeActive && backend.allowEnsemble && multiModelEnabled && agentIsSystemLuca;');
   });
 
   it('uses the SDK as a thin web-safe inner loop instead of a local-machine runtime', () => {

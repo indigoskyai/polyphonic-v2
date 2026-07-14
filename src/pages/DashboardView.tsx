@@ -277,7 +277,7 @@ function BeliefsCard({ beliefs }: { beliefs: { text: string; strength: number }[
         <div className="flex flex-col gap-2">
           {beliefs.slice(0, 5).map((b, i) => (
             <div key={i}>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{b.text}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{b.text}</div>
               <div className="flex items-center gap-2 mt-1">
                 <div style={{ flex: 1, height: 2, background: 'var(--bg-surface)', borderRadius: 1, overflow: 'hidden' }}>
                   <div style={{ height: '100%', background: 'var(--metric-fill)', width: `${b.strength * 100}%`, borderRadius: 1 }} />

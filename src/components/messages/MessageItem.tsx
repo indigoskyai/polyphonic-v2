@@ -8,6 +8,7 @@ import { useDrawerStore } from '@/stores/drawerStore';
 import RichBody from '@/components/rich/RichBody';
 import CouncilPanel from '@/components/messages/CouncilPanel';
 import MessageAttachment from '@/components/attachments/MessageAttachment';
+import DurableAttachment from '@/components/attachments/DurableAttachment';
 import ImagePreview from '@/components/attachments/ImagePreview';
 import ImageCard from '@/components/messages/ImageCard';
 import SearchCitationsCard, { type Citation } from '@/components/messages/SearchCitationsCard';
@@ -190,9 +191,12 @@ function MessageItemImpl({ messageId, nextCreatedAt, isLast }: Props) {
         })()}
 
         {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-          <div className="msg-attachments" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="msg-attachments">
             {msg.attachments.map((att, idx) => {
               const meta = (att.meta || {}) as any;
+              if (att.descriptor) {
+                return <DurableAttachment key={att.descriptor.id || idx} initial={att.descriptor} />;
+              }
               if (att.type === 'image') {
                 if (meta.kind === 'generate_image' || meta.kind === 'edit_image') {
                   return (

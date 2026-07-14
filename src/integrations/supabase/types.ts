@@ -1003,6 +1003,92 @@ export type Database = {
           },
         ]
       }
+      attachment_processing_jobs: {
+        Row: {
+          attachment_id: string
+          attempts: number
+          available_at: string
+          created_at: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attachment_id: string
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attachment_id?: string
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachment_processing_jobs_attachment_id_fkey"
+            columns: ["attachment_id"]
+            isOneToOne: true
+            referencedRelation: "chat_attachments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autonomous_generation_events: {
+        Row: {
+          agent_id: string | null
+          attempts: number
+          created_at: string
+          detail: string | null
+          id: string
+          model: string | null
+          reason: string
+          status: string
+          user_id: string
+          writer: string
+        }
+        Insert: {
+          agent_id?: string | null
+          attempts?: number
+          created_at?: string
+          detail?: string | null
+          id?: string
+          model?: string | null
+          reason: string
+          status: string
+          user_id: string
+          writer: string
+        }
+        Update: {
+          agent_id?: string | null
+          attempts?: number
+          created_at?: string
+          detail?: string | null
+          id?: string
+          model?: string | null
+          reason?: string
+          status?: string
+          user_id?: string
+          writer?: string
+        }
+        Relationships: []
+      }
       beliefs: {
         Row: {
           active: boolean | null
@@ -1011,6 +1097,9 @@ export type Database = {
           confidence: number
           confidence_tier: string | null
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           contradicting_engram_ids: string[] | null
           created_at: string | null
           domain: string | null
@@ -1034,6 +1123,9 @@ export type Database = {
           confidence?: number
           confidence_tier?: string | null
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           contradicting_engram_ids?: string[] | null
           created_at?: string | null
           domain?: string | null
@@ -1057,6 +1149,9 @@ export type Database = {
           confidence?: number
           confidence_tier?: string | null
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           contradicting_engram_ids?: string[] | null
           created_at?: string | null
           domain?: string | null
@@ -1157,6 +1252,156 @@ export type Database = {
             columns: ["checkpoint_id"]
             isOneToOne: false
             referencedRelation: "checkpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_attachment_quotas: {
+        Row: {
+          quota_bytes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          quota_bytes: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          quota_bytes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_attachments: {
+        Row: {
+          bucket: string
+          capabilities: Json
+          created_at: string
+          declared_mime_type: string
+          derivatives: Json
+          duplicate_of: string | null
+          duration_seconds: number | null
+          extracted_text: string | null
+          group_message_id: string | null
+          height: number | null
+          id: string
+          kind: string
+          message_id: string | null
+          original_name: string
+          page_count: number | null
+          processing_error: string | null
+          ready_at: string | null
+          room_id: string | null
+          scanned_at: string | null
+          sha256: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["chat_attachment_status"]
+          storage_path: string
+          thread_id: string | null
+          updated_at: string
+          upload_batch_id: string
+          user_id: string
+          verified_mime_type: string | null
+          width: number | null
+        }
+        Insert: {
+          bucket?: string
+          capabilities?: Json
+          created_at?: string
+          declared_mime_type?: string
+          derivatives?: Json
+          duplicate_of?: string | null
+          duration_seconds?: number | null
+          extracted_text?: string | null
+          group_message_id?: string | null
+          height?: number | null
+          id?: string
+          kind: string
+          message_id?: string | null
+          original_name: string
+          page_count?: number | null
+          processing_error?: string | null
+          ready_at?: string | null
+          room_id?: string | null
+          scanned_at?: string | null
+          sha256?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["chat_attachment_status"]
+          storage_path: string
+          thread_id?: string | null
+          updated_at?: string
+          upload_batch_id?: string
+          user_id: string
+          verified_mime_type?: string | null
+          width?: number | null
+        }
+        Update: {
+          bucket?: string
+          capabilities?: Json
+          created_at?: string
+          declared_mime_type?: string
+          derivatives?: Json
+          duplicate_of?: string | null
+          duration_seconds?: number | null
+          extracted_text?: string | null
+          group_message_id?: string | null
+          height?: number | null
+          id?: string
+          kind?: string
+          message_id?: string | null
+          original_name?: string
+          page_count?: number | null
+          processing_error?: string | null
+          ready_at?: string | null
+          room_id?: string | null
+          scanned_at?: string | null
+          sha256?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["chat_attachment_status"]
+          storage_path?: string
+          thread_id?: string | null
+          updated_at?: string
+          upload_batch_id?: string
+          user_id?: string
+          verified_mime_type?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_attachments_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "chat_attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_attachments_group_message_id_fkey"
+            columns: ["group_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_attachments_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "group_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_attachments_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
@@ -1597,6 +1842,9 @@ export type Database = {
       curiosity_questions: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           context: string | null
           created_at: string
           curiosity_score: number | null
@@ -1608,6 +1856,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -1619,6 +1870,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -1925,6 +2179,9 @@ export type Database = {
           affect_source: string
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string | null
           digest_id: string | null
           digest_suggested_by: string | null
@@ -1961,6 +2218,9 @@ export type Database = {
           affect_source?: string
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string | null
           digest_id?: string | null
           digest_suggested_by?: string | null
@@ -1997,6 +2257,9 @@ export type Database = {
           affect_source?: string
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string | null
           digest_id?: string | null
           digest_suggested_by?: string | null
@@ -2034,6 +2297,9 @@ export type Database = {
           activity_type: string
           agent_id: string
           content: Json | null
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           emotional_context: Json | null
           id: string
@@ -2048,6 +2314,9 @@ export type Database = {
           activity_type: string
           agent_id?: string
           content?: Json | null
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           emotional_context?: Json | null
           id?: string
@@ -2062,6 +2331,9 @@ export type Database = {
           activity_type?: string
           agent_id?: string
           content?: Json | null
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           emotional_context?: Json | null
           id?: string
@@ -2269,6 +2541,7 @@ export type Database = {
       }
       group_messages: {
         Row: {
+          attachment_ids: string[]
           attachments: Json
           content: string
           created_at: string
@@ -2285,6 +2558,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          attachment_ids?: string[]
           attachments?: Json
           content?: string
           created_at?: string
@@ -2301,6 +2575,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          attachment_ids?: string[]
           attachments?: Json
           content?: string
           created_at?: string
@@ -2719,6 +2994,9 @@ export type Database = {
         Row: {
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           mood: string | null
@@ -2730,6 +3008,9 @@ export type Database = {
         Insert: {
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           mood?: string | null
@@ -2741,6 +3022,9 @@ export type Database = {
         Update: {
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           mood?: string | null
@@ -2793,6 +3077,9 @@ export type Database = {
           confidence: number
           confidence_source: string | null
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           decay_factor: number
           detail_level: string | null
@@ -2820,6 +3107,9 @@ export type Database = {
           confidence?: number
           confidence_source?: string | null
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           decay_factor?: number
           detail_level?: string | null
@@ -2847,6 +3137,9 @@ export type Database = {
           confidence?: number
           confidence_source?: string | null
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           decay_factor?: number
           detail_level?: string | null
@@ -2877,6 +3170,9 @@ export type Database = {
           candidate_type: string
           confidence: number
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           memory_type: string
@@ -2891,6 +3187,9 @@ export type Database = {
           candidate_type: string
           confidence: number
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           memory_type: string
@@ -2905,6 +3204,9 @@ export type Database = {
           candidate_type?: string
           confidence?: number
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           memory_type?: string
@@ -2991,6 +3293,7 @@ export type Database = {
       messages: {
         Row: {
           agent: string | null
+          attachment_ids: string[]
           attachments: Json | null
           bookmarked: boolean
           content: string
@@ -3007,6 +3310,7 @@ export type Database = {
         }
         Insert: {
           agent?: string | null
+          attachment_ids?: string[]
           attachments?: Json | null
           bookmarked?: boolean
           content: string
@@ -3023,6 +3327,7 @@ export type Database = {
         }
         Update: {
           agent?: string | null
+          attachment_ids?: string[]
           attachments?: Json | null
           bookmarked?: boolean
           content?: string
@@ -3308,6 +3613,9 @@ export type Database = {
       observer_logs: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           model: string | null
@@ -3317,6 +3625,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -3326,6 +3637,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -4171,6 +4485,7 @@ export type Database = {
       subagent_tasks: {
         Row: {
           agent_id: string
+          attachment_ids: string[]
           completed_at: string | null
           created_at: string
           error: string | null
@@ -4190,6 +4505,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          attachment_ids?: string[]
           completed_at?: string | null
           created_at?: string
           error?: string | null
@@ -4209,6 +4525,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          attachment_ids?: string[]
           completed_at?: string | null
           created_at?: string
           error?: string | null
@@ -4284,6 +4601,9 @@ export type Database = {
       thought_initiations: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           message: string
@@ -4293,6 +4613,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           message: string
@@ -4302,6 +4625,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           message?: string
@@ -4315,6 +4641,9 @@ export type Database = {
         Row: {
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           salience: number
@@ -4326,6 +4655,9 @@ export type Database = {
         Insert: {
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           salience?: number
@@ -4337,6 +4669,9 @@ export type Database = {
         Update: {
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           salience?: number
@@ -4744,6 +5079,10 @@ export type Database = {
         Args: { p_created_at: string; p_room_id: string; p_user_id?: string }
         Returns: boolean
       }
+      chat_attachment_usage_bytes: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       cleanup_daily_usage: { Args: never; Returns: number }
       cleanup_idempotency_keys: { Args: never; Returns: number }
       cognitive_memory_stats: {
@@ -4768,6 +5107,10 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      lease_attachment_processing_job: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: Database["public"]["Tables"]["attachment_processing_jobs"]["Row"][]
       }
       get_app_config: { Args: { config_key: string }; Returns: string }
       has_role: {
@@ -4982,6 +5325,15 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      chat_attachment_status:
+        | "uploading"
+        | "quarantined"
+        | "scanning"
+        | "extracting"
+        | "ready"
+        | "failed"
+        | "rejected"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5110,6 +5462,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      chat_attachment_status: [
+        "uploading",
+        "quarantined",
+        "scanning",
+        "extracting",
+        "ready",
+        "failed",
+        "rejected",
+        "cancelled",
+      ],
     },
   },
 } as const

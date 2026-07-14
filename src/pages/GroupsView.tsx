@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   Paperclip,
   PanelRightOpen,
   Plus,
+  RotateCcw,
   Send,
   Shield,
   Trash2,
@@ -26,6 +27,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentSettingsStore } from '@/stores/agentSettingsStore';
 import { useGroupRoomStore } from '@/stores/groupRoomStore';
+import DurableAttachment from '@/components/attachments/DurableAttachment';
+import AttachmentSourceControl from '@/components/attachments/AttachmentSourceControl';
+import { cancelChatAttachment, retryChatAttachment, uploadChatAttachment } from '@/lib/attachmentApi';
+import { CHAT_ATTACHMENT_ACCEPT, MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chatAttachments';
+import { isCanonicalAttachment, type AttachmentDescriptor, type AttachmentStatus } from '@/types/attachments';
 import {
   groupAgentDisplayLabel,
   groupMemberDisplayName,
@@ -37,6 +43,16 @@ import {
 } from '@/lib/groupRooms';
 
 type RightPanel = 'members' | 'agents' | 'memory' | 'settings';
+
+interface GroupPendingAttachment {
+  localId: string;
+  file: File;
+  status: AttachmentStatus | 'pending';
+  progress: number;
+  descriptor?: AttachmentDescriptor;
+  error?: string;
+  controller?: AbortController;
+}
 
 export default function GroupsView() {
   const { roomId } = useParams();
@@ -76,7 +92,11 @@ export default function GroupsView() {
 
   const [newRoomTitle, setNewRoomTitle] = useState('');
   const [composer, setComposer] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<GroupPendingAttachment[]>([]);
+  const [sending, setSending] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [inviteHandle, setInviteHandle] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [mentionPolicy, setMentionPolicy] = useState<GroupRoomAgent['mention_policy']>('owner');
@@ -84,6 +104,10 @@ export default function GroupsView() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadBatchIdRef = useRef(crypto.randomUUID());
 
   const members = roomId ? (membersByRoom[roomId] ?? []) : [];
   const roomAgents = roomId ? (agentsByRoom[roomId] ?? []) : [];
@@ -93,6 +117,7 @@ export default function GroupsView() {
   const room = roomId ? rooms.find((item) => item.id === roomId) ?? null : null;
   const selfMember = user && roomId ? members.find((member) => member.user_id === user.id) : null;
   const isManager = selfMember?.role === 'owner' || selfMember?.role === 'admin';
+  const attachmentsReady = pendingAttachments.every((attachment) => attachment.status === 'ready');
 
   const membersByUser = useMemo(() => new Map(members.map((member) => [member.user_id, member])), [members]);
   const agentsByOwnerAndId = useMemo(
@@ -125,6 +150,16 @@ export default function GroupsView() {
     const unsubscribe = subscribeRoom(roomId);
     return unsubscribe;
   }, [roomId, loadRoom, subscribeRoom]);
+
+  useEffect(() => {
+    setPendingAttachments((current) => {
+      current.forEach((attachment) => attachment.controller?.abort());
+      return [];
+    });
+    setFileError(null);
+    setAttachmentMenuOpen(false);
+    uploadBatchIdRef.current = crypto.randomUUID();
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId || !user) return;
@@ -172,13 +207,105 @@ export default function GroupsView() {
     }
   };
 
+  const patchPendingAttachment = useCallback((localId: string, patch: Partial<GroupPendingAttachment>) => {
+    setPendingAttachments((current) => current.map((attachment) => (
+      attachment.localId === localId ? { ...attachment, ...patch } : attachment
+    )));
+  }, []);
+
+  const startGroupAttachmentUpload = useCallback((attachment: GroupPendingAttachment) => {
+    if (!roomId) return;
+    const controller = new AbortController();
+    patchPendingAttachment(attachment.localId, { status: 'uploading', progress: 1, controller, error: undefined });
+    void uploadChatAttachment(attachment.file, { roomId }, {
+      batchId: uploadBatchIdRef.current,
+      signal: controller.signal,
+      onState: ({ status, progress, descriptor }) => {
+        patchPendingAttachment(attachment.localId, { status, progress, descriptor, controller, error: descriptor?.error });
+      },
+    }).then((descriptor) => {
+      patchPendingAttachment(attachment.localId, { status: 'ready', progress: 100, descriptor, controller: undefined });
+    }).catch((uploadError) => {
+      if (uploadError instanceof DOMException && uploadError.name === 'AbortError') return;
+      patchPendingAttachment(attachment.localId, {
+        status: 'failed',
+        progress: 0,
+        error: uploadError instanceof Error ? uploadError.message : 'Upload failed',
+        controller: undefined,
+      });
+    });
+  }, [patchPendingAttachment, roomId]);
+
+  const addFiles = (incoming: File[]) => {
+    setFileError(null);
+    if (!roomId) return;
+    if (pendingAttachments.length + incoming.length > MAX_CHAT_ATTACHMENTS) {
+      setFileError(`Add up to ${MAX_CHAT_ATTACHMENTS} files per message.`);
+      return;
+    }
+    const oversized = incoming.find((file) => file.size > MAX_CHAT_ATTACHMENT_BYTES);
+    if (oversized) {
+      setFileError(`${oversized.name} is larger than 100 MB.`);
+      return;
+    }
+    const empty = incoming.find((file) => file.size < 1);
+    if (empty) {
+      setFileError(`${empty.name} is empty.`);
+      return;
+    }
+    const queued = incoming.map((file): GroupPendingAttachment => ({
+      localId: crypto.randomUUID(),
+      file,
+      status: 'uploading',
+      progress: 0,
+    }));
+    setPendingAttachments((current) => [...current, ...queued]);
+    queued.forEach(startGroupAttachmentUpload);
+  };
+
+  const removeGroupAttachment = (attachment: GroupPendingAttachment) => {
+    attachment.controller?.abort();
+    setPendingAttachments((current) => current.filter((item) => item.localId !== attachment.localId));
+    if (attachment.descriptor?.id) void cancelChatAttachment(attachment.descriptor.id).catch(() => undefined);
+  };
+
+  const retryGroupAttachment = (attachment: GroupPendingAttachment) => {
+    if (attachment.descriptor?.id && attachment.descriptor.status === 'failed') {
+      const controller = new AbortController();
+      patchPendingAttachment(attachment.localId, { status: 'quarantined', progress: 72, error: undefined, controller });
+      void retryChatAttachment(attachment.descriptor.id, {
+        signal: controller.signal,
+        onState: ({ status, progress, descriptor }) => {
+          patchPendingAttachment(attachment.localId, { status, progress, descriptor, controller, error: descriptor?.error });
+        },
+      }).then((descriptor) => {
+        patchPendingAttachment(attachment.localId, { status: 'ready', progress: 100, descriptor, controller: undefined });
+      }).catch((retryError) => {
+        patchPendingAttachment(attachment.localId, { status: 'failed', progress: 0, error: retryError instanceof Error ? retryError.message : 'Retry failed', controller: undefined });
+      });
+      return;
+    }
+    startGroupAttachmentUpload({ ...attachment, descriptor: undefined, error: undefined });
+  };
+
   const handleSend = async () => {
     if (!roomId) return;
     const content = composer.trim();
-    if (!content && files.length === 0) return;
-    setComposer('');
-    setFiles([]);
-    await sendMessage(roomId, content, files);
+    const descriptors = pendingAttachments.map((attachment) => attachment.descriptor);
+    if ((!content && pendingAttachments.length === 0) || sending) return;
+    if (descriptors.some((descriptor) => !descriptor || descriptor.status !== 'ready')) {
+      setFileError('Wait for every attachment to finish processing, or retry the failed file.');
+      return;
+    }
+    setSending(true);
+    const message = await sendMessage(roomId, content, descriptors as AttachmentDescriptor[]);
+    setSending(false);
+    if (message) {
+      setComposer('');
+      setPendingAttachments([]);
+      setFileError(null);
+      uploadBatchIdRef.current = crypto.randomUUID();
+    }
   };
 
   const handleInvite = async () => {
@@ -348,32 +475,122 @@ export default function GroupsView() {
               </div>
             )}
 
-            <footer className="groups-composer">
-              {files.length > 0 && (
-                <div className="groups-file-strip">
-                  {files.map((file) => (
-                    <span key={`${file.name}-${file.size}`} className="groups-file-pill">
-                      {file.name}
+            <footer
+              className="groups-composer"
+              data-dragging={draggingFiles ? 'true' : undefined}
+              onDragEnter={(event) => {
+                if (event.dataTransfer.types.includes('Files')) setDraggingFiles(true);
+              }}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDraggingFiles(false);
+                addFiles(Array.from(event.dataTransfer.files));
+              }}
+              onPaste={(event) => {
+                const pasted = Array.from(event.clipboardData.files);
+                if (pasted.length) {
+                  event.preventDefault();
+                  addFiles(pasted);
+                }
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                className="chat-file-input"
+                type="file"
+                multiple
+                accept={CHAT_ATTACHMENT_ACCEPT}
+                aria-label="File picker"
+                onChange={(event) => {
+                  addFiles(Array.from(event.target.files ?? []));
+                  event.currentTarget.value = '';
+                }}
+              />
+              <input
+                ref={photoInputRef}
+                className="chat-file-input"
+                type="file"
+                multiple
+                accept="image/*"
+                aria-label="Photo picker"
+                onChange={(event) => {
+                  addFiles(Array.from(event.target.files ?? []));
+                  event.currentTarget.value = '';
+                }}
+              />
+              <input
+                ref={cameraInputRef}
+                className="chat-file-input"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                aria-label="Camera picker"
+                onChange={(event) => {
+                  addFiles(Array.from(event.target.files ?? []));
+                  event.currentTarget.value = '';
+                }}
+              />
+              {fileError && <div className="groups-file-error" role="alert">{fileError}</div>}
+              {pendingAttachments.length > 0 && (
+                <div className="groups-file-strip" aria-live="polite">
+                  {pendingAttachments.map((attachment) => (
+                    <span
+                      key={attachment.localId}
+                      className="groups-file-pill"
+                      data-status={attachment.status}
+                      title={attachment.error || attachment.file.name}
+                    >
+                      <span className="groups-file-pill__copy">
+                        <strong>{attachment.file.name}</strong>
+                        <small>
+                          {attachment.status === 'ready'
+                            ? 'Ready'
+                            : attachment.status === 'failed' || attachment.status === 'rejected'
+                              ? attachment.error || 'Processing failed'
+                              : `${attachment.status} · ${Math.round(attachment.progress)}%`}
+                        </small>
+                      </span>
+                      {attachment.status === 'failed' && (
+                        <button
+                          type="button"
+                          aria-label={`Retry ${attachment.file.name}`}
+                          title="Retry"
+                          onClick={() => retryGroupAttachment(attachment)}
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        aria-label={`Remove ${file.name}`}
-                        onClick={() => setFiles((current) => current.filter((item) => item !== file))}
+                        aria-label={`Remove ${attachment.file.name}`}
+                        onClick={() => removeGroupAttachment(attachment)}
                       >
                         <X size={12} />
                       </button>
+                      {attachment.status !== 'ready' && attachment.status !== 'failed' && attachment.status !== 'rejected' && (
+                        <i aria-hidden="true" style={{ width: `${Math.max(3, attachment.progress)}%` }} />
+                      )}
                     </span>
                   ))}
                 </div>
               )}
               <div className="groups-composer__row">
-                <label className="groups-icon-button" aria-label="Attach file">
-                  <Paperclip size={15} />
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-                  />
-                </label>
+                <AttachmentSourceControl
+                  open={attachmentMenuOpen}
+                  onOpenChange={setAttachmentMenuOpen}
+                  onFiles={() => fileInputRef.current?.click()}
+                  onPhotos={() => photoInputRef.current?.click()}
+                  onCamera={() => cameraInputRef.current?.click()}
+                  disabled={pendingAttachments.length >= MAX_CHAT_ATTACHMENTS}
+                />
                 <textarea
                   value={composer}
                   onChange={(event) => setComposer(event.target.value)}
@@ -387,7 +604,7 @@ export default function GroupsView() {
                     }
                   }}
                 />
-                <button type="button" className="groups-icon-button groups-icon-button--primary" onClick={() => void handleSend()} aria-label="Send message">
+                <button type="button" className="groups-icon-button groups-icon-button--primary" onClick={() => void handleSend()} aria-label={sending ? 'Sending message' : !attachmentsReady ? 'Wait for attachments to finish' : 'Send message'} disabled={sending || !attachmentsReady || (!composer.trim() && pendingAttachments.length === 0)}>
                   <Send size={15} />
                 </button>
               </div>
@@ -502,11 +719,13 @@ function MessageRow({
         {message.state === 'deleted' ? <em>Message deleted</em> : message.content}
         {message.attachments.length > 0 && (
           <div className="groups-attachments">
-            {message.attachments.map((attachment) => (
-              <a key={attachment.path} href={attachment.signedUrl || '#'} target="_blank" rel="noreferrer">
-                <Paperclip size={12} /> {attachment.name}
-              </a>
-            ))}
+            {message.attachments.map((attachment, index) => isCanonicalAttachment(attachment)
+              ? <DurableAttachment key={attachment.id} initial={attachment} />
+              : (
+                <a key={`${attachment.path}-${index}`} href={attachment.signedUrl || '#'} target="_blank" rel="noreferrer">
+                  <Paperclip size={12} /> {attachment.name}
+                </a>
+              ))}
           </div>
         )}
       </div>

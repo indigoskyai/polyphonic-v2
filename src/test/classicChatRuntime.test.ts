@@ -43,7 +43,8 @@ describe('Chat runtime targets', () => {
     expect(source).toContain('model: selectedChatModel');
     expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");
     expect(source).toContain('agent: activeMessageAgent');
-    expect(source).toContain('if (classicChatActive) openCompanionFilePicker();');
+    expect(source).toContain('<AttachmentSourceControl');
+    expect(source).not.toContain('openCompanionFilePicker');
     expect(source).toContain('!classicChatActive && (');
     expect(source).toContain('normalizeStreamComparableContent');
     expect(source).toContain('shouldHideStreamingMirror');

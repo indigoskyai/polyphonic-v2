@@ -81,6 +81,11 @@ export default function DigestEngramCard({ engram, onConfirm, onReject, onEdit }
           {agent.label}
         </span>
         <span className="mn-cand-type">{engram.engram_type}</span>
+        {engram.content_integrity_status === 'suspect' && (
+          <span className="integrity-suspect" title={engram.content_integrity_reason || 'Possible legacy truncation'}>
+            review
+          </span>
+        )}
         <span className="mn-cand-conf">{engram.strength.toFixed(2)}</span>
       </div>
 

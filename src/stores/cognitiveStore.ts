@@ -26,6 +26,9 @@ export interface Belief {
   confidence_tier?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface Thought {
@@ -37,6 +40,9 @@ export interface Thought {
   salience: number;
   source: string;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface MemoryEvent {
@@ -57,6 +63,9 @@ export interface ActivityEntry {
   content: Record<string, unknown> | null;
   source: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 interface EmotionalWeather {
@@ -86,6 +95,9 @@ export interface JournalEntry {
   mood: string | null;
   trigger_type: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface MindEngram {
@@ -104,6 +116,9 @@ export interface MindEngram {
   tags: string[];
   source_context: Record<string, unknown>;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 interface CognitiveState {
@@ -149,6 +164,10 @@ const defaultEmotions: Emotions = {
 
 function rowMatchesAgent(row: { agent_id?: string | null } | null | undefined, agentId: string): boolean {
   return (row?.agent_id || 'luca') === agentId;
+}
+
+function contentIsVisible(row: { content_hidden_at?: string | null; content_integrity_status?: string | null }): boolean {
+  return !row.content_hidden_at && row.content_integrity_status !== 'rejected';
 }
 
 const emptyScopedState = {
@@ -201,7 +220,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       supabase.from('cognitive_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
       supabase.from('thought_stream').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(50),
       supabase.from('memory_events').select('*').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(20),
-      supabase.from('entity_activity_log').select('id, agent_id, activity_type, title, summary, content, source, created_at').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(80),
+      supabase.from('entity_activity_log').select('id, agent_id, activity_type, title, summary, content, source, created_at, content_integrity_status, content_integrity_reason, content_hidden_at').eq('user_id', userId).eq('agent_id', agentId).order('created_at', { ascending: false }).limit(80),
       supabase.from('emotional_state').select('*').eq('user_id', userId).eq('agent_id', agentId).maybeSingle(),
     ]);
     const cogRes = settled[0].status === 'fulfilled' ? settled[0].value : { data: null };
@@ -221,9 +240,9 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     set({
       modulators: mods ? { ...defaultModulators, ...mods } : defaultModulators,
       emotions: emos ? { ...defaultEmotions, ...emos } : defaultEmotions,
-      thoughts: (thoughtsRes.data ?? []) as Thought[],
+      thoughts: ((thoughtsRes.data ?? []) as Thought[]).filter(contentIsVisible),
       recentEvents: (eventsRes.data ?? []) as MemoryEvent[],
-      activityLog: (activityRes.data ?? []) as ActivityEntry[],
+      activityLog: ((activityRes.data ?? []) as ActivityEntry[]).filter(contentIsVisible),
       emotionalWeather: w ?? null,
       loaded: true,
     });
@@ -238,7 +257,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     // Load dreams (engrams with dream tags or source_context type)
     const dreamsPromise = supabase
       .from('engrams')
-      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .or('tags.cs.{dream},tags.cs.{consolidation}')
@@ -248,7 +267,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     // Load insights
     const insightsPromise = supabase
       .from('engrams')
-      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .contains('tags', ['insight'])
@@ -258,7 +277,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     // Load reflections
     const reflectionsPromise = supabase
       .from('engrams')
-      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at')
+      .select('id, agent_id, content, engram_type, strength, stability, accessibility, emotional_arousal, emotional_valence, access_count, surprise_score, state, tags, source_context, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .contains('tags', ['reflection'])
@@ -278,7 +297,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     // Load journal entries
     const journalPromise = supabase
       .from('journal_entries')
-      .select('id, agent_id, content, mood, trigger_type, created_at')
+      .select('id, agent_id, content, mood, trigger_type, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .order('created_at', { ascending: false })
@@ -287,7 +306,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
     // Load beliefs from the beliefs table (the Overview Belief card was reading a stale JSONB column).
     const beliefsTablePromise = supabase
       .from('beliefs')
-      .select('id, content, confidence, confidence_tier, domain, active, created_at, updated_at')
+      .select('id, content, confidence, confidence_tier, domain, active, created_at, updated_at, content_integrity_status, content_integrity_reason, content_hidden_at')
       .eq('user_id', userId)
       .eq('agent_id', agentId)
       .eq('active', true)
@@ -322,13 +341,16 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       domain?: string | null;
       created_at?: string | null;
       updated_at?: string | null;
+      content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+      content_integrity_reason?: string | null;
+      content_hidden_at?: string | null;
     }>(5);
     const statsR = results[6];
     const statsRow = statsR.status === 'fulfilled'
       ? (Array.isArray((statsR.value as any)?.data) ? (statsR.value as any).data[0] : (statsR.value as any)?.data)
       : null;
 
-    const beliefsFromTable: Belief[] = (beliefsTableRes.data ?? []).map((b) => ({
+    const beliefsFromTable: Belief[] = (beliefsTableRes.data ?? []).filter(contentIsVisible).map((b) => ({
       id: b.id,
       text: b.content,
       strength: b.confidence,
@@ -336,16 +358,19 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
       domain: b.domain ?? null,
       created_at: b.created_at ?? null,
       updated_at: b.updated_at ?? null,
+      content_integrity_status: b.content_integrity_status,
+      content_integrity_reason: b.content_integrity_reason,
+      content_hidden_at: b.content_hidden_at,
     }));
 
     if (get().scope?.userId !== userId || get().scope?.agentId !== agentId) return;
 
     set({
-      dreams: (dreamsRes.data ?? []) as MindEngram[],
-      insights: (insightsRes.data ?? []) as MindEngram[],
-      reflections: (reflectionsRes.data ?? []) as MindEngram[],
-      wanderings: (wanderingsRes.data ?? []) as Thought[],
-      journalEntries: (journalRes.data ?? []) as JournalEntry[],
+      dreams: ((dreamsRes.data ?? []) as MindEngram[]).filter(contentIsVisible),
+      insights: ((insightsRes.data ?? []) as MindEngram[]).filter(contentIsVisible),
+      reflections: ((reflectionsRes.data ?? []) as MindEngram[]).filter(contentIsVisible),
+      wanderings: ((wanderingsRes.data ?? []) as Thought[]).filter(contentIsVisible),
+      journalEntries: ((journalRes.data ?? []) as JournalEntry[]).filter(contentIsVisible),
       // Prefer beliefs from the table (live, authoritative) over whatever stale JSONB was in cognitive_state.
       ...(beliefsFromTable.length > 0 ? { beliefs: beliefsFromTable } : {}),
       memoryStats: {
@@ -387,6 +412,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
         const newThought = payload.new as Thought;
         if (!isCurrentScope()) return;
         if (!rowMatchesAgent(newThought, agentId)) return;
+        if (!contentIsVisible(newThought)) return;
         set((s) => {
           const flagged = new Set(s.newThoughtIds);
           flagged.add(newThought.id);
@@ -414,6 +440,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
         const entry = payload.new as ActivityEntry;
         if (!isCurrentScope()) return;
         if (!rowMatchesAgent(entry, agentId)) return;
+        if (!contentIsVisible(entry)) return;
         set((s) => ({ activityLog: [entry, ...s.activityLog].slice(0, 80) }));
       })
       .subscribe();
@@ -487,6 +514,7 @@ export const useCognitiveStore = create<CognitiveState>((set, get) => ({
         const entry = payload.new as JournalEntry;
         if (!isCurrentScope()) return;
         if (!rowMatchesAgent(entry, agentId)) return;
+        if (!contentIsVisible(entry)) return;
         set((s) => {
           if (s.journalEntries.some((j) => j.id === entry.id)) return {};
           return { journalEntries: [entry, ...s.journalEntries].slice(0, 100) };

@@ -9,7 +9,7 @@
  */
 
 import type { Engram } from "./types.ts";
-import { withModelRetry } from "../modelRetry.ts";
+import { generateAutonomous } from "../autonomous-generation.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic supabase client
 type SupabaseClient = { from: (table: string) => any; rpc: (fn: string, params?: Record<string, unknown>) => any };
@@ -127,41 +127,31 @@ async function findSofteningCandidates(
  * Compress an engram's content via OpenRouter LLM call.
  */
 async function compressContent(
+  supabase: SupabaseClient,
+  userId: string,
+  agentId: string,
   content: string,
   openrouterApiKey: string,
   model = "anthropic/claude-haiku-4.5",
 ): Promise<string> {
-  const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${openrouterApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SOFTENING_SYSTEM_PROMPT },
-        { role: "user", content: `Compress this memory to its essence:\n\n${content}` },
-      ],
-      max_tokens: 200,
-      temperature: 0.3,
-    }),
-    signal: AbortSignal.timeout(60000),
-  }));
-
-  if (!response.ok) {
-    throw new Error(`Softening LLM call failed: ${response.status} ${response.statusText}`);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OpenRouter response shape
-  const data: any = await response.json();
-  const compressed = data?.choices?.[0]?.message?.content?.trim();
-
-  if (!compressed) {
-    throw new Error("Softening LLM returned empty content");
-  }
-
-  return compressed;
+  const generated = await generateAutonomous<string>({
+    apiKey: openrouterApiKey,
+    model,
+    writer: "mnemos-softening",
+    messages: [
+      { role: "system", content: SOFTENING_SYSTEM_PROMPT },
+      { role: "user", content: `Compress this memory to its essence:\n\n${content}` },
+    ],
+    parse: (raw) => raw.trim(),
+    content: (compressed) => [compressed],
+    maxTokens: 512,
+    temperature: 0.3,
+    timeoutMs: 60_000,
+    supabase,
+    userId,
+    agentId,
+  });
+  return generated.value;
 }
 
 function contentWords(value: string): Set<string> {
@@ -227,7 +217,7 @@ export async function runSofteningCycle(
     try {
       const originalHash = simpleHash(engram.content);
       const model = options.model ?? "anthropic/claude-haiku-4.5";
-      const softened = await compressContent(engram.content, openrouterApiKey, model);
+      const softened = await compressContent(supabase, userId, agentId, engram.content, openrouterApiKey, model);
       const validator = validateSofteningProposal(engram.content, softened);
 
       // Don't "soften" if the LLM returned something longer
@@ -314,6 +304,9 @@ export async function runSofteningCycle(
         .from("engrams")
         .update({
           content: softened,
+          content_integrity_status: "valid",
+          content_integrity_reason: null,
+          content_hidden_at: null,
           source_context: {
             ...engram.source_context,
             softened_from_hash: originalHash,

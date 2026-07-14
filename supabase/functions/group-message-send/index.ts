@@ -11,6 +11,11 @@ import {
   requireString,
   type GroupAgentRow,
 } from "../_shared/group-rooms.ts";
+import {
+  descriptorFromRow,
+  MAX_ATTACHMENTS_PER_TURN,
+  resolveAttachmentRows,
+} from "../_shared/attachments.ts";
 
 function sanitizeAttachments(value: unknown): unknown[] {
   if (!Array.isArray(value)) return [];
@@ -52,9 +57,22 @@ Deno.serve(async (req) => {
     const body = await readJson(req);
     const roomId = requireString(body.room_id, "room_id");
     const content = typeof body.content === "string" ? body.content.trim() : "";
-    const attachments = sanitizeAttachments(body.attachments);
-    if (!content && attachments.length === 0) throw new ValidationError("Message content or attachment is required.");
+    const legacyAttachments = sanitizeAttachments(body.attachments);
+    const attachmentIds = Array.isArray(body.attachment_ids)
+      ? [...new Set(body.attachment_ids.filter((value): value is string => typeof value === "string" && value.length > 0))]
+      : [];
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_TURN) throw new ValidationError(`A message can include at most ${MAX_ATTACHMENTS_PER_TURN} attachments.`);
+    if (!content && attachmentIds.length === 0 && legacyAttachments.length === 0) throw new ValidationError("Message content or attachment is required.");
     await loadActiveMember(ctx.admin, roomId, ctx.userId);
+    const attachmentRows = await resolveAttachmentRows(ctx.admin, ctx.userId, attachmentIds);
+    for (const row of attachmentRows) {
+      if (row.status !== "ready") throw new ValidationError(`${row.original_name} is not ready.`);
+      if (row.room_id && row.room_id !== roomId) throw new ValidationError("An attachment belongs to another room.");
+      if (row.user_id !== ctx.userId) throw new ValidationError("Only the uploader can send an attachment.");
+    }
+    const attachments = attachmentRows.length
+      ? attachmentRows.map((row) => descriptorFromRow(row))
+      : legacyAttachments;
 
     const clientMessageId = typeof body.client_message_id === "string" && body.client_message_id.trim()
       ? body.client_message_id.trim().slice(0, 120)
@@ -77,6 +95,7 @@ Deno.serve(async (req) => {
         role: "user",
         content,
         attachments,
+        attachment_ids: attachmentIds,
         metadata: {
           client_message_id: clientMessageId,
           sender_kind: "human",

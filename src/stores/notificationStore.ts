@@ -9,6 +9,9 @@ export interface ThoughtInitiation {
   status: string;
   trigger_reason: string | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export interface ActivityEntry {
@@ -22,6 +25,9 @@ export interface ActivityEntry {
   severity: 'info' | 'notable' | 'important';
   surface_to_user: boolean;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_integrity_reason?: string | null;
+  content_hidden_at?: string | null;
 }
 
 export type NotificationFilter = 'all' | 'unread' | 'agents' | 'permissions' | 'memory';
@@ -82,13 +88,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const settled = await Promise.allSettled([
       supabase
         .from('thought_initiations')
-        .select('id, user_id, agent_id, message, status, trigger_reason, created_at')
+        .select('id, user_id, agent_id, message, status, trigger_reason, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50),
       supabase
         .from('entity_activity_log')
-        .select('id, agent_id, activity_type, title, summary, content, source, severity, surface_to_user, created_at')
+        .select('id, agent_id, activity_type, title, summary, content, source, severity, surface_to_user, created_at, content_integrity_status, content_integrity_reason, content_hidden_at')
         .eq('user_id', userId)
         .eq('surface_to_user', true)
         .order('created_at', { ascending: false })
@@ -105,8 +111,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       data: { last_seen_activity_at: string | null } | null;
     };
     set({
-      initiations: (initRes.data ?? []) as ThoughtInitiation[],
-      activity: (actRes.data ?? []) as ActivityEntry[],
+      initiations: ((initRes.data ?? []) as ThoughtInitiation[]).filter((item) =>
+        !item.content_hidden_at && item.content_integrity_status !== 'rejected'
+      ),
+      activity: ((actRes.data ?? []) as ActivityEntry[]).filter((item) =>
+        !item.content_hidden_at && item.content_integrity_status !== 'rejected'
+      ),
       lastSeenAt: profRes.data?.last_seen_activity_at ?? null,
     });
   },
@@ -135,6 +145,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           const row = payload.new as ThoughtInitiation;
           if (payload.eventType === 'DELETE') {
             set((s) => ({ initiations: s.initiations.filter((i) => i.id !== (payload.old as ThoughtInitiation).id) }));
+          } else if (row.content_hidden_at || row.content_integrity_status === 'rejected') {
+            set((s) => ({ initiations: s.initiations.filter((item) => item.id !== row.id) }));
           } else if (payload.eventType === 'INSERT') {
             set((s) => ({ initiations: [row, ...s.initiations].slice(0, 50) }));
           } else if (payload.eventType === 'UPDATE') {
@@ -150,6 +162,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         (payload) => {
           const row = payload.new as ActivityEntry;
           if (!row.surface_to_user) return;
+          if (row.content_hidden_at || row.content_integrity_status === 'rejected') return;
           set((s) => ({ activity: [row, ...s.activity].slice(0, 80) }));
         },
       )

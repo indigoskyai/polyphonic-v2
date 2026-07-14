@@ -356,6 +356,12 @@ export default function JournalView() {
                   <dd>{selectedItem.meta}</dd>
                 </div>
               )}
+              {selectedItem.integrityStatus === 'suspect' && (
+                <div>
+                  <dt>Integrity</dt>
+                  <dd>Legacy entry · possible truncation</dd>
+                </div>
+              )}
             </dl>
 
             <div className="journal-detail-body">

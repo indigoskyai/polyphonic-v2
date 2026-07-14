@@ -4,6 +4,7 @@ import type { Attachment } from '@/stores/attachmentStore';
 interface Props {
   attachment: Attachment;
   onRemove: () => void;
+  onRetry?: () => void;
 }
 
 function formatSize(bytes: number): string {
@@ -12,15 +13,26 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
-export default function AttachmentChip({ attachment, onRemove }: Props) {
+export default function AttachmentChip({ attachment, onRemove, onRetry }: Props) {
+  const busy = ['uploading', 'quarantined', 'scanning', 'extracting'].includes(attachment.status);
+  const failed = attachment.status === 'failed' || attachment.status === 'rejected';
   return (
-    <span className="att-chip" data-status={attachment.status}>
+    <span className="att-chip" data-status={attachment.status} aria-busy={busy || undefined} title={attachment.error}>
       <svg className="att-chip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M4 2h6l3 3v9H4V2z" />
         <path d="M10 2v3h3" />
       </svg>
       <span className="att-chip-name">{attachment.name}</span>
       <span className="att-chip-size">{formatSize(attachment.size)}</span>
+      <span className="att-chip-state" aria-live="polite">
+        {busy ? `${attachment.status}${typeof attachment.progress === 'number' ? ` ${attachment.progress}%` : ''}` : failed ? attachment.status : ''}
+      </span>
+      {busy && <span className="att-chip-progress" style={{ width: `${attachment.progress || 4}%` }} aria-hidden="true" />}
+      {failed && onRetry && attachment.status === 'failed' && (
+        <button type="button" className="att-chip-retry" onClick={onRetry} aria-label={`Retry ${attachment.name}`}>
+          retry
+        </button>
+      )}
       <button
         type="button"
         className="att-chip-remove"

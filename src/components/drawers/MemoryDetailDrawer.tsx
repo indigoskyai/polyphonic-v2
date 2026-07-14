@@ -167,6 +167,15 @@ export default function MemoryDetailDrawer() {
               {linked.length} connection{linked.length === 1 ? '' : 's'}
             </span>
           )}
+          {engram.content_integrity_status === 'suspect' && (
+            <span
+              className="status-pill secondary integrity-suspect"
+              title={engram.content_integrity_reason || 'This legacy entry may end mid-sentence.'}
+            >
+              <span className="pill-dot" />
+              review legacy text
+            </span>
+          )}
         </div>
       </div>
 
@@ -228,6 +237,12 @@ export default function MemoryDetailDrawer() {
               <span className="kv-label">Accessed</span>
               <span className="kv-value">{engram.access_count ?? 0}×</span>
             </div>
+            {engram.content_integrity_status === 'suspect' && (
+              <div className="kv-row">
+                <span className="kv-label">Integrity</span>
+                <span className="kv-value">Possible legacy truncation · preserved for review</span>
+              </div>
+            )}
           </div>
         </DrawerSection>
 

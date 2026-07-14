@@ -30,6 +30,8 @@ export interface NotebookItem {
   salience?: number;
   meta?: string;
   tags?: string[];
+  integrityStatus?: 'valid' | 'suspect' | 'rejected';
+  integrityReason?: string | null;
 }
 
 interface BuildNotebookInput {
@@ -167,6 +169,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       created_at: entry.created_at,
       source: 'journal_entries',
       meta: entry.trigger_type ? entry.trigger_type.replace(/_/g, ' ') : undefined,
+      integrityStatus: entry.content_integrity_status,
+      integrityReason: entry.content_integrity_reason,
     });
   }
 
@@ -183,6 +187,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'thought_stream',
       salience: thought.salience,
       meta: thought.trigger || thought.source,
+      integrityStatus: thought.content_integrity_status,
+      integrityReason: thought.content_integrity_reason,
     });
   }
 
@@ -197,6 +203,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'thought_stream',
       salience: thought.salience,
       meta: thought.source,
+      integrityStatus: thought.content_integrity_status,
+      integrityReason: thought.content_integrity_reason,
     });
   }
 
@@ -211,6 +219,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'engrams',
       salience: engramSalience(dream),
       tags: dream.tags,
+      integrityStatus: dream.content_integrity_status,
+      integrityReason: dream.content_integrity_reason,
     });
   }
 
@@ -225,6 +235,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'engrams',
       salience: engramSalience(insight),
       tags: insight.tags,
+      integrityStatus: insight.content_integrity_status,
+      integrityReason: insight.content_integrity_reason,
     });
   }
 
@@ -239,6 +251,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'engrams',
       salience: engramSalience(reflection),
       tags: reflection.tags,
+      integrityStatus: reflection.content_integrity_status,
+      integrityReason: reflection.content_integrity_reason,
     });
   }
 
@@ -255,6 +269,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       source: 'beliefs',
       salience: belief.strength,
       meta: belief.confidence_tier || undefined,
+      integrityStatus: belief.content_integrity_status,
+      integrityReason: belief.content_integrity_reason,
     });
   }
 
@@ -270,6 +286,8 @@ export function buildNotebookItems(input: BuildNotebookInput): NotebookItem[] {
       created_at: activity.created_at,
       source: 'entity_activity_log',
       meta: activity.source || undefined,
+      integrityStatus: activity.content_integrity_status,
+      integrityReason: activity.content_integrity_reason,
     });
   }
 

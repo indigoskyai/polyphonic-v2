@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
@@ -143,49 +143,41 @@ ${beliefsText}
 
 ${emotionalPrompt || `=== Emotional State ===\n${emotionText}`}`;
 
-    // Call LLM
-    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
+    const generation = await generateAutonomous({
+      apiKey: OPENROUTER_API_KEY,
+      model: questionModel,
+      writer: "anima-question",
+      messages: [
+        { role: "system", content: QUESTIONER_PROMPT },
+        { role: "user", content: contextBlock },
+      ],
+      temperature: 0.7,
+      maxTokens: 512,
+      supabase,
+      userId: user_id,
+      agentId: agent_id,
+      parse: (raw) => {
+        const questions: { question: string; salience: number; context: string }[] = [];
+        for (const block of raw.split(/(?=QUESTION:)/)) {
+          if (!block.trim().startsWith("QUESTION:")) continue;
+          const questionMatch = block.match(/QUESTION:\s*(.+?)(?=\nSALIENCE:|$)/s);
+          const salienceMatch = block.match(/SALIENCE:\s*([\d.]+)/);
+          const contextMatch = block.match(/CONTEXT:\s*(.+)/);
+          if (!questionMatch || !salienceMatch || !contextMatch) continue;
+          const question = normalizeAutonomousContent(questionMatch[1]);
+          const context = normalizeAutonomousContent(contextMatch[1]);
+          if (!question.endsWith("?") || question.length < 10 || !context) continue;
+          questions.push({
+            question,
+            salience: Math.max(0, Math.min(1, parseFloat(salienceMatch[1]))),
+            context,
+          });
+        }
+        return questions;
       },
-      body: JSON.stringify({
-        model: questionModel,
-        messages: [
-          { role: "system", content: QUESTIONER_PROMPT },
-          { role: "user", content: contextBlock },
-        ],
-        temperature: 0.7,
-        max_tokens: 512,
-      }),
-      signal: AbortSignal.timeout(60000),
-    }));
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: "LLM call failed" }), {
-        status: 502, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-
-    // Parse questions
-    const questions: { question: string; salience: number; context: string }[] = [];
-    const blocks = raw.split(/(?=QUESTION:)/);
-    for (const block of blocks) {
-      if (!block.trim().startsWith("QUESTION:")) continue;
-      const qMatch = block.match(/QUESTION:\s*(.+?)(?=\nSALIENCE:|$)/s);
-      const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
-      const ctxMatch = block.match(/CONTEXT:\s*(.+)/);
-      if (!qMatch) continue;
-      const question = qMatch[1].trim();
-      if (!question || question.length < 10) continue;
-      const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.5;
-      const context = ctxMatch?.[1]?.trim() || "";
-      questions.push({ question, salience, context });
-    }
+      content: (questions) => questions.flatMap((question) => [question.question, question.context]),
+    });
+    const questions = generation.value;
 
     // Insert into thought_stream with source="question"
     if (questions.length > 0) {

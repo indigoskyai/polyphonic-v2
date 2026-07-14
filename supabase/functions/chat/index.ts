@@ -19,6 +19,11 @@ import {
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
 import { getIdempotentResponse, recordIdempotentResponse } from "../_shared/idempotency.ts";
 import { appendAttachmentContext } from "../_shared/chat-attachments.ts";
+import {
+  buildModelAttachmentContent,
+  MAX_ATTACHMENTS_PER_TURN,
+  persistPdfAnnotations,
+} from "../_shared/attachments.ts";
 import { AppError, AuthError, MissingApiKeyError, ValidationError, errorResponse, newRequestId } from "../_shared/errors.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { resolveChatBackend } from "../_shared/model-backend.ts";
@@ -105,6 +110,7 @@ serve(async (req) => {
       message,
       model: modelOverride,
       attachments,
+      attachment_ids: attachmentIdsInput,
       agent_mode: agentMode,
       agent_runtime: agentRuntime,
       use_agent_runtime: useAgentRuntime,
@@ -115,11 +121,18 @@ serve(async (req) => {
       agentRuntime === "legacy_tool_planner" ||
       useAgentRuntime === true;
 
-    if (!thread_id || !message || typeof message !== "string" || message.length > 32000) {
+    const attachmentIds = Array.isArray(attachmentIdsInput)
+      ? [...new Set(attachmentIdsInput.filter((value): value is string => typeof value === "string" && value.length > 0))]
+      : [];
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_TURN) {
+      return fail(new ValidationError(`A turn can include at most ${MAX_ATTACHMENTS_PER_TURN} attachments`));
+    }
+    const hasLegacyAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!thread_id || typeof message !== "string" || message.length > 32000 || (!message.trim() && !attachmentIds.length && !hasLegacyAttachments)) {
       return fail(new ValidationError("Invalid request"));
     }
 
-    const messageWithAttachments = appendAttachmentContext(message, attachments);
+    let messageWithAttachments = appendAttachmentContext(message.trim() || "Please use the attached files.", attachments);
 
     // Service client for DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -168,6 +181,8 @@ serve(async (req) => {
     const shouldRunLegacyToolPlanner = requestedLegacyToolPlanner && backend.allowTools;
     const apiKey = backend.apiKey;
     const model = backend.model;
+    const attachmentBundle = await buildModelAttachmentContent(supabase, userId, attachmentIds, model, apiKey);
+    messageWithAttachments += attachmentBundle.promptContext;
 
     if (backend.keySource !== "user") {
       return fail(new MissingApiKeyError(
@@ -293,7 +308,19 @@ serve(async (req) => {
       }
     }
     // Add the new user message
-    openRouterMessages.push({ role: "user", content: messageWithAttachments });
+    if (attachmentBundle.cachedAnnotations.length > 0) {
+      openRouterMessages.push({
+        role: "assistant",
+        content: "Previously parsed attachment material is available for reuse.",
+        annotations: attachmentBundle.cachedAnnotations,
+      });
+    }
+    openRouterMessages.push({
+      role: "user",
+      content: attachmentBundle.parts.length > 0
+        ? [{ type: "text", text: messageWithAttachments }, ...attachmentBundle.parts]
+        : messageWithAttachments,
+    });
 
     const toolMessages = shouldRunLegacyToolPlanner
       ? await runToolPlanner(thread_id, authHeader, openRouterMessages.slice(1))
@@ -361,6 +388,7 @@ serve(async (req) => {
           let buffer = "";
           let usedModel = model;
           let tokensUsed: number | null = null;
+          const attachmentAnnotations: unknown[] = [];
 
           while (true) {
             const { done, value } = await reader.read();
@@ -396,6 +424,8 @@ serve(async (req) => {
                 // Capture model info
                 if (chunk.model) usedModel = chunk.model;
                 if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
+                const annotations = delta.annotations || chunk.choices?.[0]?.message?.annotations;
+                if (Array.isArray(annotations)) attachmentAnnotations.push(...annotations);
               } catch {
                 // Skip malformed chunks
               }
@@ -439,6 +469,11 @@ serve(async (req) => {
               throw new Error(`Failed to save assistant message: ${insertError.message}`);
             }
             insertedMessage = inserted;
+          }
+
+          if (!assistantWasDuplicate) {
+            await persistPdfAnnotations(supabase, userId, attachmentIds, attachmentAnnotations)
+              .catch((error) => console.warn("[chat] could not persist PDF annotations", error));
           }
 
           // Update thread timestamp

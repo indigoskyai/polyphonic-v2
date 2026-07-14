@@ -25,6 +25,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPrompt } from "./prompts.ts";
+import { assertCompleteAutonomousContent, generateAutonomous } from "../autonomous-generation.ts";
 
 // Lowered (Tier-2 graduation depth): with the age_factor term implemented and
 // weights rebalanced, a sustained multi-session top-domain mature entry now
@@ -127,6 +128,7 @@ export function computeGraduationScore(row: HypomnemaRow, distinctThreads: numbe
 }
 
 async function callJudge(
+  supabase: SupabaseClient,
   apiKey: string,
   promptTemplate: string,
   row: HypomnemaRow,
@@ -154,38 +156,35 @@ async function callJudge(
     .replace(/\{INJECT_NEARBY_ENGRAMS[^}]*\}/g, nearbyText)
     .replace(/\{INJECT_SCORE[^}]*\}/g, score.toFixed(2));
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), JUDGE_TIMEOUT_MS);
   try {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://polyphonic.chat",
-        "X-Title": "Polyphonic Hypomnema Graduation",
+    const generated = await generateAutonomous<JudgeOutput>({
+      apiKey,
+      model: JUDGE_MODEL,
+      writer: "hypomnema-graduation",
+      messages: [
+        { role: "system", content: filled },
+        { role: "user", content: "Decide whether this entry should graduate. JSON only." },
+      ],
+      parse: (raw) => {
+        const parsed = parseJsonish(raw) as JudgeOutput | null;
+        if (!parsed || typeof parsed.graduate !== "boolean") throw new Error("Invalid graduation verdict");
+        return parsed;
       },
-      body: JSON.stringify({
-        model: JUDGE_MODEL,
-        messages: [
-          { role: "system", content: filled },
-          { role: "user", content: "Decide whether this entry should graduate. JSON only." },
-        ],
-        temperature: 0.0,
-        max_tokens: 400,
-      }),
-      signal: ctrl.signal,
+      content: (verdict) => verdict.graduate && verdict.engram_content ? [verdict.engram_content] : [],
+      allowEmpty: (raw) => {
+        const parsed = parseJsonish(raw) as JudgeOutput | null;
+        return parsed?.graduate === false;
+      },
+      maxTokens: 512,
+      temperature: 0,
+      timeoutMs: JUDGE_TIMEOUT_MS,
+      supabase,
+      userId: row.user_id,
+      agentId: row.agent_id,
     });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const text: string = data?.choices?.[0]?.message?.content || "";
-    const parsed = parseJsonish(text) as JudgeOutput | null;
-    if (!parsed || typeof parsed.graduate !== "boolean") return null;
-    return parsed;
+    return generated.value;
   } catch {
     return null;
-  } finally {
-    clearTimeout(t);
   }
 }
 
@@ -200,13 +199,15 @@ async function promoteToEngram(
   engramContent: string,
   engramTags: string[],
 ): Promise<string | null> {
+  const validatedContent = assertCompleteAutonomousContent(engramContent, 20);
   const tags = [...new Set([...(engramTags || []), "hypomnema-graduate", row.agent_id])].slice(0, 16);
   const { data, error } = await supabase
     .from("engrams")
     .insert({
       user_id: row.user_id,
       agent_id: row.agent_id,
-      content: engramContent,
+      content: validatedContent,
+      content_integrity_status: "valid",
       engram_type: "semantic",
       strength: 0.85,
       stability: 0.7,
@@ -376,7 +377,7 @@ export async function graduateAllEligible(supabase: SupabaseClient): Promise<Gra
         }
       } catch (_err) { /* best effort */ }
 
-      const verdict = await callJudge(apiKey, promptCache, row, score, nearby);
+      const verdict = await callJudge(supabase, apiKey, promptCache, row, score, nearby);
       if (verdict?.graduate && verdict.engram_content) {
         shouldGraduate = true;
         engramContent = verdict.engram_content;

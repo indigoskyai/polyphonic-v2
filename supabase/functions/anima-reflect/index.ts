@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { evaluate as activityGate, logProcessRan } from "../_shared/activity-gate.ts";
 import { loadEmotionalState, formatEmotionalPrompt } from "../_shared/emotional-context.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
@@ -161,49 +161,40 @@ ${beliefsText}`;
       contextBlock += `\n\n=== Trigger Context (something prompted this reflection) ===\n${triggerContext}`;
     }
 
-    // Call LLM
-    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
+    const generation = await generateAutonomous({
+      apiKey: OPENROUTER_API_KEY,
+      model: reflectModel,
+      writer: "anima-reflect",
+      messages: [
+        { role: "system", content: REFLECTOR_PROMPT },
+        { role: "user", content: contextBlock },
+      ],
+      temperature: 0.7,
+      maxTokens: 1_024,
+      supabase,
+      userId: user_id,
+      agentId: agent_id,
+      parse: (raw) => {
+        const reflections: { content: string; salience: number; tags: string[] }[] = [];
+        for (const block of raw.split(/(?=THOUGHT:)/)) {
+          if (!block.trim().startsWith("THOUGHT:")) continue;
+          const contentMatch = block.match(/THOUGHT:\s*(.+?)(?=\nSALIENCE:|$)/s);
+          const salienceMatch = block.match(/SALIENCE:\s*([\d.]+)/);
+          const tagsMatch = block.match(/TAGS:\s*(.+)/);
+          if (!contentMatch || !salienceMatch || !tagsMatch) continue;
+          const content = normalizeAutonomousContent(contentMatch[1]);
+          if (!content || content.length < 10) continue;
+          reflections.push({
+            content,
+            salience: Math.max(0, Math.min(1, parseFloat(salienceMatch[1]))),
+            tags: tagsMatch[1].split(",").map((tag: string) => tag.trim().toLowerCase()).filter(Boolean),
+          });
+        }
+        return reflections;
       },
-      body: JSON.stringify({
-        model: reflectModel,
-        messages: [
-          { role: "system", content: REFLECTOR_PROMPT },
-          { role: "user", content: contextBlock },
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
-      signal: AbortSignal.timeout(60000),
-    }));
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: "LLM call failed" }), {
-        status: 502, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-
-    // Parse reflections (same format as thoughts)
-    const reflections: { content: string; salience: number; tags: string[] }[] = [];
-    const blocks = raw.split(/(?=THOUGHT:)/);
-    for (const block of blocks) {
-      if (!block.trim().startsWith("THOUGHT:")) continue;
-      const contentMatch = block.match(/THOUGHT:\s*(.+?)(?=\nSALIENCE:|$)/s);
-      const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
-      const tagsMatch = block.match(/TAGS:\s*(.+)/);
-      if (!contentMatch) continue;
-      const content = contentMatch[1].trim();
-      if (!content || content.length < 10) continue;
-      const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.5;
-      const tags = tagsMatch ? tagsMatch[1].split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean) : [];
-      reflections.push({ content, salience, tags });
-    }
+      content: (reflections) => reflections.map((reflection) => reflection.content),
+    });
+    const reflections = generation.value;
 
     // Insert into thought_stream with source="reflection"
     if (reflections.length > 0) {

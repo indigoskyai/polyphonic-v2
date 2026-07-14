@@ -6,6 +6,7 @@ import { useAccountPortabilityStore, type PortabilityPreview } from '@/stores/ac
 const TOP_COUNT_KEYS = [
   'threads',
   'messages',
+  'chat_attachments',
   'memories',
   'engrams',
   'connections',

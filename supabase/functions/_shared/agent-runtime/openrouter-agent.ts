@@ -15,6 +15,7 @@ import { callMcpTool, type McpToolRegistration } from "../mcp/client.ts";
 import { withModelRetry } from "../modelRetry.ts";
 import { persistArtifactsFromContent } from "../artifacts/extract.ts";
 import { recordIdempotentResponse } from "../idempotency.ts";
+import { persistPdfAnnotations } from "../attachments.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -23,6 +24,7 @@ type SupabaseLike = {
 type ChatMessage = {
   role: string;
   content?: unknown;
+  annotations?: unknown[];
 };
 
 type SendEvent = (data: Record<string, unknown>) => void;
@@ -43,6 +45,7 @@ export interface OpenRouterAgentRuntimeOptions {
   continuity: ContinuityPacket;
   autonomousMemory?: AutonomousMemoryArtifactsResult | null;
   userMessageId?: string | null;
+  attachmentIds?: string[];
   pendingRevisions: PendingRevision[];
   mcpTools?: McpToolRegistration[];
   corsHeaders: Record<string, string>;
@@ -344,6 +347,11 @@ async function runOpenRouterAgentSdkTurn(
   const finalContent = responseData.outputText || fullContent || "(empty)";
   const tokensUsed = responseData.usage?.totalTokens ?? null;
   const usedModel = responseData.model || options.model;
+  const attachmentAnnotations = Array.isArray(responseData.annotations)
+    ? responseData.annotations
+    : Array.isArray(responseData.output?.[0]?.annotations)
+      ? responseData.output[0].annotations
+      : [];
   const toolMessages = buildToolMessages(toolCalls, toolResults);
   const agentTraceBlock = agentTrace.length > 0 ? `— Agent activity —\n${agentTrace.join("\n")}` : "";
   const persistedThinking = [agentTraceBlock, fullThinking].filter(Boolean).join("\n\n") || null;
@@ -387,6 +395,8 @@ async function runOpenRouterAgentSdkTurn(
   }
 
   if (!assistantWasDuplicate) {
+    await persistPdfAnnotations(options.supabase as any, options.userId, options.attachmentIds || [], attachmentAnnotations)
+      .catch((error) => console.warn("[openrouter-agent-runtime] could not persist PDF annotations", error));
     await persistArtifactsFromContent(options.supabase, {
       threadId: options.threadId,
       userId: options.userId,
@@ -596,17 +606,20 @@ function buildRuntimeTools(options: OpenRouterAgentRuntimeOptions, send: SendEve
   return tools;
 }
 
-function splitInstructions(messages: ChatMessage[]): { instructions: string; input: Array<{ role: string; content: string }> } {
+function splitInstructions(messages: ChatMessage[]): { instructions: string; input: Array<{ role: string; content: unknown; annotations?: unknown[] }> } {
   const systemParts: string[] = [];
-  const input: Array<{ role: string; content: string }> = [];
+  const input: Array<{ role: string; content: unknown; annotations?: unknown[] }> = [];
   for (const message of messages) {
-    const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
     if (message.role === "system") {
-      systemParts.push(content);
+      systemParts.push(typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? ""));
       continue;
     }
     if (message.role === "user" || message.role === "assistant") {
-      input.push({ role: message.role, content });
+      input.push({
+        role: message.role,
+        content: message.content ?? "",
+        ...(Array.isArray(message.annotations) && message.annotations.length ? { annotations: message.annotations } : {}),
+      });
     }
   }
   return { instructions: systemParts.join("\n\n"), input };

@@ -37,6 +37,11 @@ function BeliefRow({ belief }: { belief: Belief }) {
         <span className="s-belief-domain">
           {belief.domain || 'general'} · {tier}
         </span>
+        {belief.content_integrity_status === 'suspect' && (
+          <span className="integrity-suspect" title={belief.content_integrity_reason || 'Possible legacy truncation'}>
+            review
+          </span>
+        )}
         <span className="s-belief-conf">{(belief.confidence * 100).toFixed(0)}%</span>
       </div>
       <div className="s-belief-content">{belief.content}</div>

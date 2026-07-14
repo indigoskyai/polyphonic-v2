@@ -45,7 +45,7 @@ interface StreamTabConfig {
   kindLabel: string;
 }
 
-function StreamTab<T extends { id: string; content: string; created_at: string; salience?: number; strength?: number; tags?: string[] }>(
+function StreamTab<T extends { id: string; content: string; created_at: string; salience?: number; strength?: number; tags?: string[]; content_integrity_status?: string }>(
   { items, cfg }: { items: T[]; cfg: StreamTabConfig }
 ) {
   const [filter, setFilter] = useState<StreamFilter>('all');
@@ -76,6 +76,7 @@ function StreamTab<T extends { id: string; content: string; created_at: string; 
                   <span className="kind">{cfg.kindLabel}</span>
                   <span className="time">{timeAgoLong(item.created_at)}</span>
                   {typeof score === 'number' && <span className="salience">{score.toFixed(2)}</span>}
+                  {item.content_integrity_status === 'suspect' && <span className="integrity-suspect">review</span>}
                 </div>
                 <div className={`s-row-content${cfg.poetic ? ' poetic' : ''}`}>{item.content}</div>
                 {item.tags && item.tags.length > 0 && (
@@ -136,6 +137,11 @@ function BeliefsTab() {
               <div key={b.id || b.text} className="s-belief">
                 <div className="s-belief-head">
                   <span className="s-belief-domain">{detail}</span>
+                  {b.content_integrity_status === 'suspect' && (
+                    <span className="integrity-suspect" title={b.content_integrity_reason || 'Possible legacy truncation'}>
+                      review
+                    </span>
+                  )}
                   <span className="s-belief-conf">{b.strength.toFixed(2)}</span>
                 </div>
                 <p className="s-belief-content">{b.text}</p>
@@ -196,9 +202,14 @@ function ActivityTab() {
                   <div className="m-activity-line" />
                 </div>
                 <div className="m-activity-body">
-                  <div className="m-activity-type">{cls}</div>
+                  <div className="m-activity-type">
+                    {cls}
+                    {ev.content_integrity_status === 'suspect' && (
+                      <span className="integrity-suspect" title={ev.content_integrity_reason || 'Possible legacy truncation'}>review</span>
+                    )}
+                  </div>
                   <div className="m-activity-summary">
-                    {ev.title || ev.summary || ev.activity_type.replace(/_/g, ' ')}
+                    {ev.summary || ev.title || ev.activity_type.replace(/_/g, ' ')}
                   </div>
                 </div>
                 <div className="m-activity-time">{timeAgoLong(ev.created_at)}</div>

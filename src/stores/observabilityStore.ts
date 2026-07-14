@@ -34,6 +34,8 @@ interface ActivityRow {
   source: string | null;
   content: Record<string, unknown> | null;
   created_at: string;
+  content_integrity_status?: 'valid' | 'suspect' | 'rejected';
+  content_hidden_at?: string | null;
 }
 
 const AGENT_ORDER: AgentKey[] = ['luca', 'vektor', 'anima'];
@@ -83,14 +85,16 @@ export const useObservabilityStore = create<ObservabilityState>((set) => ({
   refresh: async (userId: string) => {
     const { data, error } = await supabase
       .from('entity_activity_log')
-      .select('id, activity_type, source, content, created_at')
+      .select('id, activity_type, source, content, created_at, content_integrity_status, content_hidden_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) {
       return;
     }
-    const rows = (data ?? []) as ActivityRow[];
+    const rows = ((data ?? []) as ActivityRow[]).filter(
+      (row) => !row.content_hidden_at && row.content_integrity_status !== 'rejected',
+    );
 
     const byAgent: Record<AgentKey, { last: string | null; count: number }> = {
       luca: { last: null, count: 0 },

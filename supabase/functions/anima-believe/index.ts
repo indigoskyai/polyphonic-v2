@@ -4,7 +4,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { logActivity } from "../_shared/activity-log.ts";
 import { logProcessRan } from "../_shared/activity-gate.ts";
 import { isSubstrateAgentId, normalizeAgentId, nonSubstrateResponse } from "../_shared/agent-scope.ts";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 
 const STAGNATION_THRESHOLD_DAYS = 14;
@@ -236,43 +236,33 @@ What the agent has experienced since (most recent first):
 ${evidenceBlock}`;
 
       try {
-        const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
+        const generation = await generateAutonomous({
+          apiKey: OPENROUTER_API_KEY,
+          model: challengeModel,
+          writer: "anima-believe",
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+          maxTokens: 500,
+          supabase,
+          userId: user_id,
+          agentId: agent_id,
+          parse: (raw) => {
+            const challengeMatch = raw.match(/CHALLENGE:\s*(.+?)(?=\nASSESSMENT:|$)/s);
+            const assessmentMatch = raw.match(/ASSESSMENT:\s*(STRENGTHEN|WEAKEN|MAINTAIN|SUPERSEDE)/i);
+            const reasoningMatch = raw.match(/REASONING:\s*(.+)$/s);
+            if (!challengeMatch || !assessmentMatch || !reasoningMatch) return { challenge: "", assessment: "", reasoning: "" };
+            return {
+              challenge: normalizeAutonomousContent(challengeMatch[1]),
+              assessment: assessmentMatch[1].toUpperCase(),
+              reasoning: normalizeAutonomousContent(reasoningMatch[1]),
+            };
           },
-          body: JSON.stringify({
-            model: challengeModel,
-            messages: [
-              { role: "system", content: system },
-              { role: "user", content: prompt },
-            ],
-            temperature: 0.5,
-            max_tokens: 500,
-          }),
-          signal: AbortSignal.timeout(60000),
-        }));
-
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const responseText = data.choices?.[0]?.message?.content || "";
-
-        // Parse challenge response
-        let challenge = "";
-        let assessment = "MAINTAIN";
-        let reasoning = "";
-
-        for (const line of responseText.split("\n")) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("CHALLENGE:")) challenge = trimmed.split(":", 1)[1]?.trim() || trimmed.slice(10).trim();
-          else if (trimmed.startsWith("ASSESSMENT:")) {
-            const val = trimmed.split(":")[1]?.trim().toUpperCase();
-            if (["STRENGTHEN", "WEAKEN", "MAINTAIN", "SUPERSEDE"].includes(val)) assessment = val;
-          }
-          else if (trimmed.startsWith("REASONING:")) reasoning = trimmed.split(":", 1)[1]?.trim() || trimmed.slice(10).trim();
-        }
+          content: (result) => result.challenge && result.reasoning ? [result.challenge, result.reasoning] : [],
+        });
+        const { challenge, assessment, reasoning } = generation.value;
 
         // Confidence moves by the bounded gentle step for this assessment (not a
         // free-form LLM number), then clamps to the epistemic-humility band [0.05,0.95].

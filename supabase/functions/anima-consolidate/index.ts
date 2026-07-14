@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withModelRetry } from "../_shared/modelRetry.ts";
+import { generateAutonomous, normalizeAutonomousContent } from "../_shared/autonomous-generation.ts";
 import { resolveRoleModel } from "../_shared/model-backend.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
 import { logActivity } from "../_shared/activity-log.ts";
@@ -30,7 +30,7 @@ EMOTIONAL_CONTEXT: [brief emotional note — how this felt]
 SALIENCE: [0.0 to 1.0]
 TAGS: [comma-separated lowercase tags]
 
-Generate 0-5 memories. Zero is valid if nothing notable happened. Don't manufacture significance.`;
+Generate 0-5 memories. Zero is valid if nothing notable happened; in that case output exactly NO_MEMORIES. Don't manufacture significance.`;
 
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
@@ -140,76 +140,53 @@ serve(async (req) => {
       .replace("{thoughts}", thoughtsText)
       .replace("{emotions}", emotionsText);
 
-    // Call LLM
-    const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
+    const generation = await generateAutonomous({
+      apiKey: OPENROUTER_API_KEY,
+      model: consolidateModel,
+      writer: "anima-consolidate",
+      messages: [
+        { role: "system", content: "You are performing nightly memory consolidation. Be selective — only memories that pass the Behavioral Change Test deserve to persist." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.6,
+      maxTokens: 1_500,
+      supabase,
+      userId: user_id,
+      agentId: agent_id,
+      allowEmpty: (raw) => /^NO_MEMORIES\.?$/i.test(raw.trim()),
+      parse: (raw) => {
+        const candidates: any[] = [];
+        for (const block of raw.split(/(?=MEMORY:)/)) {
+          if (!block.trim().startsWith("MEMORY:")) continue;
+          const contentMatch = block.match(/MEMORY:\s*(.+?)(?=\nTYPE:|$)/s);
+          const typeMatch = block.match(/TYPE:\s*(experience|insight|relationship|impression|fact)/i);
+          const emotionMatch = block.match(/EMOTIONAL_CONTEXT:\s*(.+?)(?=\nSALIENCE:|$)/s);
+          const salienceMatch = block.match(/SALIENCE:\s*([\d.]+)/);
+          const tagsMatch = block.match(/TAGS:\s*(.+)/);
+          if (!contentMatch || !typeMatch || !emotionMatch || !salienceMatch || !tagsMatch) continue;
+          const content = normalizeAutonomousContent(contentMatch[1]);
+          const emotionalContext = normalizeAutonomousContent(emotionMatch[1]);
+          if (!content || content.length < 15 || !emotionalContext) continue;
+          const salience = Math.max(0, Math.min(1, parseFloat(salienceMatch[1])));
+          const tags = tagsMatch[1].split(",").map((tag: string) => tag.trim().toLowerCase()).filter(Boolean);
+          candidates.push({
+            user_id,
+            agent_id,
+            content,
+            memory_type: typeMatch[1].toLowerCase(),
+            confidence: salience,
+            candidate_type: salience >= 0.75 ? "pin" : "standard",
+            rationale: `Surfaced during nightly consolidation — ${emotionalContext.slice(0, 200)}`,
+            source: { origin: "anima-consolidate", model: consolidateModel, tags, emotional_context: emotionalContext },
+            status: "pending",
+            content_integrity_status: "valid",
+          });
+        }
+        return candidates;
       },
-      body: JSON.stringify({
-        model: consolidateModel,
-        messages: [
-          { role: "system", content: "You are performing nightly memory consolidation. Be selective — only memories that pass the Behavioral Change Test deserve to persist." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.6,
-        max_tokens: 1500,
-      }),
-      signal: AbortSignal.timeout(60000),
-    }));
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: "LLM call failed" }), {
-        status: 502, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-
-    // Parse memories into review-queue candidates (instead of writing direct to `memories`)
-    const newCandidates: any[] = [];
-    const blocks = raw.split(/(?=MEMORY:)/);
-    for (const block of blocks) {
-      if (!block.trim().startsWith("MEMORY:")) continue;
-      const contentMatch = block.match(/MEMORY:\s*(.+?)(?=\nTYPE:|$)/s);
-      const typeMatch = block.match(/TYPE:\s*(\S+)/);
-      const emotionMatch = block.match(/EMOTIONAL_CONTEXT:\s*(.+?)(?=\nSALIENCE:|$)/s);
-      const salMatch = block.match(/SALIENCE:\s*([\d.]+)/);
-      const tagsMatch = block.match(/TAGS:\s*(.+)/);
-      if (!contentMatch) continue;
-      const content = contentMatch[1].trim();
-      if (!content || content.length < 15) continue;
-
-      const memoryType = typeMatch?.[1]?.toLowerCase() || "experience";
-      const emotionalContext = emotionMatch?.[1]?.trim() || "";
-      const salience = salMatch ? Math.max(0, Math.min(1, parseFloat(salMatch[1]))) : 0.5;
-      const tags = tagsMatch ? tagsMatch[1].split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean) : [];
-
-      // Cross-agent significance heuristic: high salience → pin, otherwise standard
-      const candidateType: "pin" | "standard" = salience >= 0.75 ? "pin" : "standard";
-      const rationale = emotionalContext
-        ? `Surfaced during nightly consolidation — ${emotionalContext.slice(0, 200)}`
-        : `Surfaced during nightly consolidation; salience ${salience.toFixed(2)}.`;
-
-      newCandidates.push({
-        user_id,
-        agent_id,
-        content,
-        memory_type: memoryType,
-        confidence: salience,
-        candidate_type: candidateType,
-        rationale,
-        source: {
-          origin: "anima-consolidate",
-          model: consolidateModel,
-          tags,
-          emotional_context: emotionalContext || null,
-        },
-        status: "pending",
-      });
-    }
+      content: (candidates) => candidates.flatMap((candidate) => [candidate.content, candidate.source.emotional_context]),
+    });
+    const newCandidates = generation.value;
 
     // Insert candidates instead of writing direct memories
     if (newCandidates.length > 0) {
