@@ -60,6 +60,8 @@ describe('production attachment pipeline', () => {
     expect(chat).not.toContain('CompanionImportPanel');
     expect(chat).toContain('<AttachmentSourceControl');
     expect(control).toContain('attachment-source-menu');
+    expect(control).toContain('createPortal');
+    expect(control).toContain('document.body');
     expect(chat).toContain('onPaste={handleComposerPaste}');
     expect(chat).toContain('onDrop={handleDrop}');
     expect(chat).toContain('attachment_ids');
