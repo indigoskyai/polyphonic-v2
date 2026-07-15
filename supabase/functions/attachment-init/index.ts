@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
       : crypto.randomUUID();
     await assertAttachmentScope(ctx.admin, ctx.userId, threadId, roomId, true);
     const kind = classifyAttachment(name, mime);
+    if ((kind === "audio" || kind === "video") && size > 20 * 1024 * 1024) {
+      throw new ValidationError("Audio and video files must be 20 MB or smaller so agents can analyze them reliably");
+    }
 
     const { count: batchCount, error: batchError } = await ctx.admin
       .from("chat_attachments")

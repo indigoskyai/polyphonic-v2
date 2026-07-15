@@ -270,6 +270,119 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function openRouterMessageText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!Array.isArray(value)) return "";
+  return value.flatMap((part) => {
+    if (!part || typeof part !== "object") return [];
+    const text = (part as Record<string, unknown>).text;
+    return typeof text === "string" ? [text] : [];
+  }).join("\n").trim();
+}
+
+async function downloadAttachmentBytes(admin: AttachmentAdmin, row: Record<string, any>): Promise<Uint8Array> {
+  if (Number(row.size_bytes) > 20 * 1024 * 1024) throw new ValidationError(`${row.original_name} is too large for inline media analysis`);
+  const { data, error } = await admin.storage.from(String(row.bucket)).download(String(row.storage_path));
+  if (error || !data) throw error || new Error("Could not read attachment media");
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+async function persistFallbackDerivative(
+  admin: AttachmentAdmin,
+  row: Record<string, any>,
+  derivative: Record<string, unknown>,
+) {
+  const derivatives = (Array.isArray(row.derivatives) ? row.derivatives : []).filter((item: any) => item?.kind !== derivative.kind);
+  derivatives.push(derivative);
+  row.derivatives = derivatives;
+  await admin.from("chat_attachments").update({ derivatives }).eq("id", row.id);
+  return derivative;
+}
+
+async function ensureFallbackDerivative(
+  admin: AttachmentAdmin,
+  row: Record<string, any>,
+  signedUrl: string | null,
+  apiKey?: string,
+) {
+  const existing = (Array.isArray(row.derivatives) ? row.derivatives : []).find((item: any) => (
+    row.kind === "audio" ? item?.kind === "transcript" : item?.kind === "summary"
+  ));
+  if (existing?.text) return existing;
+  if (!apiKey) throw new ValidationError(`${row.original_name} needs a multimodal model or an OpenRouter key for automatic preparation`);
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "HTTP-Referer": "https://polyphonic.chat",
+    "X-Title": "Polyphonic Attachments",
+  };
+  if (row.kind === "image") {
+    if (!signedUrl) throw new Error("Could not create temporary image access");
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "user", content: [
+          { type: "text", text: "Describe this uploaded image faithfully for another agent. Transcribe legible text, preserve meaningful layout, and state uncertainty. Do not infer facts that are not visible." },
+          { type: "image_url", image_url: { url: signedUrl } },
+        ] }],
+        temperature: 0.1,
+        max_tokens: 1600,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const payload = await response.json();
+    const text = openRouterMessageText(payload?.choices?.[0]?.message?.content);
+    if (!response.ok || !text) throw new ValidationError(`Could not prepare ${row.original_name} for this model`);
+    return persistFallbackDerivative(admin, row, { kind: "summary", text, engine: "openrouter-vision" });
+  }
+
+  if (row.kind === "audio") {
+    const bytes = await downloadAttachmentBytes(admin, row);
+    const ext = extensionOf(String(row.original_name));
+    const response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini-transcribe",
+        input_audio: { data: bytesToBase64(bytes), format: ["wav", "mp3", "flac", "m4a", "aac", "ogg"].includes(ext) ? ext : "mp3" },
+        temperature: 0,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const payload = await response.json();
+    const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+    if (!response.ok || !text) throw new ValidationError(`Could not transcribe ${row.original_name}`);
+    return persistFallbackDerivative(admin, row, { kind: "transcript", text, engine: "openrouter-stt" });
+  }
+
+  if (row.kind === "video") {
+    const bytes = await downloadAttachmentBytes(admin, row);
+    const mime = String(row.verified_mime_type || row.declared_mime_type || "video/mp4");
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "user", content: [
+          { type: "text", text: "Create a grounded, chronological summary of this uploaded video. Include visible text and spoken content when available, and state uncertainty." },
+          { type: "video_url", video_url: { url: `data:${mime};base64,${bytesToBase64(bytes)}` } },
+        ] }],
+        temperature: 0.1,
+        max_tokens: 1800,
+      }),
+      signal: AbortSignal.timeout(150_000),
+    });
+    const payload = await response.json();
+    const text = openRouterMessageText(payload?.choices?.[0]?.message?.content);
+    if (!response.ok || !text) throw new ValidationError(`Could not prepare ${row.original_name} for this model`);
+    return persistFallbackDerivative(admin, row, { kind: "summary", text, engine: "openrouter-video" });
+  }
+  return null;
+}
+
 function sourceHeader(row: Record<string, any>) {
   return `[Attachment ${row.id}: ${row.original_name}]`;
 }
@@ -293,15 +406,23 @@ export async function buildModelAttachmentContent(
     const name = String(row.original_name || "attachment");
     const mime = String(row.verified_mime_type || row.declared_mime_type || "application/octet-stream");
     const header = sourceHeader(row);
+    const { data: signed } = await admin.storage.from(String(row.bucket)).createSignedUrl(String(row.storage_path), 900);
+    let derivatives = Array.isArray(row.derivatives) ? row.derivatives : [];
+    let summary = derivatives.find((item: any) => item?.kind === "summary" && typeof item?.text === "string")?.text || "";
+    let transcript = derivatives.find((item: any) => item?.kind === "transcript" && typeof item?.text === "string")?.text || "";
+    if ((row.kind === "image" && !capabilities.image && !summary)
+      || (row.kind === "audio" && !capabilities.audio && !transcript)
+      || (row.kind === "video" && !capabilities.video && !summary)) {
+      await ensureFallbackDerivative(admin, row, signed?.signedUrl || null, apiKey);
+      derivatives = Array.isArray(row.derivatives) ? row.derivatives : [];
+      summary = derivatives.find((item: any) => item?.kind === "summary" && typeof item?.text === "string")?.text || "";
+      transcript = derivatives.find((item: any) => item?.kind === "transcript" && typeof item?.text === "string")?.text || "";
+    }
     const extracted = typeof row.extracted_text === "string" ? row.extracted_text : "";
-    const derivatives = Array.isArray(row.derivatives) ? row.derivatives : [];
-    const summary = derivatives.find((item: any) => item?.kind === "summary" && typeof item?.text === "string")?.text || "";
-    const transcript = derivatives.find((item: any) => item?.kind === "transcript" && typeof item?.text === "string")?.text || "";
     const bounded = [extracted, transcript, summary].filter(Boolean).join("\n\n").slice(0, Math.max(0, remainingContext));
     remainingContext -= bounded.length;
     context.push(`${header}\nType: ${mime}\nCitation format: ${name} plus the supplied page, slide, sheet, row, timestamp, archive member, or frame marker.${bounded ? `\n\n${bounded}` : ""}`);
 
-    const { data: signed } = await admin.storage.from(String(row.bucket)).createSignedUrl(String(row.storage_path), 900);
     if (row.kind === "image" && capabilities.image && signed?.signedUrl) {
       parts.push({ type: "image_url", image_url: { url: signed.signedUrl } });
     } else if (row.kind === "document" && mime === "application/pdf" && signed?.signedUrl) {

@@ -65,16 +65,34 @@ export default function AttachmentSourceControl({
       setMenuPosition({ top: Math.max(viewportTop + gutter, top), left });
     };
 
+    let animationFrame = 0;
+    const schedulePosition = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(positionMenu);
+    };
+
+    // A viewport breakpoint can add or remove the camera row after the resize
+    // event itself has fired. Observe the rendered menu so its final height,
+    // not the pre-breakpoint height, determines whether it opens above or
+    // below the trigger.
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(schedulePosition)
+      : null;
+    if (triggerRef.current) resizeObserver?.observe(triggerRef.current);
+    if (menuRef.current) resizeObserver?.observe(menuRef.current);
+
     positionMenu();
-    window.addEventListener('resize', positionMenu);
-    window.addEventListener('scroll', positionMenu, true);
-    window.visualViewport?.addEventListener('resize', positionMenu);
-    window.visualViewport?.addEventListener('scroll', positionMenu);
+    window.addEventListener('resize', schedulePosition);
+    window.addEventListener('scroll', schedulePosition, true);
+    window.visualViewport?.addEventListener('resize', schedulePosition);
+    window.visualViewport?.addEventListener('scroll', schedulePosition);
     return () => {
-      window.removeEventListener('resize', positionMenu);
-      window.removeEventListener('scroll', positionMenu, true);
-      window.visualViewport?.removeEventListener('resize', positionMenu);
-      window.visualViewport?.removeEventListener('scroll', positionMenu);
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', schedulePosition);
+      window.removeEventListener('scroll', schedulePosition, true);
+      window.visualViewport?.removeEventListener('resize', schedulePosition);
+      window.visualViewport?.removeEventListener('scroll', schedulePosition);
     };
   }, [open]);
 

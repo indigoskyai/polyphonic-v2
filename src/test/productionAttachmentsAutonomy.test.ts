@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -29,11 +29,11 @@ describe('production attachment pipeline', () => {
     }
   });
 
-  it('defines private storage, durable jobs, realtime state, and deletion cleanup', () => {
+  it('defines private storage, realtime state, and deletion cleanup without external infrastructure', () => {
     const migration = read('supabase/migrations/20260714100000_production_chat_attachments.sql');
+    const nativeMigration = read('supabase/migrations/20260715013000_supabase_native_attachments.sql');
     expect(migration).toContain('create table if not exists public.chat_attachments');
     expect(migration).toContain("'uploading', 'quarantined', 'scanning', 'extracting', 'ready'");
-    expect(migration).toContain('public.attachment_processing_jobs');
     expect(migration).toContain('public.chat_attachment_quotas');
     expect(migration).toContain('enforce_chat_attachment_quota');
     expect(migration).toContain("values ('chat-attachments', 'chat-attachments', false, 104857600)");
@@ -42,15 +42,19 @@ describe('production attachment pipeline', () => {
     expect(migration.indexOf('create trigger enforce_chat_attachment_quota_before_insert'))
       .toBeGreaterThan(migration.indexOf('update public.group_messages message set attachment_ids'));
     expect(migration).toContain('if existing_count = 0 then return new; end if;');
+    expect(nativeMigration).toContain('drop table if exists public.attachment_processing_jobs');
+    expect(nativeMigration).toContain('drop function if exists public.lease_attachment_processing_job');
+    expect(existsSync(join(process.cwd(), 'render.yaml'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'services/attachment-worker/worker.py'))).toBe(false);
   });
 
   it('keeps generated database types aligned with the attachment and integrity migrations', () => {
     const types = read('src/integrations/supabase/types.ts');
     expect(types).toContain('chat_attachments: {');
-    expect(types).toContain('attachment_processing_jobs: {');
+    expect(types).not.toContain('attachment_processing_jobs: {');
+    expect(types).not.toContain('lease_attachment_processing_job: {');
     expect(types).toContain('chat_attachment_status:');
     expect(types).toContain('attachment_ids: string[]');
-    expect(types).toContain('content_integrity_status: string');
   });
 
   it('keeps the normal composer compact and attachment-native', () => {
@@ -62,6 +66,7 @@ describe('production attachment pipeline', () => {
     expect(control).toContain('attachment-source-menu');
     expect(control).toContain('createPortal');
     expect(control).toContain('document.body');
+    expect(control).toContain('new ResizeObserver(schedulePosition)');
     expect(chat).toContain('onPaste={handleComposerPaste}');
     expect(chat).toContain('onDrop={handleDrop}');
     expect(chat).toContain('attachment_ids');
@@ -70,6 +75,9 @@ describe('production attachment pipeline', () => {
     const api = read('src/lib/attachmentApi.ts');
     expect(api).toContain('const stableDescriptor');
     expect(api).toContain("url: ''");
+    expect(api).toContain('prepareAttachmentExtraction');
+    expect(read('supabase/functions/attachment-finalize/index.ts')).toContain('finalizeAttachmentRecord');
+    expect(read('supabase/functions/attachment-finalize/index.ts')).not.toContain('attachment_processing_jobs');
   });
 
   it('invokes every attachment endpoint through the shared error wrapper', () => {

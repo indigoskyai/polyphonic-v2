@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { AttachmentDescriptor } from '@/types/attachments';
 import { Upload } from 'tus-js-client';
+import { prepareAttachmentExtraction } from '@/lib/attachmentExtraction';
 
 export type AttachmentScope =
   | { threadId: string; roomId?: undefined }
@@ -16,10 +17,9 @@ export interface UploadProgress {
 
 const RESUMABLE_THRESHOLD = 6 * 1024 * 1024;
 const STATUS_POLL_INTERVAL_MS = 900;
-// Media extraction, transcription, and fail-closed scanning can legitimately
-// take several minutes on a 100 MB upload. Keep polling long enough for the
-// worker lease/retry window while still giving the user a bounded failure.
-const STATUS_TIMEOUT_MS = 15 * 60 * 1000;
+// Finalization normally returns ready immediately. The short polling fallback
+// keeps compatibility with a request already in flight during a deployment.
+const STATUS_TIMEOUT_MS = 2 * 60 * 1000;
 
 function functionBody(scope: AttachmentScope) {
   return {
@@ -108,6 +108,9 @@ export async function uploadChatAttachment(
 ): Promise<AttachmentDescriptor> {
   const notify = options.onState;
   notify?.({ progress: 0, status: 'pending' });
+  const extraction = await prepareAttachmentExtraction(file);
+  if (options.signal?.aborted) throw new DOMException('Upload cancelled', 'AbortError');
+  notify?.({ progress: 5, status: 'extracting' });
   const { data: initialized, error: initError } = await supabase.functions.invoke('attachment-init', {
     body: {
       name: file.name,
@@ -139,9 +142,9 @@ export async function uploadChatAttachment(
 
   notify?.({ descriptor, progress: 68, status: 'uploading' });
   const { data: finalized, error: finalizeError } = await supabase.functions.invoke('attachment-finalize', {
-    body: { attachment_id: descriptor.id },
+    body: { attachment_id: descriptor.id, extraction },
   });
-  if (finalizeError || !finalized?.attachment) throw finalizeError || new Error('Could not queue file processing');
+  if (finalizeError || !finalized?.attachment) throw finalizeError || new Error('Could not prepare the uploaded file');
   descriptor = finalized.attachment as AttachmentDescriptor;
   notify?.({ descriptor, progress: 72, status: descriptor.status });
   return waitUntilReady(descriptor, options.signal, notify);
@@ -172,10 +175,11 @@ export async function cancelChatAttachment(id: string): Promise<void> {
 
 export async function retryChatAttachment(
   id: string,
-  options: { signal?: AbortSignal; onState?: (state: UploadProgress) => void } = {},
+  options: { file?: File; signal?: AbortSignal; onState?: (state: UploadProgress) => void } = {},
 ): Promise<AttachmentDescriptor> {
-  const { data, error } = await supabase.functions.invoke('attachment-retry', { body: { attachment_id: id } });
-  if (error || !data?.attachment) throw error || new Error('Could not retry file processing');
+  const extraction = options.file ? await prepareAttachmentExtraction(options.file) : undefined;
+  const { data, error } = await supabase.functions.invoke('attachment-retry', { body: { attachment_id: id, extraction } });
+  if (error || !data?.attachment) throw error || new Error('Could not retry file preparation');
   const descriptor = data.attachment as AttachmentDescriptor;
   options.onState?.({ descriptor, status: descriptor.status, progress: 72 });
   return waitUntilReady(descriptor, options.signal, options.onState);

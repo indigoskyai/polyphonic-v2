@@ -274,6 +274,7 @@ export default function GroupsView() {
       const controller = new AbortController();
       patchPendingAttachment(attachment.localId, { status: 'quarantined', progress: 72, error: undefined, controller });
       void retryChatAttachment(attachment.descriptor.id, {
+        file: attachment.file,
         signal: controller.signal,
         onState: ({ status, progress, descriptor }) => {
           patchPendingAttachment(attachment.localId, { status, progress, descriptor, controller, error: descriptor?.error });

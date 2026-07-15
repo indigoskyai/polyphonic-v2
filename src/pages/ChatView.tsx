@@ -1511,7 +1511,7 @@ export default function ChatView() {
   const retryPendingAttachment = useCallback((attachment: Attachment) => {
     if (attachment.descriptor?.id && attachment.status === 'failed') {
       setAttachmentStatus(attachment.id, 'quarantined', { progress: 72, error: undefined });
-      void retryChatAttachment(attachment.descriptor.id).then((descriptor) => {
+      void retryChatAttachment(attachment.descriptor.id, { file: attachment.file }).then((descriptor) => {
         setAttachmentStatus(attachment.id, 'ready', { descriptor, progress: 100, error: undefined, url: descriptor.preview?.url });
       }).catch((retryError) => {
         setAttachmentStatus(attachment.id, 'failed', { error: retryError instanceof Error ? retryError.message : 'Retry failed' });

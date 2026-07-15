@@ -190,3 +190,44 @@ After deployment, confirm:
 
 Do not rewrite git history or change repository visibility from this prompt. The historical UUID/username/email exposure needs a separate explicit Riley approval for history rewrite or privatization.
 ```
+
+### 6. Keep chat attachments inside the Lovable/Supabase deployment
+
+The first attachment release briefly introduced an external Docker worker. That service is retired. The production path is now the same architecture as the rest of Polyphonic: authenticated browser preparation, private Supabase Storage, Supabase Edge Functions, and OpenRouter multimodal inputs.
+
+Prompt Lovable:
+
+```text
+Please deploy the Supabase-native Polyphonic attachment repair from latest main.
+
+Apply:
+- supabase/migrations/20260715013000_supabase_native_attachments.sql
+
+Redeploy:
+- attachment-init
+- attachment-finalize
+- attachment-retry
+- attachment-bind
+- attachment-cancel
+- attachment-url
+- chat
+- chat-multi
+- group-agent-request
+- group-message-send
+- agent-consult
+- subagent-run
+
+Include the current shared modules under supabase/functions/_shared, especially:
+- attachments.ts
+- attachment-finalization.ts
+
+Verify that:
+- attachment_processing_jobs and lease_attachment_processing_job no longer exist
+- new uploads transition directly to ready after attachment-finalize
+- text, code, DOCX, PPTX, XLSX, and ZIP uploads retain bounded extracted_text
+- private images and PDFs reach OpenRouter through short-lived signed URLs
+- audio and video up to 20 MB can be delivered or prepared through OpenRouter
+- no Render, Docker, ClamAV, Tika, LibreOffice, or FFmpeg service is required
+
+Do not create replacement external infrastructure and do not expose service-role credentials.
+```

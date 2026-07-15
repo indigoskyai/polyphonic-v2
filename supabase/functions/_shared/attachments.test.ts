@@ -5,6 +5,7 @@ import {
   safeStorageName,
   sniffMime,
 } from './attachments.ts';
+import { normalizeClientExtraction } from './attachment-finalization.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -36,4 +37,19 @@ Deno.test('allows inert SVG and rejects active SVG', () => {
   assertThrows(() => assertSafeSvg('<svg><script>alert(1)</script></svg>'), 'Script SVG was accepted');
   assertThrows(() => assertSafeSvg('<svg><image href="https://example.com/x.png"/></svg>'), 'External SVG reference was accepted');
   assertThrows(() => assertSafeSvg('<svg><style>rect{fill:url(https://example.com/x.svg)}</style></svg>'), 'External SVG CSS reference was accepted');
+});
+
+Deno.test('normalizes browser extraction and refuses untrusted derivative shapes', () => {
+  const normalized = normalizeClientExtraction({
+    extracted_text: 'first\r\nsecond\u0000',
+    checksum: 'A'.repeat(64),
+    derivatives: [
+      { kind: 'extraction', label: 'Browser DOCX extraction', metadata: { fileCount: 7, nested: { unsafe: true } } },
+      { kind: 'thumbnail', storage_path: 'somewhere/else' },
+    ],
+  });
+  assert(normalized.extractedText === 'first\nsecond', 'Extraction text was not normalized');
+  assert(normalized.checksum === 'a'.repeat(64), 'Checksum was not normalized');
+  assert(normalized.derivatives.length === 1, 'Untrusted derivatives were retained');
+  assert(normalized.derivatives[0].kind === 'extraction', 'Extraction provenance was lost');
 });

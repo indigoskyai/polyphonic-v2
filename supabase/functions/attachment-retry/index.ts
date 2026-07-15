@@ -2,6 +2,7 @@ import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts"
 import { ForbiddenError, ValidationError, wrapHandler } from "../_shared/errors.ts";
 import { requireAuthedContext, jsonResponse, readJson } from "../_shared/group-rooms.ts";
 import { descriptorFromRow } from "../_shared/attachments.ts";
+import { finalizeAttachmentRecord, recordAttachmentFailure } from "../_shared/attachment-finalization.ts";
 
 Deno.serve(async (req) => {
   const preflight = handleCorsPreflightIfNeeded(req);
@@ -15,22 +16,14 @@ Deno.serve(async (req) => {
     const { data: row, error } = await ctx.admin.from("chat_attachments").select("*").eq("id", id).maybeSingle();
     if (error) throw error;
     if (!row || row.user_id !== ctx.userId) throw new ForbiddenError("Attachment not found");
-    if (row.status !== "failed") throw new ValidationError("Only failed processing jobs can be retried");
-    const { data: updated, error: updateError } = await ctx.admin.from("chat_attachments").update({
-      status: "quarantined",
-      processing_error: null,
-    }).eq("id", id).select("*").single();
-    if (updateError) throw updateError;
-    const { error: jobError } = await ctx.admin.from("attachment_processing_jobs").upsert({
-      attachment_id: id,
-      status: "queued",
-      attempts: 0,
-      available_at: new Date().toISOString(),
-      locked_at: null,
-      locked_by: null,
-      last_error: null,
-    }, { onConflict: "attachment_id" });
-    if (jobError) throw jobError;
-    return jsonResponse({ attachment: descriptorFromRow(updated), queued: true }, corsHeaders, 202);
+    if (row.status !== "failed") throw new ValidationError("Only failed file preparation can be retried");
+    try {
+      const ready = await finalizeAttachmentRecord(ctx.admin, row, body.extraction);
+      return jsonResponse({ attachment: descriptorFromRow(ready), ready: true }, corsHeaders);
+    } catch (retryError) {
+      const failed = await recordAttachmentFailure(ctx.admin, id, retryError);
+      if (!failed) throw retryError;
+      return jsonResponse({ attachment: descriptorFromRow(failed), ready: false }, corsHeaders);
+    }
   })(req);
 });
