@@ -133,7 +133,7 @@ function inspectZip(bytes: Uint8Array, office: boolean): ZipEntry[] {
     const extraLength = view.getUint16(cursor + 30, true);
     const commentLength = view.getUint16(cursor + 32, true);
     const externalAttributes = uint32(view, cursor + 38);
-    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength)).replaceAll('\\', '/');
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength)).replace(/\\/g, '/');
     const directory = name.endsWith('/');
     const mode = (externalAttributes >>> 16) & 0xffff;
     const ext = extensionOf(name);
