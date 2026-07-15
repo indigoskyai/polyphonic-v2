@@ -1003,53 +1003,6 @@ export type Database = {
           },
         ]
       }
-      attachment_processing_jobs: {
-        Row: {
-          attachment_id: string
-          attempts: number
-          available_at: string
-          created_at: string
-          id: string
-          last_error: string | null
-          locked_at: string | null
-          locked_by: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          attachment_id: string
-          attempts?: number
-          available_at?: string
-          created_at?: string
-          id?: string
-          last_error?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          attachment_id?: string
-          attempts?: number
-          available_at?: string
-          created_at?: string
-          id?: string
-          last_error?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attachment_processing_jobs_attachment_id_fkey"
-            columns: ["attachment_id"]
-            isOneToOne: true
-            referencedRelation: "chat_attachments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       autonomous_generation_events: {
         Row: {
           agent_id: string | null
@@ -5140,27 +5093,6 @@ export type Database = {
         Returns: boolean
       }
       is_handle_owner: { Args: { p_handle: string }; Returns: boolean }
-      lease_attachment_processing_job: {
-        Args: { p_lease_seconds?: number; p_worker_id: string }
-        Returns: {
-          attachment_id: string
-          attempts: number
-          available_at: string
-          created_at: string
-          id: string
-          last_error: string | null
-          locked_at: string | null
-          locked_by: string | null
-          status: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "attachment_processing_jobs"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
       mark_activity_seen: { Args: never; Returns: undefined }
       match_engrams: {
         Args: {
