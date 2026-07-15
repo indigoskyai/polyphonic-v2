@@ -1003,6 +1003,45 @@ export type Database = {
           },
         ]
       }
+      autonomous_generation_events: {
+        Row: {
+          agent_id: string | null
+          attempts: number
+          created_at: string
+          detail: string | null
+          id: string
+          model: string | null
+          reason: string
+          status: string
+          user_id: string
+          writer: string
+        }
+        Insert: {
+          agent_id?: string | null
+          attempts?: number
+          created_at?: string
+          detail?: string | null
+          id?: string
+          model?: string | null
+          reason: string
+          status: string
+          user_id: string
+          writer: string
+        }
+        Update: {
+          agent_id?: string | null
+          attempts?: number
+          created_at?: string
+          detail?: string | null
+          id?: string
+          model?: string | null
+          reason?: string
+          status?: string
+          user_id?: string
+          writer?: string
+        }
+        Relationships: []
+      }
       beliefs: {
         Row: {
           active: boolean | null
@@ -1011,6 +1050,9 @@ export type Database = {
           confidence: number
           confidence_tier: string | null
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           contradicting_engram_ids: string[] | null
           created_at: string | null
           domain: string | null
@@ -1034,6 +1076,9 @@ export type Database = {
           confidence?: number
           confidence_tier?: string | null
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           contradicting_engram_ids?: string[] | null
           created_at?: string | null
           domain?: string | null
@@ -1057,6 +1102,9 @@ export type Database = {
           confidence?: number
           confidence_tier?: string | null
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           contradicting_engram_ids?: string[] | null
           created_at?: string | null
           domain?: string | null
@@ -1754,6 +1802,9 @@ export type Database = {
       curiosity_questions: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           context: string | null
           created_at: string
           curiosity_score: number | null
@@ -1765,6 +1816,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -1776,6 +1830,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           context?: string | null
           created_at?: string
           curiosity_score?: number | null
@@ -2082,6 +2139,9 @@ export type Database = {
           affect_source: string
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string | null
           digest_id: string | null
           digest_suggested_by: string | null
@@ -2118,6 +2178,9 @@ export type Database = {
           affect_source?: string
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string | null
           digest_id?: string | null
           digest_suggested_by?: string | null
@@ -2154,6 +2217,9 @@ export type Database = {
           affect_source?: string
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string | null
           digest_id?: string | null
           digest_suggested_by?: string | null
@@ -2191,6 +2257,9 @@ export type Database = {
           activity_type: string
           agent_id: string
           content: Json | null
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           emotional_context: Json | null
           id: string
@@ -2205,6 +2274,9 @@ export type Database = {
           activity_type: string
           agent_id?: string
           content?: Json | null
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           emotional_context?: Json | null
           id?: string
@@ -2219,6 +2291,9 @@ export type Database = {
           activity_type?: string
           agent_id?: string
           content?: Json | null
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           emotional_context?: Json | null
           id?: string
@@ -2879,6 +2954,9 @@ export type Database = {
         Row: {
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           mood: string | null
@@ -2890,6 +2968,9 @@ export type Database = {
         Insert: {
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           mood?: string | null
@@ -2901,6 +2982,9 @@ export type Database = {
         Update: {
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           mood?: string | null
@@ -2953,6 +3037,9 @@ export type Database = {
           confidence: number
           confidence_source: string | null
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           decay_factor: number
           detail_level: string | null
@@ -2980,6 +3067,9 @@ export type Database = {
           confidence?: number
           confidence_source?: string | null
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           decay_factor?: number
           detail_level?: string | null
@@ -3007,6 +3097,9 @@ export type Database = {
           confidence?: number
           confidence_source?: string | null
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           decay_factor?: number
           detail_level?: string | null
@@ -3037,6 +3130,9 @@ export type Database = {
           candidate_type: string
           confidence: number
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           memory_type: string
@@ -3051,6 +3147,9 @@ export type Database = {
           candidate_type: string
           confidence: number
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           memory_type: string
@@ -3065,6 +3164,9 @@ export type Database = {
           candidate_type?: string
           confidence?: number
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           memory_type?: string
@@ -3471,6 +3573,9 @@ export type Database = {
       observer_logs: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           model: string | null
@@ -3480,6 +3585,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -3489,6 +3597,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           model?: string | null
@@ -4450,6 +4561,9 @@ export type Database = {
       thought_initiations: {
         Row: {
           agent_id: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           message: string
@@ -4459,6 +4573,9 @@ export type Database = {
         }
         Insert: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           message: string
@@ -4468,6 +4585,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           message?: string
@@ -4481,6 +4601,9 @@ export type Database = {
         Row: {
           agent_id: string
           content: string
+          content_hidden_at: string | null
+          content_integrity_reason: string | null
+          content_integrity_status: string
           created_at: string
           id: string
           salience: number
@@ -4492,6 +4615,9 @@ export type Database = {
         Insert: {
           agent_id?: string
           content: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           salience?: number
@@ -4503,6 +4629,9 @@ export type Database = {
         Update: {
           agent_id?: string
           content?: string
+          content_hidden_at?: string | null
+          content_integrity_reason?: string | null
+          content_integrity_status?: string
           created_at?: string
           id?: string
           salience?: number

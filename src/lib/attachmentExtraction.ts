@@ -66,7 +66,7 @@ async function readBlobText(blob: Blob): Promise<string> {
 
 function normalizeExtractedText(value: string): string {
   return value
-    .replaceAll('\u0000', '')
+    .replace(/\u0000/g, '')
     .replace(/\r\n?/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
@@ -133,7 +133,7 @@ function inspectZip(bytes: Uint8Array, office: boolean): ZipEntry[] {
     const extraLength = view.getUint16(cursor + 30, true);
     const commentLength = view.getUint16(cursor + 32, true);
     const externalAttributes = uint32(view, cursor + 38);
-    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength)).replaceAll('\\', '/');
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength)).replace(/\\/g, '/');
     const directory = name.endsWith('/');
     const mode = (externalAttributes >>> 16) & 0xffff;
     const ext = extensionOf(name);
@@ -276,7 +276,8 @@ function parseLegacyOffice(bytes: Uint8Array): string {
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
