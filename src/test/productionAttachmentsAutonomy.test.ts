@@ -18,8 +18,13 @@ describe('production attachment pipeline', () => {
       expect(source, `${file} persists reusable PDF annotations`).toContain('persistPdfAnnotations');
     }
     const agentRuntime = read('supabase/functions/_shared/agent-runtime/openrouter-agent.ts');
-    expect(agentRuntime).toContain('content: message.content');
+    expect(agentRuntime).toContain('content: toOpenResponsesContent(message.content)');
     expect(agentRuntime).toContain('persistPdfAnnotations');
+    const responsesAdapter = read('supabase/functions/_shared/agent-runtime/openresponses-content.ts');
+    expect(responsesAdapter).toContain('type: "input_image"');
+    expect(responsesAdapter).toContain('type: "input_file"');
+    expect(responsesAdapter).toContain('type: "input_audio"');
+    expect(responsesAdapter).toContain('type: "input_video"');
     for (const delegated of [
       'supabase/functions/subagent-run/index.ts',
       'supabase/functions/agent-consult/index.ts',

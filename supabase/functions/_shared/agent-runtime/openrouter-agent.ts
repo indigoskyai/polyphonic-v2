@@ -16,6 +16,7 @@ import { withModelRetry } from "../modelRetry.ts";
 import { persistArtifactsFromContent } from "../artifacts/extract.ts";
 import { recordIdempotentResponse } from "../idempotency.ts";
 import { persistPdfAnnotations } from "../attachments.ts";
+import { toOpenResponsesContent } from "./openresponses-content.ts";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -617,7 +618,7 @@ function splitInstructions(messages: ChatMessage[]): { instructions: string; inp
     if (message.role === "user" || message.role === "assistant") {
       input.push({
         role: message.role,
-        content: message.content ?? "",
+        content: toOpenResponsesContent(message.content),
         ...(Array.isArray(message.annotations) && message.annotations.length ? { annotations: message.annotations } : {}),
       });
     }
