@@ -9,7 +9,7 @@ function zippedFile(name: string, entries: Record<string, string>) {
 
 describe('browser-native attachment extraction', () => {
   it('extracts bounded text and a checksum without uploading content elsewhere', async () => {
-    const result = await prepareAttachmentExtraction(new File(['hello\r\nworld'], 'notes.txt', { type: 'text/plain' }));
+    const result = await prepareAttachmentExtraction(new File(['hello\u0000\r\nworld'], 'notes.txt', { type: 'text/plain' }));
     expect(result.extracted_text).toBe('hello\nworld');
     expect(result.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(result.derivatives?.[0]?.label).toBe('Browser text extraction');

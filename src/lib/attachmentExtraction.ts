@@ -66,7 +66,7 @@ async function readBlobText(blob: Blob): Promise<string> {
 
 function normalizeExtractedText(value: string): string {
   return value
-    .replace(/\u0000/g, '')
+    .split('\u0000').join('')
     .replace(/\r\n?/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
