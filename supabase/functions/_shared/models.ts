@@ -47,6 +47,9 @@ export const REASONING_MODELS: Record<string, ModelMeta> = {
   'openai/gpt-5-mini': { reasoning: true, paramStyle: 'openai', label: 'GPT-5 Mini' },
   'openai/gpt-5-pro': { reasoning: true, paramStyle: 'openai', label: 'GPT-5 Pro' },
 
+  // Moonshot Kimi K3 — OpenRouter exposes reasoning.effort and reasoning details.
+  'moonshotai/kimi-k3': { reasoning: true, paramStyle: 'openai', label: 'Kimi K3' },
+
   // Google Gemini 3.x — uses thinking.thinkingLevel
   'google/gemini-3.1-pro-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3.1 Pro' },
   'google/gemini-3-flash-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3 Flash' },

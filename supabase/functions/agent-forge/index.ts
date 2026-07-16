@@ -36,6 +36,8 @@ interface ForgeBody {
 }
 
 const VALID_MODELS = new Set([
+  "moonshotai/kimi-k3",
+  "moonshotai/kimi-k2.7-code",
   "anthropic/claude-opus-4.8",
   "anthropic/claude-opus-4-7",
   "anthropic/claude-opus-4.6",

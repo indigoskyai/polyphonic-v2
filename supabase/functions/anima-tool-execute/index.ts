@@ -25,6 +25,8 @@ const FORGE_AGENT_BLUEPRINT_SCHEMA = {
     model: {
       type: "string",
       enum: [
+        "moonshotai/kimi-k3",
+        "moonshotai/kimi-k2.7-code",
         "anthropic/claude-opus-4-7",
         "anthropic/claude-sonnet-4.6",
         "anthropic/claude-haiku-4.5",

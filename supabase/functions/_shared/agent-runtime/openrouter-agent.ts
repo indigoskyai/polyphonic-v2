@@ -73,6 +73,8 @@ const DEFAULT_MAX_AGENT_COST_USD = 1.0;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 const ASSISTANT_DUPLICATE_WINDOW_MS = 240_000;
 const FORGE_MODELS = [
+  "moonshotai/kimi-k3",
+  "moonshotai/kimi-k2.7-code",
   "anthropic/claude-opus-4.8",
   "anthropic/claude-opus-4-7",
   "anthropic/claude-opus-4.6",

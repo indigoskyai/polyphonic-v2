@@ -28,6 +28,8 @@ import { useClock } from '@/components/settings/useClock';
 import { resolveAgentColor } from '@/lib/agentColors';
 
 const MODELS = [
+  { value: 'moonshotai/kimi-k3', label: 'Kimi K3' },
+  { value: 'moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code' },
   { value: 'anthropic/claude-opus-4.8', label: 'Claude Opus 4.8' },
   { value: 'anthropic/claude-opus-4-7', label: 'Claude Opus 4.7' },
   { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },

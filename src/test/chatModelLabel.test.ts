@@ -19,6 +19,11 @@ describe('getChatModelLabel', () => {
     expect(getChatModelLabel('anthropic/claude-opus-4-7')).toBe('Claude Opus 4.7');
   });
 
+  it('returns canonical labels for the useful current Moonshot models', () => {
+    expect(getChatModelLabel('moonshotai/kimi-k3')).toBe('Kimi K3');
+    expect(getChatModelLabel('moonshotai/kimi-k2.7-code')).toBe('Kimi K2.7 Code');
+  });
+
   it('normalizes alternative Claude Opus 4.7 aliases', () => {
     expect(getChatModelLabel('anthropic/claude-opus-4.7')).toBe('Claude Opus 4.7');
     expect(getChatModelLabel('anthropic/claude-4.7-opus-20260416')).toBe('Claude Opus 4.7');
