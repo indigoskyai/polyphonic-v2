@@ -67,7 +67,12 @@ serve(async (req) => {
       try {
         await checkAndIncrement(userId, "image-generation");
       } catch {
-        return new Response(JSON.stringify({ error: "Daily image generation limit reached" }), {
+        return new Response(JSON.stringify({
+          error: "Daily image generation limit reached",
+          code: "quota_exceeded",
+          provider: config.provider,
+          status: 429,
+        }), {
           status: 429,
           headers: jsonHeaders,
         });
@@ -89,7 +94,14 @@ serve(async (req) => {
       const status = e instanceof ImageProviderError ? e.status : 500;
       const message = e instanceof Error ? e.message : "Image generation failed";
       console.error("[anima-image-create] provider error", status, message);
-      return new Response(JSON.stringify({ error: "Image generation failed", detail: message }), {
+      return new Response(JSON.stringify({
+        error: "Image generation failed",
+        detail: message,
+        provider: e instanceof ImageProviderError ? e.provider || config.provider : config.provider,
+        code: e instanceof ImageProviderError ? e.code || "provider_error" : "unexpected_provider_error",
+        status,
+        returned_keys: e instanceof ImageProviderError ? e.returnedKeys : undefined,
+      }), {
         status: status === 429 || status === 402 || status === 422 ? status : 500,
         headers: jsonHeaders,
       });
@@ -104,7 +116,12 @@ serve(async (req) => {
       .upload(fileName, image.bytes, { contentType: image.mimeType, upsert: false });
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
-      return new Response(JSON.stringify({ error: "Failed to save generated image" }), {
+      return new Response(JSON.stringify({
+        error: "Failed to save generated image",
+        code: "storage_upload_failed",
+        provider: config.provider,
+        status: 500,
+      }), {
         status: 500,
         headers: jsonHeaders,
       });
@@ -115,7 +132,12 @@ serve(async (req) => {
       .createSignedUrl(fileName, 60 * 60 * 24 * 7);
     if (signedErr || !signed?.signedUrl) {
       console.error("Signed URL error:", signedErr);
-      return new Response(JSON.stringify({ error: "Failed to generate image URL" }), {
+      return new Response(JSON.stringify({
+        error: "Failed to generate image URL",
+        code: "signed_url_failed",
+        provider: config.provider,
+        status: 500,
+      }), {
         status: 500,
         headers: jsonHeaders,
       });

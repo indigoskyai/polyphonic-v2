@@ -3,6 +3,8 @@
 // to system OPENROUTER_API_KEY). Users can opt into their personal
 // OpenAI key by setting image_provider = 'openai' in user_settings.
 
+import { ImagePayloadError, parseImageApiPayload } from "./image-generation.ts";
+
 export type ImageProvider = "openrouter" | "openai";
 
 export interface ImageModelConfig {
@@ -73,36 +75,34 @@ export async function generateViaOpenRouter(
   prompt: string,
   sourceImage?: { bytes: Uint8Array; mimeType: string },
 ): Promise<GeneratedImage> {
-  const content: any[] = [{ type: "text", text: prompt }];
+  const body: Record<string, unknown> = {
+    model: config.model,
+    prompt,
+    n: 1,
+    output_format: "png",
+  };
   if (sourceImage) {
-    const b64 = btoa(String.fromCharCode(...sourceImage.bytes));
-    content.push({
+    body.input_references = [{
       type: "image_url",
-      image_url: { url: `data:${sourceImage.mimeType};base64,${b64}` },
-    });
+      image_url: { url: `data:${sourceImage.mimeType};base64,${bytesToBase64(sourceImage.bytes)}` },
+    }];
   }
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await fetch("https://openrouter.ai/api/v1/images", {
     method: "POST",
     headers: OPENROUTER_HEADERS(config.apiKey),
-    body: JSON.stringify({
-      model: config.model,
-      messages: [{ role: "user", content }],
-      modalities: ["image", "text"],
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new ImageProviderError(res.status, `OpenRouter image failed: ${text.slice(0, 300)}`);
+    throw new ImageProviderError(res.status, `OpenRouter image failed: ${text.slice(0, 300)}`, {
+      provider: "openrouter",
+      code: "provider_http_error",
+    });
   }
   const data = await res.json();
-  const message = data?.choices?.[0]?.message;
-  const url = message?.images?.[0]?.image_url?.url as string | undefined;
-  if (!url) throw new ImageProviderError(422, "No image returned");
-  const match = url.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) throw new ImageProviderError(422, "Unexpected image payload");
-  const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-  return { bytes, mimeType: match[1] || "image/png" };
+  const image = parseProviderPayload(data, "openrouter");
+  return { bytes: base64ToBytes(image.base64), mimeType: image.mimeType, revisedPrompt: image.revisedPrompt };
 }
 
 export async function generateViaOpenAI(
@@ -128,7 +128,8 @@ export async function generateViaOpenAI(
     form.append("n", "1");
     form.append("size", "auto");
     form.append("quality", "medium");
-    form.append("image", new Blob([sourceImage.bytes], { type: sourceImage.mimeType }), "source.png");
+    const sourceBuffer = sourceImage.bytes.slice().buffer as ArrayBuffer;
+    form.append("image", new Blob([sourceBuffer], { type: sourceImage.mimeType }), "source.png");
     const res = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -137,13 +138,14 @@ export async function generateViaOpenAI(
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new ImageProviderError(res.status, `OpenAI edit failed: ${text.slice(0, 300)}`);
+      throw new ImageProviderError(res.status, `OpenAI edit failed: ${text.slice(0, 300)}`, {
+        provider: "openai",
+        code: "provider_http_error",
+      });
     }
     const data = await res.json();
-    const item = data?.data?.[0];
-    const b64 = item?.b64_json as string | undefined;
-    if (!b64) throw new ImageProviderError(422, "No image returned");
-    return { bytes: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), mimeType: "image/png" };
+    const image = parseProviderPayload(data, "openai");
+    return { bytes: base64ToBytes(image.base64), mimeType: image.mimeType, revisedPrompt: image.revisedPrompt };
   }
 
   const body: Record<string, unknown> = {
@@ -166,23 +168,64 @@ export async function generateViaOpenAI(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new ImageProviderError(res.status, `OpenAI image failed: ${text.slice(0, 300)}`);
+    throw new ImageProviderError(res.status, `OpenAI image failed: ${text.slice(0, 300)}`, {
+      provider: "openai",
+      code: "provider_http_error",
+    });
   }
   const data = await res.json();
-  const item = data?.data?.[0];
-  const b64 = item?.b64_json as string | undefined;
-  if (!b64) throw new ImageProviderError(422, "No image returned");
+  const image = parseProviderPayload(data, "openai");
   return {
-    bytes: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)),
-    mimeType: "image/png",
-    revisedPrompt: item?.revised_prompt,
+    bytes: base64ToBytes(image.base64),
+    mimeType: image.mimeType,
+    revisedPrompt: image.revisedPrompt,
   };
 }
 
 export class ImageProviderError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  provider?: ImageProvider;
+  code?: string;
+  returnedKeys?: string[];
+
+  constructor(
+    status: number,
+    message: string,
+    details: { provider?: ImageProvider; code?: string; returnedKeys?: string[] } = {},
+  ) {
     super(message);
+    this.name = "ImageProviderError";
     this.status = status;
+    this.provider = details.provider;
+    this.code = details.code;
+    this.returnedKeys = details.returnedKeys;
   }
+}
+
+function parseProviderPayload(data: unknown, provider: ImageProvider) {
+  try {
+    return parseImageApiPayload(data, provider);
+  } catch (error) {
+    if (error instanceof ImagePayloadError) {
+      throw new ImageProviderError(422, error.message, {
+        provider,
+        code: error.code,
+        returnedKeys: error.returnedKeys,
+      });
+    }
+    throw error;
+  }
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
 }

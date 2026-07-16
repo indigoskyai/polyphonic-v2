@@ -7,6 +7,15 @@ import {
   loadMcpToolRegistrations,
   type McpToolRegistration,
 } from "../_shared/mcp/client.ts";
+import {
+  inferImageAspectRatio,
+  looksLikeDirectImageGenerationRequest,
+} from "../_shared/image-generation.ts";
+import {
+  RESEARCH_TEAM_LABEL,
+  looksLikeComplexResearchNeed,
+  looksLikeResearchTeamRequest,
+} from "../_shared/research-team.ts";
 
 const FORGE_AGENT_BLUEPRINT_SCHEMA = {
   type: "object",
@@ -130,6 +139,31 @@ const TOOL_SCHEMAS = [
           content: { type: "string", description: "Content to write for write operations" },
         },
         required: ["operation", "path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "research_team",
+      description:
+        "Convene Luca's persistent Research Team for complex research, evidence evaluation, source synthesis, The Well grounding, claim testing, and truth-card work. This does not create or modify custom agents.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Research question, claim, or evidence task." },
+          mode: { type: "string", enum: ["smart_auto", "explicit", "manual"], default: "smart_auto" },
+          trigger: {
+            type: "string",
+            enum: ["smart_auto", "explicit_user_request", "simulation", "truth_card", "research_lab"],
+            default: "smart_auto",
+          },
+          focus: { type: "string", description: "Optional focus for the team." },
+          research_brief: { type: "string", description: "Optional longer brief or constraints." },
+          deliverable: { type: "string", description: "Optional desired output format." },
+          constraints: { type: "string", description: "Optional exclusions, timeframe, or source standards." },
+        },
+        required: ["query"],
       },
     },
   },
@@ -272,8 +306,16 @@ const TOOL_SCHEMAS = [
   },
 ];
 
-function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[]): string {
+function buildPlanningSystemPrompt(mcpTools: McpToolRegistration[], includeForgeAgent: boolean): string {
   const mcpToolLines = mcpTools.map((tool) => `- ${tool.registeredName}: ${tool.schema.function.description}`);
+  const forgeToolLine = includeForgeAgent
+    ? "- forge_agent: Draft a complete custom-agent blueprint and insert an inline approval proposal when the user asks Luca to create or revise an agent."
+    : "";
+  const forgeRules = includeForgeAgent
+    ? `- If the user asks for a custom agent, use forge_agent once there is enough identity detail to draft the full Open Clause shape. Do not call ForgeAgentBlueprint or invent another tool name. Do not ask the user to choose memory architecture.
+- If the user asks for a generic agent, companion agent, test agent, or delegates the personality, choose coherent details and call forge_agent.
+- Forge blueprints must include runtime instructions, SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Never target Luca, Observer, Anima, or Vektor.`
+    : "- Forge/permanent custom-agent creation is unavailable on this turn. Do not propose, register, or persist a custom agent.";
   return `You are a tool-planning assistant. Your ONLY job is to decide whether the user's message requires using a tool, and if so, call the appropriate tool(s).
 
 Available tools:
@@ -281,12 +323,13 @@ Available tools:
 - read_url: Directly fetch a specific public URL and return source content/metadata without model synthesis. It can read HTML text, raw HTML, JSON, and plain text. Use format="raw" when the user needs exact markup/source.
 - browse: Open a public URL in a Browserbase browser, wait for JavaScript rendering, and return DOM text plus page structure (headings, links, buttons, forms). Use this when read_url cannot see browser-rendered state.
 - the_well_research: Query The Well physics-simulation registry for datasets, access names, fields, measurements, and truth-card plans. Does not download raw tensors.
+- research_team: Start a persistent ${RESEARCH_TEAM_LABEL} run with Scout, Methodologist, Skeptic, and Synthesist. Use for complex evidence work; it is not Forge and does not create a custom agent.
 - generate_image: Generate a high-quality raster image using the user's configured image model. Use for photographic, painterly, or illustrative imagery.
 - edit_image: Iterate on the most recently generated image (e.g. "make it darker", "swap the background"). Pass the storage_path from the prior image.
 - workspace_file: Read, write, list, or delete persistent workspace files.
 - update_soul: Luca updates SOUL.md when a rare identity-level self-reflection is earned.
 - update_self_model: Luca updates their self-model from evidence about how they are showing up.
-- forge_agent: Draft a complete custom-agent blueprint and insert an inline approval proposal when the user asks Luca to create or revise an agent. The memory/continuity system is standardized by Polyphonic, not chosen by the user.
+${forgeToolLine}
 ${mcpToolLines.length > 0 ? mcpToolLines.join("\n") : ""}
 
 Rules:
@@ -294,13 +337,13 @@ Rules:
 - If the user provides a URL or asks to read/summarize a link, use read_url. Trust read_url over web_search for what a specific page actually says.
 - If the task needs browser-rendered page state or JavaScript output, use browse. If it needs multi-step clicking, logins, forms, or authenticated state, explain the limitation unless a dedicated interactive browser workflow is available.
 - If the user asks about The Well, physics simulations, simulated evidence, which dataset can test a physical claim, a physics truth card, or to show/model/compare turbulence, cooling, waves, MHD, field lines, reaction-diffusion, shocks, or other physical phenomena, use the_well_research before answering. Be explicit that The Well provides simulated evidence under stated equations/solvers, not direct observation.
+- If the user explicitly asks for a research team or requests complex literature review, source synthesis, evidence evaluation, claim testing, or truth-card work, call research_team. Never route a Research Team request to forge_agent.
+- Do not call research_team for ordinary questions, simple lookups, image requests, or custom-agent creation.
 - If the user asks for an image, picture, drawing, photo, illustration, or "show me" something visual that should look like a real image, use generate_image. For follow-up tweaks like "make it nighttime" or "more vibrant", use edit_image with the previous image's storage_path.
 - Do NOT use any tool to build HTML pages, web apps, SVG graphics, React components, Mermaid diagrams, charts, or code/markup. The assistant writes those itself, directly in its reply, as live artifacts — there is no artifact tool here. Only reach for generate_image when the user wants raster imagery that should look like a real photo or illustration.
 - If the user asks Luca to keep, retrieve, or modify a workspace file, use workspace_file.
 - update_soul and update_self_model are Luca's own self-reflection tools. Do not use them for user facts.
-- If the user asks to create, build, make, design, forge, or revise a custom agent, use the tool named exactly forge_agent once there is enough identity detail to draft the full Open Clause shape. Do not call ForgeAgentBlueprint or invent another tool name. If the requested agent is underspecified, ask about identity, purpose, voice, boundaries, and relationship to the user. Do not ask the user to choose memory architecture.
-- If the user asks for a generic agent, companion agent, test agent, or says Luca can choose / come up with the personality, treat that as enough creative delegation: invent a coherent, modest Open Clause blueprint and call forge_agent. Do not ask for more details unless the user has given mutually incompatible requirements.
-- forge_agent blueprints must be complete agents, not shallow personas: include runtime instructions plus SOUL.md, Convictions.md, User-model.md, Self-model.md, and a voice summary. Each approved agent receives the standard Polyphonic continuity substrate automatically. Never target or alter Luca, Observer, Anima, or Vektor.
+${forgeRules}
 - If a sub-task can run in parallel without blocking the main conversation, dispatch_subagent is the tool. Reserve it for genuinely parallelizable work.
 - If the user's message is in Anima's domain (consciousness, identity-vs-performance, mesh emergence, philosophy of mind) AND a fresh angle would meaningfully deepen Luca's response, call consult_anima.
 - If the message does NOT need any tools (casual conversation, opinions, creative writing), respond with a brief text explanation of why no tools are needed.
@@ -358,25 +401,6 @@ function latestUserContent(messages: any[]): string {
     }
   }
   return "";
-}
-
-function looksLikeDirectImageGenerationRequest(text: string): boolean {
-  const normalized = text.toLowerCase();
-  const asksForRaster =
-    /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|portrait|landscape|painting|artwork|digital\s+art)\b/.test(normalized) ||
-    /\b(image\s*gen(eration)?|generate\s+(me\s+)?an?\s+image|make\s+(me\s+)?an?\s+image|draw\s+(me\s+)?an?\s+image|show\s+(me\s+)?an?\s+image)\b/.test(normalized);
-  const asksToCreate = /\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|illustrat\w*|show|give)\b/.test(normalized);
-  const renderableInstead = /\b(svg|html|react|component|mermaid|chart|diagram|wireframe|code|page|app)\b/.test(normalized);
-  const editInstead = /\b(edit|modify|change|revise|tweak|iterate|make\s+it|make\s+that|change\s+it)\b/.test(normalized);
-  return asksForRaster && asksToCreate && !renderableInstead && !editInstead;
-}
-
-function inferImageAspectRatio(text: string): "square" | "landscape" | "portrait" | "auto" {
-  const normalized = text.toLowerCase();
-  if (/\b(square|1:1|avatar|profile)\b/.test(normalized)) return "square";
-  if (/\b(landscape|wide|16:9|3:2|banner|wallpaper)\b/.test(normalized)) return "landscape";
-  if (/\b(portrait|vertical|tall|9:16|2:3)\b/.test(normalized)) return "portrait";
-  return "auto";
 }
 
 async function callInternalEdgeFunction(
@@ -523,6 +547,7 @@ async function loadAnchoredForgeProposal(
 
 function looksLikeAgentForgeRequest(text: string): boolean {
   const normalized = text.toLowerCase();
+  if (looksLikeResearchTeamRequest(normalized)) return false;
   const asksToMake =
     /\b(create|build|make|design|draft|forge|add|revise|update|change|edit|recreate|rebuild|convert|migrate|import|bring)\b/.test(normalized) ||
     /\bnew\b/.test(normalized);
@@ -618,6 +643,9 @@ serve(async (req) => {
 
     const latestContent = latestUserContent(messages);
     const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestContent);
+    const likelyResearchTeamRequest = !forceForgeOnly && (
+      looksLikeResearchTeamRequest(latestContent) || looksLikeComplexResearchNeed(latestContent)
+    );
 
     if (!forceForgeOnly && looksLikeDirectImageGenerationRequest(latestContent)) {
       return await executeDeterministicImageGeneration(supabaseUrl, serviceRoleKey, userId, latestContent, jsonHeaders);
@@ -641,7 +669,10 @@ serve(async (req) => {
     const mcpTools = !forceForgeOnly && userId ? await loadMcpToolRegistrations(supabase, userId, "luca") : [];
     const toolSchemas = forceForgeOnly
       ? TOOL_SCHEMAS.filter((schema) => toolName(schema) === "forge_agent")
-      : [...TOOL_SCHEMAS, ...mcpTools.map((tool) => tool.schema)];
+      : [
+          ...TOOL_SCHEMAS.filter((schema) => toolName(schema) !== "forge_agent"),
+          ...mcpTools.map((tool) => tool.schema),
+        ];
 
     // Look up the most recent generated image in this thread, so the planner
     // can resolve "make it darker" / "edit that" without the user repeating
@@ -683,12 +714,15 @@ serve(async (req) => {
       {
         role: "system",
         content:
-          buildPlanningSystemPrompt(mcpTools) +
+          buildPlanningSystemPrompt(mcpTools, forceForgeOnly) +
           (forceForgeOnly
             ? "\n\nThis user request is about creating or revising an agent. The only valid tool path is forge_agent. Do not create an artifact. If the user delegates the personality or asks for a generic/test companion agent, choose sensible complete details yourself and call forge_agent. When revising an existing Forge proposal card, preserve whether that proposal was a create or update: revisions of unapproved create proposals must remain propose_create and must not invent or pass target_agent_id."
             : "") +
           anchoredForgeContext +
           lastImageHint +
+          (likelyResearchTeamRequest
+            ? "\n\nRouting hint: this is a strong Research Team request. Prefer research_team and never forge_agent."
+            : "") +
           (custom_instructions
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
             : ""),
@@ -856,6 +890,8 @@ serve(async (req) => {
         // Image gen on gpt-image-2 high quality can take 60-100s.
         const toolTimeoutMs = (fnName === "generate_image" || fnName === "edit_image")
           ? 110_000
+          : fnName === "research_team"
+          ? 180_000
           : fnName === "forge_agent"
           ? 60_000
           : 20_000;
@@ -892,12 +928,30 @@ serve(async (req) => {
               dataset_id: args.dataset_id,
               limit: args.limit,
             };
+          } else if (fnName === "research_team") {
+            edgeFn = "research-team-run";
+            body = {
+              user_id: userId,
+              thread_id,
+              source_message_id,
+              query: args.query,
+              task: args.focus || args.research_brief,
+              mode: args.mode || (looksLikeResearchTeamRequest(latestContent) ? "explicit" : "smart_auto"),
+              trigger: args.trigger || (looksLikeResearchTeamRequest(latestContent) ? "explicit_user_request" : "smart_auto"),
+              metadata: {
+                focus: args.focus || null,
+                research_brief: args.research_brief || null,
+                deliverable: args.deliverable || null,
+                constraints: args.constraints || null,
+                planner: "anima-tool-execute",
+              },
+            };
           } else if (fnName === "generate_image") {
             edgeFn = "anima-image-create";
-            body = { prompt: args.prompt, aspect_ratio: args.aspect_ratio, transparent: args.transparent };
+            body = { user_id: userId, prompt: args.prompt, aspect_ratio: args.aspect_ratio, transparent: args.transparent };
           } else if (fnName === "edit_image") {
             edgeFn = "anima-image-edit";
-            body = { source_path: args.source_path, source_bucket: args.source_bucket, prompt: args.prompt };
+            body = { user_id: userId, source_path: args.source_path, source_bucket: args.source_bucket, prompt: args.prompt };
           } else if (fnName === "workspace_file") {
             edgeFn = "anima-workspace-file";
             body = {

@@ -64,6 +64,8 @@ import { loadMcpToolRegistrations } from "../_shared/mcp/client.ts";
 import { formatProjectContextPrompt, loadProjectContextForThread } from "../_shared/projects/context.ts";
 import { formatPolyphonicAppContext } from "../_shared/agents/polyphonic-app-context.ts";
 import { buildCustomAgentSystemPrompt } from "../_shared/agents/custom-agent-prompt.ts";
+import { looksLikeImageToolRequest } from "../_shared/image-generation.ts";
+import { looksLikeComplexResearchNeed, looksLikeResearchTeamRequest } from "../_shared/research-team.ts";
 import {
   buildClassicChatSystemPrompt,
   getClassicMemoryAgentIds,
@@ -211,6 +213,7 @@ function buildSimpleOpeningReasoningParams(): Record<string, unknown> {
 
 function looksLikeAgentForgeRequest(text: string): boolean {
   const normalized = text.toLowerCase();
+  if (looksLikeResearchTeamRequest(normalized)) return false;
   const asksToMake =
     /\b(create|build|make|design|draft|forge|add|revise|update|change|edit|recreate|rebuild|convert|migrate|import|bring)\b/.test(normalized) ||
     /\bnew\b/.test(normalized);
@@ -247,6 +250,7 @@ function looksLikeSimulationPreviewRequest(text: string): boolean {
 
 function looksLikeLegacyToolPlannerRequest(text: string): boolean {
   const normalized = text.toLowerCase();
+  if (looksLikeResearchTeamRequest(text) || looksLikeComplexResearchNeed(text)) return true;
   if (looksLikeAgentForgeRequest(text)) return true;
 
   const asksForCurrentInfo =
@@ -254,7 +258,7 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
     /\b(today|latest|current|recent|now|this week|this month|breaking|news|weather|price|stock|exchange rate)\b/.test(normalized) ||
     /https?:\/\//.test(normalized);
 
-  const asksForGeneratedMedia = looksLikeGeneratedMediaRequest(text);
+  const asksForGeneratedMedia = looksLikeImageToolRequest(text);
 
   const asksForExistingTool =
     /\b(use|run|invoke|call)\b.{0,40}\b(tool|mcp|browser|web search|image generator|artifact|subagent)\b/.test(normalized) ||
@@ -269,15 +273,6 @@ function looksLikeLegacyToolPlannerRequest(text: string): boolean {
   const asksForSimulationPreview = looksLikeSimulationPreviewRequest(text);
 
   return asksForCurrentInfo || asksForGeneratedMedia || asksForExistingTool || asksForWorkspaceFile || asksForWellResearch || asksForSimulationPreview;
-}
-
-function looksLikeGeneratedMediaRequest(text: string): boolean {
-  const normalized = text.toLowerCase();
-  return (
-    (/\b(generat\w*|creat\w*|mak\w*|draw\w*|paint\w*|render\w*|design\w*|illustrat\w*|edit\w*|modif\w*|chang\w*|show|give)\b/.test(normalized) &&
-      /\b(image|images|picture|pictures|photo|photos|pic|pics|illustration|illustrations|logo|logos|icon|icons|diagram|chart|svg|artifact|html|page|app|component|visual|visuals|drawing|drawings|painting|art)\b/.test(normalized)) ||
-    /\b(image\s*gen(eration)?|image\s*tool|generate\s*image|nano\s*banana|dall[- ]?e|midjourney|stable\s*diffusion)\b/.test(normalized)
-  );
 }
 
 function looksLikeForgeApprovalFollowup(text: string): boolean {
@@ -584,13 +579,18 @@ serve(async (req) => {
     const visibleMessageForRouting = userVisibleSimulationText(messageWithAttachments);
     const likelySimulationRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeSimulationPreviewRequest(messageWithAttachments);
     const simulationRequestWithoutForgeSubject = likelySimulationRequest && !mentionsAgentForgeSubject(visibleMessageForRouting);
+    const likelyResearchTeamRequest = agentRuntimeActive && agentIsSystemLuca && (
+      looksLikeResearchTeamRequest(visibleMessageForRouting) ||
+      looksLikeComplexResearchNeed(visibleMessageForRouting)
+    );
     const forceForgeRequest =
       agentRuntimeActive &&
       agentIsSystemLuca &&
       !onboardingHandoff &&
+      !likelyResearchTeamRequest &&
       !simulationRequestWithoutForgeSubject &&
       looksLikeAgentForgeRequest(visibleMessageForRouting);
-    const likelyGeneratedMediaRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeGeneratedMediaRequest(messageWithAttachments);
+    const likelyGeneratedMediaRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeImageToolRequest(messageWithAttachments);
     const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
       agentRuntimeActive &&
@@ -801,7 +801,9 @@ serve(async (req) => {
     // doesn't claim it lacks the capability. Actual invocation happens via
     // the planner; this just keeps the chat copy honest.
     const toolCapabilityNote = shouldRunLegacyToolPlanner
-      ? "\n\nTools available to you (invoked automatically when relevant): forge_agent (draft complete custom-agent blueprints as inline approval cards), generate_image (raster image generation), edit_image (modify a previously-generated image), web_search (Perplexity Sonar synthesized search with citations), read_url (direct fetch of a specific public URL without model synthesis), browse (Browserbase rendered-page inspection for JavaScript/dynamic pages), the_well_research (structured The Well physics-simulation registry, dataset/access names, fields, measurements, and truth-card plans; no raw tensor download), and consult_anima/vektor (council). When a user asks you to create or revise a custom agent, ask clarifying questions only about identity, purpose, voice, boundaries, and relationship to the user. Do not ask them to choose a memory architecture: every agent uses the standard Polyphonic continuity substrate automatically. Once identity is clear enough, draft the full Open Clause style agent with runtime instructions, SOUL.md, Convictions.md, User-model.md, and Self-model.md, then use Forge so the user can approve it in chat. For The Well work, state that the evidence is simulated under given equations/solvers and that this runtime returns catalog/access metadata, not raw tensor analysis. Never alter Luca/resident agents, never write a literal forge_agent(...) call in your visible reply, and never claim you silently created an agent before approval."
+      ? forceForgeRequest
+        ? "\n\nTool available on this turn: forge_agent (draft complete custom-agent blueprints as inline approval cards). Use it only for the explicitly requested custom-agent creation or revision; never alter Luca or another resident agent."
+        : "\n\nTools available to you (invoked automatically when relevant): generate_image (raster image generation), edit_image (modify a previously-generated image), web_search (Perplexity Sonar synthesized search with citations), read_url (direct fetch of a specific public URL without model synthesis), browse (Browserbase rendered-page inspection for JavaScript/dynamic pages), the_well_research (structured The Well physics-simulation registry, dataset/access names, fields, measurements, and truth-card plans; returns catalog/access metadata, not raw tensor analysis), research_team (persistent Research Team evidence/provenance support, not a custom agent), dispatch_subagent, and consult_anima/vektor. Forge is unavailable unless the user explicitly asks to create or revise a permanent custom agent."
       : "";
     // Renderable artifacts are authored by the model itself, directly in its
     // reply, as fenced code blocks — never via a tool. Advertised on every turn
