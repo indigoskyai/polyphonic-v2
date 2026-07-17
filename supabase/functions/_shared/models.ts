@@ -13,7 +13,7 @@ import {
   normalizeReasoningEffort as normalizeCapabilityReasoningEffort,
   type ModelParameterStyle,
   type ModelReasoningEffort,
-} from '../../../shared/modelCapabilities.ts';
+} from './modelCapabilities.ts';
 
 export type ParamStyle = ModelParameterStyle;
 export type ReasoningEffort = ModelReasoningEffort;
