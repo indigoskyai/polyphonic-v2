@@ -45,7 +45,8 @@ describe('Agent Forge runtime', () => {
     expect(planner).toContain('edgeFn = "agent-forge"');
     expect(planner).toContain('draft the full Open Clause shape');
     expect(planner).toContain('forceForgeOnly');
-    expect(planner).toContain('max_tokens: options.maxTokens ?? (forceForgeOnly ? 12_000 : 700)');
+    expect(planner).toContain('max_tokens: planningModel === "moonshotai/kimi-k3"');
+    expect(planner).toContain(': options.maxTokens ?? (forceForgeOnly ? 12_000 : 700)');
     expect(planner).toContain('force_forge_only === true');
     expect(planner).toContain('If the user asks for a generic agent, companion agent, test agent');
     expect(planner).toContain('The only valid tool path is forge_agent. Do not create an artifact.');
@@ -61,8 +62,9 @@ describe('Agent Forge runtime', () => {
     expect(chatMulti).toContain('!onboardingHandoff && !forceForgeRequest && !likelyGeneratedMediaRequest && agentIsSystemLuca && backend.allowTools && sdkRuntimeRequested');
     expect(chatMulti).toContain('force_forge_only: forceForgeOnly');
     expect(chatMulti).toContain('function looksLikeLegacyToolPlannerRequest');
-    expect(chatMulti).toContain('const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
-    expect(chatMulti).toContain('(forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)))');
+    expect(chatMulti).toContain('const classicK3ToolsEnabled = classicRuntime && selectedClassicModel === "moonshotai/kimi-k3" && backend.allowTools');
+    expect(chatMulti).toContain('const likelyToolRequest = (agentRuntimeActive || classicK3ToolsEnabled) && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest');
+    expect(chatMulti).toContain('(agentRuntimeActive && explicitAgentRuntime) || likelyToolRequest');
     expect(chatMulti).toContain('digital\\s+(entity|companion|being|mind)');
     expect(chatMulti).toContain('character\\s+card');
     expect(chatMulti).toContain('const onboardingHandoff');

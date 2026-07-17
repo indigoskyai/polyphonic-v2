@@ -12,7 +12,7 @@ describe('chat agent error cards', () => {
   it('renders arbitrary agent names and exposes a dismiss action', () => {
     render(
       <AgentErroredCard
-        agent="cortex-worker"
+        responderLabel="Cortex Worker"
         message="The task failed."
         detail="request_id: req_123"
         occurredAt="2026-06-29T08:00:00.000Z"

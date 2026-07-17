@@ -66,14 +66,20 @@ import CanvasPane from '@/components/canvas/CanvasPane';
 import {
   DEFAULT_CHAT_MODEL,
   defaultRuntimeForAgent,
+  getChatModelCapabilities,
   getChatModelLabel,
+  getChatModelReasoningEfforts,
+  getReasoningEffortLabel,
+  normalizeChatModelReasoningEffort,
   normalizeChatTargetPreference,
   normalizeThreadRuntimeMode,
+  type ReasoningEffort,
 } from '@/lib/chatRuntime';
 import { clearHighlightCache } from '@/components/rich/highlightCache';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
-  CHAT_ATTACHMENT_ACCEPT,
+  getChatAttachmentAccept,
+  isChatAttachmentSupported,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENTS,
 } from '@/lib/chatAttachments';
@@ -84,6 +90,7 @@ import {
   retryChatAttachment,
   uploadChatAttachment,
 } from '@/lib/attachmentApi';
+import { getStreamRevealAdvance, STREAM_SNAPSHOT_INTERVAL_MS } from '@/lib/chatPerformance';
 
 /* ─── Smooth, rate-limited typewriter hook ───
  * Decouples reveal speed from network chunk delivery. Maintains a steady
@@ -144,12 +151,7 @@ function useSmoothTypewriter(target: string, active = true) {
         gapEmaRef.current = gapEmaRef.current * 0.92 + gap * 0.08;
         const smoothedGap = gapEmaRef.current;
 
-        // Continuous cadence curve: 160 cps base, ramps to ~300 cps cap.
-        // Lower cap than before (was 520) — at 300 the typewriter caps at
-        // ~60 wpm, fast comfortable reading speed. Steadier rhythm.
-        const charsPerMs = Math.min(0.30, 0.16 + Math.sqrt(smoothedGap) * 0.018);
-
-        const advance = Math.max(1, Math.round(elapsed * charsPerMs));
+        const advance = getStreamRevealAdvance(elapsed, smoothedGap);
         const nextLen = Math.min(tgt.length, curLen + advance);
         if (nextLen !== curLen) {
           const next = tgt.slice(0, nextLen);
@@ -506,6 +508,21 @@ type FirstTurnHandoff = {
   startedAt: string;
 };
 
+type ChatRetryTarget = {
+  runtimeMode: 'classic' | 'agent';
+  modelId: string;
+  agentId: string;
+  targetLabel: string;
+  reasoningEffort: ReasoningEffort;
+};
+
+type SendMessageOptions = {
+  text?: string;
+  attachments?: PersistedAttachment[];
+  hiddenHandoff?: boolean;
+  target?: ChatRetryTarget;
+};
+
 export default function ChatView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
@@ -579,6 +596,9 @@ export default function ChatView() {
   const streamingThinking = useThreadStore((s) => s.streamingThinking);
   const threads = useThreadStore((s) => s.threads);
   const loadMessages = useThreadStore((s) => s.loadMessages);
+  const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
+  const hasOlderMessages = useThreadStore((s) => s.hasOlderMessages);
+  const loadingOlderMessages = useThreadStore((s) => s.loadingOlderMessages);
   const subscribeMessages = useThreadStore((s) => s.subscribeMessages);
   const setCurrentThread = useThreadStore((s) => s.setCurrentThread);
   const createThread = useThreadStore((s) => s.createThread);
@@ -674,7 +694,21 @@ export default function ChatView() {
     ? normalizeThreadRuntimeMode(currentThread.runtime_mode, 'agent')
     : (pendingTargetKind === 'model' ? 'classic' : defaultRuntimeForAgent(activeAgentId));
   const selectedChatModel = currentThread?.selected_model || pendingChatModelId || defaultModel || DEFAULT_CHAT_MODEL;
+  const supportedReasoningEfforts = useMemo(
+    () => getChatModelReasoningEfforts(selectedChatModel),
+    [selectedChatModel],
+  );
+  const effectiveThinkingEffort = normalizeChatModelReasoningEffort(selectedChatModel, thinkingEffort);
+  const reasoningEffortFixed = supportedReasoningEfforts.length === 1;
   const classicChatActive = threadRuntimeMode === 'classic';
+  const activeModelCapabilities = useMemo(
+    () => classicChatActive ? getChatModelCapabilities(selectedChatModel) : null,
+    [classicChatActive, selectedChatModel],
+  );
+  const activeAttachmentAccept = useMemo(
+    () => getChatAttachmentAccept(activeModelCapabilities?.inputModalities),
+    [activeModelCapabilities],
+  );
   const effectiveRuntimeMode = classicChatActive ? 'classic' : 'agent';
   const activeMessageAgent = classicChatActive ? null : activeAgentId;
   const memoryEnabled = currentThread?.memory_enabled !== false;
@@ -704,7 +738,7 @@ export default function ChatView() {
   // Allow inline UI (e.g. ImageCard "Edit with prompt") to prefill the
   // composer and optionally auto-send. Listens for window event dispatched
   // from MediaLightbox/ImageCard.
-  const sendMessageRef = useRef<((opts?: { text?: string; hiddenHandoff?: boolean }) => void) | null>(null);
+  const sendMessageRef = useRef<((opts?: SendMessageOptions) => void) | null>(null);
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
@@ -751,6 +785,9 @@ export default function ChatView() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeClientTurnIdRef = useRef<string | null>(null);
+  const cancelRequestedTurnIdRef = useRef<string | null>(null);
+  const activeSendTargetRef = useRef<ChatRetryTarget | null>(null);
   const guardianAbortRef = useRef<AbortController | null>(null);
   const inputCaptureRef = useRef('');
   const sendInFlightRef = useRef(false);
@@ -1134,25 +1171,50 @@ export default function ChatView() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, []);
 
+  const loadEarlierMessages = useCallback(async () => {
+    if (!currentThreadId || loadingOlderMessages) return;
+    const scroller = scrollRef.current;
+    const previousHeight = scroller?.scrollHeight ?? 0;
+    const previousTop = scroller?.scrollTop ?? 0;
+    await loadOlderMessages(currentThreadId);
+    requestAnimationFrame(() => {
+      const node = scrollRef.current;
+      if (!node) return;
+      node.scrollTop = previousTop + (node.scrollHeight - previousHeight);
+    });
+  }, [currentThreadId, loadOlderMessages, loadingOlderMessages]);
+
   // Reload-mid-stream recovery — persist in-progress streamed content to
   // localStorage so a refresh during streaming surfaces the partial reply
   // as a recovered assistant message instead of vanishing.
   const STREAM_KEY = currentThreadId ? `luca:stream:${currentThreadId}` : null;
   useEffect(() => {
     if (!STREAM_KEY) return;
-    if (isStreaming && streamingContent) {
+    if (!isStreaming) {
+      try { localStorage.removeItem(STREAM_KEY); } catch { /* */ }
+      return;
+    }
+
+    const persistSnapshot = () => {
+      const stream = useThreadStore.getState();
+      if (!stream.streamingContent) return;
       try {
         localStorage.setItem(STREAM_KEY, JSON.stringify({
-          content: streamingContent,
-          thinking: streamingThinking,
+          content: stream.streamingContent,
+          thinking: stream.streamingThinking,
           agent: activeMessageAgent,
           updated_at: Date.now(),
         }));
       } catch { /* quota */ }
-    } else if (!isStreaming) {
-      try { localStorage.removeItem(STREAM_KEY); } catch { /* */ }
-    }
-  }, [STREAM_KEY, isStreaming, streamingContent, streamingThinking, activeMessageAgent]);
+    };
+
+    persistSnapshot();
+    const interval = window.setInterval(persistSnapshot, STREAM_SNAPSHOT_INTERVAL_MS);
+    return () => {
+      window.clearInterval(interval);
+      persistSnapshot();
+    };
+  }, [STREAM_KEY, isStreaming, activeMessageAgent]);
 
   // On thread mount: if there's a stale in-progress snapshot from a prior
   // session, recover it as an assistant message tagged metadata.recovered.
@@ -1452,6 +1514,10 @@ export default function ChatView() {
         rejected.push(`${file.name}: empty file`);
         continue;
       }
+      if (!isChatAttachmentSupported(file, activeModelCapabilities?.inputModalities)) {
+        rejected.push(`${file.name}: not supported by ${getChatModelLabel(selectedChatModel)}`);
+        continue;
+      }
       accepted.push(file);
     }
 
@@ -1460,7 +1526,7 @@ export default function ChatView() {
       queued.forEach(startAttachmentUpload);
     }
     setAttachmentError(rejected.length > 0 ? rejected.slice(0, 2).join(' · ') : null);
-  }, [addAttachments, pendingAttachments.length, startAttachmentUpload]);
+  }, [activeModelCapabilities, addAttachments, pendingAttachments.length, selectedChatModel, startAttachmentUpload]);
 
   const openAttachmentFilePicker = useCallback(() => {
     setAttachmentMenuOpen(false);
@@ -1880,7 +1946,7 @@ export default function ChatView() {
     }
   }, [input, user, currentThreadId, guardianStreaming, modelKeyMissing, createThread, pendingTargetKind, pendingAgentId, navigate, loadThreads]);
 
-  const sendMessage = useCallback(async (options?: { text?: string; attachments?: PersistedAttachment[]; hiddenHandoff?: boolean }) => {
+  const sendMessage = useCallback(async (options?: SendMessageOptions) => {
     const sourceText = typeof options?.text === 'string' ? options.text : input;
     const replayAttachments = options?.attachments ?? null;
     const hiddenHandoff = options?.hiddenHandoff === true;
@@ -1893,15 +1959,43 @@ export default function ChatView() {
     if (sendInFlightRef.current) return;
     sendInFlightRef.current = true;
     const clientTurnId = crypto.randomUUID();
+    activeClientTurnIdRef.current = clientTurnId;
+    cancelRequestedTurnIdRef.current = null;
+    const messageText = sourceText.trim() || 'Attached files.';
+    const requestRuntimeMode = options?.target?.runtimeMode ?? effectiveRuntimeMode;
+    const requestModel = options?.target?.modelId ?? selectedChatModel;
+    const requestAgentId = options?.target?.agentId ?? activeAgentId;
+    const requestMessageAgent = requestRuntimeMode === 'classic' ? null : requestAgentId;
+    const requestReasoningEffort = normalizeChatModelReasoningEffort(
+      requestModel,
+      options?.target?.reasoningEffort ?? thinkingEffort,
+    );
+    const requestResponderLabel = options?.target?.targetLabel
+      ?? (requestRuntimeMode === 'classic' ? getChatModelLabel(requestModel) : getAgentDisplayName(requestAgentId, agentNameById));
+    const retryTarget: ChatRetryTarget = {
+      runtimeMode: requestRuntimeMode,
+      modelId: requestModel,
+      agentId: requestAgentId,
+      targetLabel: requestResponderLabel,
+      reasoningEffort: requestReasoningEffort,
+    };
+    activeSendTargetRef.current = retryTarget;
+    const targetMetadata = {
+      target_kind: requestRuntimeMode === 'classic' ? 'model' : 'agent',
+      target_id: requestRuntimeMode === 'classic' ? requestModel : requestAgentId,
+      target_label: requestResponderLabel,
+      reasoning_effort: requestReasoningEffort,
+      retry_target: retryTarget,
+      retry_text: messageText,
+    };
 
     // Dismiss welcome back on first message
     if (welcomeBack) setWelcomeBack(null);
 
-    const messageText = sourceText.trim() || 'Attached files.';
     inputCaptureRef.current = messageText;
-    persistChatTarget(classicChatActive
-      ? { kind: 'model', id: selectedChatModel }
-      : { kind: 'agent', id: activeAgentId });
+    persistChatTarget(requestRuntimeMode === 'classic'
+      ? { kind: 'model', id: requestModel }
+      : { kind: 'agent', id: requestAgentId });
     setComposerSending(true);
     if (composerSendTimeoutRef.current) {
       window.clearTimeout(composerSendTimeoutRef.current);
@@ -1916,7 +2010,7 @@ export default function ChatView() {
       setFirstTurnHandoff({
         id: crypto.randomUUID(),
         text: messageText,
-        agentLabel: currentResponderLabel,
+        agentLabel: requestResponderLabel,
         attachmentCount: pendingAttachments.length + (replayAttachments?.length ?? 0),
         startedAt: new Date().toISOString(),
       });
@@ -1928,13 +2022,15 @@ export default function ChatView() {
     let createdThread = false;
     if (!tid) {
       try {
-        tid = await createThread(user.id, pendingAgentId, null, {
-          runtimeMode: effectiveRuntimeMode,
-          selectedModel: effectiveRuntimeMode === 'classic' ? selectedChatModel : null,
+        tid = await createThread(user.id, requestAgentId, null, {
+          runtimeMode: requestRuntimeMode,
+          selectedModel: requestRuntimeMode === 'classic' ? requestModel : null,
         });
         createdThread = true;
       } catch (err) {
         sendInFlightRef.current = false;
+        activeClientTurnIdRef.current = null;
+        activeSendTargetRef.current = null;
         setFirstTurnHandoff(null);
         if (isFirstTurn && !options?.text) setInput(sourceText);
         setAttachmentError(err instanceof Error ? err.message : 'Could not start a new conversation');
@@ -1949,6 +2045,8 @@ export default function ChatView() {
       }
     } catch (err) {
       sendInFlightRef.current = false;
+      activeClientTurnIdRef.current = null;
+      activeSendTargetRef.current = null;
       setFirstTurnHandoff(null);
       if (isFirstTurn && !options?.text) setInput(sourceText);
       setAttachmentError(err instanceof Error ? err.message : 'Attachment upload failed');
@@ -1959,6 +2057,38 @@ export default function ChatView() {
     const uploadedAttachmentIds = uploadedAttachments
       .map((attachment) => attachment.descriptor?.id || (attachment.meta?.attachment_id as string | undefined))
       .filter((id): id is string => Boolean(id));
+    const persistChatError = async (
+      content: string,
+      metadata: Record<string, unknown>,
+    ) => {
+      const id = crypto.randomUUID();
+      const row = {
+        id,
+        thread_id: tid!,
+        user_id: user.id,
+        role: 'assistant',
+        content,
+        model: requestRuntimeMode === 'classic' ? requestModel : null,
+        agent: requestMessageAgent,
+        thinking_content: null,
+        tokens_used: null,
+        bookmarked: false,
+        kind: 'agent_error' as const,
+        metadata: {
+          agent: requestMessageAgent,
+          ...targetMetadata,
+          retry_attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+          client_turn_id: clientTurnId,
+          ...metadata,
+        },
+      };
+      addMessage(row as any);
+      try {
+        await insertMessageWithFreshSession(row as any);
+      } catch (persistError) {
+        console.warn('persist chat error failed', persistError);
+      }
+    };
     if (!hiddenHandoff) {
       try {
         const inserted = await insertMessageWithFreshSession({
@@ -1977,6 +2107,8 @@ export default function ChatView() {
         persistedUserMessage = inserted as unknown as Message;
       } catch (insertUserError) {
         sendInFlightRef.current = false;
+        activeClientTurnIdRef.current = null;
+        activeSendTargetRef.current = null;
         setFirstTurnHandoff(null);
         if (isFirstTurn && !options?.text) setInput(sourceText);
         const detail = insertUserError instanceof Error ? insertUserError.message : String(insertUserError);
@@ -1984,10 +2116,11 @@ export default function ChatView() {
         addMessage({
           thread_id: tid, user_id: user.id, role: 'assistant',
           content: authExpired ? 'Could not save your message. Please sign in again, then retry.' : 'Could not save your message. Please try again.',
-          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
+          model: requestRuntimeMode === 'classic' ? requestModel : null, agent: requestMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
           kind: 'agent_error',
           metadata: {
-            agent: activeMessageAgent,
+            agent: requestMessageAgent,
+            ...targetMetadata,
             message: authExpired ? 'Could not save your message. Sign in again, then retry.' : 'Could not save your message.',
             detail,
             retry_text: messageText,
@@ -2032,13 +2165,14 @@ export default function ChatView() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    let fullContent = '';
 
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
       const edgeMessageText =
-        activeAgentId === 'luca' && effectiveRuntimeMode === 'agent' && looksLikeSimulationTurnRequest(messageText)
+        requestAgentId === 'luca' && requestRuntimeMode === 'agent' && looksLikeSimulationTurnRequest(messageText)
           ? withClientSimulationTurnDirective(messageText)
           : messageText;
       const resp = await fetch(`${supabaseUrl}/functions/v1/chat-multi`, {
@@ -2052,22 +2186,23 @@ export default function ChatView() {
             thread_id: tid,
             message: edgeMessageText,
             source_message_id: persistedUserMessage?.id,
+            client_turn_id: clientTurnId,
             attachment_ids: uploadedAttachmentIds,
             attachments: uploadedAttachments,
-            model: selectedChatModel,
-            runtime_mode: effectiveRuntimeMode,
+            model: requestModel,
+            runtime_mode: requestRuntimeMode,
             memory_enabled: memoryEnabled,
-            reasoning_effort: thinkingEffort,
+            reasoning_effort: requestReasoningEffort,
             ensemble: byokEnabled && ensembleActive,
-            agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat',
+            agent_mode: requestRuntimeMode === 'agent' ? 'agent' : 'chat',
             client_context: {
               route: window.location.pathname,
               view: 'chat',
               thread_id: tid,
-              active_agent_id: activeAgentId,
-              active_agent_name: currentAgentLabel,
-              selected_model: selectedChatModel,
-              runtime_mode: effectiveRuntimeMode,
+              active_agent_id: requestAgentId,
+              active_agent_name: requestRuntimeMode === 'classic' ? requestResponderLabel : currentAgentLabel,
+              selected_model: requestModel,
+              runtime_mode: requestRuntimeMode,
               access_tier: accessTier,
               composer_surface: hiddenHandoff ? 'hidden_onboarding_handoff' : landingAutosend ? 'landing_handoff' : 'chat',
               onboarding_handoff: hiddenHandoff,
@@ -2090,21 +2225,23 @@ export default function ChatView() {
           err.requestId ? `request_id: ${err.requestId}` : null,
           `status: ${resp.status}`,
         ].filter(Boolean).join('  •  ');
-        addMessage({
-          thread_id: tid!, user_id: user.id, role: 'assistant',
-          content: isMissingKey
+        await persistChatError(
+          isMissingKey
             ? `${message}\n\n[Open Settings → Models](/settings/models) to add your OpenRouter key.`
             : message,
-          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
-          kind: 'agent_error',
-          metadata: { agent: activeMessageAgent, message, detail, code: err.code, request_id: err.requestId },
-        } as any);
+          {
+            message,
+            detail,
+            provider_status: resp.status,
+            code: err.code,
+            request_id: err.requestId,
+          },
+        );
         return;
       }
 
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
-      let fullContent = '';
       let fullThinking = '';
       const collectedVariants: Array<{ model: string; content: string; thinking?: string | null }> = [];
       const collectedRankings: RankingEntry[] = [];
@@ -2289,13 +2426,19 @@ export default function ChatView() {
                 addMessage({
                   id: assistantMessageId,
                   thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: fullContent, model: data.model || null, agent: activeMessageAgent,
+                  content: fullContent, model: data.model || requestModel, agent: requestMessageAgent,
                   thinking_content: fullThinking || null,
                   tokens_used: data.tokens_used || null,
                   bookmarked: false,
                   // Store variants as extra metadata on the message object (legacy convenience)
                   ...(collectedVariants.length > 0 ? { variants: collectedVariants } : {}),
-                  metadata: { ...(councilMetadata || {}), local_stream_stub: true },
+                  metadata: {
+                    ...(councilMetadata || {}),
+                    ...targetMetadata,
+                    request_id: data.request_id || null,
+                    provider_status: 'completed',
+                    local_stream_stub: true,
+                  },
                 } as any);
                 const localSimulationArtifacts = extractStreamingArtifacts(fullContent, { threadId: tid!, userId: user.id })
                   .filter((artifact) => artifact.kind === 'simulation')
@@ -2311,13 +2454,17 @@ export default function ChatView() {
                 justStreamedRef.current = true;
                 if (tid) loadArtifacts(tid);
               } else if (data.type === 'error') {
-                addMessage({
-                  thread_id: tid!, user_id: user.id, role: 'assistant',
-                  content: data.text || 'The model stream failed mid-response.',
-                  model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
-                  kind: 'agent_error',
-                  metadata: { agent: activeMessageAgent, message: data.text || 'Stream error', detail: data.detail || null, code: data.code || 'upstream_error' },
-                } as any);
+                void persistChatError(
+                  data.text || 'The model stream failed mid-response.',
+                  {
+                    message: data.text || 'Stream error',
+                    detail: data.detail || null,
+                    provider_status: data.status || null,
+                    code: data.code || 'upstream_error',
+                    request_id: data.request_id || null,
+                    partial_content: fullContent || null,
+                  },
+                );
               }
         } catch {
           // The stream may already have ended or the fallback row may fail locally.
@@ -2339,13 +2486,13 @@ export default function ChatView() {
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
-        addMessage({
-          thread_id: tid!, user_id: user.id, role: 'assistant',
-          content: 'Connection lost while streaming.',
-          model: null, agent: activeMessageAgent, thinking_content: null, tokens_used: null, bookmarked: false,
-          kind: 'agent_error',
-          metadata: { agent: activeMessageAgent, message: 'Connection lost while streaming.', detail: String(e?.message || e) },
-        } as any);
+        await persistChatError('Connection lost while streaming.', {
+          message: 'Connection lost while streaming.',
+          detail: String(e?.message || e),
+          provider_status: 'connection_lost',
+          code: 'connection_lost',
+          partial_content: fullContent || null,
+        });
       }
     } finally {
       setStreaming(false);
@@ -2363,9 +2510,11 @@ export default function ChatView() {
       setIsSynthesizing(false);
       abortRef.current = null;
       sendInFlightRef.current = false;
+      activeClientTurnIdRef.current = null;
+      activeSendTargetRef.current = null;
       loadThreads();
     }
-  }, [input, modelKeyMissing, pendingAttachments.length, attachmentSendBlocked, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentAgentLabel, currentResponderLabel, pendingAgentId, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, activeMessageAgent, classicChatActive, persistChatTarget, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
+  }, [input, modelKeyMissing, pendingAttachments.length, attachmentSendBlocked, user, currentThreadId, messages.length, isStreaming, firstTurnHandoff, currentResponderLabel, createThread, navigate, thinkingEffort, ensembleActive, effectiveRuntimeMode, selectedChatModel, memoryEnabled, byokEnabled, accessTier, activeAgentId, agentNameById, persistChatTarget, landingAutosend, sidebarVisible, alcoveOpen, loadMessages, loadArtifacts, addLocalArtifacts, uploadPendingAttachments, addMessage, clearAttachments, loadThreads]);
   // Keep the prefill listener pointed at the latest sendMessage closure.
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
@@ -2455,21 +2604,43 @@ export default function ChatView() {
     // Persist partial content so cancellation survives reload.
     const partial = streamingContent;
     const partialThinking = streamingThinking;
-    if (currentThreadId && user && (partial || partialThinking)) {
-      const md = { canceled: true, canceled_at: new Date().toISOString() };
+    if (currentThreadId && user && (partial || partialThinking || activeClientTurnIdRef.current)) {
+      const clientTurnId = activeClientTurnIdRef.current;
+      if (clientTurnId && cancelRequestedTurnIdRef.current === clientTurnId) return;
+      cancelRequestedTurnIdRef.current = clientTurnId;
+      const md = {
+        canceled: true,
+        canceled_at: new Date().toISOString(),
+        ...(clientTurnId ? { client_turn_id: clientTurnId } : {}),
+        ...(activeSendTargetRef.current ? {
+          target_kind: activeSendTargetRef.current.runtimeMode === 'classic' ? 'model' : 'agent',
+          target_id: activeSendTargetRef.current.runtimeMode === 'classic'
+            ? activeSendTargetRef.current.modelId
+            : activeSendTargetRef.current.agentId,
+          target_label: activeSendTargetRef.current.targetLabel,
+          reasoning_effort: activeSendTargetRef.current.reasoningEffort,
+        } : {}),
+      };
+      const canceledModel = activeSendTargetRef.current?.runtimeMode === 'classic'
+        ? activeSendTargetRef.current.modelId
+        : null;
+      const canceledAgent = activeSendTargetRef.current?.runtimeMode === 'classic'
+        ? null
+        : activeSendTargetRef.current?.agentId ?? activeMessageAgent;
       addMessage({
         thread_id: currentThreadId, user_id: user.id, role: 'assistant',
         content: partial || '_(canceled before any content)_',
-        model: null, agent: activeMessageAgent,
+        model: canceledModel, agent: canceledAgent,
         thinking_content: partialThinking || null,
         tokens_used: null, bookmarked: false,
-        metadata: md as any,
+        metadata: { ...md, local_stream_stub: true } as any,
       } as any);
       try {
         await insertMessageWithFreshSession({
           thread_id: currentThreadId, user_id: user.id, role: 'assistant',
           content: partial || '_(canceled before any content)_',
-          agent: activeMessageAgent,
+          model: canceledModel,
+          agent: canceledAgent,
           thinking_content: partialThinking || null,
           metadata: md as any,
         });
@@ -2659,7 +2830,7 @@ export default function ChatView() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept={CHAT_ATTACHMENT_ACCEPT}
+                accept={activeAttachmentAccept}
                 aria-label="Attachment file picker"
                 className="chat-file-input"
                 onChange={(e) => {
@@ -2749,13 +2920,18 @@ export default function ChatView() {
                   {!isMobile && (
                     <select
                       aria-label="Thinking effort"
-                      value={thinkingEffort}
-                      onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                      value={effectiveThinkingEffort}
+                      disabled={reasoningEffortFixed}
+                      title={reasoningEffortFixed ? `${getChatModelLabel(selectedChatModel)} currently requires Max reasoning` : undefined}
+                      onChange={(e) => {
+                        const next = e.target.value as ReasoningEffort;
+                        if (next !== 'max') setThinkingEffort(next);
+                      }}
                       className="effort-select"
                     >
-                      <option value="low">Light</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">Deep</option>
+                      {supportedReasoningEfforts.map((effort) => (
+                        <option key={effort} value={effort}>{getReasoningEffortLabel(effort)}</option>
+                      ))}
                     </select>
                   )}
                   <DictationButton
@@ -2857,6 +3033,19 @@ export default function ChatView() {
         }}
       >
         <div className="chat-message-column">
+
+          {hasOlderMessages && (
+            <div className="chat-history-loader">
+              <button
+                type="button"
+                onClick={() => { void loadEarlierMessages(); }}
+                disabled={loadingOlderMessages}
+                aria-busy={loadingOlderMessages || undefined}
+              >
+                {loadingOlderMessages ? 'Loading earlier messages…' : 'Load earlier messages'}
+              </button>
+            </div>
+          )}
 
           {/* Live activity context strip — only renders when there's actually
               live activity to surface (sub-agents working, or agent-to-agent
@@ -2981,6 +3170,11 @@ export default function ChatView() {
               const errorStatus = typeof md.error_status === 'string' ? md.error_status : null;
               if (errorStatus === 'dismissed' || errorStatus === 'retried') return null;
               const agent = typeof md.agent === 'string' ? md.agent : (msg.agent || 'luca');
+              const responderLabel = typeof md.target_label === 'string'
+                ? md.target_label
+                : msg.model
+                  ? getChatModelLabel(msg.model)
+                  : getAgentDisplayName(agent, agentNameById);
               const resolveErrorCard = (status: 'dismissed' | 'retried') => {
                 const nextMeta = {
                   ...md,
@@ -3008,12 +3202,12 @@ export default function ChatView() {
                       </div>
                     )}
                     <div className="msg-author">
-                      {getAgentDisplayName(agent, agentNameById)}
+                      {responderLabel}
                     </div>
                   </div>
                   <div className="msg-body">
                     <AgentErroredCard
-                      agent={agent}
+                      responderLabel={responderLabel}
                       message={typeof md.message === 'string' ? md.message : msg.content}
                       detail={typeof md.detail === 'string' ? md.detail : undefined}
                       occurredAt={msg.created_at}
@@ -3023,10 +3217,30 @@ export default function ChatView() {
                         const retryAttachments = Array.isArray(md.retry_attachments)
                           ? md.retry_attachments as PersistedAttachment[]
                           : undefined;
+                        const rawTarget = md.retry_target && typeof md.retry_target === 'object'
+                          ? md.retry_target as Record<string, unknown>
+                          : null;
+                        const retryTarget = rawTarget &&
+                          (rawTarget.runtimeMode === 'classic' || rawTarget.runtimeMode === 'agent') &&
+                          typeof rawTarget.modelId === 'string' &&
+                          typeof rawTarget.agentId === 'string' &&
+                          typeof rawTarget.targetLabel === 'string'
+                          ? {
+                              runtimeMode: rawTarget.runtimeMode,
+                              modelId: rawTarget.modelId,
+                              agentId: rawTarget.agentId,
+                              targetLabel: rawTarget.targetLabel,
+                              reasoningEffort: normalizeChatModelReasoningEffort(
+                                rawTarget.modelId,
+                                typeof rawTarget.reasoningEffort === 'string' ? rawTarget.reasoningEffort : null,
+                              ),
+                            } as ChatRetryTarget
+                          : undefined;
                         if (retryText || (retryAttachments && retryAttachments.length > 0)) {
                           void sendMessage({
                             text: retryText ?? '',
                             attachments: retryAttachments,
+                            target: retryTarget,
                           });
                           return;
                         }
@@ -3037,6 +3251,7 @@ export default function ChatView() {
                           void sendMessage({
                             text: prevUser.content,
                             attachments: (prevUser.attachments || []) as PersistedAttachment[],
+                            target: retryTarget,
                           });
                         }
                       }}
@@ -3254,7 +3469,7 @@ export default function ChatView() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept={CHAT_ATTACHMENT_ACCEPT}
+            accept={activeAttachmentAccept}
             aria-label="Attachment file picker"
             className="chat-file-input"
             onChange={(e) => {
@@ -3350,13 +3565,18 @@ export default function ChatView() {
               {!isMobile && (
                 <select
                   aria-label="Thinking effort"
-                  value={thinkingEffort}
-                  onChange={(e) => setThinkingEffort(e.target.value as 'low' | 'medium' | 'high')}
+                  value={effectiveThinkingEffort}
+                  disabled={reasoningEffortFixed}
+                  title={reasoningEffortFixed ? `${getChatModelLabel(selectedChatModel)} currently requires Max reasoning` : undefined}
+                  onChange={(e) => {
+                    const next = e.target.value as ReasoningEffort;
+                    if (next !== 'max') setThinkingEffort(next);
+                  }}
                   className="effort-select"
                 >
-                  <option value="low">Light</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">Deep</option>
+                  {supportedReasoningEfforts.map((effort) => (
+                    <option key={effort} value={effort}>{getReasoningEffortLabel(effort)}</option>
+                  ))}
                 </select>
               )}
 

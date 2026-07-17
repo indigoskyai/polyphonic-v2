@@ -65,9 +65,12 @@ interface ThreadState {
   isStreaming: boolean;
   streamingContent: string;
   streamingThinking: string;
+  hasOlderMessages: boolean;
+  loadingOlderMessages: boolean;
   loadThreads: () => Promise<void>;
   setCurrentThread: (id: string | null) => void;
   loadMessages: (threadId: string) => Promise<void>;
+  loadOlderMessages: (threadId: string) => Promise<void>;
   subscribeMessages: (threadId: string) => () => void;
   createThread: (userId: string, agentId?: string, projectId?: string | null, options?: CreateThreadOptions) => Promise<string>;
   addMessage: (msg: Omit<Message, 'id' | 'created_at'> & Partial<Pick<Message, 'id' | 'created_at'>>) => void;
@@ -96,6 +99,8 @@ const CONTENT_DEDUPE_WINDOW_MS = 240_000;
 // Window for matching a fresh DB row against a local optimistic stream stub
 // where the content may have drifted (Council revision). Widened in tandem.
 const STREAM_STUB_DEDUPE_WINDOW_MS = 240_000;
+export const MESSAGE_PAGE_SIZE = 80;
+let activeMessageLoadRequest = 0;
 
 const isLocalStreamStub = (message: Pick<Message, 'metadata'>) =>
   message.metadata?.local_stream_stub === true;
@@ -140,6 +145,14 @@ export const dedupeMessagesForDisplay = (messages: Message[]): Message[] => {
   return out;
 };
 
+export const normalizeMessagePage = (
+  newestFirstRows: Message[],
+  pageSize = MESSAGE_PAGE_SIZE,
+): { messages: Message[]; hasOlder: boolean } => ({
+  messages: dedupeMessagesForDisplay(newestFirstRows.slice(0, pageSize).reverse()),
+  hasOlder: newestFirstRows.length > pageSize,
+});
+
 export const mergeRealtimeMessage = (existing: Message[], row: Message): Message[] => {
   if (!row?.id) return existing;
 
@@ -182,6 +195,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   isStreaming: false,
   streamingContent: '',
   streamingThinking: '',
+  hasOlderMessages: false,
+  loadingOlderMessages: false,
 
   loadThreads: async () => {
     const { data } = await supabase
@@ -192,18 +207,57 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (data) set({ threads: dedupeThreadsById(data as Thread[]) });
   },
 
-  setCurrentThread: (id) => set({ currentThreadId: id }),
+  setCurrentThread: (id) => set((state) => (
+    state.currentThreadId === id
+      ? { currentThreadId: id }
+      : {
+          currentThreadId: id,
+          messages: [],
+          hasOlderMessages: false,
+          loadingOlderMessages: false,
+        }
+  )),
 
   loadMessages: async (threadId) => {
-    // Exclude guardian/observer messages — they live in the composer alcove,
-    // not the main thread.
+    const requestId = ++activeMessageLoadRequest;
+    set({ loadingOlderMessages: false });
     const { data } = await supabase
       .from('messages')
       .select('*')
       .eq('thread_id', threadId)
       .or('agent.is.null,and(agent.neq.guardian,agent.neq.observer)')
-      .order('created_at', { ascending: true });
-    if (data) set({ messages: dedupeMessagesForDisplay(data as Message[]) });
+      .order('created_at', { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    if (!data || requestId !== activeMessageLoadRequest || get().currentThreadId !== threadId) return;
+    const page = normalizeMessagePage(data as Message[]);
+    set({ messages: page.messages, hasOlderMessages: page.hasOlder });
+  },
+
+  loadOlderMessages: async (threadId) => {
+    const state = get();
+    if (state.loadingOlderMessages || !state.hasOlderMessages) return;
+    const oldest = state.messages[0];
+    if (!oldest) return;
+
+    set({ loadingOlderMessages: true });
+    try {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('thread_id', threadId)
+        .or('agent.is.null,and(agent.neq.guardian,agent.neq.observer)')
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE + 1);
+      if (!data || get().currentThreadId !== threadId) return;
+      const page = normalizeMessagePage(data as Message[]);
+      set((current) => ({
+        messages: dedupeMessagesForDisplay([...page.messages, ...current.messages]),
+        hasOlderMessages: page.hasOlder,
+      }));
+    } finally {
+      if (get().currentThreadId === threadId) set({ loadingOlderMessages: false });
+    }
   },
 
   // Realtime subscribe for inserts on the current thread. Catches messages
@@ -285,6 +339,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threads: dedupeThreadsById([thread, ...s.threads]),
         currentThreadId: thread.id,
         messages: [],
+        hasOlderMessages: false,
+        loadingOlderMessages: false,
       }));
       return thread.id;
     }

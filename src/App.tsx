@@ -30,7 +30,6 @@ import { readLandingChatTransitionFlag } from "./lib/guestChat";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerEscChip, DrawerCloseBtn, DrawerBody, DrawerSection } from "./components/ui/luca";
 import NotificationsDrawer from "./components/drawers/NotificationsDrawer";
 import ActivityTimelineDrawer from "./components/drawers/ActivityTimelineDrawer";
-import ThreadDetailDrawer from "./components/drawers/ThreadDetailDrawer";
 import MemoryDetailDrawer from "./components/drawers/MemoryDetailDrawer";
 import ContinuityTraceDrawer from "./components/drawers/ContinuityTraceDrawer";
 import ObserverDrawer from "./components/drawers/ObserverDrawer";
@@ -56,6 +55,7 @@ const TermsPage = lazy(() => import("./pages/TermsPage"));
 const TrustPage = lazy(() => import("./pages/TrustPage"));
 const CreditsPage = lazy(() => import("./pages/CreditsPage"));
 const ChatView = lazy(() => import("./pages/ChatView"));
+const ThreadDetailDrawer = lazy(() => import("./components/drawers/ThreadDetailDrawer"));
 const MemoryView = lazy(() => import("./pages/MemoryView"));
 const ResearchView = lazy(() => import("./pages/ResearchView"));
 const MindView = lazy(() => import("./pages/MindView"));
@@ -365,7 +365,11 @@ function DrawerRouter() {
     <Drawer open={open} onClose={close} ariaLabel={label || 'Drawer'} showBackdrop={showBackdrop} width={drawerWidth}>
       {active === 'notifications' && <NotificationsDrawer />}
       {active === 'activity-timeline' && <ActivityTimelineDrawer />}
-      {active === 'thread-detail' && <ThreadDetailDrawer />}
+      {active === 'thread-detail' && (
+        <Suspense fallback={<DrawerBody><div className="drawer-loading">Loading thread details…</div></DrawerBody>}>
+          <ThreadDetailDrawer />
+        </Suspense>
+      )}
       {active === 'memory-detail' && <MemoryDetailDrawer />}
       {active === 'continuity-trace' && <ContinuityTraceDrawer />}
       {active === 'observer' && <ObserverDrawer />}

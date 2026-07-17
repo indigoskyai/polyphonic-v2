@@ -5,8 +5,18 @@
  * the correct parameter format for enabling thinking/reasoning.
  */
 
-export type ParamStyle = 'anthropic' | 'openai' | 'google-v3' | 'google-v2';
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+import {
+  getDefaultMaxOutputTokens,
+  getHistoryRowLimit,
+  getInputTokenBudget,
+  getModelCapabilities,
+  normalizeReasoningEffort as normalizeCapabilityReasoningEffort,
+  type ModelParameterStyle,
+  type ModelReasoningEffort,
+} from '../../../shared/modelCapabilities.ts';
+
+export type ParamStyle = ModelParameterStyle;
+export type ReasoningEffort = ModelReasoningEffort;
 
 interface ModelMeta {
   reasoning: true;
@@ -48,7 +58,7 @@ export const REASONING_MODELS: Record<string, ModelMeta> = {
   'openai/gpt-5-pro': { reasoning: true, paramStyle: 'openai', label: 'GPT-5 Pro' },
 
   // Moonshot Kimi K3 — OpenRouter exposes reasoning.effort and reasoning details.
-  'moonshotai/kimi-k3': { reasoning: true, paramStyle: 'openai', label: 'Kimi K3' },
+  'moonshotai/kimi-k3': { reasoning: true, paramStyle: 'kimi-k3', label: 'Kimi K3' },
 
   // Google Gemini 3.x — uses thinking.thinkingLevel
   'google/gemini-3.1-pro-preview': { reasoning: true, paramStyle: 'google-v3', label: 'Gemini 3.1 Pro' },
@@ -69,6 +79,27 @@ export function getModelLabel(modelId: string): string {
   return REASONING_MODELS[modelId]?.label || modelId.split('/').pop() || modelId;
 }
 
+/** Normalize stale clients to the provider-supported effort for this model. */
+export function normalizeReasoningEffort(modelId: string, effort: string | null | undefined): ReasoningEffort {
+  return normalizeCapabilityReasoningEffort(modelId, effort);
+}
+
+export function getModelDefaultMaxOutputTokens(modelId: string, fallback = 16_000): number {
+  return getDefaultMaxOutputTokens(modelId, fallback);
+}
+
+export function getModelInputTokenBudget(modelId: string): number | null {
+  return getInputTokenBudget(modelId);
+}
+
+export function getModelHistoryRowLimit(modelId: string, fallback: number): number {
+  return getHistoryRowLimit(modelId, fallback);
+}
+
+export function shouldPreserveReasoningDetails(modelId: string): boolean {
+  return getModelCapabilities(modelId)?.reasoningPreservation === true;
+}
+
 /**
  * Build the correct reasoning/thinking parameters for a model's API request.
  * Returns an object to spread into the OpenRouter request body.
@@ -79,6 +110,7 @@ export function buildReasoningParams(
 ): Record<string, unknown> {
   const meta = REASONING_MODELS[modelId];
   if (!meta) return {};
+  const normalizedEffort = normalizeReasoningEffort(modelId, effort);
 
   switch (meta.paramStyle) {
     case 'anthropic': {
@@ -87,11 +119,12 @@ export function buildReasoningParams(
         low: 2048,
         medium: 8192,
         high: 32768,
+        max: 65536,
       };
       return {
         thinking: {
           type: 'enabled',
-          budget_tokens: budgetMap[effort],
+          budget_tokens: budgetMap[normalizedEffort],
         },
       };
     }
@@ -100,16 +133,22 @@ export function buildReasoningParams(
       // OpenAI GPT-5.x reasoning via OpenRouter
       return {
         reasoning: {
-          effort,
+          effort: normalizedEffort,
         },
       };
+    }
+
+    case 'kimi-k3': {
+      // K3 is not a K2 thinking model. OpenRouter expects the top-level field,
+      // and the current release supports mandatory max reasoning only.
+      return { reasoning_effort: normalizedEffort };
     }
 
     case 'google-v3': {
       // Gemini 3.x uses thinkingLevel
       return {
         thinking: {
-          thinkingLevel: effort,
+          thinkingLevel: normalizedEffort === 'max' ? 'high' : normalizedEffort,
         },
       };
     }
@@ -120,11 +159,12 @@ export function buildReasoningParams(
         low: 2048,
         medium: 8192,
         high: 32768,
+        max: 65536,
       };
       return {
         thinking: {
           enabled: true,
-          budget_tokens: budgetMap[effort],
+          budget_tokens: budgetMap[normalizedEffort],
         },
       };
     }
@@ -155,7 +195,7 @@ export function extractThinkingFromResponse(
   }
 
   // OpenAI GPT-5.x: reasoning in reasoning_details array
-  if (meta.paramStyle === 'openai') {
+  if (meta.paramStyle === 'openai' || meta.paramStyle === 'kimi-k3') {
     const details = choice.message?.reasoning_details || choice.reasoning_details;
     if (Array.isArray(details)) {
       return details

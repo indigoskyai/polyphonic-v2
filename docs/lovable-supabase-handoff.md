@@ -231,3 +231,62 @@ Verify that:
 
 Do not create replacement external infrastructure and do not expose service-role credentials.
 ```
+
+### 7. Deploy complete Kimi K3 chat support before the frontend
+
+This slice intentionally adds no database migration. It preserves the current
+realtime-policy migrations and stores K3 reasoning/tool continuity in existing
+message metadata.
+
+Prompt Lovable:
+
+```text
+Please deploy the Polyphonic Kimi K3 chat reconciliation from branch
+codex/polyphonic-chat-live-reconcile, edge first and frontend second.
+
+Before deploying:
+- Compare the remote migration ledger with supabase/migrations.
+- Confirm the existing realtime-policy migrations are already applied.
+- Do not recreate, rename, reorder, or reapply an existing migration.
+- Confirm this branch introduces no migration diff.
+
+Deploy these Edge Functions together so shared imports stay atomic:
+- chat-multi
+- anima-tool-execute
+
+Include the current shared modules, especially:
+- shared/modelCapabilities.ts
+- supabase/functions/_shared/models.ts
+- supabase/functions/_shared/model-conversation.ts
+- supabase/functions/_shared/continuity/kernel.ts
+- supabase/functions/_shared/attachments.ts
+
+Verify the deployed chat-multi request for moonshotai/kimi-k3:
+- top-level reasoning_effort is exactly "max"
+- max_tokens is 131072 for ordinary K3 turns
+- temperature, top_p, n, presence_penalty, frequency_penalty, and K2 thinking are absent
+- response streams separate reasoning and visible content
+- assistant message metadata retains reasoning_details, tool calls/results,
+  target_kind, target_id, target_label, reasoning_effort, provider status,
+  request ID, and retry target
+- a stale low/medium/high K3 effort request is normalized to max server-side
+
+Verify K3 tools through the existing allowlisted tool surface:
+- K3 is the planning model for classic K3 tool turns
+- tool_choice is auto for ordinary turns and the existing forced internal tool
+  choice remains intact where required
+- reasoning_details are returned unmodified with the assistant tool-call message
+- side-effect and approval behavior is unchanged
+
+Then publish the frontend and run authenticated release checks:
+- K3 text, image, PDF, multi-turn reasoning, tool, cancel, retry, and reload
+- drawer opens and continuity settles without an error boundary or console error
+- K3 displays a disabled Max effort control and never displays a raw model ID
+- K3 video/audio attachment selection is unavailable on the OpenRouter route
+- no K3 response or error is attributed to Luca
+- authenticated message reads/writes, realtime delivery, service-role operations,
+  and cross-user isolation still pass
+
+Return only deployment versions/timestamps, request-shape field names (never
+secret values), migration-ledger confirmation, and the smoke-test results.
+```

@@ -39,6 +39,7 @@ import {
   dedupeMessagesForDisplay,
   dedupeThreadsById,
   mergeRealtimeMessage,
+  normalizeMessagePage,
   type Message,
   useThreadStore,
 } from '@/stores/threadStore';
@@ -89,6 +90,26 @@ describe('threadStore thread list helpers', () => {
       { ...base, id: 't1' },
       { ...base, id: 't2' },
     ]);
+  });
+
+  it('clears stale conversation rows when the active thread changes', () => {
+    useThreadStore.setState({
+      currentThreadId: 'thread-old',
+      messages: [{
+        id: 'private-old-message', thread_id: 'thread-old', user_id: 'u1', role: 'user',
+        content: 'old conversation', model: null, agent: null, thinking_content: null,
+        tokens_used: null, bookmarked: false, created_at: new Date().toISOString(),
+      }],
+      hasOlderMessages: true,
+    });
+
+    useThreadStore.getState().setCurrentThread('thread-new');
+
+    expect(useThreadStore.getState()).toMatchObject({
+      currentThreadId: 'thread-new',
+      messages: [],
+      hasOlderMessages: false,
+    });
   });
 });
 
@@ -273,6 +294,27 @@ describe('threadStore message display helpers', () => {
     const deduped = dedupeMessagesForDisplay([first, duplicate, userRepeat, intentionalUserRepeat]);
 
     expect(deduped.map((m) => m.id)).toEqual(['assistant-1', 'user-1', 'user-2']);
+  });
+
+  it('turns a newest-first query page into bounded chronological history', () => {
+    const rows = Array.from({ length: 4 }, (_, index) => ({
+      id: `m-${4 - index}`,
+      thread_id: 't1',
+      user_id: 'u1',
+      role: index % 2 === 0 ? 'assistant' : 'user',
+      content: `message ${4 - index}`,
+      model: null,
+      agent: index % 2 === 0 ? 'luca' : null,
+      thinking_content: null,
+      tokens_used: null,
+      bookmarked: false,
+      created_at: `2026-07-16T12:0${4 - index}:00.000Z`,
+    })) as Message[];
+
+    const page = normalizeMessagePage(rows, 3);
+
+    expect(page.hasOlder).toBe(true);
+    expect(page.messages.map((message) => message.id)).toEqual(['m-2', 'm-3', 'm-4']);
   });
 });
 

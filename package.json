@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run",
     "test:integration": "vitest run src/test/integration/ --passWithNoTests",
+    "check:model-capabilities": "node scripts/check-kimi-k3-capabilities.mjs",
     "check:launch-payload": "node scripts/check-launch-payload.mjs",
     "verify": "bash scripts/verify.sh"
   },

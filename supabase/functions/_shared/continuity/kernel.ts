@@ -68,6 +68,12 @@ export interface ContinuityHistoryMessage {
   created_at?: string | null;
   kind?: string | null;
   metadata?: Record<string, unknown> | null;
+  model?: string | null;
+  thinking_content?: string | null;
+  attachments?: unknown[] | null;
+  attachment_ids?: string[] | null;
+  /** Request-only provider content hydrated from durable attachment IDs. */
+  provider_content?: unknown;
 }
 
 
@@ -962,10 +968,10 @@ async function loadThreadHistory(
   if (!opts.threadId) return [];
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, content, agent, created_at, kind, metadata")
+    .select("id, role, content, agent, created_at, kind, metadata, model, thinking_content, attachments, attachment_ids")
     .eq("user_id", opts.userId)
     .eq("thread_id", opts.threadId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(opts.historyLimit || 50);
   if (error) throw new Error(error.message || "history query failed");
   const activeAgentId = opts.agentId || "luca";
@@ -977,7 +983,7 @@ async function loadThreadHistory(
   // already hides these from the thread; the model history must match. An agent
   // running its own thread still sees its own messages.
   const SIDECAR_AGENTS = new Set(["observer", "guardian"]);
-  const rows = ((data || []) as ContinuityHistoryMessage[]).filter((m) => {
+  const rows = ([...((data || []) as ContinuityHistoryMessage[])].reverse()).filter((m) => {
     const a = m.agent || "luca";
     return !(SIDECAR_AGENTS.has(a) && a !== activeAgentId);
   });

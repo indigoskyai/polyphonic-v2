@@ -116,7 +116,8 @@ describe('Phase 4 reliability guardrails', () => {
     expect(source).toContain('effort: "none"');
     expect(source).toContain('exclude: true');
     expect(source).toContain('if (agentIsSystemLuca && !simpleOpeningTurn)');
-    expect(source).toContain('maxTokens: simpleOpeningTurn ? 1024 : undefined');
+    expect(source).toContain('maxTokens: simpleOpeningTurn && singleModel !== "moonshotai/kimi-k3"');
+    expect(source).toContain(': getModelDefaultMaxOutputTokens(singleModel)');
     expect(source).not.toContain('content: fullContent || "(empty)"');
     expect(source).not.toContain('synthesizedContent || "(empty)"');
     expect(legacySource).toContain('error: "empty_response"');
@@ -169,7 +170,7 @@ describe('Phase 4 reliability guardrails', () => {
     expect(chatView).toContain('const nextThreadId = await createThread(user.id, id)');
     expect(chatView).toContain('navigate(`/chat/${nextThreadId}`)');
 
-    expect(kernel).toContain('.select("id, role, content, agent, created_at, kind, metadata")');
+    expect(kernel).toContain('.select("id, role, content, agent, created_at, kind, metadata, model, thinking_content, attachments, attachment_ids")');
     expect(kernel).toContain('normalizeThreadHistoryForAgent');
     expect(kernel).toContain('Context from another agent (${messageAgent}), not your own prior reply');
     expect(kernel).toContain('const messageAgent = msg.agent || "luca"');

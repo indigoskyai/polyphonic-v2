@@ -1,5 +1,13 @@
 export type ThreadRuntimeMode = 'classic' | 'agent';
 export type ChatTargetKind = 'agent' | 'model';
+export type { ModelCapabilities, ModelReasoningEffort as ReasoningEffort } from '../../shared/modelCapabilities';
+import {
+  getModelCapabilities,
+  getSupportedReasoningEfforts,
+  normalizeReasoningEffort,
+  type ModelCapabilities,
+  type ModelReasoningEffort,
+} from '../../shared/modelCapabilities';
 
 export interface ChatTargetPreference {
   kind: ChatTargetKind;
@@ -11,13 +19,14 @@ export interface ChatModelOption {
   name: string;
   flags: { label: string; variant?: 'reasoning' | 'multimodal' | 'default' | 'new' }[];
   featured?: boolean;
+  capabilities?: ModelCapabilities;
 }
 
 export const DEFAULT_CHAT_MODEL = 'moonshotai/kimi-k2.6';
 
 export const CHAT_MODEL_OPTIONS: ChatModelOption[] = [
   { id: 'anthropic/claude-fable-5', name: 'Claude Fable 5', featured: true, flags: [{ label: 'Just released', variant: 'new' }, { label: 'Reasoning', variant: 'reasoning' }] },
-  { id: 'moonshotai/kimi-k3', name: 'Kimi K3', featured: true, flags: [{ label: 'Just released', variant: 'new' }, { label: 'Reasoning', variant: 'reasoning' }, { label: 'Multimodal', variant: 'multimodal' }] },
+  { id: 'moonshotai/kimi-k3', name: 'Kimi K3', featured: true, capabilities: getModelCapabilities('moonshotai/kimi-k3') || undefined, flags: [{ label: 'Just released', variant: 'new' }, { label: 'Reasoning', variant: 'reasoning' }, { label: 'Multimodal', variant: 'multimodal' }] },
   { id: 'moonshotai/kimi-k2.7-code', name: 'Kimi K2.7 Code', flags: [{ label: 'Coding' }, { label: 'Multimodal', variant: 'multimodal' }] },
   { id: 'moonshotai/kimi-k2.6', name: 'Kimi K2.6', flags: [{ label: 'Default', variant: 'default' }, { label: 'Multimodal', variant: 'multimodal' }] },
   { id: 'anthropic/claude-opus-4.8', name: 'Claude Opus 4.8', flags: [{ label: 'Reasoning', variant: 'reasoning' }] },
@@ -96,6 +105,25 @@ export function normalizeChatModelId(modelId: string | null | undefined): string
 export function getChatModelLabel(modelId: string | null | undefined): string {
   const id = normalizeChatModelId(modelId);
   return CHAT_MODEL_OPTIONS.find((model) => model.id === id)?.name || id;
+}
+
+export function getChatModelCapabilities(modelId: string | null | undefined): ModelCapabilities | null {
+  return getModelCapabilities(normalizeChatModelId(modelId));
+}
+
+export function getChatModelReasoningEfforts(modelId: string | null | undefined): ModelReasoningEffort[] {
+  return getSupportedReasoningEfforts(normalizeChatModelId(modelId));
+}
+
+export function normalizeChatModelReasoningEffort(
+  modelId: string | null | undefined,
+  effort: string | null | undefined,
+): ModelReasoningEffort {
+  return normalizeReasoningEffort(normalizeChatModelId(modelId), effort);
+}
+
+export function getReasoningEffortLabel(effort: ModelReasoningEffort): string {
+  return ({ low: 'Light', medium: 'Medium', high: 'Deep', max: 'Max' } as const)[effort];
 }
 
 export function getModelFamily(modelId: string | null | undefined): string {

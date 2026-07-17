@@ -100,7 +100,7 @@ describe('artifact authoring is wired to the model, not the planner', () => {
     expect(src).toContain('artifacts/extract.ts'); // shared helper
     expect(src).toContain('const artifactNote');
     expect(src).toContain('turnSystemPrompt + artifactNote + simulationArtifactNote + toolCapabilityNote');
-    expect(src).toContain('options.maxTokens ?? 16000'); // room for real artifacts, not 4096
+    expect(src).toContain('options.maxTokens ?? getModelDefaultMaxOutputTokens(model)'); // capability-aware room for real artifacts
   });
 
   it('the agent (SDK) runtime persists artifacts and has budget for big builds', () => {

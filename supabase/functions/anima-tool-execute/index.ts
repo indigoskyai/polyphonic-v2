@@ -629,7 +629,15 @@ serve(async (req) => {
       userId = claimsData.claims.sub as string;
     }
 
-    const { messages, custom_instructions, thread_id, source_message_id, user_id: bodyUserId, force_forge_only } = await req.json();
+    const {
+      messages,
+      custom_instructions,
+      thread_id,
+      source_message_id,
+      user_id: bodyUserId,
+      force_forge_only,
+      planner_model,
+    } = await req.json();
     // When invoked with the service role (internal call from chat-multi), the
     // caller MUST pass user_id in the body so we can resolve their API key.
     if (!userId && typeof bodyUserId === "string" && bodyUserId.length > 0) {
@@ -645,6 +653,9 @@ serve(async (req) => {
 
     const latestContent = latestUserContent(messages);
     const forceForgeOnly = force_forge_only === true || looksLikeAgentForgeRequest(latestContent);
+    const planningModel = planner_model === "moonshotai/kimi-k3"
+      ? "moonshotai/kimi-k3"
+      : "google/gemini-2.5-flash";
     const likelyResearchTeamRequest = !forceForgeOnly && (
       looksLikeResearchTeamRequest(latestContent) || looksLikeComplexResearchNeed(latestContent)
     );
@@ -711,7 +722,12 @@ serve(async (req) => {
     );
     const anchoredForgeContext = summarizeAnchoredForgeProposal(anchoredForgeProposal);
 
-    // Build planning messages: system + last few user/assistant messages for context
+    // K3 receives the capability-budgeted history from chat-multi intact so
+    // reasoning/tool blocks are never split. The legacy fast planner keeps its
+    // short context window for latency.
+    const plannerHistory = planningModel === "moonshotai/kimi-k3"
+      ? messages
+      : messages.slice(-6);
     const planningMessages = [
       {
         role: "system",
@@ -729,7 +745,7 @@ serve(async (req) => {
             ? `\n\nAdditional context about the user's preferences:\n${custom_instructions}`
             : ""),
       },
-      ...messages.slice(-6), // last 6 messages for context
+      ...plannerHistory,
     ];
 
     // Planning call. Forge needs enough time and output budget for full
@@ -737,7 +753,7 @@ serve(async (req) => {
     const planningController = new AbortController();
     const planningTimeout = setTimeout(
       () => planningController.abort(),
-      forceForgeOnly ? 75_000 : 15_000
+      planningModel === "moonshotai/kimi-k3" ? 120_000 : forceForgeOnly ? 75_000 : 15_000
     );
 
     const callPlanningModel = async (
@@ -751,12 +767,19 @@ serve(async (req) => {
       } = {},
     ): Promise<any> => {
       const body: Record<string, unknown> = {
-        model: "google/gemini-2.5-flash",
+        model: planningModel,
         messages: planningMessagesForCall,
         tools: toolSchemas,
-        temperature: options.temperature ?? 0.2,
-        max_tokens: options.maxTokens ?? (forceForgeOnly ? 12_000 : 700),
+        max_tokens: planningModel === "moonshotai/kimi-k3"
+          ? 131_072
+          : options.maxTokens ?? (forceForgeOnly ? 12_000 : 700),
       };
+      if (planningModel === "moonshotai/kimi-k3") {
+        body.reasoning_effort = "max";
+        body.tool_choice = "auto";
+      } else {
+        body.temperature = options.temperature ?? 0.2;
+      }
       if (options.forceToolChoice) {
         body.tool_choice = { type: "function", function: { name: "forge_agent" } };
         body.parallel_tool_calls = false;
@@ -822,7 +845,7 @@ serve(async (req) => {
         planningData = await callPlanningModel(
           [
             planningMessages[0],
-            ...messages.slice(-6),
+            ...plannerHistory,
             {
               role: "assistant",
               content: String(choice?.content || "").slice(0, 4000),
@@ -1094,6 +1117,12 @@ serve(async (req) => {
       {
         role: "assistant",
         content: choice.content || null,
+        ...(Array.isArray(choice.reasoning_details) && choice.reasoning_details.length > 0
+          ? { reasoning_details: choice.reasoning_details }
+          : {}),
+        ...(!Array.isArray(choice.reasoning_details) && typeof choice.reasoning_content === "string" && choice.reasoning_content
+          ? { reasoning_content: choice.reasoning_content }
+          : {}),
         tool_calls: toolCalls.map((tc: any) => ({
           id: tc.id,
           type: "function",

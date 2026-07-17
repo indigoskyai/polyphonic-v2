@@ -42,8 +42,9 @@ describe('Kimi K3 ecosystem registration', () => {
     expect(file).toContain(K27_CODE);
   });
 
-  it('enables OpenRouter reasoning effort for K3', () => {
+  it('uses the dedicated top-level OpenRouter reasoning protocol for K3', () => {
     const models = source('supabase/functions/_shared/models.ts');
-    expect(models).toContain("'moonshotai/kimi-k3': { reasoning: true, paramStyle: 'openai'");
+    expect(models).toContain("'moonshotai/kimi-k3': { reasoning: true, paramStyle: 'kimi-k3'");
+    expect(models).toContain("return { reasoning_effort: normalizedEffort }");
   });
 });

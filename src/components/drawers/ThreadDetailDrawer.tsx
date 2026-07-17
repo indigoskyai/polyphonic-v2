@@ -114,7 +114,7 @@ export function continuityItemToText(item: ContinuityPreviewItem | null | undefi
   return '';
 }
 
-function relativeTime(iso: string | null | undefined): string {
+export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return '—';
@@ -129,7 +129,7 @@ function relativeTime(iso: string | null | undefined): string {
   return `${days}d ago`;
 }
 
-function absTime(iso: string | null | undefined): string {
+export function absTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
     const d = new Date(iso);

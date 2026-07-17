@@ -1,4 +1,5 @@
 import type { MessageAttachment } from '@/stores/threadStore';
+import type { ModelInputModality } from '../../shared/modelCapabilities';
 
 export const CHAT_ATTACHMENT_BUCKET = 'chat-attachments';
 export const MAX_CHAT_ATTACHMENTS = 10;
@@ -14,6 +15,34 @@ export const CHAT_ATTACHMENT_ACCEPT = [
   'text/*', 'application/json', 'application/xml', 'application/rtf', 'application/zip',
   'audio/*', 'video/mp4', 'video/quicktime', 'video/webm',
 ].join(',');
+
+const CHAT_ATTACHMENT_ACCEPT_WITHOUT_AUDIO_VIDEO = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/svg+xml',
+  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/*', 'application/json', 'application/xml', 'application/rtf', 'application/zip',
+].join(',');
+
+export function getChatAttachmentAccept(inputModalities?: ModelInputModality[] | null): string {
+  if (!inputModalities) return CHAT_ATTACHMENT_ACCEPT;
+  const supportsAudio = inputModalities.includes('audio');
+  const supportsVideo = inputModalities.includes('video');
+  return supportsAudio || supportsVideo ? CHAT_ATTACHMENT_ACCEPT : CHAT_ATTACHMENT_ACCEPT_WITHOUT_AUDIO_VIDEO;
+}
+
+export function isChatAttachmentSupported(
+  file: Pick<File, 'type'>,
+  inputModalities?: ModelInputModality[] | null,
+): boolean {
+  if (!inputModalities) return true;
+  if (file.type.startsWith('audio/')) return inputModalities.includes('audio');
+  if (file.type.startsWith('video/')) return inputModalities.includes('video');
+  if (file.type.startsWith('image/')) return inputModalities.includes('image');
+  // Documents and PDFs continue through Polyphonic/OpenRouter's document
+  // parser path; they are not advertised as a native model modality.
+  return inputModalities.includes('text');
+}
 
 const CODE_EXTENSIONS: Record<string, string> = {
   js: 'javascript',

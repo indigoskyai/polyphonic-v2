@@ -1775,7 +1775,7 @@ html {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  opacity: 0.85;
+  opacity: 0.45;
   transition: opacity 0.8s var(--ease-out);
   pointer-events: none;
   z-index: 3;
@@ -1805,15 +1805,23 @@ html {
     shimmer-c7 19s ease-in-out infinite,
     shimmer-c8 23s ease-in-out infinite;
 }
-.input-shell:hover::before { opacity: 0.95; }
+.input-shell:hover::before { opacity: 0.55; }
 .input-shell.focused::before,
-.input-shell:focus-within::before { opacity: 1; }
+.input-shell:focus-within::before { opacity: 0.68; }
 
 /* Focus-within intensification — hairline only, no bloom shadow.
    The shimmer escalation IS the focus light. */
 .input-shell:focus-within {
   border-color: rgba(220, 219, 216, 0.09);
   transition: border-color 220ms var(--ease-premium);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-shell::before {
+    animation: none;
+    transition: none;
+    background: linear-gradient(90deg, rgba(232, 230, 224, 0.16), rgba(255, 198, 152, 0.22), rgba(232, 230, 224, 0.16));
+  }
 }
 
 .input-shell.sending-turn {
@@ -3029,9 +3037,9 @@ html {
      in the micro-interactions (caret, send arming, focus wake), not in modeled
      depth. Tuned faint for OLED. */
   .input-shell {
-    border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.034), rgba(255,255,255,0.024)), #08080a;
-    border: 1px solid rgba(255, 255, 255, 0.045);
+    border-radius: var(--radius-lg);
+    background: var(--surface-1);
+    border: 1px solid var(--border-faint);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     transition: box-shadow 0.45s cubic-bezier(0.22,1,0.36,1), border-color 0.45s cubic-bezier(0.22,1,0.36,1);
   }
@@ -3046,10 +3054,10 @@ html {
   /* Shimmer dialed to a subliminal whisper on mobile (base ::before opacity is
      0.85 / focus 1, which buried everything). Focus brings it up a hair —
      still nowhere near the desktop strength. */
-  .input-shell::before,
-  .input-shell:hover::before { opacity: 0.16; }
+  .input-shell::before { opacity: 0.45; }
+  .input-shell:hover::before { opacity: 0.55; }
   .input-shell.focused::before,
-  .input-shell:focus-within::before { opacity: 0.24; }
+  .input-shell:focus-within::before { opacity: 0.68; }
   .input-shell.focused {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
   }
@@ -3283,6 +3291,36 @@ html {
   -webkit-overflow-scrolling: touch;
   overflow-anchor: auto;
   padding: 32px 0;
+}
+
+.chat-history-loader {
+  height: 48px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.chat-history-loader button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-pill);
+  background: var(--surface-1);
+  color: var(--text-ghost);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out), background 120ms var(--ease-out);
+}
+
+.chat-history-loader button:hover:not(:disabled) {
+  color: var(--text-body);
+  border-color: var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.chat-history-loader button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .chat-header {

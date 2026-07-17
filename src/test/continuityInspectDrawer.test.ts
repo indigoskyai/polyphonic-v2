@@ -61,4 +61,16 @@ describe('continuityItemToText', () => {
     expect(mod.continuityItemToText({ excerpt: 'from excerpt' } as any)).toBe('from excerpt');
     expect(mod.continuityItemToText({ id: 'x' } as any)).toBe('');
   });
+
+  it('renders null and invalid timestamps safely and retains integrity filtering', async () => {
+    const mod = await import('@/components/drawers/ThreadDetailDrawer');
+    expect(mod.relativeTime(null)).toBe('—');
+    expect(mod.relativeTime('not-a-date')).toBe('—');
+    expect(mod.absTime(undefined)).toBe('—');
+    expect(mod.absTime('not-a-date')).toBe('—');
+
+    const drawer = readRepoFile('src/components/drawers/ThreadDetailDrawer.tsx');
+    expect(drawer).toContain("row.content_integrity_status !== 'rejected'");
+    expect(drawer).toContain('!row.content_hidden_at');
+  });
 });

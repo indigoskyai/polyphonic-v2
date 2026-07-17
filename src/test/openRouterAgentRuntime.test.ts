@@ -68,9 +68,9 @@ describe('OpenRouter Agent SDK runtime gate', () => {
     const targetPicker = readRepoFile('src/components/composer/ChatTargetPicker.tsx');
 
     expect(source).toContain("pendingTargetKind === 'model' ? 'classic' : defaultRuntimeForAgent(activeAgentId)");
-    expect(source).toContain("agent_mode: effectiveRuntimeMode === 'agent' ? 'agent' : 'chat'");
-    expect(source).toContain('runtime_mode: effectiveRuntimeMode');
-    expect(source).toContain('model: selectedChatModel');
+    expect(source).toContain("agent_mode: requestRuntimeMode === 'agent' ? 'agent' : 'chat'");
+    expect(source).toContain('runtime_mode: requestRuntimeMode');
+    expect(source).toContain('model: requestModel');
     expect(source).toContain("persistChatTarget({ kind: 'agent', id })");
     expect(source).toContain("persistChatTarget({ kind: 'model', id: modelId })");
     expect(source).toContain("persistChatTarget({ kind: 'agent', id: 'luca' })");

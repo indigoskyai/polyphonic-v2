@@ -4,7 +4,7 @@ import { ForbiddenError, ValidationError } from "./errors.ts";
 // supabase-js 2.x versions. Keep this helper structural so a protected class
 // member from one SDK build cannot make otherwise identical clients nominally
 // incompatible at type-check time.
-type AttachmentAdmin = {
+export type AttachmentAdmin = {
   from: (relation: string) => any;
   storage: { from: (bucket: string) => any };
 };

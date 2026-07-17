@@ -2,7 +2,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withModelRetry } from "../_shared/modelRetry.ts";
 import { getCorsHeaders, handleCorsPreflightIfNeeded } from "../_shared/cors.ts";
-import { buildReasoningParams, extractThinkingFromResponse, type ReasoningEffort } from "../_shared/models.ts";
+import {
+  buildReasoningParams,
+  extractThinkingFromResponse,
+  getModelDefaultMaxOutputTokens,
+  getModelHistoryRowLimit,
+  getModelLabel,
+  normalizeReasoningEffort,
+  shouldPreserveReasoningDetails,
+  type ReasoningEffort,
+} from "../_shared/models.ts";
+import { buildCapabilityAwareModelHistory } from "../_shared/model-conversation.ts";
 import { LUCA_SOUL, buildLucaSystemPrompt, buildLucaSynthesisPrompt } from "../_shared/agents/luca-soul.ts";
 import {
   buildCrisisDirective,
@@ -22,6 +32,7 @@ import {
   recordContinuityTurnTrace,
   shouldLoadAutonomousMemoryArtifacts,
   type AutonomousMemoryArtifactsResult,
+  type ContinuityHistoryMessage,
   type ContinuityPacket,
 } from "../_shared/continuity/index.ts";
 import {
@@ -50,6 +61,7 @@ import {
   buildModelAttachmentContent,
   MAX_ATTACHMENTS_PER_TURN,
   persistPdfAnnotations,
+  type AttachmentAdmin,
 } from "../_shared/attachments.ts";
 import { persistArtifactsFromContent } from "../_shared/artifacts/extract.ts";
 import { checkAndIncrement } from "../_shared/dailyQuota.ts";
@@ -312,6 +324,47 @@ const RAW_FORGE_TOOL_LEAK_MESSAGE =
 const DEFAULT_RANKING_MODEL = "anthropic/claude-haiku-4.5";
 const STAGE2_TIMEOUT_MS = 8000;
 
+async function hydrateHistoricalAttachmentContent(
+  history: ContinuityHistoryMessage[],
+  supabase: AttachmentAdmin,
+  userId: string,
+  model: string,
+  apiKey: string,
+): Promise<ContinuityHistoryMessage[]> {
+  if (!shouldPreserveReasoningDetails(model)) return history;
+
+  const hydrated: ContinuityHistoryMessage[] = [];
+  for (const message of history) {
+    const attachmentIds = Array.isArray(message.attachment_ids)
+      ? message.attachment_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
+    if (message.role !== "user" || attachmentIds.length === 0) {
+      hydrated.push(message);
+      continue;
+    }
+
+    try {
+      const bundle = await buildModelAttachmentContent(supabase, userId, attachmentIds, model, apiKey);
+      const text = `${message.content || "Please use the attached files."}${bundle.promptContext}`;
+      hydrated.push({
+        ...message,
+        provider_content: bundle.parts.length > 0
+          ? [{ type: "text", text }, ...bundle.parts]
+          : text,
+      });
+    } catch (error) {
+      // History should remain usable when an old attachment has been deleted
+      // or quarantined; the durable text turn is still safe to include.
+      console.warn("[chat-multi] historical attachment hydration skipped", {
+        messageId: message.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      hydrated.push(message);
+    }
+  }
+  return hydrated;
+}
+
 serve(async (req) => {
   const preflightResponse = handleCorsPreflightIfNeeded(req);
   if (preflightResponse) return preflightResponse;
@@ -356,8 +409,12 @@ serve(async (req) => {
       agent_runtime: agentRuntime,
       use_agent_runtime: useAgentRuntime,
       source_message_id: sourceMessageId,
+      client_turn_id: clientTurnIdRaw,
       client_context: clientContext,
     } = body;
+    const clientTurnId = typeof clientTurnIdRaw === "string" && clientTurnIdRaw.length <= 120
+      ? clientTurnIdRaw
+      : null;
 
     const attachmentIds = Array.isArray(attachmentIdsInput)
       ? [...new Set(attachmentIdsInput.filter((value): value is string => typeof value === "string" && value.length > 0))]
@@ -415,7 +472,7 @@ serve(async (req) => {
       .map((model) => normalizeModelId(model))
       .filter((model): model is string => !!model);
     const synthesisModel = normalizeModelId(settings?.synthesis_model || DEFAULT_SYNTHESIS_MODEL) || DEFAULT_SYNTHESIS_MODEL;
-    const reasoningEffort: ReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
+    const requestedReasoningEffort = effortOverride || settings?.reasoning_effort || "medium";
     const sdkRuntimeRequested =
       agentMode === "agent" ||
       agentRuntime === "openrouter_agent_sdk" ||
@@ -500,6 +557,10 @@ serve(async (req) => {
         ? bodyModel || storedSelectedModel || settings?.default_model || DEFAULT_ENSEMBLE[0]
         : requestedModel,
     ) || DEFAULT_ENSEMBLE[0];
+    const reasoningEffort: ReasoningEffort = normalizeReasoningEffort(
+      selectedClassicModel,
+      requestedReasoningEffort,
+    );
     const classicMemoryAgentIds = classicRuntime && quietMemoryEnabled
       ? getClassicMemoryAgentIds(selectedClassicModel)
       : undefined;
@@ -591,11 +652,13 @@ serve(async (req) => {
       !simulationRequestWithoutForgeSubject &&
       looksLikeAgentForgeRequest(visibleMessageForRouting);
     const likelyGeneratedMediaRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeImageToolRequest(messageWithAttachments);
-    const likelyToolRequest = agentRuntimeActive && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
+    const classicK3ToolsEnabled = classicRuntime && selectedClassicModel === "moonshotai/kimi-k3" && backend.allowTools;
+    const likelyToolRequest = (agentRuntimeActive || classicK3ToolsEnabled) && agentIsSystemLuca && looksLikeLegacyToolPlannerRequest(messageWithAttachments);
     const shouldRunLegacyToolPlanner =
-      agentRuntimeActive &&
       !onboardingHandoff &&
-      (forceForgeRequest || (backend.allowTools && (explicitAgentRuntime || likelyToolRequest)));
+      (forceForgeRequest || (backend.allowTools && (
+        (agentRuntimeActive && explicitAgentRuntime) || likelyToolRequest
+      )));
 
     if (agentRuntimeActive && !onboardingHandoff && agentIsSystemLuca && looksLikeForgeApprovalFollowup(messageWithAttachments)) {
       const recentForgeProposal = await loadLatestForgeProposalForThread(supabase, userId, thread_id);
@@ -677,7 +740,7 @@ serve(async (req) => {
         userMessage: messageWithAttachments,
         apiKey,
         memoryAgentIds: classicMemoryAgentIds,
-        historyLimit: backend.historyLimit,
+        historyLimit: getModelHistoryRowLimit(selectedClassicModel, backend.historyLimit),
         includeIdentity: !classicRuntime,
         includePendingRevisions: !classicRuntime && agentIsSystemLuca && backend.allowMemoryWrites,
         includeHypomnema: !classicRuntime,
@@ -694,7 +757,13 @@ serve(async (req) => {
       ? await loadCouncilSiblingContinuity(supabase, userId, thread_id, messageWithAttachments, apiKey)
       : { anima: null, vektor: null };
 
-    const history = continuity.history;
+    const history = await hydrateHistoricalAttachmentContent(
+      continuity.history,
+      supabase,
+      userId,
+      attachmentResolutionModel,
+      apiKey,
+    );
     const emotionalBlock = continuity.emotionalBlock;
     const beliefsBlock = continuity.beliefsBlock;
     const pendingRevisions = continuity.pendingRevisions;
@@ -831,9 +900,7 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
       { role: "system", content: turnSystemPrompt + artifactNote + simulationArtifactNote + toolCapabilityNote },
     ];
     if (history) {
-      for (const msg of history) {
-        baseMessages.push({ role: msg.role, content: msg.content });
-      }
+      baseMessages.push(...buildCapabilityAwareModelHistory(history, attachmentResolutionModel));
     }
     if (attachmentBundle.cachedAnnotations.length > 0) {
       baseMessages.push({
@@ -882,11 +949,12 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
     const toolPlannerResult = shouldRunLegacyToolPlanner
       ? await runToolPlanner(
           thread_id,
-          userId,
-          baseMessages.slice(1),
-          typeof sourceMessageId === "string" ? sourceMessageId : null,
-          forceForgeRequest,
-        )
+        userId,
+        baseMessages.slice(1),
+        typeof sourceMessageId === "string" ? sourceMessageId : null,
+        forceForgeRequest,
+        classicK3ToolsEnabled ? selectedClassicModel : null,
+      )
       : { toolMessages: [] };
     const toolMessages = toolPlannerResult.toolMessages;
     if (toolMessages.length > 0) {
@@ -1023,6 +1091,8 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
         {
           backend,
             idempotencyKey,
+            clientTurnId,
+            requestSignal: req.signal,
             enableContinuityWrites: backend.allowMemoryWrites,
             runtimeProfile: classicRuntime ? "classic" : "agent",
             memoryAgentIds: classicMemoryAgentIds,
@@ -1031,8 +1101,12 @@ Allowed preview presets: wave-scattering, reaction-diffusion, fluid-field, field
             continuity,
             autonomousMemory: autonomousMemoryResult,
             userMessageId: typeof sourceMessageId === "string" ? sourceMessageId : null,
-            reasoningParams: simpleOpeningTurn ? buildSimpleOpeningReasoningParams() : undefined,
-          maxTokens: simpleOpeningTurn ? 1024 : undefined,
+            reasoningParams: simpleOpeningTurn && singleModel !== "moonshotai/kimi-k3"
+              ? buildSimpleOpeningReasoningParams()
+              : undefined,
+          maxTokens: simpleOpeningTurn && singleModel !== "moonshotai/kimi-k3"
+            ? 1024
+            : getModelDefaultMaxOutputTokens(singleModel),
           guardForgeToolLeaks: agentIsSystemLuca && /\b(agent|forge|approved|approve|create|build|make|entity|companion|openclaw|open\s+clause)\b/i.test(messageWithAttachments),
           attachmentIds,
         },
@@ -1899,6 +1973,7 @@ async function runToolPlanner(
   messages: any[],
   sourceMessageId: string | null,
   forceForgeOnly = false,
+  plannerModel: string | null = null,
 ): Promise<ToolPlannerResult> {
   try {
     const controller = new AbortController();
@@ -1916,6 +1991,7 @@ async function runToolPlanner(
         user_id: userId,
         source_message_id: sourceMessageId,
         force_forge_only: forceForgeOnly,
+        planner_model: plannerModel,
         messages,
       }),
       signal: controller.signal,
@@ -2043,7 +2119,7 @@ async function callModelNonStreaming(
   apiKey: string,
   effort: ReasoningEffort = "medium",
   reasoningParamsOverride?: Record<string, unknown>,
-): Promise<{ content: string; thinking: string | null }> {
+): Promise<{ content: string; thinking: string | null; reasoningDetails: unknown[]; toolCalls: unknown[] }> {
   const reasoningParams = reasoningParamsOverride ?? buildReasoningParams(model, effort);
 
   const response = await withModelRetry(() => fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -2058,7 +2134,7 @@ async function callModelNonStreaming(
       model,
       messages,
       stream: false,
-      max_tokens: 4096,
+      max_tokens: getModelDefaultMaxOutputTokens(model, 4096),
       ...reasoningParams,
     }),
     signal: AbortSignal.timeout(60000),
@@ -2073,7 +2149,13 @@ async function callModelNonStreaming(
   const data: any = await response.json();
   const content = data?.choices?.[0]?.message?.content || "";
   const thinking = extractThinkingFromResponse(data, model);
-  return { content, thinking };
+  const message = data?.choices?.[0]?.message;
+  return {
+    content,
+    thinking,
+    reasoningDetails: Array.isArray(message?.reasoning_details) ? message.reasoning_details : [],
+    toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls : [],
+  };
 }
 
 /** Build the user prompt for the synthesis model (legacy / fallback path). */
@@ -2318,6 +2400,31 @@ interface SavedAssistantMessageResult {
   duplicate: boolean;
 }
 
+async function findCanceledTurnMessage(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  threadId: string,
+  userId: string,
+  clientTurnId: string | null | undefined,
+): Promise<string | null> {
+  if (!clientTurnId) return null;
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("thread_id", threadId)
+    .eq("user_id", userId)
+    .eq("role", "assistant")
+    .contains("metadata", { client_turn_id: clientTurnId, canceled: true })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("[chat-multi] canceled turn lookup failed", { threadId, clientTurnId, error: error.message });
+    return null;
+  }
+  return typeof data?.id === "string" ? data.id : null;
+}
+
 async function saveAssistantMessage(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -2438,8 +2545,10 @@ async function singleModelStream(
   toolMessages: any[] = [],
   requestId: string = newRequestId(),
   options: {
-    backend?: ChatBackend;
-    idempotencyKey?: string | null;
+      backend?: ChatBackend;
+      idempotencyKey?: string | null;
+      clientTurnId?: string | null;
+      requestSignal?: AbortSignal;
     enableContinuityWrites?: boolean;
       reasoningEffort?: ReasoningEffort;
       reasoningParams?: Record<string, unknown>;
@@ -2455,6 +2564,11 @@ async function singleModelStream(
     } = {},
   ): Promise<Response> {
   const encoder = new TextEncoder();
+  const providerAbort = new AbortController();
+  const abortProvider = () => providerAbort.abort();
+  const providerTimeout = setTimeout(abortProvider, model === "moonshotai/kimi-k3" ? 900_000 : 120_000);
+  if (options.requestSignal?.aborted) abortProvider();
+  else options.requestSignal?.addEventListener("abort", abortProvider, { once: true });
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: Record<string, unknown>) => {
@@ -2483,23 +2597,30 @@ async function singleModelStream(
             model,
             messages,
             stream: true,
-            max_tokens: options.maxTokens ?? 16000,
+            max_tokens: options.maxTokens ?? getModelDefaultMaxOutputTokens(model),
             ...reasoningParams,
           }),
-          signal: AbortSignal.timeout(120000),
+          signal: providerAbort.signal,
         });
 
         if (!orResponse.ok) {
           const errText = await orResponse.text().catch(() => "");
           console.error("Single-model provider error:", orResponse.status, errText);
-          let message = `Model error (${orResponse.status})`;
+          const responderLabel = options.runtimeProfile === "classic" ? getModelLabel(model) : agentId;
+          let providerMessage = "";
           try {
             const parsed = JSON.parse(errText);
-            const providerMessage = parsed?.error?.message || parsed?.message;
-            if (providerMessage) message = providerMessage;
+            providerMessage = parsed?.error?.message || parsed?.message || "";
           } catch {
-            if (errText) message = errText.slice(0, 240);
+            providerMessage = errText.slice(0, 1_000);
           }
+          let message = orResponse.status === 401
+            ? `${responderLabel}'s provider key was rejected.`
+            : orResponse.status === 402
+              ? `${responderLabel}'s provider account needs more credits.`
+              : orResponse.status === 429
+                ? `${responderLabel} is rate-limited. Please retry in a moment.`
+                : `${responderLabel} could not complete this response.`;
           if (backend?.keySource === "platform" && (orResponse.status === 401 || orResponse.status === 402 || orResponse.status === 429)) {
             message = "Free Luca chat is temporarily unavailable. Please try again shortly, or connect your own OpenRouter key in Settings.";
           }
@@ -2511,7 +2632,14 @@ async function singleModelStream(
               status: orResponse.status,
             }).catch((e) => console.warn("idempotency record failed:", e));
           }
-          send({ type: "error", text: message, code: "upstream_unavailable", request_id: requestId });
+          send({
+            type: "error",
+            text: message,
+            code: "upstream_unavailable",
+            status: orResponse.status,
+            detail: providerMessage || (errText ? errText.slice(0, 1_000) : null),
+            request_id: requestId,
+          });
           controller.close();
           clearInterval(heartbeat);
           return;
@@ -2526,7 +2654,7 @@ async function singleModelStream(
               message: "No stream",
             }).catch((e) => console.warn("idempotency record failed:", e));
           }
-          send({ type: "error", text: "No stream", code: "upstream_unavailable", request_id: requestId });
+          send({ type: "error", text: "No stream", code: "upstream_unavailable", status: orResponse.status, request_id: requestId });
           controller.close();
           clearInterval(heartbeat);
           return;
@@ -2539,6 +2667,19 @@ async function singleModelStream(
         let usedModel = model;
         let tokensUsed: number | null = null;
         const attachmentAnnotations: unknown[] = [];
+        const reasoningDetails: unknown[] = [];
+        const streamedToolCalls = new Map<number, {
+          id?: string;
+          type?: string;
+          function: { name: string; arguments: string };
+        }>();
+        let providerStreamError: {
+          message: string;
+          code: string;
+          status: number | null;
+          detail: string | null;
+        } | null = null;
+        let malformedProviderEvents = 0;
         let pendingContent = "";
         let contentGuardActive = true;
         let forgeLeakDetected = false;
@@ -2555,12 +2696,40 @@ async function singleModelStream(
           if (payload === "[DONE]") return;
           try {
             const chunk = JSON.parse(payload);
+            if (chunk?.error) {
+              const upstream = chunk.error;
+              providerStreamError = {
+                message: String(upstream.message || "The provider interrupted the response."),
+                code: String(upstream.code || upstream.type || "provider_stream_error"),
+                status: typeof upstream.status === "number"
+                  ? upstream.status
+                  : typeof upstream.code === "number" ? upstream.code : null,
+                detail: typeof upstream.metadata?.raw === "string"
+                  ? upstream.metadata.raw.slice(0, 1_000)
+                  : null,
+              };
+              return;
+            }
             const delta = chunk.choices?.[0]?.delta;
             if (!delta) return;
             if (delta.reasoning || delta.reasoning_content) {
               const t = delta.reasoning || delta.reasoning_content || "";
               fullThinking += t;
               send({ type: "thinking", text: t });
+            }
+            if (Array.isArray(delta.reasoning_details)) {
+              reasoningDetails.push(...delta.reasoning_details);
+            }
+            if (Array.isArray(delta.tool_calls)) {
+              for (const part of delta.tool_calls) {
+                const index = Number.isInteger(part?.index) ? part.index : streamedToolCalls.size;
+                const current = streamedToolCalls.get(index) || { function: { name: "", arguments: "" } };
+                if (typeof part?.id === "string") current.id = part.id;
+                if (typeof part?.type === "string") current.type = part.type;
+                if (typeof part?.function?.name === "string") current.function.name += part.function.name;
+                if (typeof part?.function?.arguments === "string") current.function.arguments += part.function.arguments;
+                streamedToolCalls.set(index, current);
+              }
             }
             if (delta.content) {
               if (!guardForgeToolLeaks) {
@@ -2589,7 +2758,9 @@ async function singleModelStream(
             if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
             const annotations = delta.annotations || chunk.choices?.[0]?.message?.annotations;
             if (Array.isArray(annotations)) attachmentAnnotations.push(...annotations);
-          } catch { /* skip */ }
+          } catch {
+            malformedProviderEvents += 1;
+          }
         };
 
         while (true) {
@@ -2607,6 +2778,24 @@ async function singleModelStream(
         for (const line of tail.split("\n")) {
           processProviderLine(line);
         }
+        if (providerStreamError) {
+          const streamError = providerStreamError as {
+            message: string;
+            code: string;
+            status: number | null;
+            detail: string | null;
+          };
+          send({
+            type: "error",
+            text: streamError.message,
+            code: streamError.code,
+            status: streamError.status,
+            detail: streamError.detail,
+            request_id: requestId,
+            partial: Boolean(fullContent || fullThinking),
+          });
+          return;
+        }
         if (guardForgeToolLeaks && contentGuardActive && pendingContent && !forgeLeakDetected) {
           contentGuardActive = false;
           emitContent(pendingContent);
@@ -2617,6 +2806,7 @@ async function singleModelStream(
           console.warn("[chat-multi] provider stream ended with no content; retrying non-streaming once", {
             model,
             requestId,
+            malformedProviderEvents,
           });
           try {
             const retry = await callModelNonStreaming(
@@ -2637,13 +2827,18 @@ async function singleModelStream(
               fullContent = retryContent;
               send({ type: "content", text: retryContent });
             }
+            if (retry.reasoningDetails.length > 0) reasoningDetails.push(...retry.reasoningDetails);
+            for (const [index, call] of retry.toolCalls.entries()) {
+              if (call && typeof call === "object") streamedToolCalls.set(index, call as any);
+            }
           } catch (retryErr) {
             console.error("[chat-multi] empty stream retry failed:", retryErr);
           }
         }
 
         if (!fullContent.trim()) {
-          const emptyMessage = "Luca's response came back empty. Please retry.";
+          const responderLabel = options.runtimeProfile === "classic" ? getModelLabel(model) : agentId;
+          const emptyMessage = `${responderLabel}'s response came back empty. Please retry.`;
           if (options.idempotencyKey) {
             recordIdempotentResponse(supabase, options.idempotencyKey, userId, "chat-send", {
               ok: false,
@@ -2657,13 +2852,32 @@ async function singleModelStream(
 
         const streamAttachments = buildAttachmentsFromToolMessages(toolMessages);
         const { citations: streamCitations, query: streamQuery } = buildCitationsFromToolMessages(toolMessages);
-        const streamMetadata = streamCitations.length > 0
-          ? { citations: streamCitations, ...(streamQuery ? { search_query: streamQuery } : {}) }
-          : null;
+        const completeToolCalls = [...streamedToolCalls.values()].filter((call) => call.id && call.function.name);
+        const streamMetadata: Record<string, unknown> = {
+          target_kind: options.runtimeProfile === "classic" ? "model" : "agent",
+          target_id: options.runtimeProfile === "classic" ? model : agentId,
+          target_label: options.runtimeProfile === "classic" ? getModelLabel(model) : agentId,
+          reasoning_effort: normalizeReasoningEffort(model, options.reasoningEffort || "medium"),
+          request_id: requestId,
+          provider_status: "completed",
+          ...(streamCitations.length > 0 ? { citations: streamCitations } : {}),
+          ...(streamQuery ? { search_query: streamQuery } : {}),
+          ...(shouldPreserveReasoningDetails(model) && reasoningDetails.length > 0
+            ? { reasoning_details: reasoningDetails }
+            : {}),
+          ...(shouldPreserveReasoningDetails(model) && completeToolCalls.length > 0
+            ? { tool_calls: completeToolCalls }
+            : {}),
+          ...(shouldPreserveReasoningDetails(model) && toolMessages.length > 0
+            ? { tool_state: toolMessages }
+            : {}),
+          ...(options.clientTurnId ? { client_turn_id: options.clientTurnId } : {}),
+        };
           let insertedMessage: { id: string | null } | null = null;
           let assistantWasDuplicate = false;
           const persistedAgentId = options.persistedAgentId === undefined ? agentId : options.persistedAgentId;
-          const duplicateMessageId = await findRecentDuplicateAssistantMessage(supabase, threadId, persistedAgentId, fullContent);
+          const canceledMessageId = await findCanceledTurnMessage(supabase, threadId, userId, options.clientTurnId);
+          const duplicateMessageId = canceledMessageId || await findRecentDuplicateAssistantMessage(supabase, threadId, persistedAgentId, fullContent);
           if (duplicateMessageId) {
             console.warn("[chat-multi] skipped duplicate assistant insert", { threadId, agentId: persistedAgentId, duplicateMessageId });
             insertedMessage = { id: duplicateMessageId };
@@ -2674,7 +2888,7 @@ async function singleModelStream(
               content: fullContent, model: usedModel, agent: persistedAgentId,
             thinking_content: fullThinking || null, tokens_used: tokensUsed,
             ...(streamAttachments.length > 0 ? { attachments: streamAttachments } : {}),
-            ...(streamMetadata ? { metadata: streamMetadata } : {}),
+            metadata: streamMetadata,
           }).select("id").single();
           if (insertError) {
             throw new Error(`Failed to save assistant message: ${insertError.message}`);
@@ -2735,6 +2949,7 @@ async function singleModelStream(
           model: usedModel,
           tokens_used: tokensUsed,
           message_id: insertedMessage?.id ?? null,
+          request_id: requestId,
           billing_tier: options.backend?.billingTier ?? "byok",
           key_source: options.backend?.keySource ?? "user",
         };
@@ -2755,9 +2970,14 @@ async function singleModelStream(
         }
         send({ type: "error", text: "Stream interrupted", code: "upstream_error", request_id: requestId });
       } finally {
+        clearTimeout(providerTimeout);
+        options.requestSignal?.removeEventListener("abort", abortProvider);
         clearInterval(heartbeat);
         controller.close();
       }
+    },
+    cancel() {
+      abortProvider();
     },
   });
 
